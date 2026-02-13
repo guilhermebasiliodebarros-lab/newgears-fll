@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Se o VS Code marcar isso de vermelho, ignore. É normal! */
+body {
+  background-color: #18181b; /* Garante fundo escuro */
+  color: white;
+}
