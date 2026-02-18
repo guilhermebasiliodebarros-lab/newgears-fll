@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import StrategyBoard from './components/StrategyBoard';
 import { 
   User, 
   LogOut, 
@@ -1480,6 +1481,7 @@ const handleDeleteRound = async (id) => {
                 <button className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-lg">Salvar Missão</button>
 
              </form>
+             
 
           )}
 
@@ -1632,6 +1634,7 @@ const handleDeleteRound = async (id) => {
 
             {!readonly && <button onClick={() => openMissionForm()} className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2"><Settings size={16}/> Gerenciar Missões</button>}
 
+
           </div>
 
           
@@ -1682,6 +1685,14 @@ const handleDeleteRound = async (id) => {
     </div>
   ))}
 </div>
+<div className="App">
+  <h1>New Gears - War Room</h1>
+
+  {/* AQUI ENTRA A LOUSA */}
+  <StrategyBoard />
+
+</div>
+
 
       </div>
 
