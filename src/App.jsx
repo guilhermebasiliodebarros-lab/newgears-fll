@@ -3,6 +3,7 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import StrategyBoard from './components/StrategyBoard';
+import Countdown from './components/Countdown';
 import { 
   User, 
   LogOut, 
@@ -1966,6 +1967,15 @@ const handleDeleteRound = async (id) => {
       {/* --- ÁREA DO TÉCNICO (ADMIN) --- */}
       {isAdmin && (
         <main className="p-4 md:p-8 max-w-[1600px] mx-auto animate-in fade-in duration-500">
+            {/* ======================================================= */}
+      {/* 🚀 AQUI: O CONTADOR ENTRA NO TOPO DO PAINEL DO TÉCNICO */}
+      {/* ======================================================= */}
+      <div className="mb-8 flex justify-center">
+        <Countdown 
+            targetDate="2026-11-30T08:00:00" 
+            title="Torneio FLL" 
+        />
+      </div>
           <div className="flex gap-4 mb-8 border-b border-white/10 pb-4 overflow-x-auto">
               <button onClick={() => setAdminTab('rotation')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'rotation' ? 'bg-white text-black' : 'text-gray-500 hover:text-white'}`}><LayoutDashboard size={18}/> Rodízio & Equipe</button>
               <button onClick={() => setAdminTab('strategy')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'strategy' ? 'bg-purple-500 text-white shadow-lg shadow-purple-900/20' : 'text-gray-500 hover:text-purple-400'}`}><Lightbulb size={18}/> Estratégia & Inovação</button>
@@ -2097,6 +2107,16 @@ const handleDeleteRound = async (id) => {
       {/* --- ÁREA DO ALUNO --- */}
       {!isAdmin && viewAsStudent && (
         <main className="p-4 md:p-8 max-w-4xl mx-auto animate-in slide-in-from-bottom-8">
+            {/* ======================================================= */}
+    {/* 🚀 COLE AQUI O CONTADOR DO ALUNO */}
+    {/* ======================================================= */}
+    <div className="mb-6">
+       <Countdown 
+          targetDate="2026-11-30T08:00:00" 
+          title="Torneio FLL" 
+       />
+    </div>
+    {/* ======================================================= */}
            <div className="text-center py-6 bg-[#151520] rounded-2xl border border-white/10 shadow-xl mb-8">
                 <div className="flex items-center justify-center gap-4">
                     <div className={`p-3 rounded-full border-2 ${viewAsStudent.avatarType === 'mech2' ? 'border-cyan-500 bg-cyan-500/10' : 'border-orange-500 bg-orange-500/10'}`}>

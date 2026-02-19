@@ -1,0 +1,49 @@
+.countdown-container {
+  text-align: center;
+  background: #1a1a1a; /* Fundo escuro */
+  color: #fff;
+  padding: 20px;
+  border-radius: 15px;
+  border: 2px solid #00d2ff; /* Azul Neon estilo LEGO Education */
+  box-shadow: 0 0 15px rgba(0, 210, 255, 0.3);
+  margin: 20px auto;
+  max-width: 600px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.countdown-container h3 {
+  margin-bottom: 15px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: #ffcc00; /* Amarelo FLL */
+}
+
+.timer-wrapper {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.time-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #333;
+  padding: 10px 15px;
+  border-radius: 8px;
+  min-width: 70px;
+}
+
+.time-number {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #fff;
+}
+
+.time-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  color: #aaa;
+  margin-top: 5px;
+}
