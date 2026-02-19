@@ -1786,7 +1786,7 @@ const handleDeleteRound = async (id) => {
       <Modal />
       <ScheduleModal />
 
-      {/* --- MODAL DO TÉCNICO: ENTREGAR BADGES --- */}
+{/* --- MODAL DO TÉCNICO: ENTREGAR BADGES --- */}
       {isAdmin && badgeStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
           <div className="bg-[#1a1a24] rounded-2xl border border-white/10 p-6 w-full max-w-2xl shadow-2xl relative">
@@ -1816,7 +1816,8 @@ const handleDeleteRound = async (id) => {
                   <button
                     key={badge.id}
                     onClick={() => toggleBadge(badgeStudent, badge.id)}
-                    className={`relative flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all duration-300 ${
+                    /* 👇 MUDANÇA 1: Adicionei a palavra 'group' no começo desta linha 👇 */
+                    className={`group relative flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all duration-300 ${
                       hasBadge 
                       ? 'bg-yellow-500/10 border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.2)] scale-105' 
                       : 'bg-black/40 border-white/5 hover:bg-white/5 hover:border-white/20 opacity-60 grayscale'
@@ -1833,6 +1834,15 @@ const handleDeleteRound = async (id) => {
                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,1)]"></div>
                        </div>
                     )}
+
+                    {/* 👇 MUDANÇA 2: Balãozinho de descrição (Tooltip) 👇 */}
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-40 bg-gray-900/95 text-gray-200 text-xs text-center p-2 rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none border border-gray-700 shadow-xl backdrop-blur-md">
+                        {badge.desc}
+                        {/* Triângulo (setinha) apontando para baixo */}
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-700"></div>
+                    </div>
+                    {/* ☝️ FIM DO BALÃOZINHO ☝️ */}
+
                   </button>
                 );
               })}
@@ -1840,7 +1850,6 @@ const handleDeleteRound = async (id) => {
           </div>
         </div>
       )}
-
       {/* --- MODAL DE BATERIA DA EQUIPE --- */}
       {showBatteryModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 animate-in fade-in backdrop-blur-sm">
