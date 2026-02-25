@@ -44,24 +44,19 @@ const StrategyBoard = () => {
   const stageWidth = 800;
   const stageHeight = 450;
 
-  // --- 1. BUSCAR DADOS INICIAIS (Mesa e Lista de Estratégias) ---
+  // --- 1. BUSCAR DADOS INICIAIS (Apenas Lista de Estratégias) ---
   useEffect(() => {
     const init = async () => {
-      // A. Buscar Mapa Ativo
-      const mapQ = query(collection(db, "maps"), where("active", "==", true));
-      const mapSnap = await getDocs(mapQ);
-      if (!mapSnap.empty) {
-        const data = mapSnap.docs[0].data();
-        setActiveMapUrl(data.imageUrl);
-        setActiveMapId(mapSnap.docs[0].id);
+      // SETA A IMAGEM LOCAL (Rápido, seguro e offline)
+      // Certifique-se que você colocou a imagem 'mesa-fll.jpg' na pasta 'public'
+      setActiveMapUrl('/mesaUnearthed.png'); 
+      setActiveMapId('mapa_padrao_local'); 
         
-        // B. Buscar Estratégias salvas para esse mapa
-        loadStrategiesList(mapSnap.docs[0].id);
-      }
+      // Buscar Estratégias salvas (continua puxando do Firebase)
+      loadStrategiesList('mapa_padrao_local'); 
     };
     init();
   }, []);
-
   const loadStrategiesList = async (mapId) => {
     try {
       const stratQ = query(collection(db, "strategies"), where("mapId", "==", mapId));
