@@ -591,12 +591,25 @@ function App() {
 
   const deleteStudent = (id) => { setStudents(prev => prev.filter(s => s.id !== id)); }
 
-  // Função EXCLUSIVA para apagar Aluno
-  const handleDeleteStudent = async (id) => {
-    if (confirm("Certeza que quer remover este aluno?")) {
-      await deleteDoc(doc(db, "students", id));
+ // 2. A função de excluir:
+const handleDeleteStudent = async (studentId) => {
+    // Confirmação para o técnico não excluir sem querer esbarrando no botão
+    if (window.confirm("Tem certeza que deseja excluir este aluno do banco de dados? A ação não pode ser desfeita.")) {
+        try {
+            // A. Deleta o documento lá no Firebase
+            const studentRef = doc(db, "students", studentId);
+            await deleteDoc(studentRef);
+
+            // B. Atualiza a tela (remove da lista local sem precisar atualizar a página)
+            setStudents(prevStudents => prevStudents.filter(s => s.id !== studentId));
+
+            alert("Aluno excluído com sucesso! 🗑️");
+        } catch (error) {
+            console.error("Erro ao excluir aluno no Firebase:", error);
+            alert("Erro ao excluir. Verifique sua conexão ou regras do Firebase.");
+        }
     }
-  };
+};
 
 const handleDeleteRound = async (id) => {
     console.log("Tentando apagar ID:", id); // Isso vai aparecer no F12 se funcionar
