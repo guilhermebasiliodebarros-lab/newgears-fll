@@ -184,6 +184,51 @@ function App() {
     { id: 'ambassador', name: 'Embaixador', icon: <Crown size={20}/>, color: 'text-purple-500', desc: 'Liderou pelo exemplo e uniu a equipe.' },
   ];
 
+  // --- DESAFIO DE INGLÊS: Função do Técnico ---
+  const toggleEnglishChallenge = async (student) => {
+      if (!isAdmin) return;
+      try {
+          const studentRef = doc(db, "students", student.id);
+          const newState = !student.englishChallengeUnlocked; // Inverte o estado atual
+          
+          await updateDoc(studentRef, {
+              englishChallengeUnlocked: newState
+          });
+
+          // Atualiza a tela na hora
+          setStudents(prev => prev.map(s => 
+              s.id === student.id ? { ...s, englishChallengeUnlocked: newState } : s
+          ));
+      } catch (error) {
+          console.error("Erro ao liberar desafio de inglês:", error);
+      }
+  };
+
+  // --- DESAFIO DE INGLÊS: Função do Aluno ---
+  const claimEnglishXP = async () => {
+      if (!viewAsStudent || !viewAsStudent.englishChallengeUnlocked) return;
+
+      try {
+          const studentRef = doc(db, "students", viewAsStudent.id);
+          const xpBonus = 20; // Quanto de XP ele ganha por falar inglês
+
+          await updateDoc(studentRef, {
+              xp: (viewAsStudent.xp || 0) + xpBonus,
+              englishChallengeUnlocked: false // Bloqueia o botão de novo automaticamente!
+          });
+
+          // Atualiza a tela do aluno
+          setViewAsStudent(prev => ({ 
+              ...prev, 
+              xp: (prev.xp || 0) + xpBonus, 
+              englishChallengeUnlocked: false 
+          }));
+          
+          alert("Great job! Mandou bem no inglês! +20 XP 🇺🇸✨");
+      } catch (error) {
+          console.error("Erro ao resgatar XP de inglês:", error);
+      }
+  };
  // Função atualizada para o Técnico dar Badges
   const toggleBadge = async (student, badgeId) => {
       if (!isAdmin) return;
@@ -1978,6 +2023,35 @@ const handleDeleteRound = async (id) => {
                       {isAdmin ? '👤 Voltar pro XP' : '👑 Modo Capitã'}
                   </button>
               )}
+{/* ÁREA DO DESAFIO DE INGLÊS (Visão do Aluno) */}
+{viewAsStudent && (
+    <div className="bg-[#151520] border border-white/10 rounded-2xl p-4 mb-6 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+            <div className="text-3xl">🇺🇸</div>
+            <div>
+                <h3 className="text-white font-bold text-sm">English Challenge</h3>
+                <p className="text-gray-400 text-xs">Fale 10 min em inglês.</p>
+            </div>
+        </div>
+
+        {/* 👇 O PULO DO GATO ESTÁ AQUI: viewAsStudent?.englishChallengeUnlocked 👇 */}
+        {viewAsStudent?.englishChallengeUnlocked ? (
+            <button 
+                onClick={claimEnglishXP}
+                className="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-xl shadow-[0_0_15px_rgba(34,197,94,0.4)] animate-bounce"
+            >
+                Resgatar +20 XP
+            </button>
+        ) : (
+            <button 
+                disabled
+                className="bg-gray-800 text-gray-500 font-bold py-2 px-4 rounded-xl border border-gray-700 cursor-not-allowed"
+            >
+                Aguardando Técnico...
+            </button>
+        )}
+    </div>
+)}
 
               {/* 3. BOTÃO DE SAIR */}
               <button onClick={handleLogout} className="bg-red-500/10 border border-red-500/20 text-red-500 p-2 rounded-full hover:bg-red-500 hover:text-white transition-all" title="Sair">
@@ -2063,6 +2137,16 @@ const handleDeleteRound = async (id) => {
                           >
                             <Trophy size={16}/>
                           </button>
+                        {/* --- BOTÃO DE LIBERAR INGLÊS --- */}
+                                              <button 
+                                                  onClick={() => toggleEnglishChallenge(s)} 
+                                                  className={`transition-colors ${s.englishChallengeUnlocked ? 'text-green-500 animate-pulse drop-shadow-[0_0_5px_rgba(34,197,94,0.8)]' : 'text-gray-600 hover:text-blue-400'}`}
+                                                  title={s.englishChallengeUnlocked ? "Desativar Inglês" : "Ativar Inglês"}
+                                              >
+                                                  <span className="font-bold font-mono text-[10px] border border-current rounded px-1">EN</span>
+                                              </button>
+
+                                              {/* Lixeira original */}
                                               <button onClick={() => handleDeleteStudent(s.id)} className="text-gray-600 hover:text-red-500"><Trash2 size={16}/></button>
                                           </div>
                                       </div>
@@ -2178,6 +2262,9 @@ const handleDeleteRound = async (id) => {
                                <div className={`mb-2 transform transition-transform ${hasBadge ? 'scale-110 group-hover:scale-125' : 'scale-90'} ${badge.color}`}>
                                    {badge.icon}
                                </div>
+
+                               {/* BOTÃO DE LIBERAR INGLÊS (Visão do Técnico) */}
+
                                
                                {/* Nome (Só aparece em telas maiores ou se tiver a badge) */}
                                <span className={`text-[10px] md:text-xs text-center font-bold leading-tight ${hasBadge ? 'text-white' : 'text-gray-600'}`}>
