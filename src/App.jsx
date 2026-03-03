@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where } from "firebase/firestore";
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import StrategyBoard from './components/StrategyBoard';
 import Countdown from './components/Countdown';
 import { 
@@ -118,7 +117,6 @@ let db, storage;
 try {
   const app = initializeApp(firebaseConfig);
   db = getFirestore(app);
-  storage = getStorage(app);
 } catch (e) { console.error("Erro Firebase", e); }
 
 
@@ -1207,66 +1205,62 @@ const handleDeleteRound = async (id) => {
 
   const closeModal = () => { setModal({ type: null, data: null }); setSelectedFile(null); }
 
-// --- ENVIO DE ATIVIDADE DO ALUNO (CONECTADO) ---
-const handleSubmitActivity = async (e) => { 
-    e.preventDefault(); 
-    setIsSubmitting(true);
-
-    try {
-        let fileDownloadURL = null;
-        let fileName = "Sem arquivo";
-
-        // 1. Processa o arquivo no FIREBASE STORAGE (se tiver)
-        if (selectedFile) {
-            const storage = getStorage();
-            // Cria um caminho único para não sobrescrever arquivos com o mesmo nome
-            const fileRef = ref(storage, `activities/${viewAsStudent.id}/${Date.now()}_${selectedFile.name}`);
-            
-            // Faz o upload no Storage do Firebase
-            const uploadTask = await uploadBytesResumable(fileRef, selectedFile);
-            
-            // Pega o link (URL) gerado pelo Firebase para poder baixar depois
-            fileDownloadURL = await getDownloadURL(uploadTask.ref);
-            fileName = selectedFile.name;
-        }
-
-        // 2. Cria o objeto da entrega
-        // Agora estamos mandando apenas textos (strings), e o Firestore aceita isso perfeitamente.
-        const submissionData = { 
-            text: submissionText, 
-            fileName: fileName, 
-            fileUrl: fileDownloadURL, // ATENÇÃO: Salva APENAS O LINK (URL), não o arquivo bruto!
-            date: new Date().toLocaleString(), 
-            status: "pending" // 'pending' faz aparecer para o técnico
-        };
-
-        // 3. Salva no banco de dados Firestore (Atualiza o aluno)
-        const studentRef = doc(db, "students", viewAsStudent.id);
-        await updateDoc(studentRef, { 
-            submission: submissionData 
-        });
-
-        // 4. Limpa o formulário e notifica
-        setSubmissionText(""); 
-        setSelectedFile(null); 
-        showNotification("Atividade enviada para o Técnico!");
-    
-    } catch (error) {
-        console.error("Erro ao enviar:", error);
-        showNotification("Erro ao enviar. Tente novamente.", "error");
-    } finally {
-        setIsSubmitting(false);
+// --- FUNÇÃO AUXILIAR PARA TRANSFORMAR O ARQUIVO EM TEXTO ---
+  const convertToBase64 = (file) => {
+      return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = (error) => reject(error);
+      });
+  };
+const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setSelectedFile(file);
     }
-}
-const handleFileSelect = (e) => { const file = e.target.files[0]; if (file) setSelectedFile(file); }
+  };
+  const handleSubmitActivity = async (e) => { 
+      e.preventDefault(); 
+      setIsSubmitting(true);
 
-// --- FUNÇÃO PARA O TÉCNICO BAIXAR O ARQUIVO ---
+      try {
+          const submissionData = { 
+              text: submissionText, // Apenas se houver campo de texto para o aluno responder
+              fileName: "Enviado por email/externo", 
+              fileUrl: "", // Removendo links
+              date: new Date().toLocaleString(), 
+              status: "pending" 
+          };
+
+          const studentRef = doc(db, "students", viewAsStudent.id);
+          await updateDoc(studentRef, { 
+              submission: submissionData 
+          });
+
+          setSubmissionText(""); 
+          showNotification("Aviso de atividade enviado para validação pelo Técnico!");
+      
+      } catch (error) {
+          console.error("Erro ao enviar:", error);
+          showNotification("Erro ao sinalizar o Técnico.", "error");
+      } finally {
+          setIsSubmitting(false);
+      }
+  };
+// ATENÇÃO: COLOQUE ISSO NO SEU CÓDIGO DO TÉCNICO
+// --- FUNÇÃO DO BOTÃO 'BAIXAR ARQUIVO' NO PAINEL DO TÉCNICO ---
   const handleDownloadFile = (sub) => { 
-      if (sub && sub.fileUrl) {
-          // Abre o link salvo no Firebase em uma nova aba
-          window.open(sub.fileUrl, '_blank');
+      if (sub && sub.fileData) {
+          // O navegador recria o arquivo a partir do texto e força o download
+          const link = document.createElement("a");
+          link.href = sub.fileData;
+          link.download = sub.fileName || "atividade_baixada.pdf";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
       } else {
-          showNotification("Não há arquivo ou o link está quebrado.", "error");
+          showNotification("Não há arquivo anexado ou o link está quebrado.", "error");
       }
   };
   // --- UI COMPONENTS ---
@@ -2362,14 +2356,7 @@ const handleFileSelect = (e) => { const file = e.target.files[0]; if (file) setS
                                 <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Relatório da Missão</label>
                                 <textarea required value={submissionText} onChange={(e) => setSubmissionText(e.target.value)} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white mb-4 focus:border-blue-500 outline-none min-h-[100px]" placeholder="Descreva aqui o que foi feito..." />
                                 
-                                <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Anexar Arquivo (opcional)</label>
-                                <div className="relative border-2 border-dashed border-white/10 rounded-lg p-6 text-center hover:bg-white/5 transition-colors mb-6 cursor-pointer">
-                                    <input type="file" onChange={handleFileSelect} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                                    <div className="flex flex-col items-center pointer-events-none">
-                                        <Upload size={24} className={selectedFile ? "text-green-500" : "text-gray-500"} />
-                                        <span className={`text-sm mt-2 font-bold ${selectedFile ? "text-green-500" : "text-gray-400"}`}>{selectedFile ? selectedFile.name : "Clique para escolher arquivo"}</span>
-                                    </div>
-                                </div>
+        
                                 
                                 <button disabled={isSubmitting} className="w-full bg-blue-600 hover:bg-blue-500 transition-colors text-white font-bold py-3 rounded-lg uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                                     {isSubmitting ? <Loader2 className="animate-spin" size={20}/> : <><Upload size={20} /> Entregar Atividade</>}
