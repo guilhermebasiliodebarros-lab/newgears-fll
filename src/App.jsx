@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where } from "firebase/firestore";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import StrategyBoard from './components/StrategyBoard';
 import Countdown from './components/Countdown';
 import { 
@@ -1207,56 +1207,68 @@ const handleDeleteRound = async (id) => {
 
   const closeModal = () => { setModal({ type: null, data: null }); setSelectedFile(null); }
 
-  // --- ENVIO DE ATIVIDADE DO ALUNO (CONECTADO) ---
-  const handleSubmitActivity = async (e) => { 
-      e.preventDefault(); 
-      setIsSubmitting(true);
+// --- ENVIO DE ATIVIDADE DO ALUNO (CONECTADO) ---
+const handleSubmitActivity = async (e) => { 
+    e.preventDefault(); 
+    setIsSubmitting(true);
 
-      try {
-          // 1. Processa o arquivo (se tiver)
-          let fileData = null;
-          let fileName = "Sem arquivo";
-          if (selectedFile) {
-              fileData = await convertBase64(selectedFile);
-              fileName = selectedFile.name;
-          }
+    try {
+        let fileDownloadURL = null;
+        let fileName = "Sem arquivo";
 
-          // 2. Cria o objeto da entrega
-          const submissionData = { 
-              text: submissionText, 
-              fileName: fileName, 
-              fileData: fileData, 
-              date: new Date().toLocaleString(), 
-              status: "pending" // Importante: 'pending' faz aparecer para o técnico
-          };
+        // 1. Processa o arquivo no FIREBASE STORAGE (se tiver)
+        if (selectedFile) {
+            const storage = getStorage();
+            // Cria um caminho único para não sobrescrever arquivos com o mesmo nome
+            const fileRef = ref(storage, `activities/${viewAsStudent.id}/${Date.now()}_${selectedFile.name}`);
+            
+            // Faz o upload no Storage do Firebase
+            const uploadTask = await uploadBytesResumable(fileRef, selectedFile);
+            
+            // Pega o link (URL) gerado pelo Firebase para poder baixar depois
+            fileDownloadURL = await getDownloadURL(uploadTask.ref);
+            fileName = selectedFile.name;
+        }
 
-          // 3. Salva no Firebase (Atualiza o aluno)
-          const studentRef = doc(db, "students", viewAsStudent.id);
-          await updateDoc(studentRef, { 
-              submission: submissionData 
-          });
+        // 2. Cria o objeto da entrega
+        // Agora estamos mandando apenas textos (strings), e o Firestore aceita isso perfeitamente.
+        const submissionData = { 
+            text: submissionText, 
+            fileName: fileName, 
+            fileUrl: fileDownloadURL, // ATENÇÃO: Salva APENAS O LINK (URL), não o arquivo bruto!
+            date: new Date().toLocaleString(), 
+            status: "pending" // 'pending' faz aparecer para o técnico
+        };
 
-          // 4. Limpa o formulário
-          setSubmissionText(""); 
-          setSelectedFile(null); 
-          showNotification("Atividade enviada para o Técnico!");
-      
-      } catch (error) {
-          console.error("Erro ao enviar:", error);
-          showNotification("Erro ao enviar. Tente novamente.", "error");
-      } finally {
-          setIsSubmitting(false);
+        // 3. Salva no banco de dados Firestore (Atualiza o aluno)
+        const studentRef = doc(db, "students", viewAsStudent.id);
+        await updateDoc(studentRef, { 
+            submission: submissionData 
+        });
+
+        // 4. Limpa o formulário e notifica
+        setSubmissionText(""); 
+        setSelectedFile(null); 
+        showNotification("Atividade enviada para o Técnico!");
+    
+    } catch (error) {
+        console.error("Erro ao enviar:", error);
+        showNotification("Erro ao enviar. Tente novamente.", "error");
+    } finally {
+        setIsSubmitting(false);
+    }
+}
+const handleFileSelect = (e) => { const file = e.target.files[0]; if (file) setSelectedFile(file); }
+
+// --- FUNÇÃO PARA O TÉCNICO BAIXAR O ARQUIVO ---
+  const handleDownloadFile = (sub) => { 
+      if (sub && sub.fileUrl) {
+          // Abre o link salvo no Firebase em uma nova aba
+          window.open(sub.fileUrl, '_blank');
+      } else {
+          showNotification("Não há arquivo ou o link está quebrado.", "error");
       }
-  }
-
-  const copyStudentLink = () => { navigator.clipboard.writeText(`${window.location.href.split('?')[0]}?mode=student`); showNotification("Link copiado!"); }
-
-  const handleFileSelect = (e) => { const file = e.target.files[0]; if (file) setSelectedFile(file); }
-
-  const handleDownloadFile = (sub) => { showNotification(`Baixando: ${sub.fileName}`, "download"); }
-
-
-
+  };
   // --- UI COMPONENTS ---
 
   const Notification = () => { if (!notification) return null; const isError = notification.type === 'error'; const isDownload = notification.type === 'download'; return (<div className={`fixed top-6 right-6 z-[100] px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right duration-300 border ${isError ? 'bg-red-500/10 border-red-500 text-red-500' : isDownload ? 'bg-blue-500/10 border-blue-500 text-blue-500' : 'bg-green-500/10 border-green-500 text-green-500'}`}>{isError ? <AlertCircle size={24}/> : isDownload ? <Download size={24}/> : <CheckCircle size={24}/>}<span className="font-bold text-sm">{notification.msg}</span></div>) }
