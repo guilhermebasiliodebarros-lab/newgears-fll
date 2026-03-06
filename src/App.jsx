@@ -170,6 +170,76 @@ const LogoNewGears = () => (
 
 function App() {
 
+// --- COMPONENTE: RANKING E ZONA DE CORTE ---
+  const RankingPanel = ({ students }) => {
+    // Organiza os alunos do maior XP para o menor
+    const sortedStudents = [...students].sort((a, b) => (b.xp || 0) - (a.xp || 0));
+
+    return (
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-800 flex items-center">
+            <Trophy className="w-7 h-7 mr-3 text-yellow-500" />
+            Ranking da Temporada
+          </h2>
+          <span className="bg-gray-100 text-gray-600 text-sm px-3 py-1 rounded-full font-medium">
+            Meta Mínima: 420 XP
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          {sortedStudents.map((student, index) => {
+            // A regra implacável: Menos de 420 vai pro vermelho!
+            const inRiskZone = (student.xp || 0) < 420;
+            
+            // Pódio: Ouro, Prata e Bronze
+            let positionColor = "text-gray-400";
+            if (index === 0) positionColor = "text-yellow-500";
+            if (index === 1) positionColor = "text-gray-300";
+            if (index === 2) positionColor = "text-amber-600";
+
+            return (
+              <div 
+                key={student.id} 
+                className={`flex items-center justify-between p-4 rounded-lg border-l-4 transition-all ${
+                  inRiskZone 
+                    ? 'bg-red-50 border-red-500 hover:bg-red-100' 
+                    : 'bg-white border-green-500 shadow-sm hover:shadow-md'
+                }`}
+              >
+                <div className="flex items-center space-x-4">
+                  <div className={`font-black text-xl w-8 ${positionColor}`}>
+                    #{index + 1}
+                  </div>
+                  <div>
+                    <p className={`font-bold text-lg ${inRiskZone ? 'text-red-700' : 'text-gray-800'}`}>
+                      {student.name}
+                    </p>
+                    {inRiskZone && (
+                      <p className="text-xs font-semibold text-red-600 flex items-center mt-1">
+                        <AlertTriangle className="w-3 h-3 mr-1" />
+                        Risco de substituição (Abaixo da meta)
+                      </p>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex items-center text-right">
+                  <span className={`text-2xl font-black ${inRiskZone ? 'text-red-600' : 'text-green-600'}`}>
+                    {student.xp || 0}
+                  </span>
+                  <span className={`text-sm font-bold ml-1 ${inRiskZone ? 'text-red-400' : 'text-green-400'}`}>
+                    XP
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
 // --- LISTA DE BADGES (VERSÃO FINAL) ---
   const BADGES_LIST = [
     { id: 'pitstop', name: 'Pit Stop F1', icon: <Timer size={20}/>, color: 'text-red-500', desc: 'Troca de anexo em menos de 3s.' },
@@ -262,6 +332,8 @@ function App() {
         prevStudents.map(s => s.id === student.id ? updatedStudent : s)
       );
   };
+  // Adicione esta linha junto com os seus outros useState:
+  const [activeTab, setActiveTab] = useState('dashboard');
 // Estado para saber qual aluno o técnico está dando badge
   const [badgeStudent, setBadgeStudent] = useState(null);
     // --- VARIÁVEIS DA BATERIA DA EQUIPE ---
@@ -1906,7 +1978,16 @@ const handleFileSelect = (e) => {
                         <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-700"></div>
                     </div>
                     {/* ☝️ FIM DO BALÃOZINHO ☝️ */}
-
+{/* Adicione este botão no menu lateral do Técnico */}
+<button
+  onClick={() => setActiveTab('ranking')}
+  className={`w-full flex items-center px-4 py-3 rounded-lg mb-2 transition-colors ${
+    activeTab === 'ranking' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'
+  }`}
+>
+  <Trophy className="w-5 h-5 mr-3" />
+  Ranking de XP
+</button>
                   </button>
                 );
               })}
@@ -1998,6 +2079,16 @@ const handleFileSelect = (e) => {
               <button onClick={() => setShowFullSchedule(true)} className="bg-white/5 border border-white/10 text-white p-2 rounded-full hover:bg-white/10 transition-colors md:px-4 md:py-2 md:rounded-lg flex items-center gap-2">
                   <CalendarDays size={18} /> <span className="hidden md:inline text-xs font-bold">Cronograma</span>
               </button>
+              {/* 👇 COLE O BOTÃO DO RANKING AQUI 👇 */}
+              {!viewAsStudent && (
+                <button 
+                  onClick={() => setActiveTab('ranking')} 
+                  className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 p-2 rounded-full hover:bg-yellow-500/20 transition-colors md:px-4 md:py-2 md:rounded-lg flex items-center gap-2"
+                >
+                  <Trophy size={18} /> <span className="hidden md:inline text-xs font-bold">Ranking XP</span>
+                </button>
+              )}
+              {/* ☝️ FIM DO BOTÃO DO RANKING ☝️ */}
 {/* --- BOTÃO DA BATERIA (NOVO) --- */}
               <button 
                 onClick={() => setShowBatteryModal(true)} 
@@ -2028,6 +2119,7 @@ const handleFileSelect = (e) => {
                   >
                       {isAdmin ? '👤 Voltar pro XP' : '👑 Modo Capitã'}
                   </button>
+                  
               )}
 {/* ÁREA DO DESAFIO DE INGLÊS (Visão do Aluno) */}
 {viewAsStudent && (
@@ -2069,6 +2161,11 @@ const handleFileSelect = (e) => {
       {/* --- ÁREA DO TÉCNICO (ADMIN) --- */}
       {isAdmin && (
         <main className="p-4 md:p-8 max-w-[1600px] mx-auto animate-in fade-in duration-500">
+
+            {/* Dentro do seu <main> ou área de conteúdo central, junto com os outros 'ifs' de abas */}
+{activeTab === 'ranking' && (
+  <RankingPanel students={students} />
+)}
             {/* ======================================================= */}
       {/* 🚀 AQUI: O CONTADOR ENTRA NO TOPO DO PAINEL DO TÉCNICO */}
       {/* ======================================================= */}
