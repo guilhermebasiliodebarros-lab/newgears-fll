@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where } from "firebase/firestore";
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc } from "firebase/firestore";
 import StrategyBoard from './components/StrategyBoard';
 import Countdown from './components/Countdown';
 import { 
@@ -1236,44 +1236,39 @@ const handleDeleteRound = async (id) => {
           showNotification("Erro ao salvar mudança.", "error");
       }
   }
-// --- ROBÔ ARRUMADOR: Força os alunos para as estações certas ---
-  // (Cole isso LOGO ABAIXO da função moveStudent)
-  
+// --- CARREGAR AS METAS DO BANCO (Memória Longa) ---
   useEffect(() => {
-    // 1. Só roda se tivermos a semana definida e alunos carregados
-    if (!currentWeekData || students.length === 0) return;
+    const docRef = doc(db, "settings", "weekly_missions");
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setMissions(docSnap.data());
+      } else {
+        setMissions({ Engenharia: {}, Inovação: {}, Gestão: {} });
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
-    console.log("Verificando se todos estão nos lugares certos...");
+  // --- ATUALIZAR NA TELA ENQUANTO DIGITAM (Memória Curta) ---
+  const updateMission = (station, field, value) => {
+    setMissions(prev => ({
+      ...prev,
+      [station]: { ...prev[station], [field]: value }
+    }));
+  };
 
-    // Função interna para verificar e mover
-    const checkAndMove = (stationName, assignedList) => {
-        // Se a lista for vazia ou texto de aviso, ignora
-        if (!Array.isArray(assignedList)) return; 
-
-        assignedList.forEach(identifier => {
-            // Tenta achar o aluno pelo ID (preferência) ou pelo Nome (texto)
-            const student = students.find(s => 
-                s.id === identifier || 
-                s.name.toLowerCase().includes(identifier.toString().toLowerCase())
-            );
-
-            // Se achou o aluno E ele NÃO está na estação certa...
-            if (student && student.station !== stationName) {
-                console.log(`MOVENDO ${student.name} para ${stationName}...`);
-                moveStudent(student.id, stationName); // <--- A MÁGICA ACONTECE AQUI
-            }
-        });
-    };
-
-    // Verifica as 3 estações
-    if (currentWeekData.assignments) {
-        checkAndMove('Gestão', currentWeekData.assignments.Gestão);
-        checkAndMove('Engenharia', currentWeekData.assignments.Engenharia);
-        checkAndMove('Inovação', currentWeekData.assignments.Inovação);
+  // --- SALVAR NO BANCO QUANDO CLICAR FORA DA CAIXA (O Pulo do Gato) ---
+  const saveMissionToFirebase = async (station) => {
+    try {
+      const docRef = doc(db, "settings", "weekly_missions");
+      await setDoc(docRef, {
+        [station]: missions[station]
+      }, { merge: true });
+      console.log(`Meta de ${station} salva no banco com sucesso!`); 
+    } catch (error) {
+      console.error("Erro ao salvar a meta da semana:", error);
     }
-
-  }, [currentWeekData, students.length]); // Roda sempre que mudar a semana ou entrarem alunos
-  const updateMission = (st, f, v) => setMissions({ ...missions, [st]: { ...missions[st], [f]: v } })
+  };
 
   const closeModal = () => { setModal({ type: null, data: null }); setSelectedFile(null); }
 
