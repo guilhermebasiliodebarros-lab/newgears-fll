@@ -2259,26 +2259,52 @@ const handleFileSelect = (e) => {
                       </div>
                   </div>
 
-                  {/* COLUNAS 2, 3 e 4: ESTAÇÕES */}
-                  {['Engenharia', 'Inovação', 'Gestão'].map(st => {
-                      const stats = getStationStats(st);
-                      return (
-                          <div key={st} className={`border rounded-2xl p-4 flex flex-col h-full relative overflow-hidden ${st==='Engenharia'?'bg-blue-500/5 border-blue-500/20':st==='Inovação'?'bg-pink-500/5 border-pink-500/20':'bg-purple-500/5 border-purple-500/20'}`}>
-                              <div className="flex justify-between items-start mb-2 border-b border-white/10 pb-2">
-                                  <h3 className={`font-black flex items-center gap-2 text-sm uppercase tracking-wider ${st==='Engenharia'?'text-blue-500':st==='Inovação'?'text-pink-500':'text-purple-500'}`}>
-                                      {st==='Engenharia'?<Rocket size={16}/>:st==='Inovação'?<Microscope size={16}/>:<BookOpen size={16}/>} {st}
-                                  </h3>
-                                  <button onClick={() => handleCloseStationWeek(st)} className="text-[10px] bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded font-bold flex items-center gap-1 transition-all"><Gavel size={10}/> Fechar Semana</button>
-                              </div>
-                              
-                              <div className="bg-black/40 rounded-xl p-3 mb-4 border border-white/5">
-                                  <label className="text-[10px] text-gray-500 font-bold uppercase block mb-2">Meta da Semana:</label>
-                                  <textarea value={missions[st]?.text || ""} onChange={(e) => updateMission(st, 'text', e.target.value)} className="w-full bg-transparent border-b border-white/10 text-xs text-gray-300 focus:border-white/50 outline-none mb-4 min-h-[60px] resize-y" />
-                                  <div className="flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/10">
-                                      <Calendar size={14} className="text-blue-500"/>
-                                      <input type="date" value={missions[st]?.deadline || ""} onChange={(e) => updateMission(st, 'deadline', e.target.value)} className="bg-transparent text-xs text-white font-bold outline-none w-full cursor-pointer" />
-                                  </div>
-                              </div>
+{/* COLUNAS 2, 3 e 4: ESTAÇÕES */}
+  {['Engenharia', 'Inovação', 'Gestão'].map(st => {
+      const stats = getStationStats(st);
+      return (
+          <div key={st} className={`border rounded-2xl p-4 flex flex-col h-full relative overflow-hidden ${st==='Engenharia'?'bg-blue-500/5 border-blue-500/20':st==='Inovação'?'bg-pink-500/5 border-pink-500/20':'bg-purple-500/5 border-purple-500/20'}`}>
+              <div className="flex justify-between items-start mb-2 border-b border-white/10 pb-2">
+                  <h3 className={`font-black flex items-center gap-2 text-sm uppercase tracking-wider ${st==='Engenharia'?'text-blue-500':st==='Inovação'?'text-pink-500':'text-purple-500'}`}>
+                      {st==='Engenharia'?<Rocket size={16}/>:st==='Inovação'?<Microscope size={16}/>:<BookOpen size={16}/>} {st}
+                  </h3>
+                  <button onClick={() => handleCloseStationWeek(st)} className="text-[10px] bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded font-bold flex items-center gap-1 transition-all"><Gavel size={10}/> Fechar Semana</button>
+              </div>
+              
+              <div className="bg-black/40 rounded-xl p-3 mb-4 border border-white/5">
+                  <label className="text-[10px] text-gray-500 font-bold uppercase block mb-2">Meta da Semana:</label>
+                  
+                  {/* Campo de Texto da Meta */}
+                  <textarea 
+                    value={missions[st]?.text || ""} 
+                    onChange={(e) => updateMission(st, 'text', e.target.value)} 
+                    className="w-full bg-transparent border-b border-white/10 text-xs text-gray-300 focus:border-white/50 outline-none mb-4 min-h-[60px] resize-y" 
+                  />
+                  
+                  {/* Campo de Data */}
+                  <div className="flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/10 mb-3">
+                      <Calendar size={14} className="text-blue-500"/>
+                      <input 
+                        type="date" 
+                        value={missions[st]?.deadline || ""} 
+                        onChange={(e) => updateMission(st, 'deadline', e.target.value)} 
+                        className="bg-transparent text-xs text-white font-bold outline-none w-full cursor-pointer" 
+                      />
+                  </div>
+
+                  {/* 👇 O BOTÃO DE SALVAR NOVO ESTÁ AQUI 👇 */}
+                  <button 
+                      onClick={() => {
+                          saveMissionToFirebase(st);
+                          showNotification(`Meta de ${st} salva com sucesso!`, 'success');
+                      }}
+                      className="w-full bg-green-600/20 hover:bg-green-600 text-green-500 hover:text-white border border-green-500/30 text-[10px] uppercase tracking-wider font-bold py-2 rounded-lg transition-all flex justify-center items-center gap-2"
+                  >
+                      <Check size={14} /> Salvar Meta
+                  </button>
+                  {/* ☝️ FIM DO BOTÃO ☝️ */}
+                  
+              </div>
 
                               <div className="space-y-3 flex-1">
                                   {stats.isCompleted && <div className="h-full flex flex-col items-center justify-center text-center opacity-50 mt-10"><CheckSquare size={48} className="text-green-500 mb-2"/><p className="text-sm font-bold text-green-500">Semana Concluída!</p></div>}
