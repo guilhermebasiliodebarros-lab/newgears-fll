@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc } from "firebase/firestore";
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc } from "firebase/firestore";
+import { db } from './firebase'; // Importa a instância já inicializada
 import StrategyBoard from './components/StrategyBoard';
 import Countdown from './components/Countdown';
 import { 
@@ -15,6 +15,7 @@ import {
   Cpu, 
   Trophy, 
   Medal, 
+  Briefcase, // <--- Ícone que faltava para o modal de especialista
   Star, 
   Shield, 
   Target, 
@@ -93,31 +94,8 @@ import {
   CheckCheck,    // <--- Provavelmente vai pedir em seguida (Aprovado Duplo)
   ExternalLink,  // <--- Provavelmente vai pedir em seguida (Abrir Arquivo em outra aba)
   FileWarning,
+  Book,          // <--- Ícone do Diário
 } from 'lucide-react';
-
-// --- CONFIGURAÇÃO DO FIREBASE (COLE AQUI) ---
-const firebaseConfig = {
-  apiKey: "AIzaSyAeHmw9cMxzhu-nbXDIU21DxkcwZU0kKtM", // Suas chaves reais
-  authDomain: "gestao-new-gears.firebaseapp.com",
-  projectId: "gestao-new-gears",
-  storageBucket: "gestao-new-gears.firebasestorage.app",
-  messagingSenderId: "230026094824",
-  appId: "1:230026094824:web:fbc826414e299dba89815d"
-};
-
-// --- LISTA DE TÉCNICOS (ADMINISTRADORES) ---
-const ADMIN_USERS = [
-  { user: "Guilherme", pass: "dti2@15!!" },
-  { user: "Felipe", pass: "dti2@15!!" } 
-  // Pode adicionar quantos quiser separando por vírgula
-];
-
-// Inicializa Firebase
-let db, storage;
-try {
-  const app = initializeApp(firebaseConfig);
-  db = getFirestore(app);
-} catch (e) { console.error("Erro Firebase", e); }
 
 
 // --- CONFIGURAÇÃO DE NÍVEIS ---
@@ -126,12 +104,18 @@ const LEVELS = [
 
     { name: "Novato", min: 0, max: 499, color: "text-gray-400" },
 
-    { name: "Aprendiz", min: 500, max: 1199, color: "text-cyan-400" },
+    { name: "Aprendiz", min: 500, max: 1199, color: "text-blue-400" },
 
     { name: "Veterano", min: 1200, max: 2399, color: "text-purple-400" },
 
     { name: "Mestre FLL", min: 2400, max: 10000, color: "text-yellow-400" }
 
+];
+// --- LISTA DE TÉCNICOS (ADMINISTRADORES) ---
+const ADMIN_USERS = [
+  { user: "Guilherme", pass: "dti2@15!!" },
+  { user: "Felipe", pass: "dti2@15!!" },
+  { user: "admin", pass: "admin123" }
 ];
 // --- SEU LOGO SVG (Componente) ---
 const LogoNewGears = () => (
@@ -167,6 +151,21 @@ const LogoNewGears = () => (
   </svg>
 );
 
+const Header = ({ title, userType, onLogout }) => (
+  <>
+    <div className="flex justify-between items-center my-8">
+      <div className="flex items-center gap-4">
+        <h1 className="text-3xl font-bold">{title}</h1>
+        <span className={`px-3 py-1 rounded-full text-xs font-bold ${userType === 'admin' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
+          {userType.toUpperCase()}
+        </span>
+      </div>
+      <button onClick={onLogout} className="bg-white/10 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2">
+        <LogOut size={16}/> Sair
+      </button>
+    </div>
+  </>
+);
 
 function App() {
 
@@ -243,8 +242,8 @@ function App() {
 // --- LISTA DE BADGES (VERSÃO FINAL) ---
   const BADGES_LIST = [
     { id: 'pitstop', name: 'Pit Stop F1', icon: <Timer size={20}/>, color: 'text-red-500', desc: 'Troca de anexo em menos de 3s.' },
-    { id: 'engineer', name: 'Engenheiro Minimalista', icon: <Wrench size={20}/>, color: 'text-gray-300', desc: 'Solução mecânica simples e genial.' },
-    { id: 'ice_blood', name: 'Sangue Frio', icon: <ThermometerSnowflake size={20}/>, color: 'text-cyan-400', desc: 'Manteve a calma no erro crítico.' },
+    { id: 'engineer', name: 'Engenheiro Minimalista', icon: <Wrench size={20}/>, color: 'text-gray-400', desc: 'Solução mecânica simples e genial.' },
+    { id: 'ice_blood', name: 'Sangue Frio', icon: <ThermometerSnowflake size={20}/>, color: 'text-blue-400', desc: 'Manteve a calma no erro crítico.' },
     { id: 'repetition', name: 'Rei da Repetição', icon: <RotateCcw size={20}/>, color: 'text-green-500', desc: '10 acertos seguidos na mesa.' },
     { id: 'helper', name: 'Braço Direito', icon: <HeartHandshake size={20}/>, color: 'text-pink-500', desc: 'Ajudou o time em qualquer situação.' },
     { id: 'data_keeper', name: 'Guardião dos Dados', icon: <BarChart size={20}/>, color: 'text-blue-500', desc: 'Trouxe estatísticas reais pro Projeto.' },
@@ -387,7 +386,10 @@ function App() {
       ? Math.round(teamMoods.reduce((acc, curr) => acc + curr.level, 0) / teamMoods.length) 
       : 0;
     // --- LÓGICA DE LOGIN (INSERIDO) ---
-  const [currentUser, setCurrentUser] = useState(null); // Se null, mostra tela de login
+  const [currentUser, setCurrentUser] = useState(() => {
+    const saved = localStorage.getItem("roboquest_user");
+    return saved ? JSON.parse(saved) : null;
+  });
   const [loginUser, setLoginUser] = useState("");
   const [loginPass, setLoginPass] = useState("");
   const [loginError, setLoginError] = useState("");
@@ -395,32 +397,43 @@ function App() {
   const handleLogin = (e) => {
     e.preventDefault();
     setLoginError("");
+    
+    // Normaliza (remove espaços e deixa minúsculo) para evitar erros de digitação
+    const userClean = loginUser.trim().toLowerCase();
+    const passClean = loginPass.trim();
 
-    // 1. Tenta logar como Técnico (Procura na lista de ADMINs)
-    const adminFound = ADMIN_USERS.find(a => a.user === loginUser && a.pass === loginPass);
+    // 1. Lógica de login de Admin (SIMPLIFICADA)
+    // TODO: Substituir por Firebase Auth. Por enquanto, uma verificação simples.
+    const adminFound = ADMIN_USERS.find(a => a.user.toLowerCase() === userClean && a.pass === passClean);
 
     if (adminFound) {
         // Logou com sucesso!
-        setCurrentUser({ type: 'admin', name: adminFound.user }); // Salva o nome de quem entrou
+        const userObj = { type: 'admin', name: adminFound.user };
+        setCurrentUser(userObj);
         setIsAdmin(true);
         setViewAsStudent(null);
+        localStorage.setItem("roboquest_user", JSON.stringify(userObj)); // Salva na memória
         return;
     }
 
-    // ... (o resto do código que verifica aluno continua igual)
-    // 2. Tenta logar como Aluno...
+    console.log("Tentando logar aluno:", userClean);
+    console.log("Alunos carregados no sistema:", students.length);
 
     // 2. Tenta logar como Aluno (busca no array 'students' que já existe no seu código)
     // Nota: Certifique-se de que o cadastro de aluno salva 'username' e 'password'
     const studentFound = students.find(s => 
-        s.username && s.username.toLowerCase() === loginUser.toLowerCase() && s.password === loginPass
+        s.username && s.username.toLowerCase().trim() === userClean && s.password === passClean
     );
 
     if (studentFound) {
-        setCurrentUser({ type: 'student', data: studentFound });
+        const userObj = { type: 'student', data: studentFound };
+        setCurrentUser(userObj);
         setIsAdmin(false); // Remove flag de admin
         setViewAsStudent(studentFound); // Força a visão para este aluno
+        localStorage.setItem("roboquest_user", JSON.stringify(userObj)); // Salva na memória
     } else {
+        // Log para ajudar a descobrir o erro (veja no F12)
+        console.log("Falha no login. Usuários disponíveis:", students.map(s => s.username));
         setLoginError("Usuário ou senha incorretos.");
     }
   };
@@ -433,12 +446,21 @@ function App() {
       setViewAsStudent(null);
       setLoginUser("");
       setLoginPass("");
+      localStorage.removeItem("roboquest_user"); // Limpa a memória
   };
   // ----------------------------------
 
-  const [isAdmin, setIsAdmin] = useState(true) 
+  // Recupera estado inicial da memória também
+  const [isAdmin, setIsAdmin] = useState(() => {
+    const saved = localStorage.getItem("roboquest_user");
+    return saved ? JSON.parse(saved).type === 'admin' : false;
+  });
 
-  const [viewAsStudent, setViewAsStudent] = useState(null)
+  const [viewAsStudent, setViewAsStudent] = useState(() => {
+    const saved = localStorage.getItem("roboquest_user");
+    const parsed = saved ? JSON.parse(saved) : null;
+    return parsed?.type === 'student' ? parsed.data : null;
+  });
 
   const [isStudentLink, setIsStudentLink] = useState(false)
 
@@ -464,6 +486,19 @@ function App() {
 
   const [students, setStudents] = useState([])
  
+  const [tasks, setTasks] = useState([]) // <--- NOVO ESTADO PARA TAREFAS
+  const [logbookEntries, setLogbookEntries] = useState([]) // <--- NOVO ESTADO PARA DIÁRIO
+
+  // --- NOVO: Sincroniza dados do aluno logado com o Firebase em tempo real ---
+  useEffect(() => {
+    if (currentUser?.type === 'student' && students.length > 0) {
+        // Procura a versão mais recente deste aluno na lista que veio do banco
+        const freshStudent = students.find(s => s.id === currentUser.data.id);
+        if (freshStudent) {
+            setViewAsStudent(freshStudent);
+        }
+    }
+  }, [students, currentUser]);
 
   const [experts, setExperts] = useState([])
 
@@ -471,9 +506,10 @@ function App() {
 
   const [rounds, setRounds] = useState([])
 
-  const [compliments, setCompliments] = useState([])
+  const [compliments, setCompliments] = useState([]) 
 
-  const [rubric, setRubric] = useState({ discovery: 3, innovation: 2, impact: 3, inclusion: 4, teamwork: 3, fun: 4 })
+  const [innovationRubric, setInnovationRubric] = useState({ identificacao: 1, design: 1, criacao: 1, iteracao: 1, comunicacao: 1 })
+  const [robotDesignRubric, setRobotDesignRubric] = useState({ durabilidade: 1, eficiencia: 1, programacao: 1, estrategia: 1 })
 
   // --- NOVOS ESTADOS NECESSÁRIOS ---
   const [questions, setQuestions] = useState([])
@@ -648,8 +684,12 @@ function App() {
     const createListener = (colName, setter) => {
         return onSnapshot(collection(db, colName), (snapshot) => {
             const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            console.log(`✅ ${colName} carregados com sucesso:`, data.length);
             setter(data);
-        }, (error) => console.error(`Erro em ${colName}:`, error));
+        }, (error) => {
+            console.error(`❌ ERRO CRÍTICO em ${colName}:`, error);
+            showNotification(`Erro de conexão: ${error.code}`, "error");
+        });
     };
 
     const unsubStudents = createListener("students", setStudents);
@@ -660,11 +700,25 @@ function App() {
     const unsubMatrix = createListener("decisionMatrix", setDecisionMatrix);
     const unsubQuestions = createListener("questions", setQuestions);
     const unsubOutreach = createListener("outreach", setOutreachEvents);
+    const unsubTasks = createListener("tasks", setTasks); // <--- NOVO LISTENER
+    const unsubLogbook = createListener("logbook", setLogbookEntries); // <--- LISTENER DIÁRIO
     // ... dentro do useEffect principal ...
     const unsubProject = onSnapshot(collection(db, "project"), (s) => {
         if (!s.empty) {
             // Pega o primeiro documento encontrado
             setProjectSummary({ ...s.docs[0].data(), id: s.docs[0].id });
+        }
+    });
+
+    // Listeners para as Rubricas
+    const unsubInnovationRubric = onSnapshot(doc(db, "settings", "rubric_innovation"), (docSnap) => {
+        if (docSnap.exists()) {
+            setInnovationRubric(docSnap.data());
+        }
+    });
+    const unsubRobotDesignRubric = onSnapshot(doc(db, "settings", "rubric_robot_design"), (docSnap) => {
+        if (docSnap.exists()) {
+            setRobotDesignRubric(docSnap.data());
         }
     });
 
@@ -678,7 +732,7 @@ function App() {
     return () => {
         unsubStudents(); unsubExperts(); unsubRobot(); unsubRounds();
         unsubCompliments(); unsubMatrix(); unsubQuestions(); 
-        unsubOutreach(); unsubMissions();
+        unsubOutreach(); unsubMissions(); unsubTasks(); unsubInnovationRubric(); unsubRobotDesignRubric(); unsubLogbook();
     };
   }, []);
 
@@ -705,6 +759,64 @@ function App() {
   const saveStudent = (newStudentData) => { setStudents(prev => { const exists = prev.find(s => s.id === newStudentData.id); return exists ? prev.map(s => s.id === newStudentData.id ? newStudentData : s) : [...prev, newStudentData]; }); }
 
   const deleteStudent = (id) => { setStudents(prev => prev.filter(s => s.id !== id)); }
+
+  // --- FUNÇÕES DO KANBAN (TAREFAS) ---
+  const handleAddTask = async (e) => {
+      e.preventDefault();
+      const text = e.target.taskText.value;
+      if(!text) return;
+      
+      try {
+          await addDoc(collection(db, "tasks"), {
+              text,
+              status: 'todo', // todo, doing, done
+              createdAt: new Date().toISOString()
+          });
+          e.target.reset();
+      } catch (error) {
+          console.error("Erro ao criar tarefa:", error);
+      }
+  }
+
+  const moveTask = async (id, newStatus) => {
+      try {
+          await updateDoc(doc(db, "tasks", id), { status: newStatus });
+      } catch (error) {
+          console.error("Erro ao mover tarefa:", error);
+      }
+  }
+
+  const removeTask = async (id) => {
+      if(window.confirm("Excluir tarefa permanentemente?")) {
+          await deleteDoc(doc(db, "tasks", id));
+      }
+  }
+
+  // --- FUNÇÃO PARA SALVAR DIÁRIO DE BORDO ---
+  const handleLogbookSubmit = async (e) => {
+      e.preventDefault();
+      const text = e.target.entry.value;
+      if (!text) return;
+      
+      // Identifica quem está escrevendo (Aluno ou Técnico)
+      const authorName = isAdmin ? "Técnico" : viewAsStudent?.name || "Anônimo";
+      const authorId = isAdmin ? "admin" : viewAsStudent?.id || "unknown";
+
+      try {
+          await addDoc(collection(db, "logbook"), {
+              studentId: authorId,
+              studentName: authorName,
+              text: text,
+              date: new Date().toISOString()
+          });
+          e.target.reset();
+          showNotification("Diário de Bordo atualizado! 📖");
+      } catch (error) {
+          console.error("Erro ao salvar diário:", error);
+          showNotification("Erro ao salvar.", "error");
+      }
+  }
+
 
  // 2. A função de excluir:
 const handleDeleteStudent = async (studentId) => {
@@ -822,6 +934,28 @@ const handleDeleteRound = async (id) => {
              showNotification("Erro ao salvar.", "error");
           }
       }
+  }
+
+  // --- FUNÇÕES DE OUTREACH (IMPACTO) ---
+  const handleOutreachSubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      
+      let img = modal.data?.image || null;
+      if (selectedFile) img = await convertBase64(selectedFile);
+
+      const outreachData = {
+          name: fd.get('name'),
+          type: fd.get('type'),
+          people: parseInt(fd.get('people')),
+          date: fd.get('date'),
+          feedback: fd.get('feedback'),
+          image: img
+      };
+
+      await addDoc(collection(db, "outreach"), outreachData);
+      closeModal();
+      showNotification("Evento de impacto registrado!");
   }
 
   const handleAttendanceSubmit = async (e) => {
@@ -1138,12 +1272,14 @@ const handleDeleteRound = async (id) => {
 
   const openGradesModal = (student) => setModal({ type: 'grades', data: student });
 
+  const openProfileModal = (student) => setModal({ type: 'profile', data: student });
+
   // Novos Modais
 
   const openMissionForm = (data = null) => { setSelectedFile(null); setModal({ type: 'missionForm', data }); }
 
   const openMatrixForm = () => setModal({ type: 'matrixForm' });
-
+  const openOutreachForm = () => { setSelectedFile(null); setModal({ type: 'outreachForm' }); }
 
 
   // --- MODAL DE XP E APROVAÇÃO (CONECTADO) ---
@@ -1255,6 +1391,24 @@ const handleDeleteRound = async (id) => {
       ...prev,
       [station]: { ...prev[station], [field]: value }
     }));
+  };
+
+  // --- FUNÇÃO PARA SALVAR A AUTO-AVALIAÇÃO DA RUBRICA ---
+  const handleRubricUpdate = async (rubricType, category, value) => {
+      const isInnovation = rubricType === 'innovation';
+      const currentRubric = isInnovation ? innovationRubric : robotDesignRubric;
+      const setRubricState = isInnovation ? setInnovationRubric : setRobotDesignRubric;
+      const docId = isInnovation ? 'rubric_innovation' : 'rubric_robot_design';
+ 
+      const newRubric = { ...currentRubric, [category]: parseInt(value) };
+      setRubricState(newRubric); // Atualiza na tela imediatamente
+      try {
+          // Salva no banco de dados sem precisar de botão "Salvar"
+          await setDoc(doc(db, "settings", docId), newRubric, { merge: true });
+      } catch (error) {
+          console.error(`Erro ao salvar rubrica de ${rubricType}:`, error);
+          showNotification("Erro ao salvar auto-avaliação.", "error");
+      }
   };
 
   // --- SALVAR NO BANCO QUANDO CLICAR FORA DA CAIXA (O Pulo do Gato) ---
@@ -1442,7 +1596,7 @@ const handleFileSelect = (e) => {
 
   // --- MODAL GERAL ---
 
-  const Modal = () => {
+  const renderModal = () => {
 
     if (!modal.type) return null;
 
@@ -1513,9 +1667,9 @@ const handleFileSelect = (e) => {
             </label>
             <label className="cursor-pointer">
                 <input type="radio" name="avatarType" value="mech2" className="hidden peer" />
-                <div className="bg-black/50 border border-white/20 rounded-xl p-4 flex flex-col items-center hover:bg-white/5 peer-checked:border-cyan-500 peer-checked:bg-cyan-500/10 transition-all">
-                    <Bot className="text-cyan-500 mb-2" size={32} />
-                    <span className="text-[10px] text-white font-bold mt-1">Ciano</span>
+                <div className="bg-black/50 border border-white/20 rounded-xl p-4 flex flex-col items-center hover:bg-white/5 peer-checked:border-fuchsia-500 peer-checked:bg-fuchsia-500/10 transition-all">
+                    <Bot className="text-fuchsia-500 mb-2" size={32} />
+                    <span className="text-[10px] text-white font-bold mt-1">Fúcsia</span>
                 </div>
             </label>
         </div>
@@ -1580,7 +1734,7 @@ const handleFileSelect = (e) => {
 
           {modal.type === 'robotView' && (<div><div className="flex justify-between items-start mb-2"><h3 className="text-xl font-bold text-white">{modal.data.name}</h3><span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-mono font-bold">{modal.data.version}</span></div><p className="text-xs text-gray-500 mb-6">{modal.data.date}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Mudanças e Testes</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.changes}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto do Protótipo</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10" alt="Robô" /></div>)}</div>)}
 
-          {modal.type === 'newRound' && (<form onSubmit={handleRoundSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><ListTodo className="text-cyan-500"/> Planejar Round</h3><div className="grid grid-cols-2 gap-4 mb-4"><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome do Round</label><input name="name" required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-cyan-500 outline-none" placeholder="Ex: Saída 1" /></div><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Tempo (segundos)</label><input name="time" type="number" required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-cyan-500 outline-none" placeholder="30" /></div></div><div className="mb-6 max-h-40 overflow-y-auto custom-scrollbar border border-white/10 rounded-lg p-2"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block sticky top-0 bg-[#151520] pb-2">Missões (Selecione)</label>{missionsList.map(m => (<label key={m.id} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded cursor-pointer"><input type="checkbox" name="missions" value={m.id} className="accent-cyan-500 w-4 h-4"/><div className="flex items-center gap-2 flex-1">{m.image && <img src={m.image} className="w-6 h-6 rounded object-cover" alt="M" />}<span className="text-sm text-gray-300">{m.code} - {m.name}</span></div><span className="text-xs font-bold text-cyan-500">+{m.points}pts</span></label>))}</div><button className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-lg">Salvar Round</button></form>)}
+          {modal.type === 'newRound' && (<form onSubmit={handleRoundSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><ListTodo className="text-blue-500"/> Planejar Round</h3><div className="grid grid-cols-2 gap-4 mb-4"><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome do Round</label><input name="name" required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Saída 1" /></div><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Tempo (segundos)</label><input name="time" type="number" required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="30" /></div></div><div className="mb-6 max-h-40 overflow-y-auto custom-scrollbar border border-white/10 rounded-lg p-2"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block sticky top-0 bg-[#151520] pb-2">Missões (Selecione)</label>{missionsList.map(m => (<label key={m.id} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded cursor-pointer"><input type="checkbox" name="missions" value={m.id} className="accent-blue-500 w-4 h-4"/><div className="flex items-center gap-2 flex-1">{m.image && <img src={m.image} className="w-6 h-6 rounded object-cover" alt="M" />}<span className="text-sm text-gray-300">{m.code} - {m.name}</span></div><span className="text-xs font-bold text-blue-500">+{m.points}pts</span></label>))}</div><button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar Round</button></form>)}
 
     
 
@@ -1596,21 +1750,21 @@ const handleFileSelect = (e) => {
 
              <form onSubmit={handleMissionSubmit}>
 
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Settings className="text-cyan-500"/> {modal.data ? 'Editar' : 'Nova'} Missão</h3>
+                <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Settings className="text-blue-500"/> {modal.data ? 'Editar' : 'Nova'} Missão</h3>
 
                 <div className="grid grid-cols-3 gap-4 mb-4">
 
-                    <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Código</label><input name="code" defaultValue={modal.data?.code} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-cyan-500 outline-none" placeholder="M01" /></div>
+                    <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Código</label><input name="code" defaultValue={modal.data?.code} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="M01" /></div>
 
-                    <div className="col-span-2"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome</label><input name="name" defaultValue={modal.data?.name} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-cyan-500 outline-none" placeholder="Coral Nursery" /></div>
+                    <div className="col-span-2"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome</label><input name="name" defaultValue={modal.data?.name} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Coral Nursery" /></div>
 
                 </div>
 
-                <div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Pontos (Máx)</label><input name="points" type="number" defaultValue={modal.data?.points} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-cyan-500 outline-none" /></div>
+                <div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Pontos (Máx)</label><input name="points" type="number" defaultValue={modal.data?.points} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div>
 
-                <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Missão</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-cyan-500/10 file:text-cyan-500 hover:file:bg-cyan-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}</div>
+                <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Missão</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}</div>
 
-                <button className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-lg">Salvar Missão</button>
+                <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar Missão</button>
 
              </form>
              
@@ -1649,6 +1803,44 @@ const handleFileSelect = (e) => {
 
           )}
 
+          {/* NOVO MODAL: EDITOR DO PROJETO */}
+          {modal.type === 'projectForm' && (
+             <form onSubmit={handleProjectSubmit}>
+                <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white">
+                    <Lightbulb className="text-yellow-500"/> Editar Projeto de Inovação
+                </h3>
+
+                <div className="mb-4">
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome do Projeto / Solução</label>
+                    <input name="title" defaultValue={projectSummary?.title} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-yellow-500 outline-none font-bold text-lg" placeholder="Ex: Filtro Bio-Sintético" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block text-red-400">O Problema</label>
+                        <textarea name="problem" defaultValue={projectSummary?.problem} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white h-32 focus:border-red-500 outline-none resize-none" placeholder="Qual problema vocês resolveram?" />
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block text-green-400">A Solução</label>
+                        <textarea name="solution" defaultValue={projectSummary?.solution} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white h-32 focus:border-green-500 outline-none resize-none" placeholder="Como funciona a invenção?" />
+                    </div>
+                </div>
+
+                <div className="mb-4">
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block text-blue-400">Impacto (Para os Juízes)</label>
+                    <textarea name="impact" defaultValue={projectSummary?.impact} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white h-20 focus:border-blue-500 outline-none" placeholder="Quem isso ajuda? Qual o benefício real?" />
+                </div>
+
+                <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10">
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto do Protótipo / Desenho</label>
+                    <input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-yellow-500/10 file:text-yellow-500 hover:file:bg-yellow-500/20 cursor-pointer" />
+                    {projectSummary?.image && !selectedFile && <div className="mt-2 text-xs text-green-500">Imagem atual já salva.</div>}
+                </div>
+
+                <button className="w-full bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-3 rounded-lg">Salvar Projeto Oficial</button>
+             </form>
+          )}
+
         </div>
 
       </div>
@@ -1661,7 +1853,7 @@ const handleFileSelect = (e) => {
 
   // --- COMPONENTE DE ESTRATÉGIA ---
 
-  const StrategyView = ({ readonly = false }) => (
+  const StrategyView = () => (
 
       <div className="animate-in fade-in duration-300 space-y-8">
 
@@ -1671,7 +1863,7 @@ const handleFileSelect = (e) => {
 
           <div className="bg-[#151520] border border-white/10 rounded-2xl p-6">
 
-              <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><BarChart3 className="text-purple-500"/> Matriz de Decisão (Pugh Matrix)</h3>{!readonly && <button onClick={openMatrixForm} className="text-xs bg-purple-500/10 text-purple-500 border border-purple-500/20 px-3 py-1.5 rounded-lg hover:bg-purple-500 hover:text-white font-bold">+ Nova Ideia</button>}</div>
+              <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><BarChart3 className="text-purple-500"/> Matriz de Decisão (Pugh Matrix)</h3><button onClick={openMatrixForm} className="text-xs bg-purple-500/10 text-purple-500 border border-purple-500/20 px-3 py-1.5 rounded-lg hover:bg-purple-500 hover:text-white font-bold">+ Nova Ideia</button></div>
 
               <div className="overflow-x-auto"><table className="w-full text-left border-collapse"><thead className="text-xs text-gray-500 uppercase border-b border-white/10"><tr><th className="p-3">Ideia</th><th className="p-3 text-center">Impacto (x3)</th><th className="p-3 text-center">Custo (x2)</th><th className="p-3 text-center">Fácil (x1)</th><th className="p-3 text-center">Inovação (x2)</th><th className="p-3 text-right text-white">Total</th></tr></thead><tbody>
 
@@ -1693,17 +1885,17 @@ const handleFileSelect = (e) => {
 
             <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
 
-                <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><MessageSquare className="text-pink-500"/> Especialistas</h3>{!readonly && <button onClick={() => openExpertModal()} className="text-xs bg-pink-500/10 text-pink-500 border border-pink-500/20 px-3 py-1.5 rounded-lg hover:bg-pink-500 hover:text-white font-bold">+ Novo</button>}</div>
+                <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><MessageSquare className="text-pink-500"/> Especialistas</h3><button onClick={() => openExpertModal()} className="text-xs bg-pink-500/10 text-pink-500 border border-pink-500/20 px-3 py-1.5 rounded-lg hover:bg-pink-500 hover:text-white font-bold">+ Novo</button></div>
 
-                <div className="space-y-4">{experts.map(exp => (<div key={exp.id} onClick={() => openExpertView(exp)} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col gap-2 relative group cursor-pointer hover:bg-white/5 transition-colors">{!readonly && <button onClick={(e) => { e.stopPropagation(); openExpertModal(exp); }} className="absolute top-2 right-2 text-gray-500 hover:text-white p-1 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"><Pencil size={12}/></button>}<div className="flex justify-between items-start pr-6"><div><span className="text-white font-bold block text-sm">{exp.name}</span><span className="text-xs text-gray-400">{exp.role}</span></div>{exp.applied ? <span className="bg-green-500/20 text-green-500 text-[9px] px-2 py-1 rounded">APLICADO</span> : <span className="bg-gray-500/20 text-gray-500 text-[9px] px-2 py-1 rounded">CONSULTA</span>}</div><p className="text-xs text-gray-300 italic line-clamp-3">"{exp.notes}"</p>{exp.image && <div className="text-[10px] text-pink-400 flex items-center gap-1 mt-1"><ImageIcon size={10}/> Tem evidência</div>}<div className="h-1 rounded-full bg-gray-700 mt-1"><div className={`h-1 rounded-full ${exp.impact==='Alto'?'bg-green-500 w-full':exp.impact==='Médio'?'bg-yellow-500 w-1/2':'bg-gray-500 w-1/4'}`}></div></div></div>))}</div>
+                <div className="space-y-4">{experts.map(exp => (<div key={exp.id} onClick={() => openExpertView(exp)} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col gap-2 relative group cursor-pointer hover:bg-white/5 transition-colors"><button onClick={(e) => { e.stopPropagation(); openExpertModal(exp); }} className="absolute top-2 right-2 text-gray-500 hover:text-white p-1 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"><Pencil size={12}/></button><div className="flex justify-between items-start pr-6"><div><span className="text-white font-bold block text-sm">{exp.name}</span><span className="text-xs text-gray-400">{exp.role}</span></div>{exp.applied ? <span className="bg-green-500/20 text-green-500 text-[9px] px-2 py-1 rounded">APLICADO</span> : <span className="bg-gray-500/20 text-gray-500 text-[9px] px-2 py-1 rounded">CONSULTA</span>}</div><p className="text-xs text-gray-300 italic line-clamp-3">"{exp.notes}"</p>{exp.image && <div className="text-[10px] text-pink-400 flex items-center gap-1 mt-1"><ImageIcon size={10}/> Tem evidência</div>}<div className="h-1 rounded-full bg-gray-700 mt-1"><div className={`h-1 rounded-full ${exp.impact==='Alto'?'bg-green-500 w-full':exp.impact==='Médio'?'bg-yellow-500 w-1/2':'bg-gray-500 w-1/4'}`}></div></div></div>))}</div>
 
             </div>
 
             <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
 
-                <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><GitCommit className="text-blue-500"/> Diário do Robô</h3>{!readonly && <button onClick={() => openRobotModal()} className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-3 py-1.5 rounded-lg hover:bg-blue-500 hover:text-white font-bold">+ Versão</button>}</div>
+                <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><GitCommit className="text-blue-500"/> Diário do Robô</h3><button onClick={() => openRobotModal()} className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-3 py-1.5 rounded-lg hover:bg-blue-500 hover:text-white font-bold">+ Versão</button></div>
 
-                <div className="relative pl-4 border-l border-white/10 space-y-8">{robotVersions.map((ver, idx) => (<div key={ver.id} onClick={() => openRobotView(ver)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-[#151520]"></div><div className="bg-black/40 border border-white/5 p-4 rounded-xl relative hover:bg-white/5 transition-colors">{!readonly && <button onClick={(e) => { e.stopPropagation(); openRobotModal(ver); }} className="absolute top-2 right-2 text-gray-500 hover:text-white p-1 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"><Pencil size={12}/></button>}<div className="flex justify-between mb-2"><span className="text-blue-400 font-mono font-bold text-xs">{ver.version}</span><span className="text-[10px] text-gray-500">{ver.date.split('-').reverse().slice(0,2).join('/')}</span></div><h4 className="text-white font-bold mb-1 text-sm">{ver.name}</h4><p className="text-xs text-gray-400 line-clamp-2">{ver.changes}</p>{ver.image && <div className="text-[10px] text-blue-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Tem foto</div>}</div></div>))}</div>
+                <div className="relative pl-4 border-l border-white/10 space-y-8">{robotVersions.map((ver, idx) => (<div key={ver.id} onClick={() => openRobotView(ver)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-[#151520]"></div><div className="bg-black/40 border border-white/5 p-4 rounded-xl relative hover:bg-white/5 transition-colors"><button onClick={(e) => { e.stopPropagation(); openRobotModal(ver); }} className="absolute top-2 right-2 text-gray-500 hover:text-white p-1 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"><Pencil size={12}/></button><div className="flex justify-between mb-2"><span className="text-blue-400 font-mono font-bold text-xs">{ver.version}</span><span className="text-[10px] text-gray-500">{ver.date.split('-').reverse().slice(0,2).join('/')}</span></div><h4 className="text-white font-bold mb-1 text-sm">{ver.name}</h4><p className="text-xs text-gray-400 line-clamp-2">{ver.changes}</p>{ver.image && <div className="text-[10px] text-blue-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Tem foto</div>}</div></div>))}</div>
 
             </div>
 
@@ -1742,7 +1934,7 @@ const handleFileSelect = (e) => {
 
                   <div className="flex justify-between text-xs mb-1"><span className={isOverTime ? 'text-red-500 font-bold' : 'text-white'}>{totalTime}s usados</span><span className="text-gray-500">{150 - totalTime}s restantes</span></div>
 
-                  <div className="w-full bg-gray-800 rounded-full h-4 overflow-hidden border border-white/5"><div className={`h-full transition-all duration-1000 ${isOverTime ? 'bg-red-500' : 'bg-cyan-500'}`} style={{width: `${timePercent}%`}}></div></div>
+                  <div className="w-full bg-gray-800 rounded-full h-4 overflow-hidden border border-white/5"><div className={`h-full transition-all duration-1000 ${isOverTime ? 'bg-red-500' : 'bg-blue-500'}`} style={{width: `${timePercent}%`}}></div></div>
 
                   {isOverTime && <p className="text-red-500 text-xs mt-2 flex items-center gap-1 font-bold animate-pulse"><AlertTriangle size={12}/> Atenção! O tempo estourou o limite da regra.</p>}
 
@@ -1754,7 +1946,7 @@ const handleFileSelect = (e) => {
 
                   <div className="h-12 w-px bg-white/10"></div>
 
-                  <div className="text-right"><p className="text-xs text-gray-400 font-bold uppercase">Saídas</p><p className="text-4xl font-black text-cyan-500">{rounds.length}</p></div>
+                  <div className="text-right"><p className="text-xs text-gray-400 font-bold uppercase">Saídas</p><p className="text-4xl font-black text-blue-500">{rounds.length}</p></div>
 
               </div>
 
@@ -1762,7 +1954,7 @@ const handleFileSelect = (e) => {
 
           <div className="flex gap-2 mb-6">
 
-            {!readonly && <button onClick={openNewRoundModal} className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg shadow-cyan-900/20"><Plus size={16}/> Criar Novo Round</button>}
+            {!readonly && <button onClick={openNewRoundModal} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg shadow-blue-900/20"><Plus size={16}/> Criar Novo Round</button>}
 
             {!readonly && <button onClick={() => openMissionForm()} className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2"><Settings size={16}/> Gerenciar Missões</button>}
 
@@ -1788,16 +1980,16 @@ const handleFileSelect = (e) => {
 
       {/* Título e Ícone */}
       <h3 className="text-white font-bold mb-2 flex items-center gap-2">
-        <ListTodo size={16} className="text-cyan-500"/> {round.name}
+        <ListTodo size={16} className="text-blue-500"/> {round.name}
       </h3>
 
       {/* Pontos e Tempo */}
       <div className="flex items-center justify-between text-xs text-gray-400 mb-4 bg-black/40 p-2 rounded border border-white/5">
         <span className="flex items-center gap-1 font-bold text-white">
-          <Calculator size={12} className="text-cyan-500"/> {round.totalPoints} pts
+          <Calculator size={12} className="text-blue-500"/> {round.totalPoints} pts
         </span>
         <span className="flex items-center gap-1 font-bold text-white">
-          <Timer size={12} className="text-cyan-500"/> {round.estimatedTime}s
+          <Timer size={12} className="text-blue-500"/> {round.estimatedTime}s
         </span>
       </div>
 
@@ -1809,7 +2001,7 @@ const handleFileSelect = (e) => {
             <div key={mid} className="text-[10px] text-gray-300 bg-white/5 px-2 py-1 rounded border border-white/5 flex items-center gap-2">
               {mission?.image && <img src={mission.image} className="w-4 h-4 rounded object-cover" alt="img" />}
               <span className="truncate flex-1">{mission?.code} - {mission?.name}</span>
-              <span className="font-bold text-cyan-500 whitespace-nowrap">+{mission?.points}</span>
+              <span className="font-bold text-blue-500 whitespace-nowrap">+{mission?.points}</span>
             </div>
           ) 
         })}
@@ -1817,19 +2009,236 @@ const handleFileSelect = (e) => {
     </div>
   ))}
 </div>
-<div className="App">
-  <h1>New Gears - War Room</h1>
-
-  {/* AQUI ENTRA A LOUSA */}
-  <StrategyBoard />
-
-</div>
-
-
       </div>
 
   )}
 
+  // --- COMPONENTE KANBAN (REUTILIZÁVEL) ---
+  const KanbanView = () => (
+      <div className="animate-in fade-in duration-500">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full min-h-[600px]">
+              
+              {/* COLUNA 1: A FAZER */}
+              <div className="bg-[#151520] border border-white/10 rounded-2xl p-4 flex flex-col">
+                  <h3 className="text-gray-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-white/5 pb-2"><ListTodo size={16}/> A Fazer ({tasks.filter(t=>t.status==='todo').length})</h3>
+                  <form onSubmit={handleAddTask} className="mb-4">
+                      <input name="taskText" placeholder="+ Nova Tarefa..." className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-orange-500 outline-none transition-all" />
+                  </form>
+                  <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
+                      {tasks.filter(t => t.status === 'todo').map(t => (
+                          <div key={t.id} className="bg-black/40 p-3 rounded-xl border border-white/5 flex justify-between items-start group hover:border-white/20 transition-all">
+                              <p className="text-sm text-gray-200">{t.text}</p>
+                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={() => moveTask(t.id, 'doing')} className="text-blue-500 hover:bg-blue-500/20 p-1.5 rounded" title="Mover para Fazendo"><ChevronRight size={16}/></button>
+                                  <button onClick={() => removeTask(t.id)} className="text-red-500 hover:bg-red-500/20 p-1.5 rounded" title="Excluir"><Trash2 size={16}/></button>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+
+              {/* COLUNA 2: FAZENDO */}
+              <div className="bg-[#151520] border border-blue-500/20 rounded-2xl p-4 flex flex-col bg-blue-500/5">
+                  <h3 className="text-blue-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-blue-500/10 pb-2"><Loader2 size={16} className="animate-spin"/> Fazendo ({tasks.filter(t=>t.status==='doing').length})</h3>
+                  <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
+                      {tasks.filter(t => t.status === 'doing').map(t => (
+                          <div key={t.id} className="bg-black/40 p-3 rounded-xl border border-blue-500/20 flex justify-between items-start group hover:border-blue-500/40 transition-all shadow-lg shadow-blue-900/10">
+                              <p className="text-sm text-white font-medium">{t.text}</p>
+                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={() => moveTask(t.id, 'done')} className="text-green-500 hover:bg-green-500/20 p-1.5 rounded" title="Concluir"><CheckCircle size={16}/></button>
+                                  <button onClick={() => removeTask(t.id)} className="text-red-500 hover:bg-red-500/20 p-1.5 rounded" title="Excluir"><Trash2 size={16}/></button>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+
+              {/* COLUNA 3: FEITO */}
+              <div className="bg-[#151520] border border-green-500/20 rounded-2xl p-4 flex flex-col bg-green-500/5">
+                  <h3 className="text-green-500 font-bold uppercase mb-4 flex items-center gap-2 border-b border-green-500/10 pb-2"><CheckCircle size={16}/> Feito ({tasks.filter(t=>t.status==='done').length})</h3>
+                  <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
+                      {tasks.filter(t => t.status === 'done').map(t => (
+                          <div key={t.id} className="bg-black/40 p-3 rounded-xl border border-green-500/10 flex justify-between items-center group opacity-60 hover:opacity-100 transition-all">
+                              <p className="text-sm text-gray-400 line-through">{t.text}</p>
+                              <button onClick={() => removeTask(t.id)} className="text-gray-600 hover:text-red-500 p-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14}/></button>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          </div>
+      </div>
+  )
+
+  // --- COMPONENTE DE AUTO-AVALIAÇÃO (RUBRICAS) ---
+  const RubricView = () => {
+      // --- DADOS DA RUBRICA: PROJETO DE INOVAÇÃO ---
+      const innovationRubricItems = [
+          { key: 'identificacao', name: 'Identificação', icon: <Search size={16} />, color: 'text-blue-400' },
+          { key: 'design', name: 'Design', icon: <Lightbulb size={16} />, color: 'text-yellow-400' },
+          { key: 'criacao', name: 'Criação', icon: <Wrench size={16} />, color: 'text-pink-400' },
+          { key: 'iteracao', name: 'Iteração', icon: <RotateCcw size={16} />, color: 'text-green-400' },
+          { key: 'comunicacao', name: 'Comunicação', icon: <Megaphone size={16} />, color: 'text-purple-400' },
+      ];
+  
+      // --- LÓGICA DO GRÁFICO DE INOVAÇÃO ---
+      const innovationSize = 300;
+      const innovationCenter = innovationSize / 2;
+      const innovationRadius = (innovationSize / 2) - 60;
+      const innovationMaxVal = 4;
+      const innovationAngleSlice = (Math.PI * 2) / innovationRubricItems.length;
+  
+      const getInnovationCoords = (value, index) => {
+          const angle = index * innovationAngleSlice - (Math.PI / 2);
+          const r = (value / innovationMaxVal) * innovationRadius;
+          return {
+              x: innovationCenter + Math.cos(angle) * r,
+              y: innovationCenter + Math.sin(angle) * r
+          };
+      };
+  
+      const innovationPoints = innovationRubricItems.map((item, i) => {
+          const val = innovationRubric[item.key] || 1;
+          const { x, y } = getInnovationCoords(val, i);
+          return `${x},${y}`;
+      }).join(' ');
+
+      // --- DADOS DA RUBRICA: DESIGN DO ROBÔ ---
+      const robotDesignRubricItems = [
+          { key: 'durabilidade', name: 'Durabilidade', icon: <Shield size={16} />, color: 'text-gray-400' },
+          { key: 'eficiencia', name: 'Eficiência Mecânica', icon: <Settings size={16} />, color: 'text-blue-400' },
+          { key: 'programacao', name: 'Qualidade da Prog.', icon: <Code size={16} />, color: 'text-green-400' },
+          { key: 'estrategia', name: 'Estratégia & Inovação', icon: <Brain size={16} />, color: 'text-purple-400' },
+      ];
+
+      // --- LÓGICA DO GRÁFICO DO ROBÔ ---
+      const robotSize = 300;
+      const robotCenter = robotSize / 2;
+      const robotRadius = (robotSize / 2) - 60;
+      const robotMaxVal = 4;
+      const robotAngleSlice = (Math.PI * 2) / robotDesignRubricItems.length;
+
+      const getRobotCoords = (value, index) => {
+          const angle = index * robotAngleSlice - (Math.PI / 2);
+          const r = (value / robotMaxVal) * robotRadius;
+          return {
+              x: robotCenter + Math.cos(angle) * r,
+              y: robotCenter + Math.sin(angle) * r
+          };
+      };
+
+      const robotPoints = robotDesignRubricItems.map((item, i) => {
+          const val = robotDesignRubric[item.key] || 1;
+          const { x, y } = getRobotCoords(val, i);
+          return `${x},${y}`;
+      }).join(' ');
+
+      return (
+          <div className="space-y-8 animate-in fade-in duration-500">
+              {/* Card do Projeto de Inovação */}
+              <div className="bg-[#151520] border border-white/10 rounded-2xl p-6">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-6"><Lightbulb className="text-yellow-500"/> Rubrica: Projeto de Inovação</h3>
+                  <div className="flex flex-col md:flex-row gap-8 items-center">
+                      <div className="relative flex-shrink-0">
+                          <svg width={innovationSize} height={innovationSize} className="mx-auto bg-black/20 rounded-full border border-white/5">
+                              {[1, 2, 3, 4].map(level => <circle key={level} cx={innovationCenter} cy={innovationCenter} r={(level / innovationMaxVal) * innovationRadius} fill="none" stroke="#333" strokeWidth="1" strokeDasharray="4 4" />)}
+                              {innovationRubricItems.map((_, i) => { const { x, y } = getInnovationCoords(innovationMaxVal, i); return <line key={i} x1={innovationCenter} y1={innovationCenter} x2={x} y2={y} stroke="#333" strokeWidth="1" />; })}
+                              <polygon points={innovationPoints} fill="rgba(234, 179, 8, 0.3)" stroke="#eab308" strokeWidth="2" />
+                              {innovationRubricItems.map((item, i) => { const val = innovationRubric[item.key] || 1; const { x, y } = getInnovationCoords(val, i); return <circle key={i} cx={x} cy={y} r="4" fill="#eab308" />; })}
+                              {innovationRubricItems.map((item, i) => { const { x, y } = getInnovationCoords(innovationMaxVal + 1.2, i); return <text key={i} x={x} y={y} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="10" fontWeight="bold">{item.name}</text>; })}
+                          </svg>
+                      </div>
+                      <div className="flex-1 w-full grid grid-cols-1 gap-6">
+                          {innovationRubricItems.map(item => (
+                              <div key={item.key}>
+                                  <div className="flex justify-between items-center mb-2">
+                                      <label className={`font-bold text-sm flex items-center gap-2 ${item.color}`}>{item.icon} {item.name}</label>
+                                      <span className="text-white font-black text-lg bg-black/30 px-2 rounded">{innovationRubric[item.key] || 1}</span>
+                                  </div>
+                                  <input type="range" min="1" max="4" value={innovationRubric[item.key] || 1} onChange={(e) => handleRubricUpdate('innovation', item.key, e.target.value)} className={`w-full h-2 rounded-lg appearance-none cursor-pointer slider-${item.key} bg-gray-700`} />
+                                  <div className="flex justify-between text-[10px] text-gray-500 mt-1 px-1"><span>Iniciante</span><span>Em Desenv.</span><span>Praticante</span><span>Exemplar</span></div>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              </div>
+
+              {/* Card do Design do Robô */}
+              <div className="bg-[#151520] border border-white/10 rounded-2xl p-6">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-6"><Wrench className="text-blue-500"/> Rubrica: Design do Robô</h3>
+                  <div className="flex flex-col md:flex-row gap-8 items-center">
+                      <div className="relative flex-shrink-0">
+                          <svg width={robotSize} height={robotSize} className="mx-auto bg-black/20 rounded-full border border-white/5">
+                              {[1, 2, 3, 4].map(level => <circle key={level} cx={robotCenter} cy={robotCenter} r={(level / robotMaxVal) * robotRadius} fill="none" stroke="#333" strokeWidth="1" strokeDasharray="4 4" />)}
+                              {robotDesignRubricItems.map((_, i) => { const { x, y } = getRobotCoords(robotMaxVal, i); return <line key={i} x1={robotCenter} y1={robotCenter} x2={x} y2={y} stroke="#333" strokeWidth="1" />; })}
+                              <polygon points={robotPoints} fill="rgba(59, 130, 246, 0.3)" stroke="#3b82f6" strokeWidth="2" />
+                              {robotDesignRubricItems.map((item, i) => { const val = robotDesignRubric[item.key] || 1; const { x, y } = getRobotCoords(val, i); return <circle key={i} cx={x} cy={y} r="4" fill="#3b82f6" />; })}
+                              {robotDesignRubricItems.map((item, i) => { const { x, y } = getRobotCoords(robotMaxVal + 1.2, i); return <text key={i} x={x} y={y} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="10" fontWeight="bold">{item.name}</text>; })}
+                          </svg>
+                      </div>
+                      <div className="flex-1 w-full grid grid-cols-1 gap-6">
+                          {robotDesignRubricItems.map(item => (
+                              <div key={item.key}>
+                                  <div className="flex justify-between items-center mb-2">
+                                      <label className={`font-bold text-sm flex items-center gap-2 ${item.color}`}>{item.icon} {item.name}</label>
+                                      <span className="text-white font-black text-lg bg-black/30 px-2 rounded">{robotDesignRubric[item.key] || 1}</span>
+                                  </div>
+                                  <input type="range" min="1" max="4" value={robotDesignRubric[item.key] || 1} onChange={(e) => handleRubricUpdate('robot_design', item.key, e.target.value)} className={`w-full h-2 rounded-lg appearance-none cursor-pointer slider-${item.key} bg-gray-700`} />
+                                  <div className="flex justify-between text-[10px] text-gray-500 mt-1 px-1"><span>Iniciante</span><span>Em Desenv.</span><span>Praticante</span><span>Exemplar</span></div>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )
+  }
+
+  // --- COMPONENTE DIÁRIO DE BORDO ---
+  const LogbookView = () => (
+      <div className="animate-in fade-in duration-500 max-w-4xl mx-auto">
+          {/* Formulário de Novo Registro */}
+          <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 mb-8">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-4"><Book className="text-yellow-500"/> Novo Registro no Diário</h3>
+              <form onSubmit={handleLogbookSubmit}>
+                  <textarea name="entry" className="w-full bg-black/50 border border-white/20 rounded-xl p-4 text-white focus:border-yellow-500 outline-none h-32 resize-none mb-4" placeholder="O que aprendemos hoje? O que deu errado? O que deu certo?"></textarea>
+                  <button className="bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-3 px-6 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-yellow-900/20"><Plus size={18}/> Registrar no Diário</button>
+              </form>
+          </div>
+
+          {/* Linha do Tempo */}
+          <div className="relative border-l border-white/10 ml-4 space-y-8 pl-8">
+              {logbookEntries.length === 0 && <p className="text-gray-500 italic">Nenhum registro ainda. Comece o diário!</p>}
+              
+              {logbookEntries.sort((a,b) => new Date(b.date) - new Date(a.date)).map(entry => (
+                  <div key={entry.id} className="relative group">
+                      {/* Bolinha na linha do tempo */}
+                      <div className="absolute -left-[39px] top-0 w-5 h-5 rounded-full bg-[#151520] border-2 border-yellow-500 flex items-center justify-center">
+                          <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                      </div>
+                      
+                      <div className="bg-black/40 border border-white/5 p-6 rounded-xl hover:bg-white/5 transition-all">
+                          <div className="flex justify-between items-start mb-3">
+                              <div className="flex items-center gap-3">
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${entry.studentId === 'admin' ? 'bg-red-500 text-white' : 'bg-blue-600 text-white'}`}>
+                                      {entry.studentName.charAt(0)}
+                                  </div>
+                                  <div>
+                                      <span className="text-white font-bold text-sm block">{entry.studentName}</span>
+                                      <span className="text-xs text-gray-500 flex items-center gap-1">
+                                          <Calendar size={10}/> {new Date(entry.date).toLocaleDateString()} 
+                                          <span className="mx-1">•</span> 
+                                          <Timer size={10}/> {new Date(entry.date).toLocaleTimeString().slice(0,5)}
+                                      </span>
+                                  </div>
+                              </div>
+                          </div>
+                          <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">{entry.text}</p>
+                      </div>
+                  </div>
+              ))}
+          </div>
+      </div>
+  )
 
 
 // --- TELA DE LOGIN (Se não tiver usuário logado) ---
@@ -1837,7 +2246,7 @@ const handleFileSelect = (e) => {
       return (
           <div className="min-h-screen bg-zinc-900 text-white font-sans flex items-center justify-center p-4 relative overflow-hidden">
               {/* Fundo decorativo */}
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 via-purple-500 to-orange-500"></div>
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-fuchsia-500"></div>
               <div className="absolute -top-20 -left-20 w-64 h-64 bg-purple-500/20 rounded-full blur-[100px]"></div>
               <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-[120px]"></div>
 
@@ -1886,7 +2295,7 @@ const handleFileSelect = (e) => {
                           </div>
                       )}
 
-                      <button className="w-full bg-white text-black font-black py-4 rounded-xl hover:bg-gray-200 transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)] mt-2 text-sm uppercase tracking-widest flex items-center justify-center gap-2">
+                      <button className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-fuchsia-600 text-white font-black py-4 rounded-xl hover:opacity-90 transition-all shadow-[0_0_20px_rgba(150,150,255,0.2)] hover:shadow-[0_0_30px_rgba(150,150,255,0.3)] mt-2 text-sm uppercase tracking-widest flex items-center justify-center gap-2">
                           <LogOut size={18} className="rotate-180"/> Entrar no Sistema
                       </button>
                   </form>
@@ -1912,10 +2321,32 @@ const handleFileSelect = (e) => {
 
   // --- RENDER PRINCIPAL (SÓ CHEGA AQUI SE ESTIVER LOGADO) ---
   return (
-    <div className="min-h-screen bg-zinc-900 text-white font-sans selection:bg-blue-500 selection:text-black pb-20 relative">
-      <Notification />
-      <Modal />
-      <ScheduleModal />
+    <div className="min-h-screen bg-[#111118] text-white font-sans selection:bg-purple-500 selection:text-white pb-20 relative">
+      {/* Estilo da Animação de Fundo */}
+      <style>{`
+        @keyframes pulse-glow {
+          0%, 100% { opacity: 0.03; transform: scale(0.98); filter: brightness(1); }
+          50% { opacity: 0.08; transform: scale(1.02); filter: brightness(1.5) drop-shadow(0 0 15px rgba(59, 130, 246, 0.2)); }
+        }
+      `}</style>
+
+      {/* Fundo com o Logo */}
+      <div 
+        className="fixed inset-0 z-0 pointer-events-none"
+        style={{
+          backgroundImage: 'url(/vite.svg)',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          backgroundSize: 'contain',
+          animation: 'pulse-glow 6s infinite ease-in-out'
+        }}
+      ></div>
+
+      {/* Conteúdo fica por cima */}
+      <div className="relative z-10">
+        <Notification />
+        {renderModal()}
+        <ScheduleModal />
 
 {/* --- MODAL DO TÉCNICO: ENTREGAR BADGES --- */}
       {isAdmin && badgeStudent && (
@@ -1973,16 +2404,6 @@ const handleFileSelect = (e) => {
                         <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-700"></div>
                     </div>
                     {/* ☝️ FIM DO BALÃOZINHO ☝️ */}
-{/* Adicione este botão no menu lateral do Técnico */}
-<button
-  onClick={() => setActiveTab('ranking')}
-  className={`w-full flex items-center px-4 py-3 rounded-lg mb-2 transition-colors ${
-    activeTab === 'ranking' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50'
-  }`}
->
-  <Trophy className="w-5 h-5 mr-3" />
-  Ranking de XP
-</button>
                   </button>
                 );
               })}
@@ -2065,8 +2486,10 @@ const handleFileSelect = (e) => {
 
  {/* HEADER DO SISTEMA (COMPLETO) */}
       <header className="sticky top-0 z-40 bg-zinc-900/90 backdrop-blur-md border-b border-white/10 px-6 py-4 flex justify-between items-center shadow-lg">
-          <div className="font-black italic text-xl tracking-tighter">NEW GEARS</div>
-          
+          <div className="w-28 h-auto">
+              <LogoNewGears />
+          </div>
+
           <div className="flex items-center gap-3 md:gap-4">
               
               {/* 1. BOTÃO CRONOGRAMA (VOLTOU!) */}
@@ -2133,7 +2556,7 @@ const handleFileSelect = (e) => {
                 onClick={claimEnglishXP}
                 className="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-xl shadow-[0_0_15px_rgba(34,197,94,0.4)] animate-bounce"
             >
-                Resgatar +20 XP
+                Resgatar +5 XP
             </button>
         ) : (
             <button 
@@ -2167,13 +2590,16 @@ const handleFileSelect = (e) => {
       <div className="mb-8 flex justify-center">
         <Countdown 
             targetDate="2026-11-30T08:00:00" 
-            title="Torneio FLL" 
+            title="Torneio FLL"
         />
       </div>
           <div className="flex gap-4 mb-8 border-b border-white/10 pb-4 overflow-x-auto">
-              <button onClick={() => setAdminTab('rotation')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'rotation' ? 'bg-white text-black' : 'text-gray-500 hover:text-white'}`}><LayoutDashboard size={18}/> Rodízio & Equipe</button>
+              <button onClick={() => setAdminTab('rotation')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'rotation' ? 'bg-white text-black' : 'text-gray-500 hover:bg-white/10'}`}><LayoutDashboard size={18}/> Rodízio & Equipe</button>
               <button onClick={() => setAdminTab('strategy')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'strategy' ? 'bg-purple-500 text-white shadow-lg shadow-purple-900/20' : 'text-gray-500 hover:text-purple-400'}`}><Lightbulb size={18}/> Estratégia & Inovação</button>
-              <button onClick={() => setAdminTab('rounds')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'rounds' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-900/20' : 'text-gray-500 hover:text-cyan-400'}`}><ListTodo size={18}/> Mesa do Robô</button>
+              <button onClick={() => setAdminTab('rounds')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'rounds' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-gray-500 hover:text-blue-400'}`}><ListTodo size={18}/> Mesa do Robô</button>
+              <button onClick={() => setAdminTab('rubrics')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'rubrics' ? 'bg-gray-400 text-black shadow-lg shadow-gray-900/20' : 'text-gray-500 hover:text-gray-400'}`}><Scale size={18}/> Rubricas</button>
+              <button onClick={() => setAdminTab('kanban')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'kanban' ? 'bg-orange-500 text-white shadow-lg shadow-orange-900/20' : 'text-gray-500 hover:text-orange-400'}`}><ClipboardList size={18}/> Tarefas (Kanban)</button>
+              <button onClick={() => setAdminTab('logbook')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'logbook' ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20' : 'text-gray-500 hover:text-yellow-400'}`}><Book size={18}/> Diário</button>
           </div>
 
           {adminTab === 'rotation' && (
@@ -2214,8 +2640,8 @@ const handleFileSelect = (e) => {
                               return (
                                   <div key={s.id} className="border border-white/10 p-3 rounded-xl bg-[#151520] flex flex-col gap-3 group hover:border-white/30 transition-all">
                                       <div className="flex items-center gap-3">
-                                          <div className={`p-2 rounded-full border-2 ${s.avatarType === 'mech2' ? 'border-cyan-500 bg-cyan-500/10' : 'border-orange-500 bg-orange-500/10'}`}>
-                                              <Bot size={20} className={s.avatarType === 'mech2' ? 'text-cyan-500' : 'text-orange-500'}/>
+                                          <div className={`p-2 rounded-full border-2 ${s.avatarType === 'mech2' ? 'border-fuchsia-500 bg-fuchsia-500/10' : 'border-orange-500 bg-orange-500/10'}`}>
+                                              <Bot size={20} className={s.avatarType === 'mech2' ? 'text-fuchsia-500' : 'text-orange-500'}/>
                                           </div>
                                           <div className="flex-1 overflow-hidden">
                                               <span className="text-white font-bold text-sm block truncate">{s.name}</span>
@@ -2226,6 +2652,7 @@ const handleFileSelect = (e) => {
                                               <button onClick={() => openGradesModal(s)} className="text-gray-500 hover:text-yellow-400 text-[10px] mt-1 flex items-center gap-1"><GraduationCap size={10}/> Lançar Notas</button>
                                           </div>
                                           <div className="flex flex-col gap-2">
+                                              <button onClick={() => openProfileModal(s)} className="text-gray-500 hover:text-green-400" title="Ver Perfil Completo"><UserCircle size={16}/></button>
                                               <button onClick={() => openNewStudentModal(s)} className="text-gray-500 hover:text-blue-400"><Pencil size={16}/></button>
                                               {/* BOTÃO DE TROFÉU 🏆 */}
                           <button 
@@ -2331,6 +2758,12 @@ const handleFileSelect = (e) => {
 
           {adminTab === 'strategy' && <StrategyView />}
           {adminTab === 'rounds' && <RoundsView />}
+          {adminTab === 'rounds' && <div className="mt-8"><StrategyBoard /></div>}
+          {adminTab === 'rubrics' && <RubricView />}
+          
+          {/* --- VISUALIZAÇÃO KANBAN --- */}
+          {adminTab === 'kanban' && <KanbanView />}
+          {adminTab === 'logbook' && <LogbookView />}
         </main>
       )}
 
@@ -2347,7 +2780,10 @@ const handleFileSelect = (e) => {
        />
     </div>
     {/* ======================================================= */}
-           <div className="text-center py-6 bg-[#151520] rounded-2xl border border-white/10 shadow-xl mb-8">
+           <div onClick={() => openProfileModal(viewAsStudent)} className="text-center py-6 bg-[#151520] rounded-2xl border border-white/10 shadow-xl mb-8 cursor-pointer hover:bg-[#1a1a24] transition-colors group relative">
+                <div className="absolute top-4 right-4 text-gray-600 group-hover:text-white transition-colors">
+                    <UserCircle size={24} />
+                </div>
                 <div className="flex items-center justify-center gap-4">
                     <div className={`p-3 rounded-full border-2 ${viewAsStudent.avatarType === 'mech2' ? 'border-cyan-500 bg-cyan-500/10' : 'border-orange-500 bg-orange-500/10'}`}>
                         <Bot size={32} className={viewAsStudent.avatarType === 'mech2' ? 'text-cyan-500' : 'text-orange-500'}/>
@@ -2437,9 +2873,12 @@ const handleFileSelect = (e) => {
            })()}
 
             <div className="flex gap-2 justify-center mb-8 border-b border-white/10 pb-4 overflow-x-auto">
-                <button onClick={() => setStudentTab('mission')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'mission' ? 'bg-white text-black' : 'text-gray-500 hover:text-white'}`}><Rocket size={18}/> Minha Missão</button>
+                <button onClick={() => setStudentTab('mission')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'mission' ? 'bg-white text-black' : 'text-gray-500 hover:bg-white/10'}`}><Rocket size={18}/> Minha Missão</button>
                 <button onClick={() => setStudentTab('strategy')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'strategy' ? 'bg-purple-500 text-white shadow-lg shadow-purple-900/20' : 'text-gray-500 hover:text-purple-400'}`}><Lightbulb size={18}/> Estratégia</button>
-                <button onClick={() => setStudentTab('rounds')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'rounds' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-900/20' : 'text-gray-500 hover:text-cyan-400'}`}><ListTodo size={18}/> Robô</button>
+                <button onClick={() => setStudentTab('rubrics')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'rubrics' ? 'bg-gray-400 text-black shadow-lg shadow-gray-900/20' : 'text-gray-500 hover:text-gray-400'}`}><Scale size={18}/> Rubricas</button>
+                <button onClick={() => setStudentTab('rounds')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'rounds' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-gray-500 hover:text-blue-400'}`}><ListTodo size={18}/> Robô</button>
+                <button onClick={() => setStudentTab('kanban')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'kanban' ? 'bg-orange-500 text-white shadow-lg shadow-orange-900/20' : 'text-gray-500 hover:text-orange-400'}`}><ClipboardList size={18}/> Tarefas</button>
+                <button onClick={() => setStudentTab('logbook')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'logbook' ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20' : 'text-gray-500 hover:text-yellow-400'}`}><Book size={18}/> Diário</button>
             </div>
 
             {studentTab === 'mission' && (
@@ -2481,43 +2920,6 @@ const handleFileSelect = (e) => {
                                 </button>
                             </form>
                         )}
-{/* --- NOVO MODAL: EDITOR DO PROJETO --- */}
-          {modal.type === 'projectForm' && (
-             <form onSubmit={handleProjectSubmit}>
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white">
-                    <Lightbulb className="text-yellow-500"/> Editar Projeto de Inovação
-                </h3>
-
-                <div className="mb-4">
-                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome do Projeto / Solução</label>
-                    <input name="title" defaultValue={projectSummary?.title} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-yellow-500 outline-none font-bold text-lg" placeholder="Ex: Filtro Bio-Sintético" />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block text-red-400">O Problema</label>
-                        <textarea name="problem" defaultValue={projectSummary?.problem} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white h-32 focus:border-red-500 outline-none resize-none" placeholder="Qual problema vocês resolveram?" />
-                    </div>
-                    <div>
-                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block text-green-400">A Solução</label>
-                        <textarea name="solution" defaultValue={projectSummary?.solution} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white h-32 focus:border-green-500 outline-none resize-none" placeholder="Como funciona a invenção?" />
-                    </div>
-                </div>
-
-                <div className="mb-4">
-                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block text-blue-400">Impacto (Para os Juízes)</label>
-                    <textarea name="impact" defaultValue={projectSummary?.impact} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white h-20 focus:border-blue-500 outline-none" placeholder="Quem isso ajuda? Qual o benefício real?" />
-                </div>
-
-                <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10">
-                    <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto do Protótipo / Desenho</label>
-                    <input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-yellow-500/10 file:text-yellow-500 hover:file:bg-yellow-500/20 cursor-pointer" />
-                    {projectSummary?.image && !selectedFile && <div className="mt-2 text-xs text-green-500">Imagem atual já salva.</div>}
-                </div>
-
-                <button className="w-full bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-3 rounded-lg">Salvar Projeto Oficial</button>
-             </form>
-          )}
                         {/* VISUALIZAÇÃO DO ENVIO REALIZADO */}
                         {viewAsStudent.submission && viewAsStudent.submission.status !== 'rejected' && (
                             <div className="text-center p-4 bg-white/5 rounded-lg border border-white/10">
@@ -2531,12 +2933,17 @@ const handleFileSelect = (e) => {
                 </>
             )}
 
-            {studentTab === 'strategy' && <div className="text-left"><StrategyView readonly={true} /></div>}
+            {studentTab === 'strategy' && <div className="text-left"><StrategyView /></div>}
             {studentTab === 'rounds' && <div className="text-left"><RoundsView readonly={true} /></div>}
+            {studentTab === 'rubrics' && <div className="text-left"><RubricView /></div>}
+            {studentTab === 'kanban' && <div className="text-left"><KanbanView /></div>}
+            {studentTab === 'logbook' && <div className="text-left"><LogbookView /></div>}
         </main>
       )}
-
     </div>
-  )
-}
-export default App
+    </div>
+        )
+      }
+      
+      export default App
+      

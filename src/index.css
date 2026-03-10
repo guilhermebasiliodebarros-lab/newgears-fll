@@ -7,3 +7,28 @@ body {
   background-color: #18181b; /* Garante fundo escuro */
   color: white;
 }
+
+.app-background {
+  background-image: url('/mesaUnearthed.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  position: relative;
+}
+
+.app-background::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(21, 21, 32, 0.8);
+  z-index: 1;
+}
+
+.app-content {
+  position: relative;
+  z-index: 2;
+}

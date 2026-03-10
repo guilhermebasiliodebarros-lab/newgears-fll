@@ -16,7 +16,7 @@ const StrategyBoard = () => {
   const [activeMapId, setActiveMapId] = useState(null);   // ID da mesa no banco
   
   const [tool, setTool] = useState('pen'); // Ferramenta (pen/eraser)
-  const [color, setColor] = useState('#06b6d4'); // Cor atual (Ciano padrão)
+  const [color, setColor] = useState('#3b82f6'); // Cor atual (Azul padrão)
   const [lines, setLines] = useState([]); // Os riscos
   const [isDrawing, setIsDrawing] = useState(false);
   
@@ -27,7 +27,7 @@ const StrategyBoard = () => {
   
  // Cores disponíveis (Paleta Expandida)
   const colors = [
-    { name: 'Ciano (Equipe)', code: '#06b6d4' },    // Padrão
+    { name: 'Azul (Equipe)', code: '#3b82f6' },    // Padrão
     { name: 'Vermelho (Erro)', code: '#ef4444' },   // Erro/Proibido
     { name: 'Verde (Sucesso)', code: '#22c55e' },   // Rota Segura
     { name: 'Amarelo (Atenção)', code: '#eab308' }, // Área de Risco
@@ -209,16 +209,16 @@ const StrategyBoard = () => {
         
         {/* Card Salvar */}
         <form onSubmit={saveStrategy} className="bg-gray-800 p-4 rounded-lg border border-gray-700">
-          <h4 className="text-cyan-400 font-bold mb-3 flex items-center gap-2">💾 Salvar Estratégia</h4>
+          <h4 className="text-blue-400 font-bold mb-3 flex items-center gap-2">💾 Salvar Estratégia</h4>
           <div className="flex gap-2">
             <input 
               type="text" 
               placeholder="Ex: Rota 1 - 250pts" 
-              className="flex-1 bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm focus:border-cyan-500 outline-none"
+              className="flex-1 bg-gray-900 border border-gray-600 rounded p-2 text-white text-sm focus:border-blue-500 outline-none"
               value={strategyName}
               onChange={(e) => setStrategyName(e.target.value)}
             />
-            <button className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold px-4 py-2 rounded text-sm">
+            <button className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded text-sm">
               Salvar
             </button>
           </div>
