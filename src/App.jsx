@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc } from "firebase/firestore";
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy } from "firebase/firestore";
 import { db } from './firebase'; // Importa a instância já inicializada
 import StrategyBoard from './components/StrategyBoard';
 import Countdown from './components/Countdown';
@@ -67,6 +67,7 @@ import {
   TrendingUp,  // <--- Provavelmente vai pedir em seguida (Tendência de alta)
   Map,         // <--- Provavelmente vai pedir em seguida (Mapa da mesa)
   Flag,
+  Tag,
   MessageSquare, // <--- O Culpado de agora (Comentários)
   Share2,        // <--- Provavelmente usado para compartilhar estratégia
   Download,      // <--- Provavelmente usado para baixar PDF
@@ -91,6 +92,7 @@ import {
   Square,
   Loader2,
   Scale,         // <--- O Culpado de agora (Avaliação)
+  Crop,          // <--- Ícone de Corte
   CheckCheck,    // <--- Provavelmente vai pedir em seguida (Aprovado Duplo)
   ExternalLink,  // <--- Provavelmente vai pedir em seguida (Abrir Arquivo em outra aba)
   FileWarning,
@@ -489,6 +491,14 @@ function App() {
   const [tasks, setTasks] = useState([]) // <--- NOVO ESTADO PARA TAREFAS
   const [logbookEntries, setLogbookEntries] = useState([]) // <--- NOVO ESTADO PARA DIÁRIO
 
+  // --- ESTADOS PARA O EDITOR DE CORTE (CROP) ---
+  const [isCropping, setIsCropping] = useState(false);
+  const [cropImgSrc, setCropImgSrc] = useState(null);
+  const [cropScale, setCropScale] = useState(1);
+  const [cropPos, setCropPos] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
   // --- NOVO: Sincroniza dados do aluno logado com o Firebase em tempo real ---
   useEffect(() => {
     if (currentUser?.type === 'student' && students.length > 0) {
@@ -700,8 +710,28 @@ function App() {
     const unsubMatrix = createListener("decisionMatrix", setDecisionMatrix);
     const unsubQuestions = createListener("questions", setQuestions);
     const unsubOutreach = createListener("outreach", setOutreachEvents);
-    const unsubTasks = createListener("tasks", setTasks); // <--- NOVO LISTENER
-    const unsubLogbook = createListener("logbook", setLogbookEntries); // <--- LISTENER DIÁRIO
+    const unsubTasks = createListener("tasks", setTasks); // <--- GARANTINDO O LISTENER DE TAREFAS
+    
+    // Listener do Diário de Bordo (agora condicional)
+    let unsubLogbook;
+    if (isAdmin) {
+        // Admin: Pega todos os registros de todos os alunos
+        // REMOVIDO orderBy('date', 'desc') para evitar erro de índice composto no collectionGroup por enquanto
+        const logbookQuery = query(collectionGroup(db, 'logbook'));
+        unsubLogbook = onSnapshot(logbookQuery, (snapshot) => {
+            const entries = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, refPath: doc.ref.path })); 
+            // Ordena no cliente
+            setLogbookEntries(entries.sort((a,b) => (b.weekId || 0) - (a.weekId || 0))); // Ordena por semana
+        });
+    } else if (viewAsStudent?.id) {
+        // Aluno: Pega apenas os seus próprios registros
+        const logbookQuery = query(collection(db, 'students', viewAsStudent.id, 'logbook'));
+        unsubLogbook = onSnapshot(logbookQuery, (snapshot) => {
+            const entries = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, refPath: doc.ref.path }));
+            setLogbookEntries(entries.sort((a,b) => (b.weekId || 0) - (a.weekId || 0)));
+        });
+    }
+
     // ... dentro do useEffect principal ...
     const unsubProject = onSnapshot(collection(db, "project"), (s) => {
         if (!s.empty) {
@@ -732,7 +762,7 @@ function App() {
     return () => {
         unsubStudents(); unsubExperts(); unsubRobot(); unsubRounds();
         unsubCompliments(); unsubMatrix(); unsubQuestions(); 
-        unsubOutreach(); unsubMissions(); unsubTasks(); unsubInnovationRubric(); unsubRobotDesignRubric(); unsubLogbook();
+        unsubOutreach(); unsubMissions(); unsubTasks(); unsubInnovationRubric(); unsubRobotDesignRubric(); if (unsubLogbook) unsubLogbook();
     };
   }, []);
 
@@ -752,6 +782,47 @@ function App() {
 
   const convertBase64 = (file) => new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result); reader.onerror = error => reject(error); });
 
+  // --- FUNÇÃO ESPECÍFICA PARA FOTO DE PERFIL (COM CROP) ---
+  const handleProfilePicSelect = async (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const base64 = await convertBase64(file);
+      setCropImgSrc(base64);
+      setCropScale(1);
+      setCropPos({ x: 0, y: 0 });
+      setIsCropping(true);
+      e.target.value = null; // Limpa input
+    }
+  };
+
+  // --- SALVAR O RECORTE ---
+  const handleCropSave = () => {
+      const canvas = document.createElement('canvas');
+      const size = 200; // Tamanho padrão do avatar
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+
+      const img = new Image();
+      img.src = cropImgSrc;
+      img.onload = () => {
+          // Preenche fundo (caso a imagem seja transparente)
+          ctx.fillStyle = '#111';
+          ctx.fillRect(0, 0, size, size);
+          
+          // Desenha a imagem com as transformações do usuário
+          ctx.drawImage(img, cropPos.x, cropPos.y, img.naturalWidth * cropScale, img.naturalHeight * cropScale);
+          
+          const resultBase64 = canvas.toDataURL('image/jpeg', 0.9);
+          
+          // Atualiza o modal de aluno com a nova imagem recortada
+          setModal(prev => ({ ...prev, data: { ...prev.data, avatarImage: resultBase64 } }));
+          
+          setIsCropping(false);
+          setCropImgSrc(null);
+      };
+  };
+
 
 
   // --- ACTIONS ---
@@ -764,13 +835,18 @@ function App() {
   const handleAddTask = async (e) => {
       e.preventDefault();
       const text = e.target.taskText.value;
+      const date = e.target.taskDate.value;
       if(!text) return;
       
+      const author = isAdmin ? "Técnico" : (viewAsStudent?.name || "Equipe");
+
       try {
           await addDoc(collection(db, "tasks"), {
               text,
               status: 'todo', // todo, doing, done
-              createdAt: new Date().toISOString()
+              createdAt: new Date().toISOString(),
+              author: author,
+              dueDate: date
           });
           e.target.reset();
       } catch (error) {
@@ -796,19 +872,32 @@ function App() {
   const handleLogbookSubmit = async (e) => {
       e.preventDefault();
       const text = e.target.entry.value;
-      if (!text) return;
-      
-      // Identifica quem está escrevendo (Aluno ou Técnico)
-      const authorName = isAdmin ? "Técnico" : viewAsStudent?.name || "Anônimo";
-      const authorId = isAdmin ? "admin" : viewAsStudent?.id || "unknown";
+      // Se não tiver semana definida, pega a atual ou a 1
+      const weekId = currentWeekData?.id || 1;
+      const weekName = currentWeekData?.weekName || "Semana Inicial";
+
+      if (!text || !viewAsStudent?.id) return; // Apenas alunos podem escrever
 
       try {
-          await addDoc(collection(db, "logbook"), {
-              studentId: authorId,
-              studentName: authorName,
+          // O caminho agora é uma subcoleção dentro do documento do aluno
+          const logbookRef = collection(db, 'students', viewAsStudent.id, 'logbook');
+          
+          // Usamos setDoc com um ID específico para evitar duplicatas na mesma semana?
+          // Ou addDoc para permitir vários registros na semana?
+          // Vamos usar addDoc para permitir vários insights na mesma semana.
+          
+          const newEntry = {
+              // Ainda salvamos o nome para a visualização consolidada do técnico
+              studentName: viewAsStudent.name, 
               text: text,
-              date: new Date().toISOString()
-          });
+              weekId: weekId,       // Para ordenar
+              weekName: weekName,   // Para exibir bonitinho
+              date: new Date().toISOString(),
+              tags: [] // Futuro: #Mecanica, #Prog
+          };
+
+          await addDoc(logbookRef, newEntry);
+
           e.target.reset();
           showNotification("Diário de Bordo atualizado! 📖");
       } catch (error) {
@@ -817,6 +906,21 @@ function App() {
       }
   }
 
+  // --- FUNÇÃO PARA EXCLUIR REGISTRO DO DIÁRIO ---
+  const handleDeleteLogbookEntry = async (entry) => {
+      if (!window.confirm("Tem certeza que deseja apagar este registro?")) return;
+
+      try {
+          // Se temos o caminho completo (refPath), usamos ele. 
+          // Senão (caso antigo), tentamos montar o caminho se soubermos o ID do aluno.
+          const path = entry.refPath || `students/${viewAsStudent?.id}/logbook/${entry.id}`;
+          await deleteDoc(doc(db, path));
+          showNotification("Registro apagado.");
+      } catch (error) {
+          console.error("Erro ao apagar registro:", error);
+          showNotification("Erro ao apagar.", "error");
+      }
+  }
 
  // 2. A função de excluir:
 const handleDeleteStudent = async (studentId) => {
@@ -866,36 +970,47 @@ const handleDeleteRound = async (id) => {
   // --- FUNÇÃO CORRIGIDA COM LOGS ---
   const handleRegisterSubmit = async (e) => { 
       e.preventDefault(); 
-      console.log("Botão cadastrar clicado!"); // Log 1
-
       const fd = new FormData(e.target); 
       
-      // Cria o objeto do aluno
-      const newStudentData = { 
+      // Verifica se estamos editando ou criando
+      const isEditing = modal.data?.id;
+
+      // A imagem agora já vem processada e redimensionada pelo Crop e está em modal.data.avatarImage
+      const avatarImage = modal.data?.avatarImage || null;
+
+      // Cria o objeto de dados do aluno
+      const studentData = { 
           name: fd.get('name'), 
           turma: fd.get('turma'), 
           username: fd.get('username'), 
           password: fd.get('password'), 
-          avatarType: fd.get('avatarType'), 
-          xp: 0, 
-          totalClasses: 0, 
-          attendedClasses: 0, 
-          station: null, 
-          submission: null 
+          avatarImage: avatarImage, // Novo campo para a foto
+          // Mantém os outros campos se estiver editando
+          xp: modal.data?.xp ?? 0,
+          totalClasses: modal.data?.totalClasses ?? 0,
+          attendedClasses: modal.data?.attendedClasses ?? 0,
+          station: modal.data?.station ?? null,
+          submission: modal.data?.submission ?? null,
+          badges: modal.data?.badges ?? [],
+          englishChallengeUnlocked: modal.data?.englishChallengeUnlocked ?? false,
       };
 
-      console.log("Dados do formulário:", newStudentData); // Log 2
-
       try {
-          // Tenta salvar no Firebase
-          await addDoc(collection(db, "students"), newStudentData);
-          console.log("Salvo no Firebase com sucesso!"); // Log 3
+          if (isEditing) {
+              // Atualiza aluno existente
+              const studentRef = doc(db, "students", modal.data.id);
+              await updateDoc(studentRef, studentData);
+              showNotification("Dados do aluno atualizados!");
+          } else {
+              // Cria novo aluno
+              await addDoc(collection(db, "students"), studentData);
+              showNotification("Aluno cadastrado com acesso!"); 
+          }
           
           closeModal(); 
-          showNotification("Aluno cadastrado com acesso!"); 
       } catch (error) {
-          console.error("Erro ao salvar no Firebase:", error); // Log de Erro
-          showNotification("Erro ao cadastrar. Veja o console (F12).", "error");
+          console.error("Erro ao salvar aluno:", error);
+          showNotification("Erro ao salvar. Veja o console (F12).", "error");
       }
   }
 
@@ -1248,7 +1363,7 @@ const handleDeleteRound = async (id) => {
 
   // --- MODAIS ---
 
-  const openNewStudentModal = () => { setSelectedFile(null); setModal({ type: 'newStudent' }); }
+  const openNewStudentModal = (data = null) => { setSelectedFile(null); setModal({ type: 'newStudent', data }); }
 
   const openReviewModal = (student) => setModal({ type: 'review', data: student });
 
@@ -1612,6 +1727,140 @@ const handleFileSelect = (e) => {
 
           {modal.type === 'imageView' && <img src={modal.data} className="w-full h-auto rounded-lg" alt="Evidência" />}
 
+          {/* --- MODAL DE RECORTE (CROP) --- */}
+          {isCropping && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 animate-in fade-in">
+                <div className="bg-zinc-800 border border-white/10 rounded-2xl p-6 w-full max-w-sm flex flex-col items-center">
+                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Crop size={20}/> Ajustar Foto</h3>
+                    
+                    {/* Área de Visualização e Arrastar */}
+                    <div 
+                        className="relative w-[200px] h-[200px] bg-black overflow-hidden rounded-full border-4 border-purple-500 shadow-2xl mb-6 cursor-move touch-none"
+                        onMouseDown={(e) => { setIsDragging(true); setDragStart({ x: e.clientX - cropPos.x, y: e.clientY - cropPos.y }); }}
+                        onMouseMove={(e) => { if(isDragging) setCropPos({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y }); }}
+                        onMouseUp={() => setIsDragging(false)}
+                        onMouseLeave={() => setIsDragging(false)}
+                        // Suporte a toque (celular)
+                        onTouchStart={(e) => { setIsDragging(true); setDragStart({ x: e.touches[0].clientX - cropPos.x, y: e.touches[0].clientY - cropPos.y }); }}
+                        onTouchMove={(e) => { if(isDragging) setCropPos({ x: e.touches[0].clientX - dragStart.x, y: e.touches[0].clientY - dragStart.y }); }}
+                        onTouchEnd={() => setIsDragging(false)}
+                    >
+                        {cropImgSrc && (
+                            <img 
+                                src={cropImgSrc} 
+                                alt="Crop" 
+                                draggable={false}
+                                style={{ 
+                                    transform: `translate(${cropPos.x}px, ${cropPos.y}px) scale(${cropScale})`, 
+                                    transformOrigin: 'top left',
+                                    maxWidth: 'none', maxHeight: 'none' // Permite zoom livre
+                                }}
+                                onLoad={(e) => {
+                                    // Centraliza automaticamente ao carregar
+                                    const img = e.target;
+                                    const initialScale = Math.max(200 / img.naturalWidth, 200 / img.naturalHeight);
+                                    setCropScale(initialScale); 
+                                    setCropPos({ x: (200 - img.naturalWidth * initialScale) / 2, y: (200 - img.naturalHeight * initialScale) / 2 });
+                                }}
+                            />
+                        )}
+                    </div>
+
+                    {/* Controle de Zoom */}
+                    <div className="w-full mb-6 px-2">
+                        <div className="flex justify-between text-xs text-gray-400 font-bold uppercase mb-2"><span>Zoom</span><span>{Math.round(cropScale * 100)}%</span></div>
+                        <input type="range" min="0.1" max="3" step="0.05" value={cropScale} onChange={(e) => setCropScale(parseFloat(e.target.value))} className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                    </div>
+
+                    <div className="flex gap-3 w-full">
+                        <button onClick={() => { setIsCropping(false); setCropImgSrc(null); }} className="flex-1 py-3 rounded-lg text-gray-400 bg-white/5 hover:bg-white/10 font-bold">Cancelar</button>
+                        <button onClick={handleCropSave} className="flex-1 py-3 rounded-lg bg-purple-600 text-white hover:bg-purple-500 font-bold shadow-lg shadow-purple-900/20">Confirmar</button>
+                    </div>
+                </div>
+            </div>
+          )}
+
+          {/* --- NOVO MODAL: PERFIL DO ALUNO DETALHADO --- */}
+          {modal.type === 'profile' && (
+            <div className="animate-in zoom-in-95">
+                {/* Header com Gradiente */}
+                <div className="relative mb-8 text-center">
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-pink-500/20 blur-xl rounded-full opacity-50"></div>
+                    <div className="relative z-10 flex flex-col items-center">
+                        <div className="relative mb-4">
+     {modal.data.avatarImage ? (
+         <img src={modal.data.avatarImage} alt="Avatar" className="w-28 h-28 rounded-full object-cover border-4 border-purple-500 shadow-lg mx-auto" />
+     ) : (
+         <div className="w-28 h-28 rounded-full bg-black/50 flex items-center justify-center border-4 border-gray-600 mx-auto">
+             <UserCircle size={80} className="text-gray-500" />
+         </div>
+     )}
+ </div>
+                        <h2 className="text-3xl font-black text-white uppercase tracking-wider">{modal.data.name}</h2>
+                        <p className="text-gray-400 font-mono text-sm bg-white/5 px-3 py-1 rounded-full mt-2 border border-white/10">{modal.data.turma} • {modal.data.station || "Membro da Equipe"}</p>
+                    </div>
+                </div>
+
+                {/* Status Grid */}
+                <div className="grid grid-cols-2 gap-4 mb-8">
+                    <div className="bg-[#151520] p-4 rounded-xl border border-white/10 flex flex-col items-center justify-center relative overflow-hidden">
+                        <div className={`absolute top-0 left-0 w-1 h-full ${getCurrentLevel(modal.data.xp).color.replace('text-', 'bg-')}`}></div>
+                        <span className="text-gray-500 text-xs font-bold uppercase mb-1">Nível Atual</span>
+                        <span className={`text-xl font-black ${getCurrentLevel(modal.data.xp).color}`}>{getCurrentLevel(modal.data.xp).name}</span>
+                        <span className="text-xs text-gray-400">{modal.data.xp} XP Totais</span>
+                    </div>
+                    <div className="bg-[#151520] p-4 rounded-xl border border-white/10 flex flex-col items-center justify-center relative overflow-hidden">
+                        <div className={`absolute top-0 left-0 w-1 h-full ${getAttendanceStats(modal.data).percent > 75 ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                        <span className="text-gray-500 text-xs font-bold uppercase mb-1">Frequência</span>
+                        <span className={`text-xl font-black ${getAttendanceStats(modal.data).percent > 75 ? 'text-green-500' : 'text-red-500'}`}>{getAttendanceStats(modal.data).percent}%</span>
+                        <span className="text-xs text-gray-400">{getAttendanceStats(modal.data).absences} Faltas</span>
+                    </div>
+                </div>
+
+                {/* Badges Collection */}
+                <div className="mb-8">
+                    <h3 className="text-white font-bold mb-4 flex items-center gap-2 border-b border-white/10 pb-2">
+                        <Medal className="text-yellow-500"/> Coleção de Badges
+                    </h3>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                        {BADGES_LIST.map(badge => {
+                            const hasBadge = modal.data.badges?.includes(badge.id);
+                            return (
+                                <div key={badge.id} className={`relative p-3 rounded-xl border flex flex-col items-center text-center transition-all group ${hasBadge ? 'bg-gradient-to-br from-white/5 to-transparent border-yellow-500/30' : 'bg-black/40 border-white/5 opacity-40 grayscale'}`}>
+                                    <div className={`mb-2 ${hasBadge ? badge.color : 'text-gray-500'}`}>{badge.icon}</div>
+                                    <span className="text-[10px] font-bold text-white leading-tight">{badge.name}</span>
+                                    {hasBadge && <div className="absolute top-2 right-2 w-1.5 h-1.5 bg-green-500 rounded-full shadow-[0_0_5px_rgba(34,197,94,1)]"></div>}
+                                    
+                                    {/* Tooltip Simples */}
+                                    <div className="absolute bottom-full mb-2 bg-black border border-white/20 p-2 rounded text-[10px] text-gray-300 w-32 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 hidden sm:block">
+                                        {badge.desc}
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+
+                <div className="flex gap-4 mt-8">
+                    {/* Botão de Editar (só aparece para o próprio aluno) */}
+                    {viewAsStudent?.id === modal.data.id && (
+                        <button 
+                            onClick={() => {
+                                closeModal(); // Fecha o modal de perfil
+                                openNewStudentModal(modal.data); // Abre o modal de edição
+                            }} 
+                            className="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg transition-colors"
+                        >
+                            Editar Perfil
+                        </button>
+                    )}
+                    <button onClick={closeModal} className="flex-1 bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-lg transition-colors">
+                        Fechar
+                    </button>
+                </div>
+            </div>
+          )}
+
           {modal.type === 'confirm' && <><h3 className="text-xl font-bold text-white mb-2">{modal.data.title}</h3><p className="text-gray-400 mb-6">{modal.data.msg}</p><div className="flex gap-3"><button onClick={closeModal} className="flex-1 py-3 rounded-lg text-gray-400 bg-white/5 hover:bg-white/10">Cancelar</button><button onClick={modal.data.onConfirm} className="flex-1 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600">Confirmar</button></div></>}
 
           
@@ -1621,18 +1870,18 @@ const handleFileSelect = (e) => {
 {modal.type === 'newStudent' && (
   <form onSubmit={handleRegisterSubmit}>
     <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white">
-      <Plus className="text-green-500"/> Novo Aluno
+      <UserPlus className="text-green-500"/> {modal.data ? 'Editar' : 'Novo'} Aluno
     </h3>
     
     {/* DADOS BÁSICOS */}
     <div className="grid grid-cols-2 gap-4 mb-4">
         <div>
             <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome</label>
-            <input name="name" required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Ana Silva" />
+            <input name="name" defaultValue={modal.data?.name} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Ana Silva" />
         </div>
         <div>
             <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Turma</label>
-            <input name="turma" required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: 8º A" />
+            <input name="turma" defaultValue={modal.data?.turma} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: 8º A" />
         </div>
     </div>
 
@@ -1645,38 +1894,26 @@ const handleFileSelect = (e) => {
         <div className="grid grid-cols-2 gap-4">
             <div>
                 <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 block">Usuário</label>
-                <input name="username" required className="w-full bg-black/50 border border-white/20 rounded-lg p-2 text-white focus:border-yellow-500 outline-none" placeholder="ana.fll" />
+                <input name="username" defaultValue={modal.data?.username} required className="w-full bg-black/50 border border-white/20 rounded-lg p-2 text-white focus:border-yellow-500 outline-none" placeholder="ana.fll" />
             </div>
             <div>
                 <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 block">Senha</label>
-                <input name="password" required className="w-full bg-black/50 border border-white/20 rounded-lg p-2 text-white focus:border-yellow-500 outline-none" placeholder="1234" />
+                <input name="password" defaultValue={modal.data?.password} required className="w-full bg-black/50 border border-white/20 rounded-lg p-2 text-white focus:border-yellow-500 outline-none" placeholder="1234" />
             </div>
         </div>
     </div>
 
-    {/* AVATAR */}
+    {/* UPLOAD DE FOTO */}
     <div className="mb-6">
-        <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Avatar</label>
-        <div className="grid grid-cols-2 gap-4">
-            <label className="cursor-pointer">
-                <input type="radio" name="avatarType" value="mech1" defaultChecked className="hidden peer" />
-                <div className="bg-black/50 border border-white/20 rounded-xl p-4 flex flex-col items-center hover:bg-white/5 peer-checked:border-orange-500 peer-checked:bg-orange-500/10 transition-all">
-                    <Bot className="text-orange-500 mb-2" size={32} />
-                    <span className="text-[10px] text-white font-bold mt-1">Laranja</span>
-                </div>
-            </label>
-            <label className="cursor-pointer">
-                <input type="radio" name="avatarType" value="mech2" className="hidden peer" />
-                <div className="bg-black/50 border border-white/20 rounded-xl p-4 flex flex-col items-center hover:bg-white/5 peer-checked:border-fuchsia-500 peer-checked:bg-fuchsia-500/10 transition-all">
-                    <Bot className="text-fuchsia-500 mb-2" size={32} />
-                    <span className="text-[10px] text-white font-bold mt-1">Fúcsia</span>
-                </div>
-            </label>
+        <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto de Perfil</label>
+        <div className="flex items-center gap-4 bg-black/30 p-3 rounded-lg border border-white/10">
+            {modal.data?.avatarImage ? ( <img src={modal.data.avatarImage} alt="Preview" className="w-16 h-16 rounded-full object-cover border-2 border-purple-500 shadow-lg"/> ) : ( <div className="w-16 h-16 rounded-full bg-black/50 flex items-center justify-center border-2 border-dashed border-gray-600"> <UserCircle size={32} className="text-gray-500" /> </div> )}
+            <input type="file" onChange={handleProfilePicSelect} accept="image/*" className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-purple-500/10 file:text-purple-500 hover:file:bg-purple-500/20 cursor-pointer"/>
         </div>
     </div>
     
     <button type="submit" className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-green-900/20 transition-all">
-        Cadastrar Aluno
+        {modal.data ? 'Salvar Alterações' : 'Cadastrar Aluno'}
     </button>
   </form>
 )}
@@ -2014,26 +2251,57 @@ const handleFileSelect = (e) => {
   )}
 
   // --- COMPONENTE KANBAN (REUTILIZÁVEL) ---
-  const KanbanView = () => (
+  const KanbanView = () => {
+      
+      const getDeadlineStatus = (date) => {
+          if (!date) return null;
+          const today = new Date();
+          today.setHours(0,0,0,0);
+          const due = new Date(date);
+          due.setHours(23,59,59);
+          const diffTime = due - today;
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          
+          if (diffDays < 0) return { color: 'text-red-500', border: 'border-red-500', icon: <AlertTriangle size={12}/>, text: 'Atrasado' };
+          if (diffDays <= 2) return { color: 'text-yellow-500', border: 'border-yellow-500', icon: <Timer size={12}/>, text: 'Prazo Curto' };
+          return { color: 'text-gray-500', border: 'border-white/5', icon: <Calendar size={12}/>, text: new Date(date).toLocaleDateString() };
+      };
+
+      const TaskCard = ({ t, showMoveRight, showDelete }) => {
+          const status = getDeadlineStatus(t.dueDate);
+          return (
+              <div className={`bg-black/40 p-3 rounded-xl border flex flex-col gap-2 group hover:border-white/20 transition-all ${status ? status.border : 'border-white/5'}`}>
+                  <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-bold uppercase bg-white/10 px-2 py-0.5 rounded text-gray-300 flex items-center gap-1">
+                          <UserCircle size={10}/> {t.author || "Equipe"}
+                      </span>
+                      {status && <span className={`text-[10px] font-bold flex items-center gap-1 ${status.color}`}>{status.icon} {status.text}</span>}
+                  </div>
+                  <p className="text-sm text-gray-200">{t.text}</p>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end pt-2 border-t border-white/5">
+                      {showMoveRight && <button onClick={() => moveTask(t.id, showMoveRight)} className="text-blue-500 hover:bg-blue-500/20 p-1.5 rounded" title="Avançar"><ChevronRight size={16}/></button>}
+                      {showDelete && <button onClick={() => removeTask(t.id)} className="text-red-500 hover:bg-red-500/20 p-1.5 rounded" title="Excluir"><Trash2 size={16}/></button>}
+                  </div>
+              </div>
+          );
+      };
+
+      return (
       <div className="animate-in fade-in duration-500">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full min-h-[600px]">
               
               {/* COLUNA 1: A FAZER */}
               <div className="bg-[#151520] border border-white/10 rounded-2xl p-4 flex flex-col">
                   <h3 className="text-gray-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-white/5 pb-2"><ListTodo size={16}/> A Fazer ({tasks.filter(t=>t.status==='todo').length})</h3>
-                  <form onSubmit={handleAddTask} className="mb-4">
+                  <form onSubmit={handleAddTask} className="mb-4 space-y-2">
                       <input name="taskText" placeholder="+ Nova Tarefa..." className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-orange-500 outline-none transition-all" />
+                      <div className="flex gap-2">
+                          <input type="date" name="taskDate" className="bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-400 focus:border-orange-500 outline-none" title="Prazo"/>
+                          <button className="flex-1 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-bold uppercase">Adicionar</button>
+                      </div>
                   </form>
                   <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                      {tasks.filter(t => t.status === 'todo').map(t => (
-                          <div key={t.id} className="bg-black/40 p-3 rounded-xl border border-white/5 flex justify-between items-start group hover:border-white/20 transition-all">
-                              <p className="text-sm text-gray-200">{t.text}</p>
-                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button onClick={() => moveTask(t.id, 'doing')} className="text-blue-500 hover:bg-blue-500/20 p-1.5 rounded" title="Mover para Fazendo"><ChevronRight size={16}/></button>
-                                  <button onClick={() => removeTask(t.id)} className="text-red-500 hover:bg-red-500/20 p-1.5 rounded" title="Excluir"><Trash2 size={16}/></button>
-                              </div>
-                          </div>
-                      ))}
+                      {tasks.filter(t => t.status === 'todo').map(t => <TaskCard key={t.id} t={t} showMoveRight="doing" showDelete={true} />)}
                   </div>
               </div>
 
@@ -2041,15 +2309,7 @@ const handleFileSelect = (e) => {
               <div className="bg-[#151520] border border-blue-500/20 rounded-2xl p-4 flex flex-col bg-blue-500/5">
                   <h3 className="text-blue-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-blue-500/10 pb-2"><Loader2 size={16} className="animate-spin"/> Fazendo ({tasks.filter(t=>t.status==='doing').length})</h3>
                   <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                      {tasks.filter(t => t.status === 'doing').map(t => (
-                          <div key={t.id} className="bg-black/40 p-3 rounded-xl border border-blue-500/20 flex justify-between items-start group hover:border-blue-500/40 transition-all shadow-lg shadow-blue-900/10">
-                              <p className="text-sm text-white font-medium">{t.text}</p>
-                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button onClick={() => moveTask(t.id, 'done')} className="text-green-500 hover:bg-green-500/20 p-1.5 rounded" title="Concluir"><CheckCircle size={16}/></button>
-                                  <button onClick={() => removeTask(t.id)} className="text-red-500 hover:bg-red-500/20 p-1.5 rounded" title="Excluir"><Trash2 size={16}/></button>
-                              </div>
-                          </div>
-                      ))}
+                      {tasks.filter(t => t.status === 'doing').map(t => <TaskCard key={t.id} t={t} showMoveRight="done" showDelete={true} />)}
                   </div>
               </div>
 
@@ -2057,17 +2317,12 @@ const handleFileSelect = (e) => {
               <div className="bg-[#151520] border border-green-500/20 rounded-2xl p-4 flex flex-col bg-green-500/5">
                   <h3 className="text-green-500 font-bold uppercase mb-4 flex items-center gap-2 border-b border-green-500/10 pb-2"><CheckCircle size={16}/> Feito ({tasks.filter(t=>t.status==='done').length})</h3>
                   <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                      {tasks.filter(t => t.status === 'done').map(t => (
-                          <div key={t.id} className="bg-black/40 p-3 rounded-xl border border-green-500/10 flex justify-between items-center group opacity-60 hover:opacity-100 transition-all">
-                              <p className="text-sm text-gray-400 line-through">{t.text}</p>
-                              <button onClick={() => removeTask(t.id)} className="text-gray-600 hover:text-red-500 p-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14}/></button>
-                          </div>
-                      ))}
+                      {tasks.filter(t => t.status === 'done').map(t => <TaskCard key={t.id} t={t} showMoveRight={null} showDelete={true} />)}
                   </div>
               </div>
           </div>
       </div>
-  )
+  )}
 
   // --- COMPONENTE DE AUTO-AVALIAÇÃO (RUBRICAS) ---
   const RubricView = () => {
@@ -2194,51 +2449,164 @@ const handleFileSelect = (e) => {
   }
 
   // --- COMPONENTE DIÁRIO DE BORDO ---
-  const LogbookView = () => (
-      <div className="animate-in fade-in duration-500 max-w-4xl mx-auto">
-          {/* Formulário de Novo Registro */}
-          <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 mb-8">
-              <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-4"><Book className="text-yellow-500"/> Novo Registro no Diário</h3>
-              <form onSubmit={handleLogbookSubmit}>
-                  <textarea name="entry" className="w-full bg-black/50 border border-white/20 rounded-xl p-4 text-white focus:border-yellow-500 outline-none h-32 resize-none mb-4" placeholder="O que aprendemos hoje? O que deu errado? O que deu certo?"></textarea>
-                  <button className="bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-3 px-6 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-yellow-900/20"><Plus size={18}/> Registrar no Diário</button>
-              </form>
-          </div>
+  const LogbookView = () => {
+      // State para o admin selecionar um aluno e para a busca
+      const [selectedStudentId, setSelectedStudentId] = useState(null);
+      const [searchTerm, setSearchTerm] = useState("");
 
-          {/* Linha do Tempo */}
-          <div className="relative border-l border-white/10 ml-4 space-y-8 pl-8">
-              {logbookEntries.length === 0 && <p className="text-gray-500 italic">Nenhum registro ainda. Comece o diário!</p>}
-              
-              {logbookEntries.sort((a,b) => new Date(b.date) - new Date(a.date)).map(entry => (
-                  <div key={entry.id} className="relative group">
-                      {/* Bolinha na linha do tempo */}
-                      <div className="absolute -left-[39px] top-0 w-5 h-5 rounded-full bg-[#151520] border-2 border-yellow-500 flex items-center justify-center">
-                          <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                      </div>
-                      
-                      <div className="bg-black/40 border border-white/5 p-6 rounded-xl hover:bg-white/5 transition-all">
-                          <div className="flex justify-between items-start mb-3">
-                              <div className="flex items-center gap-3">
-                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${entry.studentId === 'admin' ? 'bg-red-500 text-white' : 'bg-blue-600 text-white'}`}>
-                                      {entry.studentName.charAt(0)}
+      // --- VISÃO DO TÉCNICO ---
+      if (isAdmin) {
+          const entriesForSelectedStudent = selectedStudentId
+              ? logbookEntries.filter(entry => {
+                  const pathParts = entry.refPath.split('/');
+                  // O caminho é students/STUDENT_ID/logbook/ENTRY_ID
+                  return pathParts.length > 1 && pathParts[1] === selectedStudentId;
+              })
+              : [];
+          
+          const filteredEntries = searchTerm
+              ? entriesForSelectedStudent.filter(entry => 
+                  entry.text.toLowerCase().includes(searchTerm.toLowerCase())
+                )
+              : entriesForSelectedStudent;
+          
+          const selectedStudent = students.find(s => s.id === selectedStudentId);
+
+          return (
+              <div className="animate-in fade-in duration-500 grid grid-cols-1 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+                  {/* Lista de Alunos */}
+                  <div className="lg:col-span-1 bg-[#151520] border border-white/10 rounded-2xl p-4 h-fit">
+                      <h3 className="text-base font-bold text-white flex items-center gap-2 mb-4 border-b border-white/10 pb-3">
+                          <Users size={16}/> Diários da Equipe
+                      </h3>
+                      <div className="space-y-2">
+                          {students.map(student => (
+                              <button 
+                                  key={student.id} 
+                                  onClick={() => setSelectedStudentId(student.id)}
+                                  className={`w-full text-left p-3 rounded-lg transition-colors text-sm flex items-center gap-3 ${selectedStudentId === student.id ? 'bg-yellow-500 text-black font-bold' : 'bg-black/40 hover:bg-white/10 text-white'}`}
+                              >
+                                  <div className={`p-1 rounded-full border ${student.avatarType === 'mech2' ? 'border-fuchsia-500' : 'border-orange-500'}`}>
+                                      {student.avatarImage ? (
+                                         <img src={student.avatarImage} alt="Avatar" className="w-6 h-6 rounded-full object-cover" />
+                                     ) : (
+                                         <UserCircle size={20} className="text-gray-500" />
+                                     )}
                                   </div>
-                                  <div>
-                                      <span className="text-white font-bold text-sm block">{entry.studentName}</span>
-                                      <span className="text-xs text-gray-500 flex items-center gap-1">
-                                          <Calendar size={10}/> {new Date(entry.date).toLocaleDateString()} 
-                                          <span className="mx-1">•</span> 
-                                          <Timer size={10}/> {new Date(entry.date).toLocaleTimeString().slice(0,5)}
-                                      </span>
-                                  </div>
-                              </div>
-                          </div>
-                          <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">{entry.text}</p>
+                                  {student.name}
+                              </button>
+                          ))}
                       </div>
                   </div>
-              ))}
+
+                  {/* Linha do Tempo do Aluno Selecionado */}
+                  <div className="lg:col-span-3">
+                      {/* Barra de Busca (só aparece se um aluno for selecionado) */}
+                      {selectedStudentId && (
+                          <div className="relative mb-6">
+                              <Search size={18} className="absolute left-4 top-3.5 text-gray-500" />
+                              <input 
+                                  type="text"
+                                  placeholder={`Buscar no diário de ${selectedStudent?.name}...`}
+                                  value={searchTerm}
+                                  onChange={(e) => setSearchTerm(e.target.value)}
+                                  className="w-full bg-[#151520] border border-white/10 rounded-xl p-3 pl-12 text-white focus:border-yellow-500 outline-none"
+                              />
+                          </div>
+                      )}
+                      {!selectedStudentId ? (
+                          <div className="h-full min-h-[400px] flex items-center justify-center bg-[#151520] border-2 border-dashed border-white/10 rounded-2xl p-6 text-center">
+                              <div>
+                                  <BookOpen size={48} className="text-gray-600 mx-auto mb-4"/>
+                                  <p className="text-gray-400 font-bold">Selecione um aluno à esquerda</p>
+                                  <p className="text-sm text-gray-500">para visualizar seu diário de bordo individual.</p>
+                              </div>
+                          </div>
+                      ) : (
+                          <div className="relative border-l border-white/10 ml-4 space-y-8 pl-8">
+                              {filteredEntries.length === 0 && (
+                                  <div className="text-gray-500 italic">
+                                      Nenhum registro para <span className="font-bold">{selectedStudent?.name}</span> ainda.
+                                  </div>
+                              )}
+                              {filteredEntries.map(entry => (
+                                  <div key={entry.id} className="relative group">
+                                      <div className="absolute -left-[39px] top-0 w-5 h-5 rounded-full bg-[#151520] border-2 border-yellow-500 flex items-center justify-center"><div className="w-2 h-2 bg-yellow-500 rounded-full"></div></div>
+                                      <div className="bg-black/40 border border-white/5 p-6 rounded-xl hover:bg-white/5 transition-all">
+                                          <div className="flex justify-between items-start mb-3">
+                                              <div className="flex items-center gap-3">
+                                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm bg-blue-600 text-white`}>{entry.studentName.charAt(0)}</div>
+                                                  <div>
+                                                      <span className="text-white font-bold text-sm block">{entry.studentName}</span>
+                                                      <span className="text-xs text-gray-500 flex items-center gap-1"><Calendar size={10}/> {entry.weekName || "Semana Geral"}<span className="mx-1">•</span><Timer size={10}/> {new Date(entry.date).toLocaleDateString()}</span>
+                                                  </div>
+                                              </div>
+                                          </div>
+                                          <button onClick={() => handleDeleteLogbookEntry(entry)} className="absolute top-4 right-4 text-gray-600 hover:text-red-500 p-2 transition-colors" title="Excluir Registro"><Trash2 size={16} /></button>
+                                          <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">{entry.text}</p>
+                                      </div>
+                                  </div>
+                              ))}
+                          </div>
+                      )}
+                  </div>
+              </div>
+          );
+      }
+
+      // --- Lógica de filtro para o aluno ---
+      const filteredEntries = searchTerm
+          ? logbookEntries.filter(entry => 
+              entry.text.toLowerCase().includes(searchTerm.toLowerCase())
+            )
+          : logbookEntries;
+
+      // --- VISÃO DO ALUNO (Permanece a mesma) ---
+      return (
+          <div className="animate-in fade-in duration-500 max-w-4xl mx-auto">
+              <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 mb-8">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-4"><Book className="text-yellow-500"/> Diário de Bordo Semanal</h3>
+                  <p className="text-gray-400 text-sm mb-4">Registrando aprendizados da <strong className="text-yellow-500">{currentWeekData?.weekName || "Semana Atual"}</strong></p>
+                  <form onSubmit={handleLogbookSubmit}>
+                      <textarea name="entry" className="w-full bg-black/50 border border-white/20 rounded-xl p-4 text-white focus:border-yellow-500 outline-none h-32 resize-none mb-4" placeholder="O que aprendemos nesta semana? O que deu errado e como resolvemos?"></textarea>
+                      <button className="bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-3 px-6 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-yellow-900/20"><Plus size={18}/> Salvar Registro da Semana</button>
+                  </form>
+              </div>
+              {/* Barra de Busca do Aluno */}
+              <div className="relative mb-6">
+                  <Search size={18} className="absolute left-4 top-3.5 text-gray-500" />
+                  <input 
+                      type="text"
+                      placeholder="Buscar nos meus registros..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full bg-[#151520] border border-white/10 rounded-xl p-3 pl-12 text-white focus:border-yellow-500 outline-none"
+                  />
+              </div>
+              <div className="relative border-l border-white/10 ml-4 space-y-8 pl-8">
+                  {filteredEntries.length === 0 && <p className="text-gray-500 italic">{searchTerm ? 'Nenhum registro encontrado.' : 'Nenhum registro ainda. Comece o diário!'}</p>}
+                  {filteredEntries.map(entry => (
+                      <div key={entry.id} className="relative group">
+                          <div className="absolute -left-[39px] top-0 w-5 h-5 rounded-full bg-[#151520] border-2 border-yellow-500 flex items-center justify-center"><div className="w-2 h-2 bg-yellow-500 rounded-full"></div></div>
+                          <div className="bg-black/40 border border-white/5 p-6 rounded-xl hover:bg-white/5 transition-all">
+                              <div className="flex justify-between items-start mb-3">
+                                  <div className="flex items-center gap-3">
+                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm bg-blue-600 text-white`}>{entry.studentName.charAt(0)}</div>
+                                      <div>
+                                          <span className="text-white font-bold text-sm block">{entry.studentName}</span>
+                                          <span className="text-xs text-gray-500 flex items-center gap-1"><Calendar size={10}/> {entry.weekName || "Semana Geral"}<span className="mx-1">•</span><Timer size={10}/> {new Date(entry.date).toLocaleDateString()}</span>
+                                      </div>
+                                  </div>
+                              </div>
+                              <button onClick={() => handleDeleteLogbookEntry(entry)} className="absolute top-4 right-4 text-gray-600 hover:text-red-500 p-2 transition-colors" title="Excluir Registro"><Trash2 size={16} /></button>
+                              <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">{entry.text}</p>
+                          </div>
+                      </div>
+                  ))}
+              </div>
           </div>
-      </div>
-  )
+      );
+  }
 
 
 // --- TELA DE LOGIN (Se não tiver usuário logado) ---
@@ -2640,9 +3008,13 @@ const handleFileSelect = (e) => {
                               return (
                                   <div key={s.id} className="border border-white/10 p-3 rounded-xl bg-[#151520] flex flex-col gap-3 group hover:border-white/30 transition-all">
                                       <div className="flex items-center gap-3">
-                                          <div className={`p-2 rounded-full border-2 ${s.avatarType === 'mech2' ? 'border-fuchsia-500 bg-fuchsia-500/10' : 'border-orange-500 bg-orange-500/10'}`}>
-                                              <Bot size={20} className={s.avatarType === 'mech2' ? 'text-fuchsia-500' : 'text-orange-500'}/>
-                                          </div>
+                                          {s.avatarImage ? (
+     <img src={s.avatarImage} alt="Avatar" className="w-10 h-10 rounded-full object-cover" />
+ ) : (
+     <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
+         <UserCircle size={24} className="text-gray-500" />
+     </div>
+ )}
                                           <div className="flex-1 overflow-hidden">
                                               <span className="text-white font-bold text-sm block truncate">{s.name}</span>
                                               <div className="flex items-center mt-1 gap-2">
@@ -2785,9 +3157,13 @@ const handleFileSelect = (e) => {
                     <UserCircle size={24} />
                 </div>
                 <div className="flex items-center justify-center gap-4">
-                    <div className={`p-3 rounded-full border-2 ${viewAsStudent.avatarType === 'mech2' ? 'border-cyan-500 bg-cyan-500/10' : 'border-orange-500 bg-orange-500/10'}`}>
-                        <Bot size={32} className={viewAsStudent.avatarType === 'mech2' ? 'text-cyan-500' : 'text-orange-500'}/>
-                    </div>
+                    {viewAsStudent.avatarImage ? (
+     <img src={viewAsStudent.avatarImage} alt="Avatar" className="w-12 h-12 rounded-full object-cover" />
+ ) : (
+     <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center">
+         <UserCircle size={32} className="text-gray-500" />
+     </div>
+ )}
                     <div className="text-left">
                         <h2 className="text-2xl font-bold text-white leading-none">{viewAsStudent.name}</h2>
                         <p className="text-gray-400 text-sm font-mono mt-1">{viewAsStudent.turma}</p>
