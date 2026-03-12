@@ -2,14 +2,13 @@ import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
 // --- AQUI ENTRA O CÓDIGO QUE VOCÊ COPIOU DO SITE ---
-// As chaves agora são carregadas de um arquivo .env.local (que não vai para o GitHub)
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_API_KEY,
-  authDomain: import.meta.env.VITE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_APP_ID
+  apiKey: "AIzaSyAeHmw9cMxzhu-nbXDIU21DxkcwZU0kKtM",
+  authDomain: "gestao-new-gears.firebaseapp.com",
+  projectId: "gestao-new-gears",
+  storageBucket: "gestao-new-gears.firebasestorage.app",
+  messagingSenderId: "230026094824",
+  appId: "1:230026094824:web:fbc826414e299dba89815d"
 };
 // ---------------------------------------------------
 

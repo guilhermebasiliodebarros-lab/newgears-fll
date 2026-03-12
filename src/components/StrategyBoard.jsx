@@ -1,13 +1,28 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Stage, Layer, Image as KonvaImage, Line } from 'react-konva';
+import { Stage, Layer, Image as KonvaImage, Line, Rect, Circle, Text } from 'react-konva'; // Import Circle e Text
 import useImage from 'use-image';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase'; // ⚠️ CONFIRA O CAMINHO!
+import { Maximize, Minimize, Crosshair } from 'lucide-react'; // Ícones
 
 // --- COMPONENTE DE IMAGEM ---
 const MapImage = ({ src, width, height }) => {
-  const [image] = useImage(src);
-  return <KonvaImage image={image} width={width} height={height} />;
+  const [image, status, error] = useImage(src); // Destructure status and error
+
+  useEffect(() => {
+    console.log(`MapImage: Loading ${src}, Status: ${status}`);
+    if (status === 'error') {
+      console.error(`Failed to load image: ${src}. Error:`, error);
+    }
+  }, [src, status, error]);
+
+  if (status === 'loading') {
+    return <Rect width={width} height={height} fill="#333" />; // Placeholder while loading
+  }
+  if (status === 'error') {
+    return <Rect width={width} height={height} fill="#550000" />; // Red error background
+  }
+  return <KonvaImage image={image} width={width} height={height} />; // Only render if image is loaded
 };
 
 const StrategyBoard = () => {
@@ -19,6 +34,7 @@ const StrategyBoard = () => {
   const [color, setColor] = useState('#3b82f6'); // Cor atual (Azul padrão)
   const [lines, setLines] = useState([]); // Os riscos
   const [isDrawing, setIsDrawing] = useState(false);
+  const [lastMarker, setLastMarker] = useState(null); // Ponto de captura (x, y)
   
   const [savedStrategies, setSavedStrategies] = useState([]); // Lista de estratégias salvas
   const [strategyName, setStrategyName] = useState(""); // Nome para salvar
@@ -49,7 +65,9 @@ const StrategyBoard = () => {
     const init = async () => {
       // SETA A IMAGEM LOCAL (Rápido, seguro e offline)
       // Certifique-se que você colocou a imagem 'mesa-fll.jpg' na pasta 'public'
-      setActiveMapUrl('/mesaUnearthed.png'); 
+      // Adicionamos um carimbo de data para forçar o navegador a recarregar a imagem nova
+      // CORREÇÃO: Mudado para .jpg conforme verificado
+      setActiveMapUrl(`/Unearthed.jpg?t=${new Date().getTime()}`); 
       setActiveMapId('mapa_padrao_local'); 
         
       // Buscar Estratégias salvas (continua puxando do Firebase)
@@ -68,10 +86,22 @@ const StrategyBoard = () => {
     }
   };
 
+  // --- ESTADO TELA CHEIA ---
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
   // --- 2. LÓGICA DE DESENHO (Agora com Cores!) ---
   const handleMouseDown = (e) => {
-    setIsDrawing(true);
     const pos = e.target.getStage().getPointerPosition();
+    
+    // SE ESTIVER NA FERRAMENTA DE MIRA (CAPTURE), APENAS MARCA O PONTO
+    if (tool === 'picker') {
+        const coords = { x: Math.round(pos.x), y: Math.round(pos.y) };
+        setLastMarker(coords);
+        localStorage.setItem('lastMapClick', JSON.stringify(coords));
+        return; // Não desenha linha
+    }
+
+    setIsDrawing(true);
     // Agora salvamos a COR junto com a linha!
     setLines([...lines, { tool, color, points: [pos.x, pos.y] }]);
   };
@@ -80,14 +110,15 @@ const StrategyBoard = () => {
     if (!isDrawing) return;
     const stage = e.target.getStage();
     const point = stage.getPointerPosition();
-    let lastLine = lines[lines.length - 1];
     
-    // Adiciona pontos à linha atual
+    // Correção: Criar cópia do array para não mutar estado diretamente
+    const newLines = [...lines];
+    const lastLine = { ...newLines[newLines.length - 1] };
+    
     lastLine.points = lastLine.points.concat([point.x, point.y]);
     
-    // Atualiza React de forma otimizada
-    lines.splice(lines.length - 1, 1, lastLine);
-    setLines(lines.concat());
+    newLines.splice(newLines.length - 1, 1, lastLine);
+    setLines(newLines);
   };
 
   const handleMouseUp = () => setIsDrawing(false);
@@ -126,8 +157,9 @@ const StrategyBoard = () => {
 
   if (!activeMapUrl) return <div className="text-white">Carregando mesa...</div>;
 
+  console.log("StrategyBoard: Rendering with activeMapUrl:", activeMapUrl);
   return (
-    <div className="flex flex-col gap-6 bg-gray-900 p-6 rounded-xl border border-gray-800">
+    <div className={`flex flex-col gap-6 bg-gray-900 p-6 rounded-xl border border-gray-800 ${isFullscreen ? 'fixed inset-0 z-[100] h-screen w-screen overflow-hidden justify-center' : ''}`}>
       
       {/* --- CABEÇALHO: FERRAMENTAS E CORES --- */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-gray-800 p-4 rounded-lg">
@@ -148,6 +180,21 @@ const StrategyBoard = () => {
 
         {/* Lado Direito: Ações */}
         <div className="flex items-center gap-2">
+          {/* Botão de Captura de Coordenada */}
+          <button 
+            onClick={() => setTool('picker')}
+            className={`px-3 py-1 rounded text-sm font-bold flex items-center gap-2 ${tool === 'picker' ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-700 text-gray-300'}`}
+            title="Clique para marcar uma coordenada (sem riscar)"
+          >
+            <Crosshair size={16}/> Mira
+          </button>
+
+          {/* Botão Tela Cheia */}
+          <button onClick={() => setIsFullscreen(!isFullscreen)} className="px-3 py-1 rounded text-sm font-bold bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-500/50 flex items-center gap-2"
+          >
+            {isFullscreen ? <Minimize size={16}/> : <Maximize size={16}/>} {isFullscreen ? 'Sair' : 'Expandir'}
+          </button>
+
           <button 
             onClick={() => setTool('eraser')}
             className={`px-3 py-1 rounded text-sm font-bold flex items-center gap-2 ${tool === 'eraser' ? 'bg-white text-black' : 'bg-gray-700 text-gray-300'}`}
@@ -164,7 +211,7 @@ const StrategyBoard = () => {
       </div>
 
       {/* --- ÁREA DO DESENHO --- */}
-      <div className="flex justify-center bg-black/50 rounded-lg p-2 border border-gray-700 overflow-hidden">
+      <div className="flex justify-center bg-black/50 rounded-lg p-2 border border-gray-700 overflow-hidden" style={{ cursor: tool === 'picker' ? 'crosshair' : 'default' }}>
         {/* ... dentro do return ... */}
 
 <Stage
@@ -200,6 +247,25 @@ const StrategyBoard = () => {
         }
       />
     ))}
+
+    {/* CAMADA 3: O ALVO DA MIRA (Só aparece se tiver clicado com a ferramenta de Mira) */}
+    {lastMarker && (
+        <>
+            <Circle x={lastMarker.x} y={lastMarker.y} radius={8} stroke="red" strokeWidth={2} />
+            <Circle x={lastMarker.x} y={lastMarker.y} radius={2} fill="red" />
+            <Rect 
+                x={lastMarker.x + 10} y={lastMarker.y - 25} 
+                width={110} height={22} fill="black" cornerRadius={5} opacity={0.8} 
+                listening={false}
+            />
+            <Text 
+                x={lastMarker.x + 15} y={lastMarker.y - 20} 
+                text={`X: ${lastMarker.x}, Y: ${lastMarker.y}`} 
+                fill="#ffff00" fontSize={12} fontStyle="bold" fontVariant="small-caps"
+                listening={false}
+            />
+        </>
+    )}
   </Layer>
 </Stage>
       </div>

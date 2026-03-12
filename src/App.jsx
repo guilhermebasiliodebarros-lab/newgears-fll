@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy } from "firebase/firestore";
 import { db } from './firebase'; // Importa a instância já inicializada
 import StrategyBoard from './components/StrategyBoard';
@@ -97,6 +97,7 @@ import {
   ExternalLink,  // <--- Provavelmente vai pedir em seguida (Abrir Arquivo em outra aba)
   FileWarning,
   Book,          // <--- Ícone do Diário
+  Play,          // <--- NOVO: Ícone de Play para o Cronômetro
 } from 'lucide-react';
 
 
@@ -516,6 +517,13 @@ function App() {
 
   const [rounds, setRounds] = useState([])
 
+  const [scoreHistory, setScoreHistory] = useState([]) // <--- NOVO: Histórico de pontuações
+
+  // --- ESTADOS DO CRONÔMETRO ---
+  const [activeTimer, setActiveTimer] = useState(null); // { roundId, start, name }
+  const [timerDisplay, setTimerDisplay] = useState(0); 
+  const [roundFormValues, setRoundFormValues] = useState({}); // { [roundId]: value }
+
   const [compliments, setCompliments] = useState([]) 
 
   const [innovationRubric, setInnovationRubric] = useState({ identificacao: 1, design: 1, criacao: 1, iteracao: 1, comunicacao: 1 })
@@ -562,28 +570,33 @@ function App() {
 
 
 
-// --- FUNÇÃO DE CRONOGRAMA (11 ALUNOS: 2 FIXOS + 9 NO RODÍZIO TRIPLO) ---
-  const generateSchedule = () => { 
+// --- FUNÇÃO DE CRONOGRAMA OFICIAL (10 ALUNOS) ---
+  // Usamos useMemo para reconectar os dados assim que os alunos carregarem do Firebase
+  const rotationSchedule = useMemo(() => { 
       const schedule = []; 
-      let currentDate = new Date("2026-03-02"); // Data de Início
+      let currentDate = new Date("2026-03-23"); // Data de Início
 
-      // 1. CAPITÃS (Sempre Fixas em Gestão)
+      // 1. CAPITÃS (Sempre Fixas em Gestão - Tarde)
       const capitasNames = ["Heloise", "Sofia"];
 
-      // 2. LISTA DOS 9 ALUNOS DO RODÍZIO
-      // (Adicione os nomes reais aqui conforme entrarem)
-      const poolDeAlunos = [
+      // 2. APRENDIZ (Sexto Ano - Flutua para aprender)
+      const trainee = "Antônio";
+
+      // 3. POOL DO RODÍZIO (7 Alunos da Manhã)
+      // Estes rodam nas vagas: 3 Eng, 3 Inov, 1 Gestão (Líder da Manhã)
+      // Ciclo de 7 semanas para dar a volta completa
+      const morningPool = [
           "Enzo", "Mariana", 
-          "Aluno 3", "Aluno 4", 
-          "Aluno 5", "Aluno 6", 
-          "Aluno 7", "Aluno 8", 
-          "Aluno 9"
+          "Lívia", "Arthur Silva", 
+          "Benjamim", "Davi Miguel", 
+          "Antônio Yamaguchi" 
       ];
 
       // Função auxiliar para criar objetos visuais (evita o "Vago")
       const getStudentObjects = (namesList) => {
           return namesList.map(nameStr => {
-              const found = students.find(s => s.name.toLowerCase().includes(nameStr.toLowerCase()));
+              // Correção: Comparação exata para diferenciar "Antônio" de "Antônio Yamaguchi"
+              const found = students.find(s => s.name && s.name.trim().toLowerCase() === nameStr.trim().toLowerCase());
               if (found) return found; 
               // Cria objeto temporário se não achar no banco
               return { id: `fake-${nameStr}-${Math.random()}`, name: nameStr, avatarType: 'robot' };
@@ -594,43 +607,33 @@ function App() {
           const endDate = new Date(currentDate); 
           endDate.setDate(currentDate.getDate() + 4); 
           
-          // --- ALGORITMO DE MISTURA (O "LIQUIDIFICADOR") ---
-          // Gira a lista toda semana para mudar as duplas
-          const step = i - 1; 
-          const misturados = [
-              ...poolDeAlunos.slice(step % poolDeAlunos.length),
-              ...poolDeAlunos.slice(0, step % poolDeAlunos.length)
-          ];
-
-          // Divide os 9 alunos em 3 grupos de 3
-          const grupo1 = misturados.slice(0, 3);
-          const grupo2 = misturados.slice(3, 6);
-          const grupo3 = misturados.slice(6, 9);
-
-          let engTeam = [];
-          let inovTeam = [];
-          let gestTeam = [];
-
-          // --- RODÍZIO TRIPLO (A dança das cadeiras) ---
-          const resto = i % 3; // 1, 2 ou 0
-
-          if (resto === 1) {       // SEMANA 1, 4, 7...
-              engTeam = grupo1;
-              inovTeam = grupo2;
-              gestTeam = grupo3;
-          } else if (resto === 2) { // SEMANA 2, 5, 8...
-              engTeam = grupo3;
-              inovTeam = grupo1;
-              gestTeam = grupo2;
-          } else {                 // SEMANA 3, 6, 9...
-              engTeam = grupo2;
-              inovTeam = grupo3;
-              gestTeam = grupo1;
+          // --- LÓGICA DE ROTAÇÃO (CICLO DE 7) ---
+          // A cada semana, giramos a lista dos 7 alunos uma posição
+          // Assim, todos passam por Eng -> Inov -> Gestão
+          const shift = (i - 1) % 7;
+          const currentRotation = [...morningPool];
+          
+          // Realiza a rotação do array
+          for(let k = 0; k < shift; k++) {
+              currentRotation.push(currentRotation.shift());
           }
 
-          // Adiciona as Capitãs ao time de Gestão da semana
-          // O "..." espalha os alunos do rodízio junto com as capitãs
-          const gestaoFinal = [...capitasNames, ...gestTeam];
+          // DISTRIBUIÇÃO INTERCALADA (EVITA REPETIÇÕES SEGUIDAS)
+          // Para alternar e não ficar 3 semanas na mesma área:
+          // Eng: Pega índices 0, 3, 5
+          // Inov: Pega índices 2, 4, 6
+          // Gestão: Pega índice 1
+          const engTeam = [currentRotation[0], currentRotation[3], currentRotation[5]];
+          const inovTeam = [currentRotation[2], currentRotation[4], currentRotation[6]];
+          const morningLeader = [currentRotation[1]];
+
+          // ONDE ENTRA O ANTÔNIO?
+          // Alternamos ele: Semanas ímpares na Eng, Pares na Inovação
+          if (i % 2 !== 0) engTeam.push(trainee);
+          else inovTeam.push(trainee);
+
+          // GESTÃO FINAL = Capitãs (Tarde) + Líder da Manhã
+          const gestaoFinal = [...capitasNames, ...morningLeader];
 
           schedule.push({ 
               id: i, 
@@ -645,9 +648,8 @@ function App() {
           }); 
           currentDate.setDate(currentDate.getDate() + 7); 
       } 
-      return schedule; 
-  }
-  const [rotationSchedule] = useState(generateSchedule());
+      return schedule;
+  }, [students]); // <--- A mágica acontece aqui: atualiza quando "students" muda
 
   // --- 1. CÁLCULO DA SEMANA ATUAL (CÓDIGO NOVO) ---
   useEffect(() => {
@@ -711,6 +713,7 @@ function App() {
     const unsubQuestions = createListener("questions", setQuestions);
     const unsubOutreach = createListener("outreach", setOutreachEvents);
     const unsubTasks = createListener("tasks", setTasks); // <--- GARANTINDO O LISTENER DE TAREFAS
+    const unsubScoreHistory = createListener("score_history", setScoreHistory); // <--- LISTENER DO GRÁFICO
     
     // Listener do Diário de Bordo (agora condicional)
     let unsubLogbook;
@@ -761,11 +764,37 @@ function App() {
 
     return () => {
         unsubStudents(); unsubExperts(); unsubRobot(); unsubRounds();
-        unsubCompliments(); unsubMatrix(); unsubQuestions(); 
+        unsubCompliments(); unsubMatrix(); unsubQuestions(); unsubScoreHistory();
         unsubOutreach(); unsubMissions(); unsubTasks(); unsubInnovationRubric(); unsubRobotDesignRubric(); if (unsubLogbook) unsubLogbook();
     };
   }, []);
 
+  // --- LÓGICA DO CRONÔMETRO ---
+  useEffect(() => {
+    let interval;
+    if (activeTimer) {
+        interval = setInterval(() => {
+            const now = Date.now();
+            const diff = Math.floor((now - activeTimer.start) / 1000);
+            setTimerDisplay(diff);
+        }, 200);
+    }
+    return () => clearInterval(interval);
+  }, [activeTimer]);
+
+  const toggleTimer = (round) => {
+    if (activeTimer?.roundId === round.id) {
+        // PARAR
+        const preciseTime = Math.floor((Date.now() - activeTimer.start) / 1000);
+        setRoundFormValues(prev => ({ ...prev, [round.id]: preciseTime })); // Preenche o input
+        setActiveTimer(null);
+        setTimerDisplay(0);
+    } else {
+        // INICIAR
+        setActiveTimer({ roundId: round.id, start: Date.now(), name: round.name });
+        setTimerDisplay(0);
+    }
+  };
 
 
   // --- FIM DOS USE EFFECTS ---
@@ -967,6 +996,45 @@ const handleDeleteRound = async (id) => {
     }
   };
   
+  // --- FUNÇÕES DE EXCLUSÃO (MATRIZ, ESPECIALISTAS, ROBÔ) ---
+  const handleDeleteMatrix = async (id) => {
+      if (window.confirm("Tem certeza que deseja excluir esta ideia da matriz?")) {
+          try {
+              await deleteDoc(doc(db, "decisionMatrix", id));
+              showNotification("Ideia excluída com sucesso!");
+          } catch (error) {
+              console.error("Erro ao excluir ideia:", error);
+              showNotification("Erro ao excluir.", "error");
+          }
+      }
+  };
+
+  const handleDeleteExpert = async (e, id) => {
+      e.stopPropagation(); // Evita abrir o modal de visualização ao clicar na lixeira
+      if (window.confirm("Tem certeza que deseja excluir este especialista?")) {
+          try {
+              await deleteDoc(doc(db, "experts", id));
+              showNotification("Especialista excluído!");
+          } catch (error) {
+              console.error("Erro ao excluir especialista:", error);
+              showNotification("Erro ao excluir.", "error");
+          }
+      }
+  };
+
+  const handleDeleteRobotVersion = async (e, id) => {
+      e.stopPropagation(); // Evita abrir o modal de visualização
+      if (window.confirm("Tem certeza que deseja excluir esta versão do robô?")) {
+          try {
+              await deleteDoc(doc(db, "robotVersions", id));
+              showNotification("Versão do robô excluída!");
+          } catch (error) {
+              console.error("Erro ao excluir versão:", error);
+              showNotification("Erro ao excluir.", "error");
+          }
+      }
+  };
+
   // --- FUNÇÃO CORRIGIDA COM LOGS ---
   const handleRegisterSubmit = async (e) => { 
       e.preventDefault(); 
@@ -1184,15 +1252,48 @@ const handleDeleteRound = async (id) => {
 
       const roundData = {
           name: fd.get('name'),
+          startBase: fd.get('startBase'), // <--- SALVA A BASE ESCOLHIDA
           estimatedTime: parseInt(fd.get('time')),
           missions: selectedMissions,
           totalPoints
       };
 
+      // --- LÓGICA DE DESENHO AUTOMÁTICO NA ESTRATÉGIA ---
+      const pathColor = fd.get('pathColor') || '#ffff00';
+
       try {
+          // 1. Salva o Round
           await addDoc(collection(db, "rounds"), roundData);
+
+          // 2. Tenta criar o desenho automático da rota
+          // Coordenadas aproximadas das bases (considerando canvas 800x450)
+          let startX = 60; let startY = 225; // Base Esquerda (Padrão)
+          if (roundData.startBase === 'Direita') { startX = 740; startY = 225; }
+
+          // Constrói os pontos da linha [x1, y1, x2, y2, ...]
+          let points = [startX, startY];
+          
+          selectedMissions.forEach(mId => {
+              const m = missionsList.find(miss => miss.id === mId);
+              if (m && m.x > 0 && m.y > 0) {
+                  points.push(m.x, m.y);
+              }
+          });
+
+          // Só cria se tivermos um caminho traçado (Base + pelo menos 1 missão com coordenadas)
+          if (points.length > 2) {
+              await addDoc(collection(db, "strategies"), {
+                  name: `[AUTO] ${roundData.name}`,
+                  mapId: 'mapa_padrao_local', // ID fixo usado no StrategyBoard
+                  lines: [{ tool: 'pen', color: pathColor, points: points }],
+                  createdAt: new Date().toISOString()
+              });
+              showNotification(`Rota automática criada com ${points.length/2} pontos! 🗺️`);
+          } else {
+              showNotification("Round salvo! (Sem rota automática)");
+          }
+
           closeModal();
-          showNotification("Round salvo no Firebase!");
       } catch (error) {
           console.error("Erro ao salvar round:", error);
           showNotification("Erro ao salvar.", "error");
@@ -1241,6 +1342,8 @@ const handleDeleteRound = async (id) => {
           code: fd.get('code'),
           name: fd.get('name'),
           points: parseInt(fd.get('points')),
+          x: parseInt(fd.get('x')) || 0, // <--- COORDENADA X
+          y: parseInt(fd.get('y')) || 0, // <--- COORDENADA Y
           image: img
       };
 
@@ -1971,7 +2074,38 @@ const handleFileSelect = (e) => {
 
           {modal.type === 'robotView' && (<div><div className="flex justify-between items-start mb-2"><h3 className="text-xl font-bold text-white">{modal.data.name}</h3><span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-mono font-bold">{modal.data.version}</span></div><p className="text-xs text-gray-500 mb-6">{modal.data.date}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Mudanças e Testes</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.changes}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto do Protótipo</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10" alt="Robô" /></div>)}</div>)}
 
-          {modal.type === 'newRound' && (<form onSubmit={handleRoundSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><ListTodo className="text-blue-500"/> Planejar Round</h3><div className="grid grid-cols-2 gap-4 mb-4"><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome do Round</label><input name="name" required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Saída 1" /></div><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Tempo (segundos)</label><input name="time" type="number" required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="30" /></div></div><div className="mb-6 max-h-40 overflow-y-auto custom-scrollbar border border-white/10 rounded-lg p-2"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block sticky top-0 bg-[#151520] pb-2">Missões (Selecione)</label>{missionsList.map(m => (<label key={m.id} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded cursor-pointer"><input type="checkbox" name="missions" value={m.id} className="accent-blue-500 w-4 h-4"/><div className="flex items-center gap-2 flex-1">{m.image && <img src={m.image} className="w-6 h-6 rounded object-cover" alt="M" />}<span className="text-sm text-gray-300">{m.code} - {m.name}</span></div><span className="text-xs font-bold text-blue-500">+{m.points}pts</span></label>))}</div><button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar Round</button></form>)}
+          {modal.type === 'newRound' && (<form onSubmit={handleRoundSubmit}>
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><ListTodo className="text-blue-500"/> Planejar Saída</h3>
+              
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome da Saída</label><input name="name" required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Saída 1" /></div>
+                  <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Tempo Estimado (s)</label><input name="time" type="number" required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="30" /></div>
+              </div>
+
+              {/* SELEÇÃO DE BASE */}
+              <div className="mb-4">
+                  <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Base de Saída</label>
+                  <div className="flex gap-4">
+                      <label className="flex items-center gap-2 bg-black/50 p-3 rounded-lg border border-white/20 flex-1 cursor-pointer hover:border-blue-500 transition-colors"><input type="radio" name="startBase" value="Esquerda" defaultChecked className="accent-blue-500"/><span className="text-sm text-white">Esquerda (Vermelho)</span></label>
+                      <label className="flex items-center gap-2 bg-black/50 p-3 rounded-lg border border-white/20 flex-1 cursor-pointer hover:border-red-500 transition-colors"><input type="radio" name="startBase" value="Direita" className="accent-red-500"/><span className="text-sm text-white">Direita (Azul)</span></label>
+                  </div>
+              </div>
+
+              {/* SELEÇÃO DE COR DA ROTA (NOVO) */}
+              <div className="mb-4">
+                  <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Cor da Rota (Desenho Automático)</label>
+                  <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
+                      {['#ef4444', '#3b82f6', '#22c55e', '#eab308', '#a855f7', '#f97316', '#ffffff'].map(c => (
+                          <label key={c} className="cursor-pointer">
+                              <input type="radio" name="pathColor" value={c} className="peer sr-only" defaultChecked={c==='#eab308'}/>
+                              <div className="w-8 h-8 rounded-full border-2 border-transparent peer-checked:border-white peer-checked:scale-110 transition-all shadow-lg" style={{backgroundColor: c}}></div>
+                          </label>
+                      ))}
+                  </div>
+                  <p className="text-[10px] text-gray-500">Se as missões tiverem coordenadas X/Y configuradas, o sistema desenhará o caminho na mesa.</p>
+              </div>
+
+              <div className="mb-6 max-h-40 overflow-y-auto custom-scrollbar border border-white/10 rounded-lg p-2"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block sticky top-0 bg-[#151520] pb-2">Missões (Selecione)</label>{missionsList.map(m => (<label key={m.id} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded cursor-pointer"><input type="checkbox" name="missions" value={m.id} className="accent-blue-500 w-4 h-4"/><div className="flex items-center gap-2 flex-1">{m.image && <img src={m.image} className="w-6 h-6 rounded object-cover" alt="M" />}<span className="text-sm text-gray-300">{m.code} - {m.name}</span></div><span className="text-xs font-bold text-blue-500">+{m.points}pts</span></label>))}</div><button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar Saída</button></form>)}
 
     
 
@@ -1998,6 +2132,42 @@ const handleFileSelect = (e) => {
                 </div>
 
                 <div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Pontos (Máx)</label><input name="points" type="number" defaultValue={modal.data?.points} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div>
+
+                {/* COORDENADAS X / Y (NOVO) */}
+                <div className="grid grid-cols-2 gap-4 mb-4 bg-white/5 p-3 rounded-lg border border-white/10 relative">
+                    <div className="col-span-2 flex justify-between items-center mb-1">
+                        <span className="text-[10px] text-gray-400 uppercase font-bold">Posição no Mapa (0-800 x 0-450)</span>
+                        {/* BOTÃO MÁGICO DE PEGAR CLIQUE */}
+                        <button 
+                            type="button"
+                            onClick={() => {
+                                const saved = localStorage.getItem('lastMapClick');
+                                if (saved) {
+                                    const { x, y } = JSON.parse(saved);
+                                    // Preenche os inputs via DOM (pois são não-controlados)
+                                    const inputX = document.querySelector('input[name="x"]');
+                                    const inputY = document.querySelector('input[name="y"]');
+                                    if(inputX) inputX.value = x;
+                                    if(inputY) inputY.value = y;
+                                    showNotification(`📍 Coordenadas capturadas: X=${x}, Y=${y}`);
+                                } else {
+                                    showNotification("Nenhum clique registrado. Vá na aba 'Mesa do Robô' e clique no mapa.", "error");
+                                }
+                            }}
+                            className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-1 rounded hover:bg-blue-500 hover:text-white transition-colors flex items-center gap-1"
+                        >
+                            <Map size={10}/> Pegar do Mapa
+                        </button>
+                    </div>
+                    <div>
+                        <label className="text-[10px] text-gray-500 block">X (Horizontal)</label>
+                        <input name="x" type="number" defaultValue={modal.data?.x} className="w-full bg-black/50 border border-white/20 rounded p-2 text-white text-xs outline-none focus:border-blue-500" placeholder="Ex: 400" />
+                    </div>
+                    <div>
+                        <label className="text-[10px] text-gray-500 block">Y (Vertical)</label>
+                        <input name="y" type="number" defaultValue={modal.data?.y} className="w-full bg-black/50 border border-white/20 rounded p-2 text-white text-xs outline-none focus:border-blue-500" placeholder="Ex: 225" />
+                    </div>
+                </div>
 
                 <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Missão</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}</div>
 
@@ -2102,13 +2272,13 @@ const handleFileSelect = (e) => {
 
               <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><BarChart3 className="text-purple-500"/> Matriz de Decisão (Pugh Matrix)</h3><button onClick={openMatrixForm} className="text-xs bg-purple-500/10 text-purple-500 border border-purple-500/20 px-3 py-1.5 rounded-lg hover:bg-purple-500 hover:text-white font-bold">+ Nova Ideia</button></div>
 
-              <div className="overflow-x-auto"><table className="w-full text-left border-collapse"><thead className="text-xs text-gray-500 uppercase border-b border-white/10"><tr><th className="p-3">Ideia</th><th className="p-3 text-center">Impacto (x3)</th><th className="p-3 text-center">Custo (x2)</th><th className="p-3 text-center">Fácil (x1)</th><th className="p-3 text-center">Inovação (x2)</th><th className="p-3 text-right text-white">Total</th></tr></thead><tbody>
+              <div className="overflow-x-auto"><table className="w-full text-left border-collapse"><thead className="text-xs text-gray-500 uppercase border-b border-white/10"><tr><th className="p-3">Ideia</th><th className="p-3 text-center">Impacto (x3)</th><th className="p-3 text-center">Custo (x2)</th><th className="p-3 text-center">Fácil (x1)</th><th className="p-3 text-center">Inovação (x2)</th><th className="p-3 text-right text-white">Total</th><th className="p-3"></th></tr></thead><tbody>
 
                   {decisionMatrix.sort((a,b) => (b.impact*3 + b.cost*2 + b.feasibility + b.innovation*2) - (a.impact*3 + a.cost*2 + a.feasibility + a.innovation*2)).map(item => {
 
                       const total = (item.impact*3) + (item.cost*2) + (item.feasibility) + (item.innovation*2);
 
-                      return (<tr key={item.id} className="border-b border-white/5 hover:bg-white/5 transition-colors"><td className="p-3 font-bold text-white">{item.name}</td><td className="p-3 text-center text-gray-400">{item.impact}</td><td className="p-3 text-center text-gray-400">{item.cost}</td><td className="p-3 text-center text-gray-400">{item.feasibility}</td><td className="p-3 text-center text-gray-400">{item.innovation}</td><td className="p-3 text-right font-black text-purple-400 text-lg">{total}</td></tr>)
+                      return (<tr key={item.id} className="border-b border-white/5 hover:bg-white/5 transition-colors"><td className="p-3 font-bold text-white">{item.name}</td><td className="p-3 text-center text-gray-400">{item.impact}</td><td className="p-3 text-center text-gray-400">{item.cost}</td><td className="p-3 text-center text-gray-400">{item.feasibility}</td><td className="p-3 text-center text-gray-400">{item.innovation}</td><td className="p-3 text-right font-black text-purple-400 text-lg">{total}</td><td className="p-3 text-right"><button onClick={() => handleDeleteMatrix(item.id)} className="text-gray-600 hover:text-red-500 p-1 transition-colors"><Trash2 size={16}/></button></td></tr>)
 
                   })}
 
@@ -2124,7 +2294,13 @@ const handleFileSelect = (e) => {
 
                 <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><MessageSquare className="text-pink-500"/> Especialistas</h3><button onClick={() => openExpertModal()} className="text-xs bg-pink-500/10 text-pink-500 border border-pink-500/20 px-3 py-1.5 rounded-lg hover:bg-pink-500 hover:text-white font-bold">+ Novo</button></div>
 
-                <div className="space-y-4">{experts.map(exp => (<div key={exp.id} onClick={() => openExpertView(exp)} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col gap-2 relative group cursor-pointer hover:bg-white/5 transition-colors"><button onClick={(e) => { e.stopPropagation(); openExpertModal(exp); }} className="absolute top-2 right-2 text-gray-500 hover:text-white p-1 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"><Pencil size={12}/></button><div className="flex justify-between items-start pr-6"><div><span className="text-white font-bold block text-sm">{exp.name}</span><span className="text-xs text-gray-400">{exp.role}</span></div>{exp.applied ? <span className="bg-green-500/20 text-green-500 text-[9px] px-2 py-1 rounded">APLICADO</span> : <span className="bg-gray-500/20 text-gray-500 text-[9px] px-2 py-1 rounded">CONSULTA</span>}</div><p className="text-xs text-gray-300 italic line-clamp-3">"{exp.notes}"</p>{exp.image && <div className="text-[10px] text-pink-400 flex items-center gap-1 mt-1"><ImageIcon size={10}/> Tem evidência</div>}<div className="h-1 rounded-full bg-gray-700 mt-1"><div className={`h-1 rounded-full ${exp.impact==='Alto'?'bg-green-500 w-full':exp.impact==='Médio'?'bg-yellow-500 w-1/2':'bg-gray-500 w-1/4'}`}></div></div></div>))}</div>
+                <div className="space-y-4">{experts.map(exp => (<div key={exp.id} onClick={() => openExpertView(exp)} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col gap-2 relative group cursor-pointer hover:bg-white/5 transition-colors">
+                    {/* Botões de Ação (Editar e Excluir) */}
+                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                        <button onClick={(e) => { e.stopPropagation(); openExpertModal(exp); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
+                        <button onClick={(e) => handleDeleteExpert(e, exp.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>
+                    </div>
+                    <div className="flex justify-between items-start pr-6"><div><span className="text-white font-bold block text-sm">{exp.name}</span><span className="text-xs text-gray-400">{exp.role}</span></div>{exp.applied ? <span className="bg-green-500/20 text-green-500 text-[9px] px-2 py-1 rounded">APLICADO</span> : <span className="bg-gray-500/20 text-gray-500 text-[9px] px-2 py-1 rounded">CONSULTA</span>}</div><p className="text-xs text-gray-300 italic line-clamp-3">"{exp.notes}"</p>{exp.image && <div className="text-[10px] text-pink-400 flex items-center gap-1 mt-1"><ImageIcon size={10}/> Tem evidência</div>}<div className="h-1 rounded-full bg-gray-700 mt-1"><div className={`h-1 rounded-full ${exp.impact==='Alto'?'bg-green-500 w-full':exp.impact==='Médio'?'bg-yellow-500 w-1/2':'bg-gray-500 w-1/4'}`}></div></div></div>))}</div>
 
             </div>
 
@@ -2132,7 +2308,13 @@ const handleFileSelect = (e) => {
 
                 <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><GitCommit className="text-blue-500"/> Diário do Robô</h3><button onClick={() => openRobotModal()} className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-3 py-1.5 rounded-lg hover:bg-blue-500 hover:text-white font-bold">+ Versão</button></div>
 
-                <div className="relative pl-4 border-l border-white/10 space-y-8">{robotVersions.map((ver, idx) => (<div key={ver.id} onClick={() => openRobotView(ver)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-[#151520]"></div><div className="bg-black/40 border border-white/5 p-4 rounded-xl relative hover:bg-white/5 transition-colors"><button onClick={(e) => { e.stopPropagation(); openRobotModal(ver); }} className="absolute top-2 right-2 text-gray-500 hover:text-white p-1 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"><Pencil size={12}/></button><div className="flex justify-between mb-2"><span className="text-blue-400 font-mono font-bold text-xs">{ver.version}</span><span className="text-[10px] text-gray-500">{ver.date.split('-').reverse().slice(0,2).join('/')}</span></div><h4 className="text-white font-bold mb-1 text-sm">{ver.name}</h4><p className="text-xs text-gray-400 line-clamp-2">{ver.changes}</p>{ver.image && <div className="text-[10px] text-blue-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Tem foto</div>}</div></div>))}</div>
+                <div className="relative pl-4 border-l border-white/10 space-y-8">{robotVersions.map((ver, idx) => (<div key={ver.id} onClick={() => openRobotView(ver)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-[#151520]"></div><div className="bg-black/40 border border-white/5 p-4 rounded-xl relative hover:bg-white/5 transition-colors">
+                    {/* Botões de Ação (Editar e Excluir) */}
+                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                        <button onClick={(e) => { e.stopPropagation(); openRobotModal(ver); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
+                        <button onClick={(e) => handleDeleteRobotVersion(e, ver.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>
+                    </div>
+                    <div className="flex justify-between mb-2"><span className="text-blue-400 font-mono font-bold text-xs">{ver.version}</span><span className="text-[10px] text-gray-500">{ver.date.split('-').reverse().slice(0,2).join('/')}</span></div><h4 className="text-white font-bold mb-1 text-sm">{ver.name}</h4><p className="text-xs text-gray-400 line-clamp-2">{ver.changes}</p>{ver.image && <div className="text-[10px] text-blue-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Tem foto</div>}</div></div>))}</div>
 
             </div>
 
@@ -2143,6 +2325,198 @@ const handleFileSelect = (e) => {
 
   )
 
+  // --- GRÁFICO DE EVOLUÇÃO (SVG PURO) ---
+  const ScoreEvolutionChart = () => {
+      // Estado local para filtrar o gráfico
+      const [chartFilter, setChartFilter] = useState('score_total'); // 'score_total' ou ID do round
+      
+      // Prepara os dados baseado no filtro
+      let rawData = [];
+      let yLabel = "pts";
+      let color = "#22c55e"; // Verde para pontos
+
+      if (chartFilter === 'score_total') {
+          // Pega apenas históricos de pontuação total
+          rawData = scoreHistory.filter(h => !h.roundId);
+      } else {
+          // Pega histórico de TEMPO de um round específico
+          rawData = scoreHistory.filter(h => h.roundId === chartFilter);
+          yLabel = "seg";
+          color = "#3b82f6"; // Azul para tempo
+      }
+
+      const data = [...rawData].sort((a,b) => new Date(a.date) - new Date(b.date));
+
+      if (data.length < 2 && chartFilter === 'score_total') return (
+        <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 mb-8 text-center text-gray-500 text-sm flex flex-col items-center justify-center h-48">
+            <TrendingUp size={32} className="mb-2 opacity-50"/>
+            <p>Registre pelo menos 2 treinos para ver o gráfico de evolução.</p>
+        </div>
+      );
+
+      const width = 800;
+      const height = 200;
+      const padding = 20;
+      
+      // Se for tempo, queremos ver cair (mas gráfico svg padrão sobe valores, então tratamos visualmente)
+      const valKey = chartFilter === 'score_total' ? 'score' : 'time';
+      const maxVal = Math.max(...data.map(d => d[valKey]), chartFilter === 'score_total' ? 100 : 60); 
+      const minVal = Math.min(...data.map(d => d[valKey]), 0);
+
+      // Função para converter dados em coordenadas X,Y
+      const getX = (index) => padding + (index / (data.length - 1)) * (width - 2 * padding);
+      const getY = (val) => height - padding - ((val - minVal) / (maxVal - minVal || 1)) * (height - 2 * padding);
+
+      // Cria o caminho da linha (path d)
+      const pathData = data.map((d, i) => 
+          `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d[valKey])}`
+      ).join(' ');
+
+      // Cria o caminho para o preenchimento (area fill)
+      const fillPathData = `${pathData} L ${width - padding} ${height} L ${padding} ${height} Z`;
+
+      return (
+          <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 mb-8">
+              <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-white font-bold flex items-center gap-2">
+                      <TrendingUp style={{ color }}/> {chartFilter === 'score_total' ? 'Evolução da Pontuação' : 'Melhoria de Tempo (Segundos)'}
+                  </h3>
+                  
+                  {/* SELETOR DE GRÁFICO */}
+                  <select 
+                    className="bg-black/40 border border-white/20 text-xs text-white rounded-lg p-2 outline-none focus:border-blue-500"
+                    value={chartFilter}
+                    onChange={(e) => setChartFilter(e.target.value)}
+                  >
+                      <option value="score_total">📊 Pontuação Geral</option>
+                      {rounds.map(r => (
+                          <option key={r.id} value={r.id}>⏱️ Tempo: {r.name}</option>
+                      ))}
+                  </select>
+              </div>
+
+              {data.length === 0 ? (
+                  <div className="h-32 flex items-center justify-center text-gray-500 text-xs italic border border-dashed border-white/10 rounded-xl">
+                      Sem dados registrados para este gráfico ainda.
+                  </div>
+              ) : (
+              <div className="w-full overflow-hidden relative">
+                  <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto drop-shadow-2xl">
+                      {/* Gradiente de Fundo */}
+                      <defs>
+                          <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={color} stopOpacity="0.2"/>
+                              <stop offset="100%" stopColor={color} stopOpacity="0"/>
+                          </linearGradient>
+                      </defs>
+
+                      {/* Linhas de Grade Horizontal */}
+                      {[0, 0.25, 0.5, 0.75, 1].map(p => {
+                          const y = height - padding - (p * (height - 2 * padding));
+                          return <line key={p} x1={padding} y1={y} x2={width-padding} y2={y} stroke="#333" strokeDasharray="4 4" strokeWidth="1"/>
+                      })}
+
+                      {/* Área Preenchida */}
+                      <path d={fillPathData} fill="url(#scoreGradient)" />
+
+                      {/* Linha do Gráfico */}
+                      <path d={pathData} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+
+                      {/* Pontos */}
+                      {data.map((d, i) => (
+                          <g key={d.id} className="group">
+                              <circle cx={getX(i)} cy={getY(d[valKey])} r="4" fill="#151520" stroke={color} strokeWidth="2" />
+                              {/* Tooltip simples no SVG */}
+                              <rect x={getX(i) - 35} y={getY(d[valKey]) - 35} width="70" height="25" rx="4" fill="#000" fillOpacity="0.8" className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                              <text x={getX(i)} y={getY(d[valKey]) - 18} textAnchor="middle" fill="white" fontSize="12" fontWeight="bold" className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                  {d[valKey]} {yLabel}
+                              </text>
+                          </g>
+                      ))}
+                  </svg>
+                  
+                  {/* Legenda X (Datas) */}
+                  <div className="flex justify-between px-4 mt-2 text-[10px] text-gray-500 uppercase font-mono">
+                      <span>{new Date(data[0].date).toLocaleDateString()}</span>
+                      <span>{new Date(data[data.length-1].date).toLocaleDateString()}</span>
+                  </div>
+              </div>
+              )}
+          </div>
+      );
+  };
+
+  // Função para salvar pontuação no histórico
+  const handleSavePracticeScore = async (totalPoints) => {
+      if (!window.confirm(`Registrar pontuação oficial de treino: ${totalPoints} pontos?`)) return;
+      
+      try {
+          await addDoc(collection(db, "score_history"), {
+              score: totalPoints,
+              date: new Date().toISOString(),
+              author: isAdmin ? 'Técnico' : viewAsStudent?.name || 'Equipe'
+          });
+          showNotification("Pontuação registrada no gráfico! 📈");
+      } catch (error) {
+          console.error("Erro ao salvar histórico:", error);
+          showNotification("Erro ao salvar.", "error");
+      }
+  };
+
+  // --- NOVA FUNÇÃO: SALVAR EXECUÇÃO DE UM ROUND ESPECÍFICO ---
+  const handleSaveRoundRun = async (e, round) => {
+    e.preventDefault();
+    const timeVal = parseInt(e.target.time.value);
+    if(!timeVal || isNaN(timeVal)) return;
+
+    // --- CÁLCULO DE TENDÊNCIA VS MÉDIA DOS ÚLTIMOS 3 TREINOS ---
+    const previousRuns = scoreHistory
+        .filter(h => h.roundId === round.id && h.time)
+        .sort((a,b) => new Date(b.date) - new Date(a.date)) // Ordena do mais recente
+        .slice(0, 3); // Pega os 3 últimos
+
+    let trendMsg = "";
+    if (previousRuns.length > 0) {
+        const avg = previousRuns.reduce((acc, curr) => acc + curr.time, 0) / previousRuns.length;
+        const diff = timeVal - avg;
+
+        // Tempo menor = Melhor (Verde)
+        if (diff < 0) {
+            trendMsg = ` 🟢 ⬇️ ${(Math.abs(diff)).toFixed(1)}s mais rápido que a média!`;
+        } else if (diff > 0) {
+            trendMsg = ` 🔴 ⬆️ ${(Math.abs(diff)).toFixed(1)}s mais lento que a média.`;
+        }
+    }
+
+    try {
+        // 1. Salva no histórico para o gráfico
+        await addDoc(collection(db, "score_history"), {
+            roundId: round.id,
+            roundName: round.name,
+            time: timeVal, // O tempo que levou
+            date: new Date().toISOString(),
+            author: viewAsStudent?.name || "Técnico"
+        });
+
+        // 2. Atualiza o tempo estimado do round (para ficar real)
+        await updateDoc(doc(db, "rounds", round.id), {
+            estimatedTime: timeVal
+        });
+
+        showNotification(`Treino de "${round.name}" registrado: ${timeVal}s ${trendMsg}`);
+        
+        // Limpa o valor do formulário local (estado controlado)
+        setRoundFormValues(prev => {
+            const next = { ...prev };
+            delete next[round.id];
+            return next;
+        });
+        e.target.reset();
+    } catch (error) {
+        console.error("Erro round run:", error);
+        showNotification("Erro ao salvar.", "error");
+    }
+  };
 
 
   // --- COMPONENTE DE ROUNDS ---
@@ -2162,6 +2536,25 @@ const handleFileSelect = (e) => {
       return (
 
       <div className="animate-in fade-in duration-300">
+          
+          {/* Exibe o gráfico para todos (motivação!) */}
+          <ScoreEvolutionChart />
+
+          {/* --- WIDGET FLUTUANTE DO CRONÔMETRO --- */}
+          {activeTimer && (
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] bg-red-600 text-white px-6 py-4 rounded-full shadow-[0_0_40px_rgba(220,38,38,0.8)] flex items-center gap-6 animate-in slide-in-from-bottom-20 border-4 border-[#151520] hover:scale-105 transition-transform cursor-pointer" onClick={() => toggleTimer({ id: activeTimer.roundId })}>
+                <div className="flex flex-col">
+                    <span className="text-[10px] font-bold opacity-80 uppercase tracking-wider">Cronometrando</span>
+                    <span className="text-sm font-black">{activeTimer.name}</span>
+                </div>
+                <div className="text-4xl font-black font-mono w-24 text-center tabular-nums">
+                    {timerDisplay}s
+                </div>
+                <div className="bg-white text-red-600 p-3 rounded-full animate-pulse">
+                    <Square size={24} fill="currentColor" />
+                </div>
+            </div>
+          )}
 
           <div className="bg-gradient-to-r from-[#151520] to-[#0a0a0f] border border-white/10 rounded-2xl p-6 mb-8 flex flex-col md:flex-row justify-between items-center gap-6">
 
@@ -2190,11 +2583,13 @@ const handleFileSelect = (e) => {
           </div>
 
           <div className="flex gap-2 mb-6">
-
-            {!readonly && <button onClick={openNewRoundModal} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg shadow-blue-900/20"><Plus size={16}/> Criar Novo Round</button>}
+            
+            {!readonly && <button onClick={openNewRoundModal} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg shadow-blue-900/20"><Plus size={16}/> Criar Nova Saída</button>}
 
             {!readonly && <button onClick={() => openMissionForm()} className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2"><Settings size={16}/> Gerenciar Missões</button>}
 
+            {/* Botão de Registrar Treino (Salva no Gráfico) */}
+            {!readonly && <button onClick={() => handleSavePracticeScore(totalPoints)} className="bg-green-600/20 text-green-500 border border-green-500/30 hover:bg-green-600 hover:text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all"><Trophy size={16}/> Registrar Round Completo</button>}
 
           </div>
 
@@ -2217,15 +2612,20 @@ const handleFileSelect = (e) => {
 
       {/* Título e Ícone */}
       <h3 className="text-white font-bold mb-2 flex items-center gap-2">
-        <ListTodo size={16} className="text-blue-500"/> {round.name}
+        <ListTodo size={16} className="text-blue-500"/> 
+        <span className="flex-1 truncate">{round.name}</span>
+        {/* Exibe a Base (Etiqueta Visual) */}
+        {round.startBase && (
+            <span className={`text-[9px] uppercase font-black px-1.5 py-0.5 rounded border ${round.startBase === 'Direita' ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400'}`}>{round.startBase}</span>
+        )}
       </h3>
 
-      {/* Pontos e Tempo */}
-      <div className="flex items-center justify-between text-xs text-gray-400 mb-4 bg-black/40 p-2 rounded border border-white/5">
-        <span className="flex items-center gap-1 font-bold text-white">
+      {/* Pontos e Tempo (Display) */}
+      <div className="flex items-center justify-between text-xs text-gray-400 mb-2 bg-black/40 p-2 rounded border border-white/5">
+        <span className="flex items-center gap-1 font-bold text-green-400" title="Pontos deste round">
           <Calculator size={12} className="text-blue-500"/> {round.totalPoints} pts
         </span>
-        <span className="flex items-center gap-1 font-bold text-white">
+        <span className="flex items-center gap-1 font-bold text-white" title="Tempo estimado atual">
           <Timer size={12} className="text-blue-500"/> {round.estimatedTime}s
         </span>
       </div>
@@ -2243,6 +2643,32 @@ const handleFileSelect = (e) => {
           ) 
         })}
       </div>
+
+      {/* --- ÁREA DE REGISTRO RÁPIDO (NOVO) --- */}
+      {!readonly && (
+        <form onSubmit={(e) => handleSaveRoundRun(e, round)} className="mt-4 pt-3 border-t border-white/5 flex gap-2 items-center">
+            <div className="relative flex-1">
+                {/* Input Controlado pelo Cronômetro */}
+                <input 
+                    name="time" 
+                    type="number" 
+                    placeholder={round.estimatedTime} 
+                    value={roundFormValues[round.id] !== undefined ? roundFormValues[round.id] : ''}
+                    onChange={(e) => setRoundFormValues(prev => ({ ...prev, [round.id]: e.target.value }))}
+                    className={`w-full bg-black/30 border rounded-lg py-1.5 px-2 text-xs text-white focus:border-blue-500 outline-none text-center transition-colors ${activeTimer?.roundId === round.id ? 'border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'border-white/10'}`} 
+                />
+                <span className="absolute right-2 top-1.5 text-[10px] text-gray-500">seg</span>
+            </div>
+            
+            {/* Botão de Cronômetro */}
+            <button type="button" onClick={() => toggleTimer(round)} className={`p-1.5 rounded-lg transition-all ${activeTimer?.roundId === round.id ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-700 text-gray-400 hover:text-white'}`} title="Cronômetro">
+                {activeTimer?.roundId === round.id ? <Square size={14} fill="currentColor"/> : <Play size={14} fill="currentColor"/>}
+            </button>
+
+            {/* Botão de Salvar */}
+            <button className="bg-blue-600 hover:bg-blue-500 text-white p-1.5 rounded-lg text-xs font-bold transition-colors shadow-lg shadow-blue-900/20" title="Salvar Tempo"><Check size={14}/></button>
+        </form>
+      )}
     </div>
   ))}
 </div>
@@ -3152,6 +3578,22 @@ const handleFileSelect = (e) => {
        />
     </div>
     {/* ======================================================= */}
+
+    {/* ALERTA DE LÍDER DE GESTÃO */}
+    {currentWeekData?.assignments?.Gestão?.some(s => s.id === viewAsStudent.id) && !["Heloise", "Sofia"].includes(viewAsStudent.name) && (
+        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-4 rounded-xl border border-purple-400/30 shadow-lg mb-6 animate-pulse flex items-center justify-between">
+            <div className="flex items-center gap-3">
+                <div className="bg-white/20 p-2 rounded-full">
+                    <Crown size={24} className="text-yellow-300" />
+                </div>
+                <div>
+                    <h3 className="text-white font-bold text-lg leading-tight">Você é o Líder de Gestão esta semana!</h3>
+                    <p className="text-purple-100 text-xs">Sua missão: Cobrar tarefas e manter a equipe focada.</p>
+                </div>
+            </div>
+        </div>
+    )}
+
            <div onClick={() => openProfileModal(viewAsStudent)} className="text-center py-6 bg-[#151520] rounded-2xl border border-white/10 shadow-xl mb-8 cursor-pointer hover:bg-[#1a1a24] transition-colors group relative">
                 <div className="absolute top-4 right-4 text-gray-600 group-hover:text-white transition-colors">
                     <UserCircle size={24} />
