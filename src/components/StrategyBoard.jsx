@@ -180,15 +180,6 @@ const StrategyBoard = () => {
 
         {/* Lado Direito: Ações */}
         <div className="flex items-center gap-2">
-          {/* Botão de Captura de Coordenada */}
-          <button 
-            onClick={() => setTool('picker')}
-            className={`px-3 py-1 rounded text-sm font-bold flex items-center gap-2 ${tool === 'picker' ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-700 text-gray-300'}`}
-            title="Clique para marcar uma coordenada (sem riscar)"
-          >
-            <Crosshair size={16}/> Mira
-          </button>
-
           {/* Botão Tela Cheia */}
           <button onClick={() => setIsFullscreen(!isFullscreen)} className="px-3 py-1 rounded text-sm font-bold bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-500/50 flex items-center gap-2"
           >

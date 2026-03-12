@@ -988,6 +988,11 @@ const handleDeleteRound = async (id) => {
         // Tenta apagar com o nome 'history'
         await deleteDoc(doc(db, "history", id));
         
+        // --- NOVO: Apaga também o histórico do gráfico deste round ---
+        // Usamos o state 'scoreHistory' que já está carregado para não precisar fazer outra busca
+        const historyToDelete = scoreHistory.filter(h => h.roundId === id);
+        historyToDelete.forEach(async (h) => await deleteDoc(doc(db, "score_history", h.id)));
+
         showNotification("Registro apagado do banco!");
       } catch (error) {
         console.error("Erro fatal ao apagar:", error);
@@ -2133,42 +2138,6 @@ const handleFileSelect = (e) => {
 
                 <div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Pontos (Máx)</label><input name="points" type="number" defaultValue={modal.data?.points} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div>
 
-                {/* COORDENADAS X / Y (NOVO) */}
-                <div className="grid grid-cols-2 gap-4 mb-4 bg-white/5 p-3 rounded-lg border border-white/10 relative">
-                    <div className="col-span-2 flex justify-between items-center mb-1">
-                        <span className="text-[10px] text-gray-400 uppercase font-bold">Posição no Mapa (0-800 x 0-450)</span>
-                        {/* BOTÃO MÁGICO DE PEGAR CLIQUE */}
-                        <button 
-                            type="button"
-                            onClick={() => {
-                                const saved = localStorage.getItem('lastMapClick');
-                                if (saved) {
-                                    const { x, y } = JSON.parse(saved);
-                                    // Preenche os inputs via DOM (pois são não-controlados)
-                                    const inputX = document.querySelector('input[name="x"]');
-                                    const inputY = document.querySelector('input[name="y"]');
-                                    if(inputX) inputX.value = x;
-                                    if(inputY) inputY.value = y;
-                                    showNotification(`📍 Coordenadas capturadas: X=${x}, Y=${y}`);
-                                } else {
-                                    showNotification("Nenhum clique registrado. Vá na aba 'Mesa do Robô' e clique no mapa.", "error");
-                                }
-                            }}
-                            className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-1 rounded hover:bg-blue-500 hover:text-white transition-colors flex items-center gap-1"
-                        >
-                            <Map size={10}/> Pegar do Mapa
-                        </button>
-                    </div>
-                    <div>
-                        <label className="text-[10px] text-gray-500 block">X (Horizontal)</label>
-                        <input name="x" type="number" defaultValue={modal.data?.x} className="w-full bg-black/50 border border-white/20 rounded p-2 text-white text-xs outline-none focus:border-blue-500" placeholder="Ex: 400" />
-                    </div>
-                    <div>
-                        <label className="text-[10px] text-gray-500 block">Y (Vertical)</label>
-                        <input name="y" type="number" defaultValue={modal.data?.y} className="w-full bg-black/50 border border-white/20 rounded p-2 text-white text-xs outline-none focus:border-blue-500" placeholder="Ex: 225" />
-                    </div>
-                </div>
-
                 <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Missão</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}</div>
 
                 <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar Missão</button>
@@ -2334,8 +2303,9 @@ const handleFileSelect = (e) => {
       let rawData = [];
       let yLabel = "pts";
       let color = "#22c55e"; // Verde para pontos
+      const isGeneral = chartFilter === 'score_total';
 
-      if (chartFilter === 'score_total') {
+      if (isGeneral) {
           // Pega apenas históricos de pontuação total
           rawData = scoreHistory.filter(h => !h.roundId);
       } else {
@@ -2345,9 +2315,28 @@ const handleFileSelect = (e) => {
           color = "#3b82f6"; // Azul para tempo
       }
 
+      // --- FUNÇÃO PARA LIMPAR O GRÁFICO ATUAL ---
+      const handleClearChart = async () => {
+        const confirmMsg = isGeneral 
+            ? "ZERAR o gráfico geral de Pontos/Tempo? Isso apaga todo o histórico da equipe." 
+            : "Limpar o histórico de tempos deste round?";
+            
+        if (!window.confirm(confirmMsg)) return;
+        
+        // Apaga apenas os documentos que estão sendo mostrados no gráfico agora
+        try {
+            const deletePromises = rawData.map(d => deleteDoc(doc(db, "score_history", d.id)));
+            await Promise.all(deletePromises);
+            showNotification("Histórico do gráfico limpo!", "success");
+        } catch (error) {
+            console.error("Erro ao limpar gráfico:", error);
+            showNotification("Erro ao limpar.", "error");
+        }
+      };
+
       const data = [...rawData].sort((a,b) => new Date(a.date) - new Date(b.date));
 
-      if (data.length < 2 && chartFilter === 'score_total') return (
+      if (data.length < 2 && isGeneral) return (
         <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 mb-8 text-center text-gray-500 text-sm flex flex-col items-center justify-center h-48">
             <TrendingUp size={32} className="mb-2 opacity-50"/>
             <p>Registre pelo menos 2 treinos para ver o gráfico de evolução.</p>
@@ -2360,28 +2349,46 @@ const handleFileSelect = (e) => {
       
       // Se for tempo, queremos ver cair (mas gráfico svg padrão sobe valores, então tratamos visualmente)
       const valKey = chartFilter === 'score_total' ? 'score' : 'time';
-      const maxVal = Math.max(...data.map(d => d[valKey]), chartFilter === 'score_total' ? 100 : 60); 
-      const minVal = Math.min(...data.map(d => d[valKey]), 0);
+      
+      // ESCALAS (Máximos)
+      const maxScore = Math.max(...data.map(d => d.score || 0), 100);
+      const maxTime = Math.max(...data.map(d => d.time || 0), isGeneral ? 150 : 60); // 150s para geral, 60s para round
+
+      const minVal = 0; // Sempre base zero para facilitar leitura
 
       // Função para converter dados em coordenadas X,Y
       const getX = (index) => padding + (index / (data.length - 1)) * (width - 2 * padding);
-      const getY = (val) => height - padding - ((val - minVal) / (maxVal - minVal || 1)) * (height - 2 * padding);
+      
+      // Y dinâmico (Pontos ou Tempo)
+      const getY = (val, type = 'score') => {
+          const max = type === 'time' ? maxTime : maxScore;
+          return height - padding - ((val || 0) / max) * (height - 2 * padding);
+      };
 
       // Cria o caminho da linha (path d)
-      const pathData = data.map((d, i) => 
-          `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d[valKey])}`
-      ).join(' ');
+      const pathDataMain = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d[valKey], isGeneral ? 'score' : 'time')}`).join(' ');
+      
+      // Linha secundária (Tempo) apenas se for Geral
+      const pathDataTime = isGeneral ? data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d.time || 0, 'time')}`).join(' ') : "";
 
       // Cria o caminho para o preenchimento (area fill)
-      const fillPathData = `${pathData} L ${width - padding} ${height} L ${padding} ${height} Z`;
+      const fillPathData = `${pathDataMain} L ${width - padding} ${height} L ${padding} ${height} Z`;
 
       return (
           <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 mb-8">
               <div className="flex justify-between items-center mb-6">
                   <h3 className="text-white font-bold flex items-center gap-2">
-                      <TrendingUp style={{ color }}/> {chartFilter === 'score_total' ? 'Evolução da Pontuação' : 'Melhoria de Tempo (Segundos)'}
+                      <TrendingUp style={{ color }}/> {isGeneral ? 'Evolução (Pontos vs Tempo)' : 'Melhoria de Tempo (Segundos)'}
                   </h3>
                   
+                  <div className="flex items-center gap-2">
+                  {/* Botão de Limpar Histórico */}
+                  {data.length > 0 && (
+                      <button onClick={handleClearChart} className="p-2 text-gray-500 hover:text-red-500 hover:bg-white/5 rounded-lg transition-colors" title="Zerar este gráfico">
+                          <Trash2 size={16}/>
+                      </button>
+                  )}
+
                   {/* SELETOR DE GRÁFICO */}
                   <select 
                     className="bg-black/40 border border-white/20 text-xs text-white rounded-lg p-2 outline-none focus:border-blue-500"
@@ -2393,6 +2400,7 @@ const handleFileSelect = (e) => {
                           <option key={r.id} value={r.id}>⏱️ Tempo: {r.name}</option>
                       ))}
                   </select>
+                  </div>
               </div>
 
               {data.length === 0 ? (
@@ -2410,35 +2418,76 @@ const handleFileSelect = (e) => {
                           </linearGradient>
                       </defs>
 
-                      {/* Linhas de Grade Horizontal */}
+                      {/* Linhas de Grade Horizontal (Baseadas na escala principal) */}
                       {[0, 0.25, 0.5, 0.75, 1].map(p => {
                           const y = height - padding - (p * (height - 2 * padding));
                           return <line key={p} x1={padding} y1={y} x2={width-padding} y2={y} stroke="#333" strokeDasharray="4 4" strokeWidth="1"/>
                       })}
 
-                      {/* Área Preenchida */}
-                      <path d={fillPathData} fill="url(#scoreGradient)" />
+                      {/* Área Preenchida (Apenas Principal) */}
+                      <path d={fillPathData} fill={isGeneral ? "url(#scoreGradient)" : "none"} />
 
-                      {/* Linha do Gráfico */}
-                      <path d={pathData} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                      {/* SEGUNDA LINHA: TEMPO (AZUL) - Só no Geral */}
+                      {isGeneral && (
+                        <>
+                            <path d={pathDataTime} fill="none" stroke="#3b82f6" strokeWidth="2" strokeDasharray="5 5" strokeLinecap="round" strokeLinejoin="round" opacity="0.7"/>
+                            {data.map((d, i) => (
+                                <circle key={`t-${d.id}`} cx={getX(i)} cy={getY(d.time || 0, 'time')} r="3" fill="#151520" stroke="#3b82f6" strokeWidth="2" />
+                            ))}
+                        </>
+                      )}
+
+                      {/* LINHA PRINCIPAL (VERDE ou AZUL) */}
+                      <path d={pathDataMain} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
 
                       {/* Pontos */}
                       {data.map((d, i) => (
-                          <g key={d.id} className="group">
-                              <circle cx={getX(i)} cy={getY(d[valKey])} r="4" fill="#151520" stroke={color} strokeWidth="2" />
-                              {/* Tooltip simples no SVG */}
-                              <rect x={getX(i) - 35} y={getY(d[valKey]) - 35} width="70" height="25" rx="4" fill="#000" fillOpacity="0.8" className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                              <text x={getX(i)} y={getY(d[valKey]) - 18} textAnchor="middle" fill="white" fontSize="12" fontWeight="bold" className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                  {d[valKey]} {yLabel}
-                              </text>
-                          </g>
+                          (() => {
+                            const yPos = getY(d[valKey], isGeneral ? 'score' : 'time');
+                            const dateText = new Date(d.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+
+                            return (
+                                <g key={d.id} className="group">
+                                    <circle cx={getX(i)} cy={yPos} r="4" fill="#151520" stroke={color} strokeWidth="2" />
+                                    
+                                    {/* Tooltip Aprimorado */}
+                                    <g className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                        <rect 
+                                            x={getX(i) - 45} 
+                                            y={yPos - (isGeneral ? 60 : 48)} 
+                                            width="90" 
+                                            height={isGeneral ? 55 : 40} 
+                                            rx="5" 
+                                            fill="black" 
+                                            fillOpacity="0.9"
+                                            stroke="#555"
+                                            strokeWidth="1"
+                                        />
+                                        
+                                        {isGeneral ? (
+                                            <>
+                                                <text x={getX(i)} y={yPos - 45} textAnchor="middle" fill="white" fontSize="12" fontWeight="bold">{d.score} pts</text>
+                                                <text x={getX(i)} y={yPos - 30} textAnchor="middle" fill="#3b82f6" fontSize="10" fontWeight="bold">{d.time ? `${d.time}s` : '--'}</text>
+                                                <text x={getX(i)} y={yPos - 15} textAnchor="middle" fill="#9ca3af" fontSize="10">{dateText}</text>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <text x={getX(i)} y={yPos - 35} textAnchor="middle" fill="white" fontSize="12" fontWeight="bold">{d.time} seg</text>
+                                                <text x={getX(i)} y={yPos - 20} textAnchor="middle" fill="#9ca3af" fontSize="10">{dateText}</text>
+                                            </>
+                                        )}
+                                    </g>
+                                </g>
+                            )
+                          })()
                       ))}
                   </svg>
                   
                   {/* Legenda X (Datas) */}
-                  <div className="flex justify-between px-4 mt-2 text-[10px] text-gray-500 uppercase font-mono">
-                      <span>{new Date(data[0].date).toLocaleDateString()}</span>
-                      <span>{new Date(data[data.length-1].date).toLocaleDateString()}</span>
+                  <div className="flex justify-between px-4 mt-2 text-[10px] text-gray-500 uppercase font-mono select-none">
+                      <span>{new Date(data[0].date).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})}</span>
+                      {data.length > 3 && (<span>{new Date(data[Math.floor(data.length / 2)].date).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})}</span>)}
+                      <span>{new Date(data[data.length-1].date).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})}</span>
                   </div>
               </div>
               )}
@@ -2447,12 +2496,13 @@ const handleFileSelect = (e) => {
   };
 
   // Função para salvar pontuação no histórico
-  const handleSavePracticeScore = async (totalPoints) => {
-      if (!window.confirm(`Registrar pontuação oficial de treino: ${totalPoints} pontos?`)) return;
+  const handleSavePracticeScore = async (totalPoints, totalTime) => {
+      if (!window.confirm(`Registrar treino oficial?\nPontos: ${totalPoints}\nTempo: ${totalTime}s`)) return;
       
       try {
           await addDoc(collection(db, "score_history"), {
               score: totalPoints,
+              time: totalTime, // Salva o tempo junto!
               date: new Date().toISOString(),
               author: isAdmin ? 'Técnico' : viewAsStudent?.name || 'Equipe'
           });
@@ -2589,7 +2639,7 @@ const handleFileSelect = (e) => {
             {!readonly && <button onClick={() => openMissionForm()} className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2"><Settings size={16}/> Gerenciar Missões</button>}
 
             {/* Botão de Registrar Treino (Salva no Gráfico) */}
-            {!readonly && <button onClick={() => handleSavePracticeScore(totalPoints)} className="bg-green-600/20 text-green-500 border border-green-500/30 hover:bg-green-600 hover:text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all"><Trophy size={16}/> Registrar Round Completo</button>}
+            {!readonly && <button onClick={() => handleSavePracticeScore(totalPoints, totalTime)} className="bg-green-600/20 text-green-500 border border-green-500/30 hover:bg-green-600 hover:text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all"><Trophy size={16}/> Registrar Round Completo</button>}
 
           </div>
 
