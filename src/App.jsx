@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy } from "firebase/firestore";
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy, limit } from "firebase/firestore";
 import { db } from './firebase'; // Importa a instância já inicializada
 import StrategyBoard from './components/StrategyBoard';
 import Countdown from './components/Countdown';
@@ -169,6 +169,73 @@ const Header = ({ title, userType, onLogout }) => (
     </div>
   </>
 );
+
+// --- COMPONENTE: PIT STOP MODAL (Extraído para corrigir erro de Hooks) ---
+const PitStopModal = ({ viewAsStudent, pitStopRecords, showNotification }) => {
+  const [time, setTime] = useState(0);
+  const [running, setRunning] = useState(false);
+  const [startTime, setStartTime] = useState(0);
+
+  useEffect(() => {
+      let interval;
+      if (running) {
+          interval = setInterval(() => setTime(Date.now() - startTime), 10);
+      }
+      return () => clearInterval(interval);
+  }, [running, startTime]);
+
+  const handleStartStop = async () => {
+      if (running) {
+          setRunning(false);
+          // Salvar recorde?
+          const finalTime = (time / 1000).toFixed(3);
+          if (confirm(`Salvar tempo de ${finalTime}s no Ranking?`)) {
+              const name = viewAsStudent ? viewAsStudent.name : "Técnico";
+              await addDoc(collection(db, "pitstop_records"), {
+                  name, time: parseFloat(finalTime), date: new Date().toISOString()
+              });
+              showNotification(`⏱️ ${finalTime}s registrado!`);
+          }
+      } else {
+          setTime(0);
+          setStartTime(Date.now());
+          setRunning(true);
+      }
+  };
+
+  return (
+      <div className="text-center">
+          <h3 className="text-2xl font-black mb-2 text-white italic">PIT STOP F1</h3>
+          <p className="text-xs text-gray-400 mb-8 uppercase tracking-widest">Treino de Troca de Garras</p>
+          
+          <div className="bg-black/50 border border-white/10 rounded-2xl p-8 mb-8">
+              <div className={`text-6xl font-mono font-black tabular-nums tracking-tighter ${running ? 'text-yellow-400' : 'text-white'}`}>
+                  {(time / 1000).toFixed(3)}<span className="text-lg text-gray-500 ml-1">s</span>
+              </div>
+          </div>
+
+          <button onClick={handleStartStop} className={`w-full py-6 rounded-xl font-black text-xl uppercase tracking-widest transition-all shadow-lg ${running ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-900/20' : 'bg-green-600 hover:bg-green-500 text-white shadow-green-900/20'}`}>
+              {running ? '🛑 PARAR' : '🚀 INICIAR'}
+          </button>
+
+          <div className="mt-8 pt-8 border-t border-white/10 text-left">
+              <h4 className="text-xs font-bold text-gray-500 uppercase mb-4 flex items-center gap-2"><Trophy size={12} className="text-yellow-500"/> Top 5 Mais Rápidos</h4>
+              <div className="space-y-2">
+                  {pitStopRecords.map((rec, i) => (
+                      <div key={rec.id} className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
+                          <div className="flex items-center gap-3">
+                              <span className={`font-black text-sm w-4 ${i===0?'text-yellow-500':i===1?'text-gray-300':i===2?'text-orange-500':'text-gray-600'}`}>#{i+1}</span>
+                              <span className="text-white text-sm font-bold">{rec.name}</span>
+                          </div>
+                          <span className="font-mono text-blue-400 font-bold">{rec.time.toFixed(3)}s</span>
+                      </div>
+                  ))}
+                  {pitStopRecords.length === 0 && <p className="text-xs text-gray-600 italic text-center">Nenhum recorde ainda. Seja o primeiro!</p>}
+              </div>
+          </div>
+      </div>
+  );
+}
 
 function App() {
 
@@ -474,6 +541,7 @@ function App() {
   const [studentTab, setStudentTab] = useState('mission')
 
   
+  const [robotSubTab, setRobotSubTab] = useState('overview'); // 'overview' | 'map'
 
   // --- DADOS EDITÁVEIS DE MISSÕES (Mestre das Missões) ---
 
@@ -523,6 +591,7 @@ function App() {
   const [activeTimer, setActiveTimer] = useState(null); // { roundId, start, name }
   const [timerDisplay, setTimerDisplay] = useState(0); 
   const [roundFormValues, setRoundFormValues] = useState({}); // { [roundId]: value }
+  const [pitStopRecords, setPitStopRecords] = useState([]); // <--- NOVO: Ranking de Pit Stop
 
   const [compliments, setCompliments] = useState([]) 
 
@@ -570,7 +639,7 @@ function App() {
 
 
 
-// --- FUNÇÃO DE CRONOGRAMA OFICIAL (10 ALUNOS) ---
+// --- FUNÇÃO DE CRONOGRAMA OFICIAL (12 ALUNOS) ---
   // Usamos useMemo para reconectar os dados assim que os alunos carregarem do Firebase
   const rotationSchedule = useMemo(() => { 
       const schedule = []; 
@@ -579,8 +648,7 @@ function App() {
       // 1. CAPITÃS (Sempre Fixas em Gestão - Tarde)
       const capitasNames = ["Heloise", "Sofia"];
 
-      // 2. APRENDIZ (Sexto Ano - Flutua para aprender)
-      const trainee = "Antônio";
+      // 2. APRENDIZES (Sexto Ano): Antônio, Heloisa, Helena (Rodízio Simplificado)
 
       // 3. POOL DO RODÍZIO (7 Alunos da Manhã)
       // Estes rodam nas vagas: 3 Eng, 3 Inov, 1 Gestão (Líder da Manhã)
@@ -627,10 +695,23 @@ function App() {
           const inovTeam = [currentRotation[2], currentRotation[4], currentRotation[6]];
           const morningLeader = [currentRotation[1]];
 
-          // ONDE ENTRA O ANTÔNIO?
-          // Alternamos ele: Semanas ímpares na Eng, Pares na Inovação
-          if (i % 2 !== 0) engTeam.push(trainee);
-          else inovTeam.push(trainee);
+          // ONDE ENTRAM OS TRAINEES (6º ANO)?
+          // Ciclo de 6 semanas: Rotaciona as duplas e as áreas para misturar bem (Todos trabalham com todos)
+          const tList = ["Antônio Echenique", "Helena", "Heloisa"];
+          const cycle = (i - 1) % 6; 
+          
+          let pair, solo;
+          if (cycle < 2) { pair = [tList[0], tList[1]]; solo = tList[2]; }      // Ant & Hel
+          else if (cycle < 4) { pair = [tList[1], tList[2]]; solo = tList[0]; } // Hel & Helo
+          else { pair = [tList[2], tList[0]]; solo = tList[1]; }                // Helo & Ant
+
+          if (cycle % 2 === 0) {
+             engTeam.push(...pair);
+             inovTeam.push(solo);
+          } else {
+             inovTeam.push(...pair);
+             engTeam.push(solo);
+          }
 
           // GESTÃO FINAL = Capitãs (Tarde) + Líder da Manhã
           const gestaoFinal = [...capitasNames, ...morningLeader];
@@ -717,6 +798,13 @@ function App() {
     
     // Listener do Diário de Bordo (agora condicional)
     let unsubLogbook;
+    
+    // Listener do Ranking de Pit Stop (Top 5 Melhores Tempos)
+    const pitStopQuery = query(collection(db, "pitstop_records"), orderBy("time", "asc"), limit(5));
+    const unsubPitStop = onSnapshot(pitStopQuery, (snap) => {
+        setPitStopRecords(snap.docs.map(d => ({...d.data(), id: d.id})));
+    });
+
     if (isAdmin) {
         // Admin: Pega todos os registros de todos os alunos
         // REMOVIDO orderBy('date', 'desc') para evitar erro de índice composto no collectionGroup por enquanto
@@ -765,7 +853,7 @@ function App() {
     return () => {
         unsubStudents(); unsubExperts(); unsubRobot(); unsubRounds();
         unsubCompliments(); unsubMatrix(); unsubQuestions(); unsubScoreHistory();
-        unsubOutreach(); unsubMissions(); unsubTasks(); unsubInnovationRubric(); unsubRobotDesignRubric(); if (unsubLogbook) unsubLogbook();
+        unsubOutreach(); unsubMissions(); unsubTasks(); unsubInnovationRubric(); unsubRobotDesignRubric(); if (unsubLogbook) unsubLogbook(); unsubPitStop();
     };
   }, []);
 
@@ -1496,6 +1584,7 @@ const handleDeleteRound = async (id) => {
   const openGradesModal = (student) => setModal({ type: 'grades', data: student });
 
   const openProfileModal = (student) => setModal({ type: 'profile', data: student });
+  const openPitStopModal = () => setModal({ type: 'pitstop' }); // <--- NOVO MODAL
 
   // Novos Modais
 
@@ -2119,6 +2208,8 @@ const handleFileSelect = (e) => {
           {modal.type === 'grades' && (<form onSubmit={handleGradesSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><GraduationCap className="text-yellow-500"/> Lançar Notas SESI</h3><p className="text-xs text-gray-400 mb-6">Digite as notas da etapa separadas por vírgula (Ex: 10, 9.5, 8.0).</p><div className="mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Notas do Aluno: {modal.data.name}</label><input name="grades" required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-yellow-500 outline-none" placeholder="Ex: 10, 9.5, 8.0" /></div><div className="bg-white/5 p-4 rounded-xl text-xs text-gray-400 mb-6 space-y-1"><p className="font-bold text-white mb-2">Regra de Pontuação:</p><p>• Nota 10 = <span className="text-green-500 font-bold">+10 XP</span></p><p>• Nota 9.0 a 9.9 = <span className="text-cyan-500 font-bold">+7 XP</span></p><p>• Nota 8.0 a 8.9 = <span className="text-purple-500 font-bold">+5 XP</span></p><p>• Abaixo de 8.0 = +0 XP</p></div><button className="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 rounded-lg">Processar Boletim</button></form>)}
 
           
+          {/* --- NOVO MODAL: TREINO DE PIT STOP --- */}
+          {modal.type === 'pitstop' && <PitStopModal viewAsStudent={viewAsStudent} pitStopRecords={pitStopRecords} showNotification={showNotification} />}
 
           {/* NOVO MODAL: EDITOR DE MISSÕES */}
 
@@ -2585,33 +2676,52 @@ const handleFileSelect = (e) => {
 
       return (
 
-      <div className="animate-in fade-in duration-300">
-          
-          {/* Exibe o gráfico para todos (motivação!) */}
-          <ScoreEvolutionChart />
+      <div className="animate-in fade-in duration-300 space-y-6">
+
+          {/* --- NAVEGAÇÃO DA ÁREA DO ROBÔ --- */}
+          <div className="flex justify-center bg-black/20 p-1 rounded-xl w-fit mx-auto border border-white/10 mb-4">
+              <button 
+                  onClick={() => setRobotSubTab('overview')}
+                  className={`px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${robotSubTab === 'overview' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+              >
+                  <LayoutDashboard size={16}/> Painel de Rounds
+              </button>
+              <button 
+                  onClick={() => setRobotSubTab('map')}
+                  className={`px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${robotSubTab === 'map' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+              >
+                  <Map size={16}/> Mesa de Estratégia
+              </button>
+          </div>
 
           {/* --- WIDGET FLUTUANTE DO CRONÔMETRO --- */}
           {activeTimer && (
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] bg-red-600 text-white px-6 py-4 rounded-full shadow-[0_0_40px_rgba(220,38,38,0.8)] flex items-center gap-6 animate-in slide-in-from-bottom-20 border-4 border-[#151520] hover:scale-105 transition-transform cursor-pointer" onClick={() => toggleTimer({ id: activeTimer.roundId })}>
+            <div className="fixed bottom-6 right-6 z-[100] bg-red-600 text-white px-6 py-4 rounded-full shadow-[0_0_40px_rgba(220,38,38,0.8)] flex items-center gap-6 animate-in slide-in-from-bottom-20 border-4 border-[#151520] hover:scale-105 transition-transform cursor-pointer" onClick={() => toggleTimer({ id: activeTimer.roundId })}>
                 <div className="flex flex-col">
-                    <span className="text-[10px] font-bold opacity-80 uppercase tracking-wider">Cronometrando</span>
+                    <span className="text-[10px] font-bold opacity-80 uppercase tracking-wider">Rodando</span>
                     <span className="text-sm font-black">{activeTimer.name}</span>
                 </div>
                 <div className="text-4xl font-black font-mono w-24 text-center tabular-nums">
                     {timerDisplay}s
                 </div>
-                <div className="bg-white text-red-600 p-3 rounded-full animate-pulse">
+                <div className="bg-white text-red-600 p-2 rounded-full animate-pulse">
                     <Square size={24} fill="currentColor" />
                 </div>
             </div>
           )}
 
-          <div className="bg-gradient-to-r from-[#151520] to-[#0a0a0f] border border-white/10 rounded-2xl p-6 mb-8 flex flex-col md:flex-row justify-between items-center gap-6">
-
-              <div className="flex-1 w-full">
-
-                  <h3 className="text-sm text-gray-400 font-bold uppercase mb-2">Tempo de Mesa (Máx 150s)</h3>
-
+          {robotSubTab === 'overview' && (
+            <>
+          {/* 1. BARRA DE STATUS E BOTÕES */}
+          <div className="bg-[#151520] border border-white/10 rounded-2xl p-4 flex flex-col xl:flex-row justify-between items-center gap-6 shadow-xl">
+              
+              {/* Barra de Progresso do Tempo */}
+              <div className="flex-1 w-full xl:border-r border-white/10 xl:pr-6">
+                  <div className="flex justify-between items-end mb-2">
+                    <h3 className="text-sm text-gray-400 font-bold uppercase flex items-center gap-2">
+                        <Timer size={16} className="text-blue-500"/> Tempo Total (2:30)
+                    </h3>
+                  </div>
                   <div className="flex justify-between text-xs mb-1"><span className={isOverTime ? 'text-red-500 font-bold' : 'text-white'}>{totalTime}s usados</span><span className="text-gray-500">{150 - totalTime}s restantes</span></div>
 
                   <div className="w-full bg-gray-800 rounded-full h-4 overflow-hidden border border-white/5"><div className={`h-full transition-all duration-1000 ${isOverTime ? 'bg-red-500' : 'bg-blue-500'}`} style={{width: `${timePercent}%`}}></div></div>
@@ -2619,33 +2729,35 @@ const handleFileSelect = (e) => {
                   {isOverTime && <p className="text-red-500 text-xs mt-2 flex items-center gap-1 font-bold animate-pulse"><AlertTriangle size={12}/> Atenção! O tempo estourou o limite da regra.</p>}
 
               </div>
-
-              <div className="flex items-center gap-6">
-
-                  <div className="text-right"><p className="text-xs text-gray-400 font-bold uppercase">Pontuação Projetada</p><p className="text-4xl font-black text-white">{totalPoints} <span className="text-sm text-gray-600">pts</span></p></div>
-
+              
+              {/* Placar Rápido */}
+              <div className="flex items-center gap-6 px-4">
+                  <div className="text-right"><p className="text-[10px] text-gray-400 font-bold uppercase">Total</p><p className="text-3xl font-black text-white">{totalPoints} <span className="text-xs text-gray-600">pts</span></p></div>
                   <div className="h-12 w-px bg-white/10"></div>
-
-                  <div className="text-right"><p className="text-xs text-gray-400 font-bold uppercase">Saídas</p><p className="text-4xl font-black text-blue-500">{rounds.length}</p></div>
-
+                  <div className="text-right"><p className="text-[10px] text-gray-400 font-bold uppercase">Saídas</p><p className="text-3xl font-black text-blue-500">{rounds.length}</p></div>
               </div>
 
+              {/* Barra de Ferramentas (Botões) */}
+              <div className="flex flex-wrap justify-center gap-2 xl:pl-6 w-full xl:w-auto">
+                {!readonly && (
+                    <>
+                    <button onClick={openNewRoundModal} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-blue-900/20 transition-all"><Plus size={16}/> Criar Saída</button>
+                    <button onClick={() => openMissionForm()} className="bg-white/5 border border-white/10 hover:bg-white/10 text-white px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 transition-all"><Settings size={16}/> Missões</button>
+                    <button onClick={openPitStopModal} className="bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 transition-all"><Timer size={16}/> Pit Stop</button>
+                    {/* Botão de Registrar Treino (Salva no Gráfico) */}
+                    <button onClick={() => handleSavePracticeScore(totalPoints, totalTime)} className="bg-green-600/10 border border-green-500/20 text-green-500 hover:bg-green-600 hover:text-white px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 transition-all" title="Salvar pontuação atual no histórico"><Trophy size={16}/> Salvar Treino</button>
+                    </>
+                )}
+              </div>
           </div>
 
-          <div className="flex gap-2 mb-6">
+         {/* 2. CONTEÚDO PRINCIPAL (GRID) */}
+         <div className="grid lg:grid-cols-3 gap-6">
             
-            {!readonly && <button onClick={openNewRoundModal} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg shadow-blue-900/20"><Plus size={16}/> Criar Nova Saída</button>}
-
-            {!readonly && <button onClick={() => openMissionForm()} className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2"><Settings size={16}/> Gerenciar Missões</button>}
-
-            {/* Botão de Registrar Treino (Salva no Gráfico) */}
-            {!readonly && <button onClick={() => handleSavePracticeScore(totalPoints, totalTime)} className="bg-green-600/20 text-green-500 border border-green-500/30 hover:bg-green-600 hover:text-white px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all"><Trophy size={16}/> Registrar Round Completo</button>}
-
-          </div>
-
-          
-
-         <div className="grid lg:grid-cols-4 gap-4">
+            {/* COLUNA DA ESQUERDA: LISTA DE ROUNDS (Ocupa 2/3) */}
+            <div className="lg:col-span-2 space-y-4">
+                <h4 className="text-gray-400 font-bold uppercase text-xs flex items-center gap-2 mb-2"><ListTodo size={14}/> Estratégia de Saídas</h4>
+                <div className="grid md:grid-cols-2 gap-4">
   {rounds.map(round => (
     <div key={round.id} className="bg-[#151520] border border-white/10 rounded-xl p-4 relative group hover:border-cyan-500/30 transition-colors">
       
@@ -2721,7 +2833,30 @@ const handleFileSelect = (e) => {
       )}
     </div>
   ))}
+  {rounds.length === 0 && (
+      <div className="col-span-2 py-12 text-center border-2 border-dashed border-white/5 rounded-xl text-gray-500">
+          <p>Nenhuma saída planejada ainda.</p>
+          <p className="text-xs mt-1">Clique em "Criar Saída" para começar.</p>
+      </div>
+  )}
 </div>
+            </div>
+
+            {/* COLUNA DA DIREITA: GRÁFICO (Ocupa 1/3) */}
+            <div className="lg:col-span-1">
+                <h4 className="text-gray-400 font-bold uppercase text-xs flex items-center gap-2 mb-4"><TrendingUp size={14}/> Performance da Equipe</h4>
+                <ScoreEvolutionChart />
+            </div>
+         </div>
+         </>
+          )}
+
+      {robotSubTab === 'map' && (
+        <div className="bg-[#151520] p-1 rounded-2xl border border-white/10">
+            <StrategyBoard />
+        </div>
+      )}
+
       </div>
 
   )}
@@ -3336,6 +3471,13 @@ const handleFileSelect = (e) => {
 
           <div className="flex items-center gap-3 md:gap-4">
               
+              {/* --- CONTADOR COMPACTO --- */}
+              <Countdown 
+                  targetDate="2026-12-01T08:00:00" 
+                  title="TORNEIO" 
+                  compact={true} 
+              />
+
               {/* 1. BOTÃO CRONOGRAMA (VOLTOU!) */}
               {/* Só aparece se o modal de cronograma não estiver aberto */}
               <button onClick={() => setShowFullSchedule(true)} className="bg-white/5 border border-white/10 text-white p-2 rounded-full hover:bg-white/10 transition-colors md:px-4 md:py-2 md:rounded-lg flex items-center gap-2">
@@ -3428,15 +3570,6 @@ const handleFileSelect = (e) => {
 {activeTab === 'ranking' && (
   <RankingPanel students={students} />
 )}
-            {/* ======================================================= */}
-      {/* 🚀 AQUI: O CONTADOR ENTRA NO TOPO DO PAINEL DO TÉCNICO */}
-      {/* ======================================================= */}
-      <div className="mb-8 flex justify-center">
-        <Countdown 
-            targetDate="2026-11-30T08:00:00" 
-            title="Torneio FLL"
-        />
-      </div>
           <div className="flex gap-4 mb-8 border-b border-white/10 pb-4 overflow-x-auto">
               <button onClick={() => setAdminTab('rotation')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'rotation' ? 'bg-white text-black' : 'text-gray-500 hover:bg-white/10'}`}><LayoutDashboard size={18}/> Rodízio & Equipe</button>
               <button onClick={() => setAdminTab('strategy')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'strategy' ? 'bg-purple-500 text-white shadow-lg shadow-purple-900/20' : 'text-gray-500 hover:text-purple-400'}`}><Lightbulb size={18}/> Estratégia & Inovação</button>
@@ -3605,8 +3738,7 @@ const handleFileSelect = (e) => {
           )}
 
           {adminTab === 'strategy' && <StrategyView />}
-          {adminTab === 'rounds' && <RoundsView />}
-          {adminTab === 'rounds' && <div className="mt-8"><StrategyBoard /></div>}
+          {adminTab === 'rounds' && <RoundsView />} {/* StrategyBoard agora mora dentro de RoundsView */}
           {adminTab === 'rubrics' && <RubricView />}
           
           {/* --- VISUALIZAÇÃO KANBAN --- */}
@@ -3618,16 +3750,6 @@ const handleFileSelect = (e) => {
       {/* --- ÁREA DO ALUNO --- */}
       {!isAdmin && viewAsStudent && (
         <main className="p-4 md:p-8 max-w-4xl mx-auto animate-in slide-in-from-bottom-8">
-            {/* ======================================================= */}
-    {/* 🚀 COLE AQUI O CONTADOR DO ALUNO */}
-    {/* ======================================================= */}
-    <div className="mb-6">
-       <Countdown 
-          targetDate="2026-11-30T08:00:00" 
-          title="Torneio FLL" 
-       />
-    </div>
-    {/* ======================================================= */}
 
     {/* ALERTA DE LÍDER DE GESTÃO */}
     {currentWeekData?.assignments?.Gestão?.some(s => s.id === viewAsStudent.id) && !["Heloise", "Sofia"].includes(viewAsStudent.name) && (
