@@ -98,6 +98,8 @@ import {
   FileWarning,
   Book,          // <--- Ícone do Diário
   Play,          // <--- NOVO: Ícone de Play para o Cronômetro
+  Clock,         // <--- NOVO: Ícone de Relógio (Agenda)
+  MapPin,        // <--- NOVO: Ícone de Localização (Agenda)
 } from 'lucide-react';
 
 
@@ -587,6 +589,7 @@ function App() {
  
   const [tasks, setTasks] = useState([]) // <--- NOVO ESTADO PARA TAREFAS
   const [logbookEntries, setLogbookEntries] = useState([]) // <--- NOVO ESTADO PARA DIÁRIO
+  const [events, setEvents] = useState([]) // <--- NOVO ESTADO PARA AGENDA
 
   // --- ESTADOS PARA O EDITOR DE CORTE (CROP) ---
   const [isCropping, setIsCropping] = useState(false);
@@ -823,6 +826,7 @@ function App() {
     const unsubOutreach = createListener("outreach", setOutreachEvents);
     const unsubTasks = createListener("tasks", setTasks); // <--- GARANTINDO O LISTENER DE TAREFAS
     const unsubScoreHistory = createListener("score_history", setScoreHistory); // <--- LISTENER DO GRÁFICO
+    const unsubEvents = createListener("events", setEvents); // <--- LISTENER DA AGENDA
     
     // Listener do Diário de Bordo (agora condicional)
     let unsubLogbook;
@@ -881,6 +885,7 @@ function App() {
     return () => {
         unsubStudents(); unsubExperts(); unsubRobot(); unsubRounds();
         unsubCompliments(); unsubMatrix(); unsubQuestions(); unsubScoreHistory();
+        unsubEvents();
         unsubOutreach(); unsubMissions(); unsubTasks(); unsubInnovationRubric(); unsubRobotDesignRubric(); if (unsubLogbook) unsubLogbook(); unsubPitStop();
     };
   }, []);
@@ -1541,6 +1546,43 @@ const handleDeleteRound = async (id) => {
       }
   }
 
+  // --- FUNÇÕES DA AGENDA ---
+  const handleEventSubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const eventData = {
+          title: fd.get('title'),
+          date: fd.get('date'),
+          time: fd.get('time'),
+          type: fd.get('type'),
+          location: fd.get('location'),
+          description: fd.get('description')
+      };
+
+      try {
+          if (modal.data?.id) {
+              await updateDoc(doc(db, "events", modal.data.id), eventData);
+          } else {
+              await addDoc(collection(db, "events"), eventData);
+          }
+          closeModal();
+          showNotification("Evento salvo na agenda!");
+      } catch (error) {
+          console.error("Erro ao salvar evento:", error);
+          showNotification("Erro ao salvar.", "error");
+      }
+  }
+
+  const handleDeleteEvent = async (id) => {
+      if(window.confirm("Deseja excluir este evento da agenda?")) {
+          try {
+              await deleteDoc(doc(db, "events", id));
+              showNotification("Evento excluído.");
+          } catch(error) {
+              console.error("Erro ao excluir evento:", error);
+          }
+      }
+  }
 
   const handleCloseStationWeek = async (station) => {
       const stationStudents = students.filter(s => s.station === station);
@@ -2379,6 +2421,52 @@ const handleFileSelect = (e) => {
                 </div>
 
                 <button className="w-full bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-3 rounded-lg">Salvar Projeto Oficial</button>
+             </form>
+          )}
+
+          {/* NOVO MODAL: EDITOR DE AGENDA/EVENTO */}
+          {modal.type === 'eventForm' && (
+             <form onSubmit={handleEventSubmit}>
+                <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><CalendarDays className="text-blue-500"/> {modal.data ? 'Editar' : 'Novo'} Evento</h3>
+                
+                <div className="mb-4">
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Título do Evento</label>
+                    <input name="title" defaultValue={modal.data?.title} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Reunião com Eng. Mecânico" />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data</label>
+                        <input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" />
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Horário</label>
+                        <input name="time" type="time" defaultValue={modal.data?.time} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Tipo</label>
+                        <select name="type" defaultValue={modal.data?.type || 'Visita'} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none">
+                            <option value="Visita">Visita Técnica</option>
+                            <option value="Especialista">Mentoria / Especialista</option>
+                            <option value="Reunião">Reunião Extra</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Local / Link</label>
+                        <input name="location" defaultValue={modal.data?.location} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Zoom ou Unicamp" />
+                    </div>
+                </div>
+
+                <div className="mb-6">
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Descrição (Opcional)</label>
+                    <textarea name="description" defaultValue={modal.data?.description} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none h-24 resize-none" placeholder="Detalhes do encontro, materiais necessários, etc..."></textarea>
+                </div>
+
+                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-blue-900/20">Salvar na Agenda</button>
              </form>
           )}
 
@@ -3293,6 +3381,90 @@ const handleFileSelect = (e) => {
       );
   }
 
+  // --- COMPONENTE DE AGENDA ---
+  const AgendaView = () => {
+      const todayDate = new Date().toISOString().split('T')[0];
+      
+      // Separa entre próximos eventos e eventos que já passaram
+      const upcomingEvents = events.filter(e => e.date >= todayDate).sort((a,b) => new Date(a.date) - new Date(b.date));
+      const pastEvents = events.filter(e => e.date < todayDate).sort((a,b) => new Date(b.date) - new Date(a.date));
+
+      const getTypeColor = (type) => {
+          if(type === 'Especialista') return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+          if(type === 'Visita') return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+          if(type === 'Reunião') return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
+          return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
+      }
+
+      return (
+          <div className="animate-in fade-in duration-500 space-y-8">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-[#151520] p-6 rounded-2xl border border-white/10 gap-4">
+                  <div>
+                      <h2 className="text-2xl font-bold text-white flex items-center gap-2"><CalendarDays className="text-blue-500"/> Agenda da Equipe</h2>
+                      <p className="text-gray-400 text-sm mt-1">Acompanhe visitas, encontros com especialistas e eventos importantes.</p>
+                  </div>
+                  {isAdmin && (
+                      <button onClick={() => setModal({type: 'eventForm'})} className="shrink-0 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-blue-900/20 transition-all">
+                          <Plus size={16}/> Novo Evento
+                      </button>
+                  )}
+              </div>
+
+              <div className="space-y-4">
+                  <h3 className="text-gray-400 font-bold uppercase text-xs flex items-center gap-2 ml-2">Próximos Eventos</h3>
+                  {upcomingEvents.length === 0 ? (
+                      <div className="bg-[#151520] border border-dashed border-white/10 p-8 rounded-xl text-center text-gray-500 italic">Nenhum evento agendado para o futuro.</div>
+                  ) : (
+                      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {upcomingEvents.map(ev => (
+                              <div key={ev.id} className="bg-[#151520] border border-white/10 p-5 rounded-xl hover:border-white/30 transition-all group relative shadow-md">
+                                  {isAdmin && (
+                                      <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                          <button onClick={() => setModal({type: 'eventForm', data: ev})} className="text-gray-400 hover:text-white p-1.5 bg-black/50 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
+                                          <button onClick={() => handleDeleteEvent(ev.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/50 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>
+                                      </div>
+                                  )}
+                                  <div className="flex items-center gap-2 mb-3">
+                                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${getTypeColor(ev.type)}`}>{ev.type}</span>
+                                      <span className="text-xs text-gray-300 flex items-center gap-1 font-mono"><Calendar size={12} className="text-blue-500"/> {ev.date.split('-').reverse().join('/')}</span>
+                                  </div>
+                                  <h4 className="text-white font-bold text-lg mb-2 leading-tight pr-12">{ev.title}</h4>
+                                  {ev.description && <p className="text-sm text-gray-400 mb-4 line-clamp-2">{ev.description}</p>}
+                                  <div className="flex flex-col gap-1.5 pt-3 border-t border-white/5 mt-auto">
+                                      <div className="flex items-center gap-2 text-xs text-gray-300"><Clock size={14} className="text-yellow-500"/> {ev.time}</div>
+                                      {ev.location && <div className="flex items-center gap-2 text-xs text-gray-300"><MapPin size={14} className="text-green-500"/> {ev.location}</div>}
+                                  </div>
+                              </div>
+                          ))}
+                      </div>
+                  )}
+              </div>
+
+              {pastEvents.length > 0 && (
+                  <div className="space-y-4 pt-8 border-t border-white/10 opacity-70">
+                      <h3 className="text-gray-500 font-bold uppercase text-xs flex items-center gap-2 ml-2">Eventos Passados</h3>
+                      <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-4">
+                           {pastEvents.map(ev => (
+                              <div key={ev.id} className="bg-black/40 border border-white/5 p-4 rounded-xl relative group">
+                                  {isAdmin && (
+                                      <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                          <button onClick={() => handleDeleteEvent(ev.id)} className="text-gray-500 hover:text-red-500 p-1 bg-black/80 rounded"><Trash2 size={12}/></button>
+                                      </div>
+                                  )}
+                                  <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-gray-500 text-xs flex items-center gap-1"><Calendar size={10}/> {ev.date.split('-').reverse().join('/')}</span>
+                                  </div>
+                                  <h4 className="text-gray-400 font-bold text-sm mb-1">{ev.title}</h4>
+                                  <span className="text-[10px] text-gray-600">{ev.type} {ev.location && `• ${ev.location}`}</span>
+                              </div>
+                           ))}
+                      </div>
+                  </div>
+              )}
+          </div>
+      )
+  }
+
 
 // --- TELA DE LOGIN (Se não tiver usuário logado) ---
   if (!currentUser) {
@@ -3687,6 +3859,7 @@ const handleFileSelect = (e) => {
               <button onClick={() => setAdminTab('rubrics')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'rubrics' ? 'bg-gray-400 text-black shadow-lg shadow-gray-900/20' : 'text-gray-500 hover:text-gray-400'}`}><Scale size={18}/> Rubricas</button>
               <button onClick={() => setAdminTab('kanban')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'kanban' ? 'bg-orange-500 text-white shadow-lg shadow-orange-900/20' : 'text-gray-500 hover:text-orange-400'}`}><ClipboardList size={18}/> Tarefas (Kanban)</button>
               <button onClick={() => setAdminTab('logbook')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'logbook' ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20' : 'text-gray-500 hover:text-yellow-400'}`}><Book size={18}/> Diário</button>
+              <button onClick={() => setAdminTab('agenda')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'agenda' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20' : 'text-gray-500 hover:text-indigo-400'}`}><CalendarDays size={18}/> Agenda</button>
           </div>
 
           {adminTab === 'rotation' && (
@@ -3854,6 +4027,7 @@ const handleFileSelect = (e) => {
           {/* --- VISUALIZAÇÃO KANBAN --- */}
           {adminTab === 'kanban' && <KanbanView />}
           {adminTab === 'logbook' && <LogbookView />}
+          {adminTab === 'agenda' && <AgendaView />}
         </main>
       )}
 
@@ -3979,6 +4153,7 @@ const handleFileSelect = (e) => {
                 <button onClick={() => setStudentTab('rounds')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'rounds' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-gray-500 hover:text-blue-400'}`}><ListTodo size={18}/> Robô</button>
                 <button onClick={() => setStudentTab('kanban')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'kanban' ? 'bg-orange-500 text-white shadow-lg shadow-orange-900/20' : 'text-gray-500 hover:text-orange-400'}`}><ClipboardList size={18}/> Tarefas</button>
                 <button onClick={() => setStudentTab('logbook')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'logbook' ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20' : 'text-gray-500 hover:text-yellow-400'}`}><Book size={18}/> Diário</button>
+                <button onClick={() => setStudentTab('agenda')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'agenda' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20' : 'text-gray-500 hover:text-indigo-400'}`}><CalendarDays size={18}/> Agenda</button>
             </div>
 
             {studentTab === 'mission' && (
@@ -4038,6 +4213,7 @@ const handleFileSelect = (e) => {
             {studentTab === 'rubrics' && <div className="text-left"><RubricView /></div>}
             {studentTab === 'kanban' && <div className="text-left"><KanbanView /></div>}
             {studentTab === 'logbook' && <div className="text-left"><LogbookView /></div>}
+            {studentTab === 'agenda' && <div className="text-left"><AgendaView /></div>}
         </main>
       )}
     </div>
@@ -4046,4 +4222,3 @@ const handleFileSelect = (e) => {
       }
       
       export default App
-      
