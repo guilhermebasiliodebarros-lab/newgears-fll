@@ -245,65 +245,78 @@ function App() {
     const sortedStudents = [...students].sort((a, b) => (b.xp || 0) - (a.xp || 0));
 
     return (
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-800 flex items-center">
-            <Trophy className="w-7 h-7 mr-3 text-yellow-500" />
-            Ranking da Temporada
-          </h2>
-          <span className="bg-gray-100 text-gray-600 text-sm px-3 py-1 rounded-full font-medium">
-            Meta Mínima: 420 XP
-          </span>
-        </div>
+      <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in">
+        <div className="bg-[#151520] w-full max-w-5xl p-6 rounded-2xl shadow-2xl border border-white/10 relative flex flex-col max-h-[85vh]">
+          
+          {/* Botão Fechar */}
+          <button 
+            onClick={() => setActiveTab('dashboard')}
+            className="absolute top-4 right-4 text-gray-500 hover:text-white p-2 bg-white/5 rounded-lg z-10 transition-colors"
+          >
+            <X size={24}/>
+          </button>
 
-        <div className="space-y-3">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4 pr-12">
+            <h2 className="text-2xl font-bold text-white flex items-center">
+              <Trophy className="w-7 h-7 mr-3 text-yellow-500" />
+              Ranking da Temporada
+            </h2>
+            <span className="bg-white/5 border border-white/10 text-gray-400 text-xs px-3 py-1 rounded-full font-bold uppercase tracking-wider">
+              Meta Mínima: 420 XP
+            </span>
+          </div>
+
+          <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {sortedStudents.map((student, index) => {
             // A regra implacável: Menos de 420 vai pro vermelho!
             const inRiskZone = (student.xp || 0) < 420;
             
             // Pódio: Ouro, Prata e Bronze
-            let positionColor = "text-gray-400";
-            if (index === 0) positionColor = "text-yellow-500";
-            if (index === 1) positionColor = "text-gray-300";
-            if (index === 2) positionColor = "text-amber-600";
+            let positionColor = "text-gray-500";
+            if (index === 0) positionColor = "text-yellow-500 drop-shadow-[0_0_5px_rgba(234,179,8,0.5)]";
+            if (index === 1) positionColor = "text-gray-300 drop-shadow-[0_0_5px_rgba(209,213,219,0.5)]";
+            if (index === 2) positionColor = "text-amber-600 drop-shadow-[0_0_5px_rgba(217,119,6,0.5)]";
 
             return (
               <div 
                 key={student.id} 
-                className={`flex items-center justify-between p-4 rounded-lg border-l-4 transition-all ${
+                className={`flex items-center justify-between p-3 rounded-xl border-l-4 transition-all ${
                   inRiskZone 
-                    ? 'bg-red-50 border-red-500 hover:bg-red-100' 
-                    : 'bg-white border-green-500 shadow-sm hover:shadow-md'
+                    ? 'bg-red-500/5 border-red-500 hover:bg-red-500/10' 
+                    : 'bg-black/40 border-green-500 hover:bg-white/5'
                 }`}
               >
-                <div className="flex items-center space-x-4">
-                  <div className={`font-black text-xl w-8 ${positionColor}`}>
+                <div className="flex items-center space-x-3 overflow-hidden">
+                  <div className={`font-black text-lg w-6 shrink-0 ${positionColor}`}>
                     #{index + 1}
                   </div>
-                  <div>
-                    <p className={`font-bold text-lg ${inRiskZone ? 'text-red-700' : 'text-gray-800'}`}>
+                  <div className="overflow-hidden">
+                    <p className={`font-bold text-sm truncate ${inRiskZone ? 'text-red-400' : 'text-gray-200'}`}>
                       {student.name}
                     </p>
                     {inRiskZone && (
-                      <p className="text-xs font-semibold text-red-600 flex items-center mt-1">
-                        <AlertTriangle className="w-3 h-3 mr-1" />
-                        Risco de substituição (Abaixo da meta)
+                      <p className="text-[10px] font-bold text-red-500 flex items-center mt-0.5 truncate">
+                        <AlertTriangle className="w-3 h-3 mr-1 shrink-0" />
+                        Abaixo da meta
                       </p>
                     )}
                   </div>
                 </div>
                 
-                <div className="flex items-center text-right">
-                  <span className={`text-2xl font-black ${inRiskZone ? 'text-red-600' : 'text-green-600'}`}>
+                <div className="flex items-center text-right shrink-0 pl-2">
+                  <span className={`text-lg font-black ${inRiskZone ? 'text-red-500' : 'text-green-500'}`}>
                     {student.xp || 0}
                   </span>
-                  <span className={`text-sm font-bold ml-1 ${inRiskZone ? 'text-red-400' : 'text-green-400'}`}>
+                  <span className={`text-[10px] font-bold ml-1 ${inRiskZone ? 'text-red-700' : 'text-green-700'}`}>
                     XP
                   </span>
                 </div>
               </div>
             );
           })}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -426,6 +439,21 @@ function App() {
   // Função para Salvar o Humor
   const handleMoodSubmit = async (level) => {
       if (!viewAsStudent) return;
+
+      // Trava 1: Apenas dias de treino (Segunda=1, Quarta=3)
+      const dayOfWeek = new Date().getDay();
+      if (dayOfWeek !== 1 && dayOfWeek !== 3) {
+          alert("Check-in bloqueado. Votação permitida apenas às segundas e quartas.");
+          return;
+      }
+
+      // Trava 2: Impedir Farm de XP (apenas um voto por dia)
+      const hasVotedToday = teamMoods.some(mood => mood.studentId === viewAsStudent.id);
+      if (hasVotedToday) {
+          alert("Você já respondeu hoje! Foco no treino.");
+          return;
+      }
+
       const today = new Date().toISOString().split('T')[0];
       
       try {
@@ -3407,43 +3435,79 @@ const handleFileSelect = (e) => {
                     <p className="text-gray-400 text-sm mt-2">Sua honestidade ajuda a equipe a treinar melhor. <br/>(Vale +2 XP!)</p>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3">
-                    {/* Opção 100% */}
-                    <button onClick={() => handleMoodSubmit(100)} className="flex items-center gap-4 p-4 rounded-xl bg-green-500/10 border border-green-500/20 hover:bg-green-500 hover:text-black transition-all group text-left">
-                        <div className="p-2 bg-green-500/20 rounded-full group-hover:bg-black/20"><BatteryFull size={24} className="text-green-500 group-hover:text-black"/></div>
-                        <div>
-                            <span className="block font-bold text-green-500 group-hover:text-black">100% - Turbo Mode</span>
-                            <span className="text-xs text-gray-400 group-hover:text-black/70">Tô pronto pra tudo!</span>
-                        </div>
-                    </button>
+                {/* LÓGICA DE EXIBIÇÃO: TRAVAS DA BATERIA */}
+                {(() => {
+                    const dayOfWeek = new Date().getDay();
+                    const isTrainingDay = dayOfWeek === 1 || dayOfWeek === 3; // 1 = Seg, 3 = Qua
+                    const hasVotedToday = viewAsStudent && teamMoods.some(mood => mood.studentId === viewAsStudent.id);
 
-                    {/* Opção 75% */}
-                    <button onClick={() => handleMoodSubmit(75)} className="flex items-center gap-4 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500 hover:text-white transition-all group text-left">
-                        <div className="p-2 bg-blue-500/20 rounded-full group-hover:bg-white/20"><BatteryMedium size={24} className="text-blue-500 group-hover:text-white"/></div>
-                        <div>
-                            <span className="block font-bold text-blue-500 group-hover:text-white">75% - Focado</span>
-                            <span className="text-xs text-gray-400 group-hover:text-white/80">Estou bem, vamos nessa.</span>
-                        </div>
-                    </button>
+                    if (viewAsStudent && !isTrainingDay) {
+                        return (
+                            <div className="text-center bg-yellow-500/10 border border-yellow-500/20 p-6 rounded-xl mb-6">
+                                <p className="font-bold text-yellow-500 text-lg">Fora de Treino 🛑</p>
+                                <p className="text-xs text-gray-400 mt-2">A carga da bateria da equipe só pode ser checada nas <strong className="text-gray-300">Segundas</strong> e <strong className="text-gray-300">Quartas</strong>.</p>
+                            </div>
+                        );
+                    }
 
-                    {/* Opção 50% */}
-                    <button onClick={() => handleMoodSubmit(50)} className="flex items-center gap-4 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 hover:bg-yellow-500 hover:text-black transition-all group text-left">
-                        <div className="p-2 bg-yellow-500/20 rounded-full group-hover:bg-black/20"><BatteryLow size={24} className="text-yellow-500 group-hover:text-black"/></div>
-                        <div>
-                            <span className="block font-bold text-yellow-500 group-hover:text-black">50% - Economia de Energia</span>
-                            <span className="text-xs text-gray-400 group-hover:text-black/70">Cansado, mas aguento.</span>
-                        </div>
-                    </button>
+                    if (viewAsStudent && hasVotedToday) {
+                        return (
+                            <div className="text-center bg-green-500/10 border border-green-500/20 p-6 rounded-xl mb-6 flex flex-col items-center">
+                                <CheckCircle size={32} className="text-green-500 mb-2"/>
+                                <p className="font-bold text-green-500 text-lg">Check-in Concluído!</p>
+                                <p className="text-xs text-gray-400 mt-2">Seus +2 XP já foram creditados. Foco na missão de hoje!</p>
+                            </div>
+                        );
+                    }
 
-                    {/* Opção 25% */}
-                    <button onClick={() => handleMoodSubmit(25)} className="flex items-center gap-4 p-4 rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all group text-left">
-                        <div className="p-2 bg-red-500/20 rounded-full group-hover:bg-white/20"><BatteryWarning size={24} className="text-red-500 group-hover:text-white"/></div>
-                        <div>
-                            <span className="block font-bold text-red-500 group-hover:text-white">25% - Bateria Arriada</span>
-                            <span className="text-xs text-gray-400 group-hover:text-white/80">Preciso de ajuda ou pausa.</span>
+                    if (!viewAsStudent) {
+                        return (
+                            <div className="text-center bg-white/5 border border-white/10 p-4 rounded-xl mb-6">
+                                <p className="text-sm text-gray-400">Modo Técnico: Acompanhe os registros da equipe abaixo.</p>
+                            </div>
+                        );
+                    }
+
+                    return (
+                        <div className="grid grid-cols-1 gap-3">
+                            {/* Opção 100% */}
+                            <button onClick={() => handleMoodSubmit(100)} className="flex items-center gap-4 p-4 rounded-xl bg-green-500/10 border border-green-500/20 hover:bg-green-500 hover:text-black transition-all group text-left">
+                                <div className="p-2 bg-green-500/20 rounded-full group-hover:bg-black/20"><BatteryFull size={24} className="text-green-500 group-hover:text-black"/></div>
+                                <div>
+                                    <span className="block font-bold text-green-500 group-hover:text-black">100% - Turbo Mode</span>
+                                    <span className="text-xs text-gray-400 group-hover:text-black/70">Tô pronto pra tudo!</span>
+                                </div>
+                            </button>
+
+                            {/* Opção 75% */}
+                            <button onClick={() => handleMoodSubmit(75)} className="flex items-center gap-4 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500 hover:text-white transition-all group text-left">
+                                <div className="p-2 bg-blue-500/20 rounded-full group-hover:bg-white/20"><BatteryMedium size={24} className="text-blue-500 group-hover:text-white"/></div>
+                                <div>
+                                    <span className="block font-bold text-blue-500 group-hover:text-white">75% - Focado</span>
+                                    <span className="text-xs text-gray-400 group-hover:text-white/80">Estou bem, vamos nessa.</span>
+                                </div>
+                            </button>
+
+                            {/* Opção 50% */}
+                            <button onClick={() => handleMoodSubmit(50)} className="flex items-center gap-4 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 hover:bg-yellow-500 hover:text-black transition-all group text-left">
+                                <div className="p-2 bg-yellow-500/20 rounded-full group-hover:bg-black/20"><BatteryLow size={24} className="text-yellow-500 group-hover:text-black"/></div>
+                                <div>
+                                    <span className="block font-bold text-yellow-500 group-hover:text-black">50% - Economia de Energia</span>
+                                    <span className="text-xs text-gray-400 group-hover:text-black/70">Cansado, mas aguento.</span>
+                                </div>
+                            </button>
+
+                            {/* Opção 25% */}
+                            <button onClick={() => handleMoodSubmit(25)} className="flex items-center gap-4 p-4 rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all group text-left">
+                                <div className="p-2 bg-red-500/20 rounded-full group-hover:bg-white/20"><BatteryWarning size={24} className="text-red-500 group-hover:text-white"/></div>
+                                <div>
+                                    <span className="block font-bold text-red-500 group-hover:text-white">25% - Bateria Arriada</span>
+                                    <span className="text-xs text-gray-400 group-hover:text-white/80">Preciso de ajuda ou pausa.</span>
+                                </div>
+                            </button>
                         </div>
-                    </button>
-                </div>
+                    );
+                })()}
                 
                 {/* Quem já votou (Transparência) */}
                 <div className="mt-6 pt-6 border-t border-white/10">
