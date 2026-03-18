@@ -591,6 +591,63 @@ function App() {
   const [logbookEntries, setLogbookEntries] = useState([]) // <--- NOVO ESTADO PARA DIÁRIO
   const [events, setEvents] = useState([]) // <--- NOVO ESTADO PARA AGENDA
 
+  // --- LÓGICA DE NOTIFICAÇÕES DA AGENDA EM TEMPO REAL ---
+  const getLocalYYYYMMDD = (dateObj) => {
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+  };
+  const localTodayObj = new Date();
+  const localTodayStr = getLocalYYYYMMDD(localTodayObj);
+  const localTomorrowObj = new Date();
+  localTomorrowObj.setDate(localTodayObj.getDate() + 1);
+  const localTomorrowStr = getLocalYYYYMMDD(localTomorrowObj);
+
+  const eventsToday = events.filter(e => e.date === localTodayStr);
+  const eventsTomorrow = events.filter(e => e.date === localTomorrowStr);
+  const urgentEventsCount = eventsToday.length + eventsTomorrow.length;
+
+  // --- LÓGICA DE NOTIFICAÇÕES DO KANBAN ---
+  const urgentTasks = tasks.filter(t => t.status !== 'done' && t.dueDate && t.dueDate <= localTodayStr);
+  const urgentTasksCount = urgentTasks.length;
+
+  const UrgentEventsBanner = () => {
+      if (eventsToday.length === 0 && eventsTomorrow.length === 0) return null;
+      if (eventsToday.length === 0 && eventsTomorrow.length === 0 && urgentTasks.length === 0) return null;
+      return (
+          <div className="mb-6 space-y-3">
+              {eventsToday.map(ev => (
+                  <div key={ev.id} className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl flex items-center justify-between animate-in slide-in-from-top-4 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
+                      <div className="flex items-center gap-4">
+                          <div className="p-3 bg-red-500/20 rounded-full animate-pulse"><AlertTriangle className="text-red-500" size={24} /></div>
+                          <div><h4 className="text-red-400 font-bold text-xs uppercase tracking-widest mb-1 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500 animate-ping"></div> EVENTO HOJE</h4><p className="text-white font-bold md:text-lg leading-none">{ev.title} <span className="text-gray-300 font-normal text-xs md:text-sm ml-2">às {ev.time}</span></p></div>
+                      </div>
+                      <button onClick={() => { isAdmin ? setAdminTab('agenda') : setStudentTab('agenda') }} className="hidden md:block text-xs bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg font-bold transition-all shadow-lg shadow-red-900/20 whitespace-nowrap">Ver na Agenda</button>
+                  </div>
+              ))}
+              {eventsTomorrow.map(ev => (
+                  <div key={ev.id} className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-xl flex items-center justify-between animate-in slide-in-from-top-4 shadow-[0_0_15px_rgba(234,179,8,0.1)]">
+                      <div className="flex items-center gap-4">
+                          <div className="p-3 bg-yellow-500/20 rounded-full"><CalendarDays className="text-yellow-500" size={24} /></div>
+                          <div><h4 className="text-yellow-500 font-bold text-xs uppercase tracking-widest mb-1">EVENTO AMANHÃ</h4><p className="text-white font-bold md:text-lg leading-none">{ev.title} <span className="text-gray-300 font-normal text-xs md:text-sm ml-2">às {ev.time}</span></p></div>
+                      </div>
+                      <button onClick={() => { isAdmin ? setAdminTab('agenda') : setStudentTab('agenda') }} className="hidden md:block text-xs bg-yellow-600 hover:bg-yellow-500 text-black px-4 py-2 rounded-lg font-bold transition-all shadow-lg shadow-yellow-900/20 whitespace-nowrap">Ver na Agenda</button>
+                  </div>
+              ))}
+              {urgentTasks.map(task => (
+                  <div key={task.id} className="bg-orange-500/10 border border-orange-500/50 p-4 rounded-xl flex items-center justify-between animate-in slide-in-from-top-4 shadow-[0_0_20px_rgba(249,115,22,0.2)]">
+                      <div className="flex items-center gap-4">
+                          <div className="p-3 bg-orange-500/20 rounded-full animate-pulse"><ClipboardList className="text-orange-500" size={24} /></div>
+                          <div><h4 className="text-orange-400 font-bold text-xs uppercase tracking-widest mb-1 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-orange-500 animate-ping"></div> TAREFA VENCENDO</h4><p className="text-white font-bold md:text-lg leading-none">{task.text}</p></div>
+                      </div>
+                      <button onClick={() => { isAdmin ? setAdminTab('kanban') : setStudentTab('kanban') }} className="hidden md:block text-xs bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-lg font-bold transition-all shadow-lg shadow-orange-900/20 whitespace-nowrap">Ver Kanban</button>
+                  </div>
+              ))}
+          </div>
+      );
+  }
+
   // --- ESTADOS PARA O EDITOR DE CORTE (CROP) ---
   const [isCropping, setIsCropping] = useState(false);
   const [cropImgSrc, setCropImgSrc] = useState(null);
@@ -986,6 +1043,7 @@ function App() {
       e.preventDefault();
       const text = e.target.taskText.value;
       const date = e.target.taskDate.value;
+      const tag = e.target.taskTag ? e.target.taskTag.value : 'geral';
       if(!text) return;
       
       const author = isAdmin ? "Técnico" : (viewAsStudent?.name || "Equipe");
@@ -996,7 +1054,8 @@ function App() {
               status: 'todo', // todo, doing, done
               createdAt: new Date().toISOString(),
               author: author,
-              dueDate: date
+              dueDate: date,
+              tag: tag
           });
           e.target.reset();
       } catch (error) {
@@ -1017,6 +1076,16 @@ function App() {
           await deleteDoc(doc(db, "tasks", id));
       }
   }
+
+      const takeoverTask = async (id) => {
+          if (!viewAsStudent) return;
+          try {
+              await updateDoc(doc(db, "tasks", id), { author: viewAsStudent.name });
+              showNotification("Você assumiu a responsabilidade desta tarefa!");
+          } catch (error) {
+              console.error("Erro ao assumir:", error);
+          }
+      }
 
   // --- FUNÇÃO PARA SALVAR DIÁRIO DE BORDO ---
   const handleLogbookSubmit = async (e) => {
@@ -3026,6 +3095,13 @@ const handleFileSelect = (e) => {
   // --- COMPONENTE KANBAN (REUTILIZÁVEL) ---
   const KanbanView = () => {
       
+      const KANBAN_TAGS = [
+          { id: 'engenharia', label: 'Engenharia', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
+          { id: 'inovacao', label: 'Inovação', color: 'bg-pink-500/10 text-pink-400 border-pink-500/20' },
+          { id: 'gestao', label: 'Gestão', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
+          { id: 'geral', label: 'Geral', color: 'bg-gray-500/10 text-gray-400 border-gray-500/20' }
+      ];
+
       const getDeadlineStatus = (date) => {
           if (!date) return null;
           const today = new Date();
@@ -3042,16 +3118,28 @@ const handleFileSelect = (e) => {
 
       const TaskCard = ({ t, showMoveRight, showDelete }) => {
           const status = getDeadlineStatus(t.dueDate);
+          const tagObj = KANBAN_TAGS.find(tag => tag.id === (t.tag || 'geral')) || KANBAN_TAGS[3];
+
           return (
               <div className={`bg-black/40 p-3 rounded-xl border flex flex-col gap-2 group hover:border-white/20 transition-all ${status ? status.border : 'border-white/5'}`}>
-                  <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-bold uppercase bg-white/10 px-2 py-0.5 rounded text-gray-300 flex items-center gap-1">
-                          <UserCircle size={10}/> {t.author || "Equipe"}
-                      </span>
-                      {status && <span className={`text-[10px] font-bold flex items-center gap-1 ${status.color}`}>{status.icon} {status.text}</span>}
+                  <div className="flex justify-between items-start gap-2">
+                      <div className="flex flex-wrap gap-1.5">
+                          <span className="text-[10px] font-bold uppercase bg-white/10 px-2 py-0.5 rounded text-gray-300 flex items-center gap-1">
+                              <UserCircle size={10}/> {t.author || "Equipe"}
+                          </span>
+                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border flex items-center gap-1 ${tagObj.color}`}>
+                              <Tag size={8}/> {tagObj.label}
+                          </span>
+                      </div>
+                      {status && <span className={`text-[10px] font-bold flex items-center gap-1 whitespace-nowrap mt-0.5 ${status.color}`}>{status.icon} {status.text}</span>}
                   </div>
                   <p className="text-sm text-gray-200">{t.text}</p>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end pt-2 border-t border-white/5">
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end pt-2 border-t border-white/5 mt-1">
+                      {viewAsStudent && t.author !== viewAsStudent.name && t.status !== 'done' && (
+                          <button onClick={() => takeoverTask(t.id)} className="mr-auto text-green-500 hover:bg-green-500/20 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition-colors" title="Assumir esta tarefa para você">
+                              <UserCheck size={14}/> Assumir
+                          </button>
+                      )}
                       {showMoveRight && <button onClick={() => moveTask(t.id, showMoveRight)} className="text-blue-500 hover:bg-blue-500/20 p-1.5 rounded" title="Avançar"><ChevronRight size={16}/></button>}
                       {showDelete && <button onClick={() => removeTask(t.id)} className="text-red-500 hover:bg-red-500/20 p-1.5 rounded" title="Excluir"><Trash2 size={16}/></button>}
                   </div>
@@ -3069,8 +3157,13 @@ const handleFileSelect = (e) => {
                   <form onSubmit={handleAddTask} className="mb-4 space-y-2">
                       <input name="taskText" placeholder="+ Nova Tarefa..." className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-orange-500 outline-none transition-all" />
                       <div className="flex gap-2">
-                          <input type="date" name="taskDate" className="bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-400 focus:border-orange-500 outline-none" title="Prazo"/>
-                          <button className="flex-1 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-bold uppercase">Adicionar</button>
+                          <select name="taskTag" className="bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-400 focus:border-orange-500 outline-none w-1/3">
+                              <option value="engenharia">Engenharia</option>
+                              <option value="inovacao">Inovação</option>
+                              <option value="gestao">Gestão</option>
+                          </select>
+                          <input type="date" name="taskDate" className="bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-400 focus:border-orange-500 outline-none w-1/3" title="Prazo"/>
+                          <button className="flex-1 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-bold uppercase">Add</button>
                       </div>
                   </form>
                   <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
@@ -3416,8 +3509,13 @@ const handleFileSelect = (e) => {
                       <div className="bg-[#151520] border border-dashed border-white/10 p-8 rounded-xl text-center text-gray-500 italic">Nenhum evento agendado para o futuro.</div>
                   ) : (
                       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {upcomingEvents.map(ev => (
-                              <div key={ev.id} className="bg-[#151520] border border-white/10 p-5 rounded-xl hover:border-white/30 transition-all group relative shadow-md">
+                          {upcomingEvents.map((ev, index) => (
+                              <div key={ev.id} className={`bg-[#151520] border ${index === 0 ? 'border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.15)] md:scale-[1.02] z-10' : 'border-white/10'} p-5 rounded-xl hover:border-white/30 transition-all group relative`}>
+                                  {index === 0 && (
+                                      <div className="absolute -top-3 left-4 bg-yellow-500 text-black text-[10px] font-black uppercase px-2 py-0.5 rounded shadow-md flex items-center gap-1">
+                                          <AlertTriangle size={10}/> Próximo
+                                      </div>
+                                  )}
                                   {isAdmin && (
                                       <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                           <button onClick={() => setModal({type: 'eventForm', data: ev})} className="text-gray-400 hover:text-white p-1.5 bg-black/50 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
@@ -3847,6 +3945,7 @@ const handleFileSelect = (e) => {
       {/* --- ÁREA DO TÉCNICO (ADMIN) --- */}
       {isAdmin && (
         <main className="p-4 md:p-8 max-w-[1600px] mx-auto animate-in fade-in duration-500">
+          <UrgentEventsBanner />
 
             {/* Dentro do seu <main> ou área de conteúdo central, junto com os outros 'ifs' de abas */}
 {activeTab === 'ranking' && (
@@ -3857,9 +3956,15 @@ const handleFileSelect = (e) => {
               <button onClick={() => setAdminTab('strategy')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'strategy' ? 'bg-purple-500 text-white shadow-lg shadow-purple-900/20' : 'text-gray-500 hover:text-purple-400'}`}><Lightbulb size={18}/> Estratégia & Inovação</button>
               <button onClick={() => setAdminTab('rounds')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'rounds' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-gray-500 hover:text-blue-400'}`}><ListTodo size={18}/> Mesa do Robô</button>
               <button onClick={() => setAdminTab('rubrics')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'rubrics' ? 'bg-gray-400 text-black shadow-lg shadow-gray-900/20' : 'text-gray-500 hover:text-gray-400'}`}><Scale size={18}/> Rubricas</button>
-              <button onClick={() => setAdminTab('kanban')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'kanban' ? 'bg-orange-500 text-white shadow-lg shadow-orange-900/20' : 'text-gray-500 hover:text-orange-400'}`}><ClipboardList size={18}/> Tarefas (Kanban)</button>
+              <button onClick={() => setAdminTab('kanban')} className={`relative flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'kanban' ? 'bg-orange-500 text-white shadow-lg shadow-orange-900/20' : 'text-gray-500 hover:text-orange-400'}`}>
+                  <ClipboardList size={18}/> Tarefas (Kanban)
+                  {urgentTasksCount > 0 && <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500"></span></span>}
+              </button>
               <button onClick={() => setAdminTab('logbook')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'logbook' ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20' : 'text-gray-500 hover:text-yellow-400'}`}><Book size={18}/> Diário</button>
-              <button onClick={() => setAdminTab('agenda')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'agenda' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20' : 'text-gray-500 hover:text-indigo-400'}`}><CalendarDays size={18}/> Agenda</button>
+              <button onClick={() => setAdminTab('agenda')} className={`relative flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'agenda' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20' : 'text-gray-500 hover:text-indigo-400'}`}>
+                  <CalendarDays size={18}/> Agenda
+                  {urgentEventsCount > 0 && <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>}
+              </button>
           </div>
 
           {adminTab === 'rotation' && (
@@ -3999,19 +4104,41 @@ const handleFileSelect = (e) => {
 
                               <div className="space-y-3 flex-1">
                                   {stats.isCompleted && <div className="h-full flex flex-col items-center justify-center text-center opacity-50 mt-10"><CheckSquare size={48} className="text-green-500 mb-2"/><p className="text-sm font-bold text-green-500">Semana Concluída!</p></div>}
-                                  {students.filter(s => s.station === st).map(s => (
-                                      <div key={s.id} className="border border-white/10 p-3 rounded-xl bg-[#151520] relative group animate-in slide-in-from-bottom-2">
+                                  {students.filter(s => s.station === st).map(s => {
+                                      // Busca a tarefa principal do aluno no Kanban
+                                      const studentTasks = tasks.filter(t => t.author === s.name && t.status !== 'done');
+                                      // Prioriza a que ele está fazendo, se não houver, pega a próxima "A Fazer"
+                                      const activeTask = studentTasks.find(t => t.status === 'doing') || studentTasks[0];
+
+                                      return (
+                                      <div key={s.id} className="border border-white/10 p-3 rounded-xl bg-[#151520] relative group animate-in slide-in-from-bottom-2 flex flex-col">
                                           <div className="flex justify-between items-start mb-2">
                                               <div><span className="text-white font-bold text-sm block">{s.name}</span><span className="text-gray-500 text-[10px] font-mono bg-white/5 px-1.5 rounded inline-block mt-0.5">{s.turma}</span></div>
-                                              <button onClick={() => moveStudent(s.id, null)} className="text-gray-500 hover:text-white bg-black/20 p-1 rounded"><X size={12}/></button>
+                                              <button onClick={() => moveStudent(s.id, null)} className="text-gray-500 hover:text-red-500 bg-black/20 hover:bg-red-500/10 p-1 rounded transition-colors" title="Remover da Estação"><X size={12}/></button>
                                           </div>
                                           {s.submission?.status === 'pending' && <AlertCircle size={16} className="text-yellow-500 absolute top-2 right-8 animate-bounce"/>}
-                                          <div className="flex items-center justify-between mt-2">
+                                          
+                                          {/* --- INTEGRAÇÃO COM KANBAN (FOCO ATUAL) --- */}
+                                          <div className="my-2 bg-black/40 rounded-lg p-2 border border-white/5 flex-1">
+                                              <span className="text-[9px] text-gray-500 font-bold uppercase flex items-center gap-1 mb-1">
+                                                  <ClipboardList size={10}/> Foco Atual
+                                              </span>
+                                              {activeTask ? (
+                                                  <div className="flex items-start gap-1.5">
+                                                      {activeTask.status === 'doing' ? <Loader2 size={12} className="text-blue-500 animate-spin shrink-0 mt-0.5"/> : <Square size={12} className="text-orange-500 shrink-0 mt-0.5"/>}
+                                                      <p className={`text-xs line-clamp-2 ${activeTask.status === 'doing' ? 'text-blue-200' : 'text-gray-400'}`} title={activeTask.text}>{activeTask.text}</p>
+                                                  </div>
+                                              ) : (
+                                                  <p className="text-[10px] text-gray-600 italic">Livre (Sem tarefas pendentes)</p>
+                                              )}
+                                          </div>
+
+                                          <div className="flex items-center justify-between mt-1">
                                               <button onClick={() => openXPModal(s)} className="text-yellow-500 text-xs font-bold hover:text-yellow-400 bg-yellow-500/10 px-2 py-1 rounded flex items-center gap-1 transition-colors"><Trophy size={12}/> {s.xp} XP</button>
                                           </div>
-                                          {s.submission?.status === 'pending' && <button onClick={() => openReviewModal(s)} className="w-full mt-2 bg-yellow-500 text-black text-xs font-bold py-1 rounded hover:bg-yellow-400 flex items-center justify-center gap-2"><Eye size={12}/> Revisar Entrega</button>}
+                                          {s.submission?.status === 'pending' && <button onClick={() => openReviewModal(s)} className="w-full mt-2 bg-yellow-500 text-black text-xs font-bold py-1.5 rounded hover:bg-yellow-400 flex items-center justify-center gap-2 shadow-lg shadow-yellow-900/20"><Eye size={12}/> Revisar Entrega</button>}
                                       </div>
-                                  ))}
+                                  )})}
                               </div>
                           </div>
                       )
@@ -4034,6 +4161,7 @@ const handleFileSelect = (e) => {
       {/* --- ÁREA DO ALUNO --- */}
       {!isAdmin && viewAsStudent && (
         <main className="p-4 md:p-8 max-w-4xl mx-auto animate-in slide-in-from-bottom-8">
+          <UrgentEventsBanner />
 
     {/* ALERTA DE LÍDER DE GESTÃO */}
     {currentWeekData?.assignments?.Gestão?.some(s => s.id === viewAsStudent.id) && !["Heloise", "Sofia"].includes(viewAsStudent.name) && (
@@ -4151,9 +4279,15 @@ const handleFileSelect = (e) => {
                 <button onClick={() => setStudentTab('strategy')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'strategy' ? 'bg-purple-500 text-white shadow-lg shadow-purple-900/20' : 'text-gray-500 hover:text-purple-400'}`}><Lightbulb size={18}/> Estratégia</button>
                 <button onClick={() => setStudentTab('rubrics')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'rubrics' ? 'bg-gray-400 text-black shadow-lg shadow-gray-900/20' : 'text-gray-500 hover:text-gray-400'}`}><Scale size={18}/> Rubricas</button>
                 <button onClick={() => setStudentTab('rounds')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'rounds' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-gray-500 hover:text-blue-400'}`}><ListTodo size={18}/> Robô</button>
-                <button onClick={() => setStudentTab('kanban')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'kanban' ? 'bg-orange-500 text-white shadow-lg shadow-orange-900/20' : 'text-gray-500 hover:text-orange-400'}`}><ClipboardList size={18}/> Tarefas</button>
+                <button onClick={() => setStudentTab('kanban')} className={`relative flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'kanban' ? 'bg-orange-500 text-white shadow-lg shadow-orange-900/20' : 'text-gray-500 hover:text-orange-400'}`}>
+                    <ClipboardList size={18}/> Tarefas
+                    {urgentTasksCount > 0 && <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500"></span></span>}
+                </button>
                 <button onClick={() => setStudentTab('logbook')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'logbook' ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20' : 'text-gray-500 hover:text-yellow-400'}`}><Book size={18}/> Diário</button>
-                <button onClick={() => setStudentTab('agenda')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'agenda' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20' : 'text-gray-500 hover:text-indigo-400'}`}><CalendarDays size={18}/> Agenda</button>
+                <button onClick={() => setStudentTab('agenda')} className={`relative flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'agenda' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20' : 'text-gray-500 hover:text-indigo-400'}`}>
+                    <CalendarDays size={18}/> Agenda
+                    {urgentEventsCount > 0 && <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>}
+                </button>
             </div>
 
             {studentTab === 'mission' && (
