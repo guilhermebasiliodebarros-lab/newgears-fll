@@ -2148,7 +2148,53 @@ const handleFileSelect = (e) => {
 
         
 
-          {modal.type === 'xp' && (<form onSubmit={(e) => { e.preventDefault(); modal.data.onConfirm(e.target[0].value); }}><div className="flex items-center gap-3 mb-6"><div className="p-3 bg-yellow-500/10 rounded-lg text-yellow-500"><Scale size={24}/></div><div><h3 className="text-xl font-bold text-white">Gerenciar XP</h3><p className="text-xs text-gray-400">Aluno: {modal.data.student.name}</p></div></div><input type="number" autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white mb-6 font-mono text-lg focus:border-yellow-500 outline-none" placeholder="Ex: 50 ou -20" /><div className="grid grid-cols-4 gap-2 mb-6"><button type="button" onClick={()=>modal.data.onConfirm(10)} className="bg-green-500/10 text-green-500 text-xs py-2 rounded border border-green-500/20 hover:bg-green-500 hover:text-black">+10</button><button type="button" onClick={()=>modal.data.onConfirm(50)} className="bg-green-500/10 text-green-500 text-xs py-2 rounded border border-green-500/20 hover:bg-green-500 hover:text-black">+50</button><button type="button" onClick={()=>modal.data.onConfirm(-10)} className="bg-red-500/10 text-red-500 text-xs py-2 rounded border border-red-500/20 hover:bg-red-500 hover:text-white">-10</button><button type="button" onClick={()=>modal.data.onConfirm(-50)} className="bg-red-500/10 text-red-500 text-xs py-2 rounded border border-red-500/20 hover:bg-red-500 hover:text-white">-50</button></div><button className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-3 rounded-lg">Confirmar</button></form>)}
+          {modal.type === 'xp' && (
+            <div className="animate-in fade-in">
+              <div className="flex items-center gap-4 mb-6 pb-4 border-b border-white/10">
+                {modal.data.student.avatarImage ? (
+                    <img src={modal.data.student.avatarImage} alt="Avatar" className="w-12 h-12 rounded-full object-cover border-2 border-yellow-500" />
+                ) : (
+                    <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center border-2 border-yellow-500">
+                        <UserCircle size={24} className="text-yellow-500" />
+                    </div>
+                )}
+                <div>
+                  <h3 className="text-xl font-bold text-white">Gerenciar XP: {modal.data.student.name}</h3>
+                  <p className="text-sm text-yellow-500 font-mono font-bold mt-1 bg-yellow-500/10 inline-block px-2 py-0.5 rounded-md border border-yellow-500/20">
+                      Saldo: {modal.data.student.xp || 0} XP
+                  </p>
+                </div>
+              </div>
+      
+              <div className="space-y-6">
+                {/* Adicionar XP */}
+                <div className="bg-green-500/5 border border-green-500/20 rounded-xl p-4 shadow-inner">
+                  <p className="text-xs text-green-500 font-bold uppercase mb-3 flex items-center gap-1"><TrendingUp size={14}/> Recompensar (+)</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[5, 10, 20, 50].map(val => (
+                      <button key={val} type="button" onClick={() => modal.data.onConfirm(val)} className="bg-green-500/10 text-green-500 font-black py-3 rounded-lg border border-green-500/20 hover:bg-green-500 hover:text-black transition-colors shadow-sm">+{val}</button>
+                    ))}
+                  </div>
+                </div>
+      
+                {/* Remover XP */}
+                <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4 shadow-inner">
+                  <p className="text-xs text-red-500 font-bold uppercase mb-3 flex items-center gap-1"><TrendingUp size={14} className="rotate-180"/> Penalizar (-)</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[-5, -10, -20, -50].map(val => (
+                      <button key={val} type="button" onClick={() => modal.data.onConfirm(val)} className="bg-red-500/10 text-red-500 font-black py-3 rounded-lg border border-red-500/20 hover:bg-red-500 hover:text-white transition-colors shadow-sm">{val}</button>
+                    ))}
+                  </div>
+                </div>
+      
+                {/* Valor Personalizado */}
+                <form onSubmit={(e) => { e.preventDefault(); modal.data.onConfirm(e.target.customVal.value); }} className="flex gap-2 pt-2">
+                  <input name="customVal" type="number" placeholder="Ou digite outro valor..." className="flex-1 bg-black/50 border border-white/20 rounded-xl p-3 text-white text-center font-mono focus:border-yellow-500 outline-none" required />
+                  <button className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold px-6 rounded-xl transition-all shadow-lg shadow-yellow-900/20">Aplicar</button>
+                </form>
+              </div>
+            </div>
+          )}
 
           {modal.type === 'review' && (
   <div className="animate-in fade-in">
