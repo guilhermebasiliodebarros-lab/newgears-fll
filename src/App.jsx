@@ -10,6 +10,8 @@ import {
   CheckCircle, 
   X, 
   ChevronRight, 
+  ChevronLeft,
+  Pause,
   Upload, 
   Bot, 
   Cpu, 
@@ -100,6 +102,7 @@ import {
   Play,          // <--- NOVO: Ícone de Play para o Cronômetro
   Clock,         // <--- NOVO: Ícone de Relógio (Agenda)
   MapPin,        // <--- NOVO: Ícone de Localização (Agenda)
+  MonitorPlay,   // <--- NOVO: Ícone do Modo TV
 } from 'lucide-react';
 
 
@@ -571,6 +574,9 @@ function App() {
   const [studentTab, setStudentTab] = useState('mission')
 
   
+  // --- ESTADO DO MODO TV ---
+  const [isTvMode, setIsTvMode] = useState(false);
+
   const [robotSubTab, setRobotSubTab] = useState('overview'); // 'overview' | 'map'
 
   // --- DADOS EDITÁVEIS DE MISSÕES (Mestre das Missões) ---
@@ -1318,22 +1324,35 @@ const handleDeleteRound = async (id) => {
   const handleOutreachSubmit = async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
-      
-      let img = modal.data?.image || null;
-      if (selectedFile) img = await convertBase64(selectedFile);
 
       const outreachData = {
           name: fd.get('name'),
           type: fd.get('type'),
           people: parseInt(fd.get('people')),
           date: fd.get('date'),
-          feedback: fd.get('feedback'),
-          image: img
+          feedback: fd.get('feedback')
       };
 
-      await addDoc(collection(db, "outreach"), outreachData);
-      closeModal();
-      showNotification("Evento de impacto registrado!");
+      try {
+          await addDoc(collection(db, "outreach"), outreachData);
+          closeModal();
+          showNotification("Evento de impacto registrado!");
+      } catch (error) {
+          console.error("Erro ao salvar impacto:", error);
+          showNotification("Erro ao salvar.", "error");
+      }
+  }
+
+  const handleDeleteOutreach = async (id) => {
+      if (window.confirm("Tem certeza que deseja excluir este registro de impacto?")) {
+          try {
+              await deleteDoc(doc(db, "outreach", id));
+              showNotification("Registro excluído com sucesso!");
+          } catch (error) {
+              console.error("Erro ao excluir impacto:", error);
+              showNotification("Erro ao excluir.", "error");
+          }
+      }
   }
 
   const handleAttendanceSubmit = async (e) => {
@@ -1937,6 +1956,281 @@ const handleFileSelect = (e) => {
   };
   // --- UI COMPONENTS ---
 
+  // --- MODO TV (SALA DE ROBÓTICA) ---
+  const TvModePanel = () => {
+      if (!isTvMode) return null;
+
+      const [slide, setSlide] = useState(0);
+      const [isPaused, setIsPaused] = useState(false);
+      const slidesCount = 3;
+
+      useEffect(() => {
+          if (isPaused) return;
+          const timer = setInterval(() => {
+              setSlide(s => (s + 1) % slidesCount);
+          }, 12000); // Troca de slide a cada 12 segundos
+          return () => clearInterval(timer);
+      }, [isPaused]);
+
+      // Dados processados para os slides
+      const sortedStudents = [...students].sort((a, b) => (b.xp || 0) - (a.xp || 0));
+      const todayDate = new Date().toISOString().split('T')[0];
+      const upcomingEvents = events.filter(e => e.date >= todayDate).sort((a,b) => new Date(a.date) - new Date(b.date)).slice(0, 4);
+      
+      const totalXP = students.reduce((sum, s) => sum + (s.xp || 0), 0);
+      const totalTasksDone = tasks.filter(t => t.status === 'done').length;
+      const totalImpact = outreachEvents.reduce((sum, ev) => sum + (ev.people || 0), 0);
+
+      const closeTvMode = () => {
+          setIsTvMode(false);
+          try { if (document.fullscreenElement) document.exitFullscreen(); } catch(e){}
+      };
+
+      return (
+          <div className="fixed inset-0 z-[200] bg-[#0a0a0f] text-white flex flex-col font-sans overflow-hidden">
+              {/* HEADER TV */}
+              <div className="p-6 border-b border-white/10 flex justify-between items-center bg-[#151520] shadow-2xl z-10">
+                  <div className="flex items-center gap-6">
+                      <div className="w-20"><LogoNewGears /></div>
+                      <div>
+                          <h1 className="text-4xl font-black italic tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-500 to-fuchsia-500">NEW GEARS TV</h1>
+                          <p className="text-gray-400 font-mono text-xl uppercase font-bold mt-1 tracking-widest">
+                              {new Date().toLocaleDateString('pt-BR')} • {currentWeekData?.weekName || 'Temporada FLL'}
+                          </p>
+                      </div>
+                  </div>
+                  <div className="scale-150 origin-right mr-12">
+                      <Countdown targetDate="2026-12-01T08:00:00" title="TORNEIO FLL" compact={true} />
+                  </div>
+              </div>
+
+              {/* CONTEÚDO DOS SLIDES (Com animação de transição) */}
+              <div className="flex-1 p-10 relative overflow-hidden bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#1a1a2e] via-[#0a0a0f] to-black">
+                  <div key={slide} className="w-full h-full animate-in fade-in zoom-in-95 duration-700">
+                      
+                      {/* SLIDE 0: KANBAN GIGANTE */}
+                      {slide === 0 && (
+                          <div className="h-full flex flex-col">
+                              <h2 className="text-3xl font-black text-gray-400 mb-8 flex items-center gap-3 uppercase tracking-widest"><ClipboardList size={36}/> Painel de Tarefas Kanban</h2>
+                              <div className="grid grid-cols-3 gap-8 flex-1 overflow-hidden">
+                                  {[
+                                      { status: 'todo', title: 'A Fazer', color: 'border-orange-500', icon: <AlertTriangle/> },
+                                      { status: 'doing', title: 'Fazendo', color: 'border-blue-500', icon: <Loader2 className="animate-spin"/> },
+                                      { status: 'done', title: 'Feito', color: 'border-green-500', icon: <CheckCircle/> }
+                                  ].map(col => (
+                                      <div key={col.status} className={`bg-[#151520]/80 border-t-8 ${col.color} rounded-2xl p-6 flex flex-col h-full shadow-2xl`}>
+                                          <h3 className="text-3xl font-black uppercase mb-6 flex items-center gap-3">{col.icon} {col.title}</h3>
+                                          <div className="space-y-4">
+                                              {tasks.filter(t => t.status === col.status).slice(0, 5).map(t => (
+                                                  <div key={t.id} className="bg-black/60 p-5 rounded-xl border border-white/10 shadow-lg">
+                                                      <span className="bg-white/10 px-3 py-1.5 rounded-lg text-sm font-bold text-blue-400 uppercase inline-block mb-3">{t.author || "Equipe"}</span>
+                                                      <p className="text-2xl font-bold text-gray-200 leading-tight">{t.text}</p>
+                                                  </div>
+                                              ))}
+                                          </div>
+                                      </div>
+                                  ))}
+                              </div>
+                          </div>
+                      )}
+
+                      {/* SLIDE 1: RAIO-X E RANKING */}
+                      {slide === 1 && (
+                          <div className="h-full flex flex-col justify-center max-w-7xl mx-auto w-full">
+                              <div className="grid grid-cols-2 gap-16">
+                                  {/* Ranking */}
+                                  <div>
+                                      <h2 className="text-4xl font-black mb-8 text-yellow-500 flex items-center gap-4 uppercase"><Trophy size={40}/> Ranking Geral XP</h2>
+                                      <div className="grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
+                                          {sortedStudents.map((s, i) => (
+                                              <div key={s.id} className="bg-[#151520]/80 p-4 rounded-xl flex items-center gap-3 border border-white/10 shadow-xl">
+                                                  <span className={`text-3xl font-black w-10 ${i===0?'text-yellow-500 drop-shadow-md':i===1?'text-gray-300':i===2?'text-orange-500':'text-gray-600'}`}>#{i+1}</span>
+                                                  {s.avatarImage ? <img src={s.avatarImage} alt="Avatar" className="w-10 h-10 rounded-full object-cover border-2 border-white/20" /> : <UserCircle size={40} className="text-gray-500" />}
+                                                  <h3 className="text-xl font-bold flex-1 truncate text-gray-200">{s.name}</h3>
+                                                  <span className={`text-xl font-black ${i===0?'text-yellow-500':'text-green-500'}`}>{s.xp}</span>
+                                              </div>
+                                          ))}
+                                      </div>
+                                  </div>
+                                  {/* Estatísticas */}
+                                  <div className="flex flex-col justify-center gap-8">
+                                      <div className="bg-blue-500/10 border border-blue-500/30 p-8 rounded-3xl text-center shadow-[0_0_50px_rgba(59,130,246,0.15)]">
+                                          <p className="text-blue-400 text-2xl font-bold uppercase tracking-widest mb-2">XP Total da Equipe</p>
+                                          <p className="text-8xl font-black text-white">{totalXP}</p>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-8">
+                                          <div className="bg-orange-500/10 border border-orange-500/30 p-8 rounded-3xl text-center">
+                                              <Megaphone size={40} className="mx-auto text-orange-500 mb-4"/>
+                                              <p className="text-6xl font-black text-white mb-2">{totalImpact}</p>
+                                              <p className="text-orange-400 font-bold uppercase tracking-widest">Alcançados</p>
+                                          </div>
+                                          <div className="bg-green-500/10 border border-green-500/30 p-8 rounded-3xl text-center">
+                                              <CheckCheck size={40} className="mx-auto text-green-500 mb-4"/>
+                                              <p className="text-6xl font-black text-white mb-2">{totalTasksDone}</p>
+                                              <p className="text-green-400 font-bold uppercase tracking-widest">Tarefas Feitas</p>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+                      )}
+
+                      {/* SLIDE 2: AGENDA E METAS */}
+                      {slide === 2 && (
+                          <div className="h-full flex flex-col justify-center max-w-7xl mx-auto w-full">
+                              <div className="grid grid-cols-2 gap-16">
+                                  {/* Metas da Semana */}
+                                  <div>
+                                      <h2 className="text-4xl font-black mb-8 text-white flex items-center gap-4 uppercase"><Target size={40} className="text-red-500"/> Foco da Semana</h2>
+                                      <div className="grid grid-cols-1 gap-5">
+                                          {['Engenharia', 'Inovação', 'Gestão'].map(st => (
+                                              <div key={st} className="bg-[#151520]/80 p-6 rounded-2xl border border-white/10 shadow-xl relative overflow-hidden">
+                                                  <div className={`absolute top-0 left-0 w-2 h-full ${st==='Engenharia'?'bg-blue-500':st==='Inovação'?'bg-pink-500':'bg-purple-500'}`}></div>
+                                                  <h3 className={`text-xl font-black uppercase mb-2 tracking-widest ${st==='Engenharia'?'text-blue-500':st==='Inovação'?'text-pink-500':'text-purple-500'}`}>{st}</h3>
+                                                  <p className="text-xl font-medium text-gray-200 leading-snug line-clamp-3">"{missions[st]?.text || "Aguardando definição..."}"</p>
+                                              </div>
+                                          ))}
+                                      </div>
+                                  </div>
+                                  {/* Próximos Eventos */}
+                                  <div>
+                                      <h2 className="text-4xl font-black mb-8 text-white flex items-center gap-4 uppercase"><CalendarDays size={40} className="text-indigo-500"/> Agenda de Eventos</h2>
+                                      {upcomingEvents.length === 0 ? (
+                                          <div className="bg-[#151520]/50 border-2 border-dashed border-white/10 p-12 rounded-3xl text-center">
+                                              <p className="text-3xl text-gray-500 font-bold">Nenhum evento futuro agendado.</p>
+                                          </div>
+                                      ) : (
+                                          <div className="space-y-6">
+                                              {upcomingEvents.map((ev, i) => (
+                                                  <div key={ev.id} className={`bg-[#151520]/80 p-8 rounded-3xl border shadow-xl flex flex-col justify-center ${i===0 ? 'border-yellow-500/50 bg-yellow-500/5 scale-105 transform origin-left' : 'border-white/10'}`}>
+                                                      {i===0 && <span className="text-yellow-500 font-black tracking-widest uppercase mb-2 block">O Mais Próximo!</span>}
+                                                      <h3 className="text-4xl font-black text-white mb-4">{ev.title}</h3>
+                                                      <div className="flex items-center gap-6 text-2xl text-gray-400 font-mono">
+                                                          <span className="flex items-center gap-2"><Calendar size={24}/> {ev.date.split('-').reverse().join('/')}</span>
+                                                          <span className="flex items-center gap-2 text-yellow-400"><Clock size={24}/> {ev.time}</span>
+                                                      </div>
+                                                  </div>
+                                              ))}
+                                          </div>
+                                      )}
+                                  </div>
+                              </div>
+                          </div>
+                      )}
+                  </div>
+              </div>
+
+              {/* FOOTER TV (STATUS E NAVEGAÇÃO) */}
+              <div className="p-6 border-t border-white/10 flex justify-between items-center bg-[#151520] z-10">
+                  <div className="flex items-center gap-3 text-gray-500 uppercase font-bold tracking-widest">
+                      <div className={`w-3 h-3 rounded-full ${isPaused ? 'bg-yellow-500' : 'bg-red-500 animate-pulse'}`}></div> {isPaused ? 'PAUSADO' : 'AO VIVO'}
+                  </div>
+                  <div className="flex items-center gap-6">
+                      <button onClick={() => setSlide(s => (s - 1 + slidesCount) % slidesCount)} className="text-gray-500 hover:text-white p-2 bg-white/5 rounded-full hover:bg-white/10 transition-all" title="Canal Anterior"><ChevronLeft size={24}/></button>
+                      <button onClick={() => setIsPaused(!isPaused)} className={`text-gray-500 hover:text-white p-2 rounded-full transition-all ${isPaused ? 'bg-yellow-500/20 text-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.3)]' : 'bg-white/5 hover:bg-white/10'}`} title={isPaused ? "Retomar Auto-play" : "Pausar TV"}>
+                          {isPaused ? <Play size={24}/> : <Pause size={24}/>}
+                      </button>
+                      <div className="flex gap-4 cursor-pointer">
+                          {[...Array(slidesCount)].map((_, i) => (
+                              <button key={i} onClick={() => setSlide(i)} className={`h-2 rounded-full transition-all duration-500 ${i === slide ? 'w-12 bg-white' : 'w-4 bg-gray-700 hover:bg-gray-500'}`} />
+                          ))}
+                      </div>
+                      <button onClick={() => setSlide(s => (s + 1) % slidesCount)} className="text-gray-500 hover:text-white p-2 bg-white/5 rounded-full hover:bg-white/10 transition-all" title="Próximo Canal"><ChevronRight size={24}/></button>
+                  </div>
+                  <button onClick={closeTvMode} className="text-gray-500 hover:text-white bg-white/5 hover:bg-white/10 px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2">
+                      <X size={20} /> Sair da TV
+                  </button>
+              </div>
+          </div>
+      )
+  };
+
+  // --- COMPONENTE DE ESTATÍSTICAS DA EQUIPE (VISÃO DOS JUÍZES) ---
+  const TeamStatsPanel = () => {
+      const totalXP = students.reduce((sum, s) => sum + (s.xp || 0), 0);
+      const totalBadges = students.reduce((sum, s) => sum + (s.badges?.length || 0), 0);
+      const totalImpact = outreachEvents.reduce((sum, ev) => sum + (ev.people || 0), 0);
+      const totalTasksDone = tasks.filter(t => t.status === 'done').length;
+      const totalExperts = experts.length;
+      const totalRobotVersions = robotVersions.length;
+      const maxScore = scoreHistory.reduce((max, h) => Math.max(max, h.score || 0), 0);
+
+      const stats = [
+          { label: 'Pessoas Impactadas', value: totalImpact, icon: <Megaphone size={16}/>, color: 'text-orange-500' },
+          { label: 'Especialistas', value: totalExperts, icon: <Briefcase size={16}/>, color: 'text-purple-500' },
+          { label: 'Versões do Robô', value: totalRobotVersions, icon: <GitCommit size={16}/>, color: 'text-blue-500' },
+          { label: 'Recorde de Pontos', value: maxScore, icon: <Trophy size={16}/>, color: 'text-green-500' },
+          { label: 'Tarefas Entregues', value: totalTasksDone, icon: <CheckCheck size={16}/>, color: 'text-pink-500' },
+          { label: 'Badges Coletadas', value: totalBadges, icon: <Medal size={16}/>, color: 'text-cyan-500' },
+          { label: 'XP da Equipe', value: totalXP, icon: <Zap size={16}/>, color: 'text-yellow-500' }
+      ];
+
+      return (
+          <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 mb-4 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><BarChart3 size={150} /></div>
+              <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2 relative z-10"><BarChart3 className="text-blue-500"/> Raio-X da Temporada (Dados para Juízes)</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 relative z-10">
+                  {stats.map((st, idx) => (
+                      <div key={idx} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col items-center justify-center text-center hover:bg-white/5 transition-colors">
+                          <div className={`mb-2 ${st.color}`}>{st.icon}</div>
+                          <p className={`text-2xl font-black ${st.color}`}>{st.value}</p>
+                          <p className="text-[10px] text-gray-400 uppercase font-bold mt-1 leading-tight">{st.label}</p>
+                      </div>
+                  ))}
+              </div>
+          </div>
+      );
+  };
+
+  // --- COMPONENTE DE CONQUISTAS COLETIVAS (TEAM ACHIEVEMENTS) ---
+  const TeamAchievementsPanel = () => {
+      const totalXP = students.reduce((sum, s) => sum + (s.xp || 0), 0);
+      const totalImpact = outreachEvents.reduce((sum, ev) => sum + (ev.people || 0), 0);
+      const totalTasksDone = tasks.filter(t => t.status === 'done').length;
+      const totalExperts = experts.length;
+
+      const achievements = [
+          { id: 'team_xp', name: 'Potência Máxima', icon: <Zap size={20}/>, color: 'text-yellow-400', bg: 'bg-yellow-500', desc: 'Atingir 6.000 XP somados por toda a equipe.', current: totalXP, target: 6000 },
+          { id: 'team_impact', name: 'Voz da Mudança', icon: <Megaphone size={20}/>, color: 'text-orange-500', bg: 'bg-orange-500', desc: 'Impactar mais de 350 pessoas com o projeto.', current: totalImpact, target: 350 },
+          { id: 'team_tasks', name: 'Máquina de Produtividade', icon: <CheckCheck size={20}/>, color: 'text-green-500', bg: 'bg-green-500', desc: 'Concluir 30 tarefas no Kanban da equipe.', current: totalTasksDone, target: 30 },
+          { id: 'team_experts', name: 'Mentes Conectadas', icon: <Briefcase size={20}/>, color: 'text-purple-500', bg: 'bg-purple-500', desc: 'Consultar 5 especialistas diferentes.', current: totalExperts, target: 5 }
+      ];
+
+      return (
+          <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 mb-8 relative overflow-hidden shadow-xl">
+              <div className="absolute -right-10 -top-10 text-white/5 pointer-events-none">
+                  <Trophy size={180} />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2 relative z-10">
+                  <Crown className="text-yellow-500"/> Conquistas da Equipe
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10">
+                  {achievements.map(ach => {
+                      const isUnlocked = ach.current >= ach.target;
+                      const progress = Math.min(100, (ach.current / ach.target) * 100);
+                      
+                      return (
+                          <div key={ach.id} className={`p-4 rounded-xl border flex flex-col relative overflow-hidden transition-all duration-500 ${isUnlocked ? 'bg-gradient-to-br from-white/10 to-transparent border-yellow-500/50 shadow-[0_0_20px_rgba(234,179,8,0.15)] scale-[1.02]' : 'bg-black/40 border-white/5 opacity-80'}`}>
+                              <div className="flex items-center gap-3 mb-3">
+                                  <div className={`p-2 rounded-lg ${isUnlocked ? ach.bg + '/20 ' + ach.color : 'bg-white/5 text-gray-500'}`}>
+                                      {ach.icon}
+                                  </div>
+                                  <div>
+                                      <h4 className={`font-bold text-sm leading-tight ${isUnlocked ? 'text-white' : 'text-gray-400'}`}>{ach.name}</h4>
+                                      {isUnlocked ? <span className="text-[10px] text-green-400 font-bold flex items-center gap-1 uppercase tracking-wider mt-0.5"><CheckCircle size={10}/> Desbloqueado</span> : <span className="text-[10px] text-gray-500 uppercase tracking-wider mt-0.5 font-bold">Bloqueado</span>}
+                                  </div>
+                              </div>
+                              <p className="text-xs text-gray-400 mb-3 flex-1">{ach.desc}</p>
+                              <div className="w-full bg-gray-800 rounded-full h-2 mb-1 overflow-hidden"><div className={`h-full transition-all duration-1000 ${isUnlocked ? ach.bg : 'bg-gray-500'}`} style={{width: `${progress}%`}}></div></div>
+                              <div className="text-[10px] text-right font-mono text-gray-500 font-bold">{ach.current} / {ach.target}</div>
+                          </div>
+                      )
+                  })}
+              </div>
+          </div>
+      )
+  };
+
   const Notification = () => { if (!notification) return null; const isError = notification.type === 'error'; const isDownload = notification.type === 'download'; return (<div className={`fixed top-6 right-6 z-[100] px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right duration-300 border ${isError ? 'bg-red-500/10 border-red-500 text-red-500' : isDownload ? 'bg-blue-500/10 border-blue-500 text-blue-500' : 'bg-green-500/10 border-green-500 text-green-500'}`}>{isError ? <AlertCircle size={24}/> : isDownload ? <Download size={24}/> : <CheckCircle size={24}/>}<span className="font-bold text-sm">{notification.msg}</span></div>) }
 
 
@@ -2493,6 +2787,53 @@ const handleFileSelect = (e) => {
              </form>
           )}
 
+          {/* MODAL DE IMPACTO (OUTREACH) */}
+          {modal.type === 'outreachForm' && (
+             <form onSubmit={handleOutreachSubmit}>
+                <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Megaphone className="text-orange-500"/> Registrar Impacto</h3>
+                
+                <div className="mb-4">
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome do Evento / Ação</label>
+                    <input name="name" required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-orange-500 outline-none" placeholder="Ex: Apresentação para o 6º Ano" />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Público-Alvo</label>
+                        <select name="type" className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-orange-500 outline-none">
+                            <option value="Escola">Escola / Alunos</option>
+                            <option value="Especialistas">Especialistas</option>
+                            <option value="Comunidade">Comunidade / Pais</option>
+                            <option value="Equipes FLL">Outras Equipes FLL</option>
+                            <option value="Internet">Internet / Redes Sociais</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data</label>
+                        <input name="date" type="date" required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-orange-500 outline-none" />
+                    </div>
+                </div>
+
+                <div className="mb-4">
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Pessoas Impactadas</label>
+                    <input name="people" type="number" min="1" required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-orange-500 outline-none text-xl font-bold" placeholder="Ex: 35" />
+                </div>
+
+                <div className="mb-6">
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Feedback / Resultado (Opcional)</label>
+                    <textarea name="feedback" className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-orange-500 outline-none h-24 resize-none" placeholder="O que acharam? Deram alguma sugestão?"></textarea>
+                </div>
+
+                <div className="bg-orange-500/10 border border-orange-500/20 p-3 rounded-xl mb-6 text-xs text-orange-400 flex items-start gap-2">
+                    <Info size={16} className="shrink-0 mt-0.5"/>
+                    <p>O Firebase não armazena fotos desta etapa para economizar espaço. Registre as fotos por conta própria no Drive da equipe e mostre aos juízes!</p>
+                </div>
+
+                <button type="submit" className="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-orange-900/20 transition-all">Salvar Registro</button>
+             </form>
+          )}
+
           {/* NOVO MODAL: EDITOR DE AGENDA/EVENTO */}
           {modal.type === 'eventForm' && (
              <form onSubmit={handleEventSubmit}>
@@ -2609,6 +2950,53 @@ const handleFileSelect = (e) => {
 
             </div>
 
+            {/* COMPARTILHAMENTO E IMPACTO */}
+            <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <Megaphone className="text-orange-500"/> Impacto
+                    </h3>
+                    <button onClick={() => openOutreachForm()} className="text-xs bg-orange-500/10 text-orange-500 border border-orange-500/20 px-3 py-1.5 rounded-lg hover:bg-orange-500 hover:text-white font-bold">+ Registro</button>
+                </div>
+
+                <div className="flex flex-col gap-4">
+                    {/* Resumo de Impacto */}
+                    <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl flex items-center justify-between">
+                        <div>
+                            <p className="text-[10px] text-orange-400 uppercase font-bold">Pessoas Alcançadas</p>
+                            <h4 className="text-3xl font-black text-white">{outreachEvents.reduce((acc, ev) => acc + (ev.people || 0), 0)}</h4>
+                        </div>
+                        <Users size={32} className="text-orange-500 opacity-50"/>
+                    </div>
+
+                    {/* Lista de Eventos */}
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-2 border-t border-white/10 pt-4">
+                        {outreachEvents.sort((a, b) => new Date(b.date) - new Date(a.date)).map(ev => (
+                            <div key={ev.id} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col relative group hover:bg-white/5 transition-colors">
+                                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                    <button onClick={() => handleDeleteOutreach(ev.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>
+                                </div>
+                                <div className="flex justify-between items-start mb-2 pr-6">
+                                    <div>
+                                        <span className="text-white font-bold text-sm block">{ev.name}</span>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-white/10 text-gray-300">{ev.type}</span>
+                                            <span className="text-[10px] text-gray-500 flex items-center gap-1"><Calendar size={10}/> {ev.date.split('-').reverse().join('/')}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="mt-2 text-sm text-orange-400 font-bold">
+                                    +{ev.people} pessoas
+                                </div>
+                                {ev.feedback && <p className="text-xs text-gray-300 italic mt-2 pt-2 border-t border-white/5">"{ev.feedback}"</p>}
+                            </div>
+                        ))}
+                        {outreachEvents.length === 0 && (
+                            <div className="text-center text-gray-500 text-sm italic py-4">Nenhum registro de impacto ainda.</div>
+                        )}
+                    </div>
+                </div>
+            </div>
 
           </div>
 
@@ -3669,6 +4057,7 @@ const handleFileSelect = (e) => {
       <div className="relative z-10">
         <Notification />
         {renderModal()}
+        <TvModePanel />
         <ScheduleModal />
 
 {/* --- MODAL DO TÉCNICO: ENTREGAR BADGES --- */}
@@ -3895,6 +4284,14 @@ const handleFileSelect = (e) => {
                       {teamMoods.length > 0 ? `${teamAverage}%` : 'Check-in'}
                   </span>
               </button>
+              {/* --- BOTÃO MODO TV (TODOS PODEM ACESSAR) --- */}
+              <button 
+                onClick={() => { setIsTvMode(true); try { document.documentElement.requestFullscreen() } catch(e){} }} 
+                className="bg-fuchsia-500/10 border border-fuchsia-500/20 text-fuchsia-400 p-2 rounded-full hover:bg-fuchsia-500 hover:text-white transition-all md:px-4 md:py-2 md:rounded-lg flex items-center gap-2 shadow-[0_0_15px_rgba(217,70,239,0.15)]"
+              >
+                  <MonitorPlay size={18} /> <span className="hidden md:inline text-xs font-bold uppercase tracking-wider">Modo TV</span>
+              </button>
+
               {/* 2. BOTÃO MÁGICO DAS CAPITÃS (Sofia e Heloise) */}
               {viewAsStudent && (viewAsStudent.name === 'Sofia' || viewAsStudent.name === 'Heloise') && (
                   <button 
@@ -3969,6 +4366,9 @@ const handleFileSelect = (e) => {
 
           {adminTab === 'rotation' && (
             <>
+              <TeamStatsPanel />
+              <TeamAchievementsPanel />
+              
               {/* CABEÇALHO DA SEMANA */}
               <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
                   <div className="flex items-center gap-3 text-gray-400">
@@ -4177,6 +4577,9 @@ const handleFileSelect = (e) => {
             </div>
         </div>
     )}
+
+           <TeamStatsPanel />
+           <TeamAchievementsPanel />
 
            <div onClick={() => openProfileModal(viewAsStudent)} className="text-center py-6 bg-[#151520] rounded-2xl border border-white/10 shadow-xl mb-8 cursor-pointer hover:bg-[#1a1a24] transition-colors group relative">
                 <div className="absolute top-4 right-4 text-gray-600 group-hover:text-white transition-colors">
