@@ -1580,25 +1580,31 @@ const handleDeleteRound = async (id) => {
       const fd = new FormData(e.target);
       const student = modal.data; // Dados do aluno vindo do modal
 
-      // 1. Calcula o bônus de XP baseado nas notas
-      const gradesString = fd.get('grades');
-      const grades = gradesString.split(',').map(g => parseFloat(g.trim()));
       let bonusXP = 0;
+      const newGrades = {};
       
-      grades.forEach(grade => {
-          if (!isNaN(grade)) {
-              if (grade === 10) bonusXP += 10;
-              else if (grade >= 9.0) bonusXP += 7;
-              else if (grade >= 8.0) bonusXP += 5;
+      // Lista das matérias para iterar e capturar os valores do formulário
+      const subjects = ['Matemática', 'Português', 'Ciências', 'História', 'Geografia', 'Inglês', 'Artes', 'Ed. Física', 'Robótica', 'STEAM'];
+
+      subjects.forEach(subj => {
+          const val = fd.get(`grade_${subj}`);
+          if (val && val.trim() !== '') {
+              const grade = parseFloat(val);
+              if (!isNaN(grade)) {
+                  newGrades[subj] = grade;
+                  if (grade === 10) bonusXP += 10;
+                  else if (grade >= 9.0) bonusXP += 7;
+                  else if (grade >= 8.0) bonusXP += 5;
+              }
           }
       });
 
       try {
-          // 2. Atualiza apenas o XP do aluno no Firebase
           const studentRef = doc(db, "students", student.id);
           
           await updateDoc(studentRef, {
-              xp: (student.xp || 0) + bonusXP
+              xp: (student.xp || 0) + bonusXP,
+              schoolGrades: newGrades // Salva as notas no perfil do aluno para histórico
           });
 
           closeModal();
@@ -1713,6 +1719,32 @@ const handleDeleteRound = async (id) => {
       }
   }
 
+  // --- FUNÇÃO PARA APLICAR O RODÍZIO AUTOMATICAMENTE ---
+  const handleApplyRotation = async () => {
+      if (!currentWeekData) return;
+      if (!window.confirm(`Sincronizar a equipe com a ${currentWeekData.weekName}? Todos os alunos serão movidos para as suas estações.`)) return;
+      
+      try {
+          // Cria uma lista de atualizações para enviar tudo de uma vez
+          const updates = students.map(student => {
+              let targetStation = null;
+              
+              // Verifica em qual estação o aluno está escalado no cronograma
+              if (currentWeekData.assignments.Engenharia.some(s => s.name === student.name)) targetStation = 'Engenharia';
+              else if (currentWeekData.assignments.Inovação.some(s => s.name === student.name)) targetStation = 'Inovação';
+              else if (currentWeekData.assignments.Gestão.some(s => s.name === student.name)) targetStation = 'Gestão';
+
+              // Atualiza o aluno no Firebase
+              return updateDoc(doc(db, "students", student.id), { station: targetStation, submission: null });
+          });
+
+          await Promise.all(updates);
+          showNotification("Rodízio automático aplicado com sucesso!", "success");
+      } catch (error) {
+          console.error("Erro ao aplicar rodízio:", error);
+          showNotification("Erro ao aplicar rodízio.", "error");
+      }
+  };
 
 
   // --- MODAIS ---
@@ -2008,134 +2040,8 @@ const handleFileSelect = (e) => {
               <div className="flex-1 p-10 relative overflow-hidden bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#1a1a2e] via-[#0a0a0f] to-black">
                   <div key={slide} className="w-full h-full animate-in fade-in duration-1000">
                       
-                      {/* SLIDE 0: KANBAN GIGANTE */}
+                      {/* SLIDE 0: CRONOGRAMA DA SEMANA */}
                       {slide === 0 && (
-                          <div className="h-full flex flex-col">
-                              <h2 className="text-4xl font-black text-gray-400 mb-6 flex items-center gap-3 uppercase tracking-widest"><ClipboardList size={40}/> Painel de Tarefas Kanban</h2>
-                              <div className="grid grid-cols-3 gap-6 flex-1 overflow-hidden">
-                                  {[
-                                      { status: 'todo', title: 'A Fazer', color: 'border-orange-500', icon: <AlertTriangle size={32}/> },
-                                      { status: 'doing', title: 'Fazendo', color: 'border-blue-500', icon: <Loader2 size={32} className="animate-spin"/> },
-                                      { status: 'done', title: 'Feito', color: 'border-green-500', icon: <CheckCircle size={32}/> }
-                                  ].map(col => (
-                                      <div key={col.status} className={`bg-[#151520]/80 border-t-8 ${col.color} rounded-2xl p-5 flex flex-col h-full shadow-2xl`}>
-                                          <h3 className="text-3xl font-black uppercase mb-4 flex items-center gap-3">{col.icon} {col.title}</h3>
-                                          <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-2 pb-2">
-                                              {tasks.filter(t => t.status === col.status).map(t => (
-                                                  <div key={t.id} className="bg-black/60 p-4 rounded-xl border border-white/10 shadow-lg flex flex-col">
-                                                      <div className="flex justify-between items-start mb-2">
-                                                          <span className="bg-white/10 px-2 py-1 rounded text-xs font-bold text-blue-400 uppercase tracking-wider">{t.author || "Equipe"}</span>
-                                                          {t.tag && <span className="text-[10px] uppercase font-bold text-gray-500 border border-gray-600 px-2 py-1 rounded">{t.tag}</span>}
-                                                      </div>
-                                                      <p className="text-xl font-bold text-gray-200 leading-snug">{t.text}</p>
-                                                  </div>
-                                              ))}
-                                          </div>
-                                      </div>
-                                  ))}
-                              </div>
-                          </div>
-                      )}
-
-                      {/* SLIDE 1: RAIO-X E RANKING */}
-                      {slide === 1 && (
-                          <div className="h-full flex flex-col justify-center max-w-7xl mx-auto w-full">
-                              <div className="grid grid-cols-2 gap-16">
-                                  {/* Ranking */}
-                                  <div>
-                                      <h2 className="text-4xl font-black mb-8 text-yellow-500 flex items-center gap-4 uppercase"><Trophy size={40}/> Ranking Geral XP</h2>
-                                      <div className="grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
-                                          {sortedStudents.map((s, i) => (
-                                              <div key={s.id} className="bg-[#151520]/80 p-4 rounded-xl flex items-center gap-3 border border-white/10 shadow-xl">
-                                                  <span className={`text-3xl font-black w-10 ${i===0?'text-yellow-500 drop-shadow-md':i===1?'text-gray-300':i===2?'text-orange-500':'text-gray-600'}`}>#{i+1}</span>
-                                                  {s.avatarImage ? <img src={s.avatarImage} alt="Avatar" className="w-10 h-10 rounded-full object-cover border-2 border-white/20" /> : <UserCircle size={40} className="text-gray-500" />}
-                                                  <h3 className="text-xl font-bold flex-1 truncate text-gray-200">{s.name}</h3>
-                                                  <span className={`text-xl font-black ${i===0?'text-yellow-500':'text-green-500'}`}>{s.xp}</span>
-                                              </div>
-                                          ))}
-                                      </div>
-                                  </div>
-                                  {/* Estatísticas */}
-                                  <div className="flex flex-col justify-center gap-8">
-                                      <div className="bg-blue-500/10 border border-blue-500/30 p-8 rounded-3xl text-center shadow-[0_0_50px_rgba(59,130,246,0.15)]">
-                                          <p className="text-blue-400 text-2xl font-bold uppercase tracking-widest mb-2">XP Total da Equipe</p>
-                                          <p className="text-8xl font-black text-white">{totalXP}</p>
-                                      </div>
-                                      <div className="grid grid-cols-2 gap-8">
-                                          <div className="bg-orange-500/10 border border-orange-500/30 p-8 rounded-3xl text-center">
-                                              <Megaphone size={40} className="mx-auto text-orange-500 mb-4"/>
-                                              <p className="text-6xl font-black text-white mb-2">{totalImpact}</p>
-                                              <p className="text-orange-400 font-bold uppercase tracking-widest">Alcançados</p>
-                                          </div>
-                                          <div className="bg-green-500/10 border border-green-500/30 p-8 rounded-3xl text-center">
-                                              <CheckCheck size={40} className="mx-auto text-green-500 mb-4"/>
-                                              <p className="text-6xl font-black text-white mb-2">{totalTasksDone}</p>
-                                              <p className="text-green-400 font-bold uppercase tracking-widest">Tarefas Feitas</p>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
-                          </div>
-                      )}
-
-                      {/* SLIDE 2: METAS DA SEMANA (3 COLUNAS) */}
-                      {slide === 2 && (
-                          <div className="h-full flex flex-col justify-center max-w-7xl mx-auto w-full">
-                              <h2 className="text-5xl font-black mb-12 text-white flex items-center justify-center gap-4 uppercase"><Target size={48} className="text-red-500"/> Foco da Semana</h2>
-                              <div className="grid grid-cols-3 gap-8">
-                                  {['Engenharia', 'Inovação', 'Gestão'].map(st => (
-                                      <div key={st} className="bg-[#151520]/80 p-8 rounded-3xl border border-white/10 shadow-xl relative flex flex-col h-[65vh]">
-                                          <div className={`absolute top-0 left-0 w-full h-2 rounded-t-3xl ${st==='Engenharia'?'bg-blue-500':st==='Inovação'?'bg-pink-500':'bg-purple-500'}`}></div>
-                                          <h3 className={`text-3xl font-black uppercase mb-6 tracking-widest text-center mt-2 ${st==='Engenharia'?'text-blue-500':st==='Inovação'?'text-pink-500':'text-purple-500'}`}>{st}</h3>
-                                          <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 min-h-0">
-                                              <p className="text-2xl font-medium text-gray-200 leading-relaxed whitespace-pre-wrap break-words">"{missions[st]?.text || "Aguardando definição..."}"</p>
-                                          </div>
-                                      </div>
-                                  ))}
-                              </div>
-                          </div>
-                      )}
-
-                      {/* SLIDE 3: AGENDA / EVENTOS */}
-                      {slide === 3 && (
-                          <div className="h-full flex flex-col max-w-7xl mx-auto w-full">
-                              <h2 className="text-5xl font-black mb-10 text-white flex items-center justify-center gap-4 uppercase tracking-widest"><CalendarDays size={48} className="text-blue-500"/> Agenda da Equipe</h2>
-                              <div className="grid grid-cols-3 xl:grid-cols-4 gap-4 flex-1 overflow-hidden pt-4 pb-4 px-2">
-                                  {upcomingEvents.length === 0 ? (
-                                      <div className="col-span-full flex flex-col items-center justify-center text-gray-500 italic bg-[#151520]/50 rounded-3xl border border-white/5 h-64">
-                                          <CalendarDays size={64} className="mb-4 opacity-50"/>
-                                          <p className="text-2xl">Nenhum evento agendado para os próximos dias.</p>
-                                      </div>
-                                  ) : (
-                                      upcomingEvents.map((ev) => {
-                                          const isToday = ev.date === todayDate;
-                                          const typeColor = ev.type === 'Especialista' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : ev.type === 'Visita' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : ev.type === 'Reunião' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 'bg-gray-500/10 text-gray-400 border-gray-500/20';
-                                          return (
-                                              <div key={ev.id} className={`bg-[#151520] border p-5 rounded-2xl flex flex-col relative ${isToday ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-white/10'}`}>
-                                                  {isToday && (
-                                                      <div className="absolute -top-4 left-4 z-10 bg-red-600 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded shadow-md flex items-center gap-1 animate-pulse">
-                                                          <AlertTriangle size={10}/> Hoje
-                                                      </div>
-                                                  )}
-                                                  <div className="flex items-center gap-2 mb-3">
-                                                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${typeColor}`}>{ev.type}</span>
-                                                      <span className="text-xs text-gray-300 flex items-center gap-1 font-mono"><Calendar size={12} className="text-blue-500"/> {ev.date.split('-').reverse().join('/')}</span>
-                                                  </div>
-                                                  <h4 className="text-white font-bold text-lg mb-2 leading-tight">{ev.title}</h4>
-                                                  <div className="flex flex-col gap-1.5 pt-3 border-t border-white/5 mt-auto">
-                                                      <div className="flex items-center gap-2 text-xs text-gray-300"><Clock size={14} className="text-yellow-500"/> {ev.time}</div>
-                                                      {ev.location && <div className="flex items-center gap-2 text-xs text-gray-300 truncate"><MapPin size={14} className="text-green-500 shrink-0"/> {ev.location}</div>}
-                                                  </div>
-                                              </div>
-                                          )
-                                      })
-                                  )}
-                              </div>
-                          </div>
-                      )}
-
-                      {/* SLIDE 4: CRONOGRAMA DA SEMANA */}
-                      {slide === 4 && (
                           <div className="h-full flex flex-col max-w-7xl mx-auto w-full">
                               <h2 className="text-4xl font-black mb-4 text-white flex items-center justify-center gap-4 uppercase tracking-widest"><Users size={40} className="text-yellow-500"/> Equipe da Semana</h2>
                               
@@ -2184,12 +2090,138 @@ const handleFileSelect = (e) => {
                           </div>
                       )}
 
-                      {/* SLIDE 5: GRÁFICO DE EVOLUÇÃO (ROUNDS) */}
-                      {slide === 5 && (
+                      {/* SLIDE 1: METAS DA SEMANA (3 COLUNAS) */}
+                      {slide === 1 && (
+                          <div className="h-full flex flex-col justify-center max-w-7xl mx-auto w-full">
+                              <h2 className="text-5xl font-black mb-12 text-white flex items-center justify-center gap-4 uppercase"><Target size={48} className="text-red-500"/> Foco da Semana</h2>
+                              <div className="grid grid-cols-3 gap-8">
+                                  {['Engenharia', 'Inovação', 'Gestão'].map(st => (
+                                      <div key={st} className="bg-[#151520]/80 p-8 rounded-3xl border border-white/10 shadow-xl relative flex flex-col h-[65vh]">
+                                          <div className={`absolute top-0 left-0 w-full h-2 rounded-t-3xl ${st==='Engenharia'?'bg-blue-500':st==='Inovação'?'bg-pink-500':'bg-purple-500'}`}></div>
+                                          <h3 className={`text-3xl font-black uppercase mb-6 tracking-widest text-center mt-2 ${st==='Engenharia'?'text-blue-500':st==='Inovação'?'text-pink-500':'text-purple-500'}`}>{st}</h3>
+                                          <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 min-h-0">
+                                              <p className="text-2xl font-medium text-gray-200 leading-relaxed whitespace-pre-wrap break-words">"{missions[st]?.text || "Aguardando definição..."}"</p>
+                                          </div>
+                                      </div>
+                                  ))}
+                              </div>
+                          </div>
+                      )}
+
+                      {/* SLIDE 2: KANBAN GIGANTE */}
+                      {slide === 2 && (
+                          <div className="h-full flex flex-col">
+                              <h2 className="text-4xl font-black text-gray-400 mb-6 flex items-center gap-3 uppercase tracking-widest"><ClipboardList size={40}/> Painel de Tarefas Kanban</h2>
+                              <div className="grid grid-cols-3 gap-6 flex-1 overflow-hidden">
+                                  {[
+                                      { status: 'todo', title: 'A Fazer', color: 'border-orange-500', icon: <AlertTriangle size={32}/> },
+                                      { status: 'doing', title: 'Fazendo', color: 'border-blue-500', icon: <Loader2 size={32} className="animate-spin"/> },
+                                      { status: 'done', title: 'Feito', color: 'border-green-500', icon: <CheckCircle size={32}/> }
+                                  ].map(col => (
+                                      <div key={col.status} className={`bg-[#151520]/80 border-t-8 ${col.color} rounded-2xl p-5 flex flex-col h-full shadow-2xl`}>
+                                          <h3 className="text-3xl font-black uppercase mb-4 flex items-center gap-3">{col.icon} {col.title}</h3>
+                                          <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-2 pb-2">
+                                              {tasks.filter(t => t.status === col.status).map(t => (
+                                                  <div key={t.id} className="bg-black/60 p-4 rounded-xl border border-white/10 shadow-lg flex flex-col">
+                                                      <div className="flex justify-between items-start mb-2">
+                                                          <span className="bg-white/10 px-2 py-1 rounded text-xs font-bold text-blue-400 uppercase tracking-wider">{t.author || "Equipe"}</span>
+                                                          {t.tag && <span className="text-[10px] uppercase font-bold text-gray-500 border border-gray-600 px-2 py-1 rounded">{t.tag}</span>}
+                                                      </div>
+                                                      <p className="text-xl font-bold text-gray-200 leading-snug">{t.text}</p>
+                                                  </div>
+                                              ))}
+                                          </div>
+                                      </div>
+                                  ))}
+                              </div>
+                          </div>
+                      )}
+
+                      {/* SLIDE 3: GRÁFICO DE EVOLUÇÃO (ROUNDS) */}
+                      {slide === 3 && (
                           <div className="h-full flex flex-col max-w-7xl mx-auto w-full justify-center">
                               <h2 className="text-5xl font-black mb-12 text-white flex items-center justify-center gap-4 uppercase tracking-widest"><TrendingUp size={48} className="text-green-500"/> Desempenho do Robô</h2>
                               <div className="w-full transform scale-110 origin-center mt-8">
                                   <ScoreEvolutionChart isTvMode={true} />
+                              </div>
+                          </div>
+                      )}
+
+                      {/* SLIDE 4: AGENDA / EVENTOS */}
+                      {slide === 4 && (
+                          <div className="h-full flex flex-col max-w-7xl mx-auto w-full">
+                              <h2 className="text-5xl font-black mb-10 text-white flex items-center justify-center gap-4 uppercase tracking-widest"><CalendarDays size={48} className="text-blue-500"/> Agenda da Equipe</h2>
+                              <div className="grid grid-cols-3 xl:grid-cols-4 gap-4 flex-1 overflow-hidden pt-4 pb-4 px-2">
+                                  {upcomingEvents.length === 0 ? (
+                                      <div className="col-span-full flex flex-col items-center justify-center text-gray-500 italic bg-[#151520]/50 rounded-3xl border border-white/5 h-64">
+                                          <CalendarDays size={64} className="mb-4 opacity-50"/>
+                                          <p className="text-2xl">Nenhum evento agendado para os próximos dias.</p>
+                                      </div>
+                                  ) : (
+                                      upcomingEvents.map((ev) => {
+                                          const isToday = ev.date === todayDate;
+                                          const typeColor = ev.type === 'Especialista' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : ev.type === 'Visita' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : ev.type === 'Reunião' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 'bg-gray-500/10 text-gray-400 border-gray-500/20';
+                                          return (
+                                              <div key={ev.id} className={`bg-[#151520] border p-5 rounded-2xl flex flex-col relative ${isToday ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-white/10'}`}>
+                                                  {isToday && (
+                                                      <div className="absolute -top-4 left-4 z-10 bg-red-600 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded shadow-md flex items-center gap-1 animate-pulse">
+                                                          <AlertTriangle size={10}/> Hoje
+                                                      </div>
+                                                  )}
+                                                  <div className="flex items-center gap-2 mb-3">
+                                                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${typeColor}`}>{ev.type}</span>
+                                                      <span className="text-xs text-gray-300 flex items-center gap-1 font-mono"><Calendar size={12} className="text-blue-500"/> {ev.date.split('-').reverse().join('/')}</span>
+                                                  </div>
+                                                  <h4 className="text-white font-bold text-lg mb-2 leading-tight">{ev.title}</h4>
+                                                  <div className="flex flex-col gap-1.5 pt-3 border-t border-white/5 mt-auto">
+                                                      <div className="flex items-center gap-2 text-xs text-gray-300"><Clock size={14} className="text-yellow-500"/> {ev.time}</div>
+                                                      {ev.location && <div className="flex items-center gap-2 text-xs text-gray-300 truncate"><MapPin size={14} className="text-green-500 shrink-0"/> {ev.location}</div>}
+                                                  </div>
+                                              </div>
+                                          )
+                                      })
+                                  )}
+                              </div>
+                          </div>
+                      )}
+
+                      {/* SLIDE 5: RAIO-X E RANKING */}
+                      {slide === 5 && (
+                          <div className="h-full flex flex-col justify-center max-w-7xl mx-auto w-full">
+                              <div className="grid grid-cols-2 gap-16">
+                                  {/* Ranking */}
+                                  <div>
+                                      <h2 className="text-4xl font-black mb-8 text-yellow-500 flex items-center gap-4 uppercase"><Trophy size={40}/> Ranking Geral XP</h2>
+                                      <div className="grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
+                                          {sortedStudents.map((s, i) => (
+                                              <div key={s.id} className="bg-[#151520]/80 p-4 rounded-xl flex items-center gap-3 border border-white/10 shadow-xl">
+                                                  <span className={`text-3xl font-black w-10 ${i===0?'text-yellow-500 drop-shadow-md':i===1?'text-gray-300':i===2?'text-orange-500':'text-gray-600'}`}>#{i+1}</span>
+                                                  {s.avatarImage ? <img src={s.avatarImage} alt="Avatar" className="w-10 h-10 rounded-full object-cover border-2 border-white/20" /> : <UserCircle size={40} className="text-gray-500" />}
+                                                  <h3 className="text-xl font-bold flex-1 truncate text-gray-200">{s.name}</h3>
+                                                  <span className={`text-xl font-black ${i===0?'text-yellow-500':'text-green-500'}`}>{s.xp}</span>
+                                              </div>
+                                          ))}
+                                      </div>
+                                  </div>
+                                  {/* Estatísticas */}
+                                  <div className="flex flex-col justify-center gap-8">
+                                      <div className="bg-blue-500/10 border border-blue-500/30 p-8 rounded-3xl text-center shadow-[0_0_50px_rgba(59,130,246,0.15)]">
+                                          <p className="text-blue-400 text-2xl font-bold uppercase tracking-widest mb-2">XP Total da Equipe</p>
+                                          <p className="text-8xl font-black text-white">{totalXP}</p>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-8">
+                                          <div className="bg-orange-500/10 border border-orange-500/30 p-8 rounded-3xl text-center">
+                                              <Megaphone size={40} className="mx-auto text-orange-500 mb-4"/>
+                                              <p className="text-6xl font-black text-white mb-2">{totalImpact}</p>
+                                              <p className="text-orange-400 font-bold uppercase tracking-widest">Alcançados</p>
+                                          </div>
+                                          <div className="bg-green-500/10 border border-green-500/30 p-8 rounded-3xl text-center">
+                                              <CheckCheck size={40} className="mx-auto text-green-500 mb-4"/>
+                                              <p className="text-6xl font-black text-white mb-2">{totalTasksDone}</p>
+                                              <p className="text-green-400 font-bold uppercase tracking-widest">Tarefas Feitas</p>
+                                          </div>
+                                      </div>
+                                  </div>
                               </div>
                           </div>
                       )}
@@ -2760,7 +2792,43 @@ const handleFileSelect = (e) => {
 
           {modal.type === 'attendance' && (<form onSubmit={handleAttendanceSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><ListTodo className="text-green-500"/> Chamada do Dia</h3><div className="mb-6 max-h-60 overflow-y-auto custom-scrollbar">{students.map(s => { const stats = getAttendanceStats(s); return ( <label key={s.id} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-lg border-b border-white/5 cursor-pointer"><input type="checkbox" name="present" value={s.id} defaultChecked className="accent-green-500 w-5 h-5"/><div className="flex-1"><span className="text-white font-bold block">{s.name}</span><span className="text-xs text-gray-500">{s.turma} • Presença: <span className={stats.percent < 75 ? 'text-red-500' : 'text-green-500'}>{stats.percent}%</span> • Faltas: {stats.absences}</span></div></label>) })}</div><button className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg">Confirmar Presença</button></form>)}
 
-          {modal.type === 'grades' && (<form onSubmit={handleGradesSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><GraduationCap className="text-yellow-500"/> Lançar Notas SESI</h3><p className="text-xs text-gray-400 mb-6">Digite as notas da etapa separadas por vírgula (Ex: 10, 9.5, 8.0).</p><div className="mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Notas do Aluno: {modal.data.name}</label><input name="grades" required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-yellow-500 outline-none" placeholder="Ex: 10, 9.5, 8.0" /></div><div className="bg-white/5 p-4 rounded-xl text-xs text-gray-400 mb-6 space-y-1"><p className="font-bold text-white mb-2">Regra de Pontuação:</p><p>• Nota 10 = <span className="text-green-500 font-bold">+10 XP</span></p><p>• Nota 9.0 a 9.9 = <span className="text-cyan-500 font-bold">+7 XP</span></p><p>• Nota 8.0 a 8.9 = <span className="text-purple-500 font-bold">+5 XP</span></p><p>• Abaixo de 8.0 = +0 XP</p></div><button className="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 rounded-lg">Processar Boletim</button></form>)}
+          {modal.type === 'grades' && (
+              <form onSubmit={handleGradesSubmit}>
+                  <h3 className="text-xl font-bold mb-2 flex items-center gap-2 text-white"><GraduationCap className="text-yellow-500"/> Boletim SESI</h3>
+                  <p className="text-xs text-gray-400 mb-6">Insira as notas finais do aluno(a) <strong className="text-white">{modal.data.name}</strong> por matéria.</p>
+                  
+                  <div className="bg-black/50 border border-white/20 rounded-xl p-4 mb-6">
+                      <div className="grid grid-cols-3 gap-4">
+                          {['Matemática', 'Português', 'Ciências', 'História', 'Geografia', 'Inglês', 'Artes', 'Ed. Física', 'Robótica', 'STEAM'].map(subj => (
+                              <div key={subj} className="flex flex-col">
+                                  <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 truncate" title={subj}>{subj}</label>
+                                  <input
+                                      name={`grade_${subj}`}
+                                      type="number"
+                                      step="0.1"
+                                      min="0"
+                                      max="10"
+                                      defaultValue={modal.data.schoolGrades?.[subj] || ''}
+                                      className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white focus:border-yellow-500 outline-none font-mono text-sm"
+                                      placeholder="0.0"
+                                  />
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+
+                  <div className="bg-white/5 p-4 rounded-xl text-xs text-gray-400 mb-6">
+                      <p className="font-bold text-white mb-2">Bônus de XP por Matéria:</p>
+                      <div className="grid grid-cols-2 gap-2">
+                          <p>• Nota 10 = <span className="text-green-500 font-bold">+10 XP</span></p>
+                          <p>• Nota 9.0 a 9.9 = <span className="text-cyan-500 font-bold">+7 XP</span></p>
+                          <p>• Nota 8.0 a 8.9 = <span className="text-purple-500 font-bold">+5 XP</span></p>
+                          <p>• Abaixo de 8.0 = <span className="text-gray-500 font-bold">+0 XP</span></p>
+                      </div>
+                  </div>
+                  <button className="w-full bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-3 rounded-lg shadow-lg shadow-yellow-900/20">Processar Boletim</button>
+              </form>
+          )}
 
           
           {/* --- NOVO MODAL: TREINO DE PIT STOP --- */}
@@ -4464,6 +4532,7 @@ const handleFileSelect = (e) => {
                       </div>
                   </div>
                   <div className="flex gap-2">
+                      <button onClick={handleApplyRotation} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 rounded-xl text-sm font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-lg shadow-blue-900/20"><RotateCcw size={18} /> Aplicar Rodízio</button>
                       <button onClick={openAttendanceModal} className="bg-white/10 hover:bg-white/20 text-white px-4 py-3 rounded-xl text-sm font-bold uppercase tracking-wider flex items-center gap-2 transition-all"><ListTodo size={18} /> Chamada</button>
                       <button onClick={() => openNewStudentModal()} className="bg-green-600 hover:bg-green-500 text-white px-4 py-3 rounded-xl text-sm font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-lg shadow-green-900/20"><Plus size={18} /> Novo Aluno</button>
                   </div>
@@ -4588,10 +4657,17 @@ const handleFileSelect = (e) => {
                                       // Prioriza a que ele está fazendo, se não houver, pega a próxima "A Fazer"
                                       const activeTask = studentTasks.find(t => t.status === 'doing') || studentTasks[0];
 
+                                      const isLeader = st === 'Gestão' && s.name !== 'Sofia' && s.name !== 'Heloise';
+
                                       return (
-                                      <div key={s.id} className="border border-white/10 p-3 rounded-xl bg-[#151520] relative group animate-in slide-in-from-bottom-2 flex flex-col">
+                                      <div key={s.id} className={`p-3 rounded-xl relative group animate-in slide-in-from-bottom-2 flex flex-col border transition-all ${isLeader ? 'bg-gradient-to-r from-yellow-500/10 to-transparent border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.15)]' : 'bg-[#151520] border-white/10'}`}>
                                           <div className="flex justify-between items-start mb-2">
-                                              <div><span className="text-white font-bold text-sm block">{s.name}</span><span className="text-gray-500 text-[10px] font-mono bg-white/5 px-1.5 rounded inline-block mt-0.5">{s.turma}</span></div>
+                                              <div>
+                                                  <span className={`font-bold text-sm flex items-center gap-1.5 ${isLeader ? 'text-yellow-400' : 'text-white'}`}>
+                                                      {isLeader && <Crown size={14} className="text-yellow-500" />} {s.name}
+                                                  </span>
+                                                  <span className="text-gray-500 text-[10px] font-mono bg-white/5 px-1.5 rounded inline-block mt-0.5">{s.turma} {isLeader && <span className="ml-1 text-yellow-500 font-bold uppercase tracking-widest bg-yellow-500/10 px-1 rounded border border-yellow-500/20">Líder</span>}</span>
+                                              </div>
                                               <button onClick={() => moveStudent(s.id, null)} className="text-gray-500 hover:text-red-500 bg-black/20 hover:bg-red-500/10 p-1 rounded transition-colors" title="Remover da Estação"><X size={12}/></button>
                                           </div>
                                           {s.submission?.status === 'pending' && <AlertCircle size={16} className="text-yellow-500 absolute top-2 right-8 animate-bounce"/>}
