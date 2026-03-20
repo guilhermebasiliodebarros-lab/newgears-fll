@@ -3,6 +3,10 @@ import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where
 import { db } from './firebase'; // Importa a instância já inicializada
 import StrategyBoard from './components/StrategyBoard';
 import Countdown from './components/Countdown';
+import PitStopModal from './components/PitStopModal';
+import RankingPanel from './components/RankingPanel';
+import LogoNewGears from './components/LogoNewGears';
+import TvModePanel from './components/TvModePanel';
 import { 
   User, 
   LogOut, 
@@ -125,39 +129,6 @@ const ADMIN_USERS = [
   { user: "Felipe", pass: "dti2@15!!" },
   { user: "admin", pass: "admin123" }
 ];
-// --- SEU LOGO SVG (Componente) ---
-const LogoNewGears = () => (
-  <svg 
-    viewBox="0 0 1883 1717" 
-    fill="none" 
-    xmlns="http://www.w3.org/2000/svg" 
-    className="w-full h-full" // Isso faz ele obedecer o tamanho da div pai
-  >
-    <path d="M1319.52 0H484.578L643.201 261.487H1461.22L1049.61 979.258L1183.56 1212.84L1599.3 487.874L1319.52 0Z" fill="url(#paint0_linear_302_578)"/>
-    <path d="M139.887 852.111L557.36 1580.11L702.975 1311.06L293.964 597.82L1117.18 597.82L1251.13 364.237L419.661 364.237L139.887 852.111Z" fill="url(#paint1_linear_302_578)"/>
-    <path d="M1465.53 1473.06L1883 745.067L1578.76 752.627L1169.75 1465.87L758.142 748.096L490.244 748.096L905.979 1473.06L1465.53 1473.06Z" fill="url(#paint2_linear_302_578)"/>
-    <defs>
-      <linearGradient id="paint0_linear_302_578" x1="548.556" y1="535.528" x2="1568.11" y2="544.977" gradientUnits="userSpaceOnUse">
-        <stop stopColor="#6293E9"/>
-        <stop offset="0.315399" stopColor="#5D58D3"/>
-        <stop offset="0.75" stopColor="#820AAF"/>
-        <stop offset="1" stopColor="#D01BF1"/>
-      </linearGradient>
-      <linearGradient id="paint1_linear_302_578" x1="986.023" y1="1256.56" x2="479.319" y2="365.754" gradientUnits="userSpaceOnUse">
-        <stop stopColor="#6293E9"/>
-        <stop offset="0.315399" stopColor="#5D58D3"/>
-        <stop offset="0.75" stopColor="#820AAF"/>
-        <stop offset="1" stopColor="#D01BF1"/>
-      </linearGradient>
-      <linearGradient id="paint2_linear_302_578" x1="1390.36" y1="533.085" x2="867.125" y2="1414.15" gradientUnits="userSpaceOnUse">
-        <stop stopColor="#6293E9"/>
-        <stop offset="0.315399" stopColor="#5D58D3"/>
-        <stop offset="0.75" stopColor="#820AAF"/>
-        <stop offset="1" stopColor="#D01BF1"/>
-      </linearGradient>
-    </defs>
-  </svg>
-);
 
 const Header = ({ title, userType, onLogout }) => (
   <>
@@ -175,157 +146,7 @@ const Header = ({ title, userType, onLogout }) => (
   </>
 );
 
-// --- COMPONENTE: PIT STOP MODAL (Extraído para corrigir erro de Hooks) ---
-const PitStopModal = ({ viewAsStudent, pitStopRecords, showNotification }) => {
-  const [time, setTime] = useState(0);
-  const [running, setRunning] = useState(false);
-  const [startTime, setStartTime] = useState(0);
-
-  useEffect(() => {
-      let interval;
-      if (running) {
-          interval = setInterval(() => setTime(Date.now() - startTime), 10);
-      }
-      return () => clearInterval(interval);
-  }, [running, startTime]);
-
-  const handleStartStop = async () => {
-      if (running) {
-          setRunning(false);
-          // Salvar recorde?
-          const finalTime = (time / 1000).toFixed(3);
-          if (confirm(`Salvar tempo de ${finalTime}s no Ranking?`)) {
-              const name = viewAsStudent ? viewAsStudent.name : "Técnico";
-              await addDoc(collection(db, "pitstop_records"), {
-                  name, time: parseFloat(finalTime), date: new Date().toISOString()
-              });
-              showNotification(`⏱️ ${finalTime}s registrado!`);
-          }
-      } else {
-          setTime(0);
-          setStartTime(Date.now());
-          setRunning(true);
-      }
-  };
-
-  return (
-      <div className="text-center">
-          <h3 className="text-2xl font-black mb-2 text-white italic">PIT STOP F1</h3>
-          <p className="text-xs text-gray-400 mb-8 uppercase tracking-widest">Treino de Troca de Garras</p>
-          
-          <div className="bg-black/50 border border-white/10 rounded-2xl p-8 mb-8">
-              <div className={`text-6xl font-mono font-black tabular-nums tracking-tighter ${running ? 'text-yellow-400' : 'text-white'}`}>
-                  {(time / 1000).toFixed(3)}<span className="text-lg text-gray-500 ml-1">s</span>
-              </div>
-          </div>
-
-          <button onClick={handleStartStop} className={`w-full py-6 rounded-xl font-black text-xl uppercase tracking-widest transition-all shadow-lg ${running ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-900/20' : 'bg-green-600 hover:bg-green-500 text-white shadow-green-900/20'}`}>
-              {running ? '🛑 PARAR' : '🚀 INICIAR'}
-          </button>
-
-          <div className="mt-8 pt-8 border-t border-white/10 text-left">
-              <h4 className="text-xs font-bold text-gray-500 uppercase mb-4 flex items-center gap-2"><Trophy size={12} className="text-yellow-500"/> Top 5 Mais Rápidos</h4>
-              <div className="space-y-2">
-                  {pitStopRecords.map((rec, i) => (
-                      <div key={rec.id} className="flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/5">
-                          <div className="flex items-center gap-3">
-                              <span className={`font-black text-sm w-4 ${i===0?'text-yellow-500':i===1?'text-gray-300':i===2?'text-orange-500':'text-gray-600'}`}>#{i+1}</span>
-                              <span className="text-white text-sm font-bold">{rec.name}</span>
-                          </div>
-                          <span className="font-mono text-blue-400 font-bold">{rec.time.toFixed(3)}s</span>
-                      </div>
-                  ))}
-                  {pitStopRecords.length === 0 && <p className="text-xs text-gray-600 italic text-center">Nenhum recorde ainda. Seja o primeiro!</p>}
-              </div>
-          </div>
-      </div>
-  );
-}
-
 function App() {
-
-// --- COMPONENTE: RANKING E ZONA DE CORTE ---
-  const RankingPanel = ({ students }) => {
-    // Organiza os alunos do maior XP para o menor
-    const sortedStudents = [...students].sort((a, b) => (b.xp || 0) - (a.xp || 0));
-
-    return (
-      <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 animate-in fade-in">
-        <div className="bg-[#151520] w-full max-w-5xl p-6 rounded-2xl shadow-2xl border border-white/10 relative flex flex-col max-h-[85vh]">
-          
-          {/* Botão Fechar */}
-          <button 
-            onClick={() => setActiveTab('dashboard')}
-            className="absolute top-4 right-4 text-gray-500 hover:text-white p-2 bg-white/5 rounded-lg z-10 transition-colors"
-          >
-            <X size={24}/>
-          </button>
-
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4 pr-12">
-            <h2 className="text-2xl font-bold text-white flex items-center">
-              <Trophy className="w-7 h-7 mr-3 text-yellow-500" />
-              Ranking da Temporada
-            </h2>
-            <span className="bg-white/5 border border-white/10 text-gray-400 text-xs px-3 py-1 rounded-full font-bold uppercase tracking-wider">
-              Meta Mínima: 420 XP
-            </span>
-          </div>
-
-          <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {sortedStudents.map((student, index) => {
-            // A regra implacável: Menos de 420 vai pro vermelho!
-            const inRiskZone = (student.xp || 0) < 420;
-            
-            // Pódio: Ouro, Prata e Bronze
-            let positionColor = "text-gray-500";
-            if (index === 0) positionColor = "text-yellow-500 drop-shadow-[0_0_5px_rgba(234,179,8,0.5)]";
-            if (index === 1) positionColor = "text-gray-300 drop-shadow-[0_0_5px_rgba(209,213,219,0.5)]";
-            if (index === 2) positionColor = "text-amber-600 drop-shadow-[0_0_5px_rgba(217,119,6,0.5)]";
-
-            return (
-              <div 
-                key={student.id} 
-                className={`flex items-center justify-between p-3 rounded-xl border-l-4 transition-all ${
-                  inRiskZone 
-                    ? 'bg-red-500/5 border-red-500 hover:bg-red-500/10' 
-                    : 'bg-black/40 border-green-500 hover:bg-white/5'
-                }`}
-              >
-                <div className="flex items-center space-x-3 overflow-hidden">
-                  <div className={`font-black text-lg w-6 shrink-0 ${positionColor}`}>
-                    #{index + 1}
-                  </div>
-                  <div className="overflow-hidden">
-                    <p className={`font-bold text-sm truncate ${inRiskZone ? 'text-red-400' : 'text-gray-200'}`}>
-                      {student.name}
-                    </p>
-                    {inRiskZone && (
-                      <p className="text-[10px] font-bold text-red-500 flex items-center mt-0.5 truncate">
-                        <AlertTriangle className="w-3 h-3 mr-1 shrink-0" />
-                        Abaixo da meta
-                      </p>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="flex items-center text-right shrink-0 pl-2">
-                  <span className={`text-lg font-black ${inRiskZone ? 'text-red-500' : 'text-green-500'}`}>
-                    {student.xp || 0}
-                  </span>
-                  <span className={`text-[10px] font-bold ml-1 ${inRiskZone ? 'text-red-700' : 'text-green-700'}`}>
-                    XP
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
 // --- LISTA DE BADGES (VERSÃO FINAL) ---
   const BADGES_LIST = [
@@ -1685,8 +1506,8 @@ const handleDeleteRound = async (id) => {
       const approvedCount = stationStudents.filter(s => s.submission?.status === 'approved').length;
       const totalInStation = stationStudents.length;
       const isCompleteTeam = approvedCount === totalInStation;
-      const BASE_XP = 50; 
-      const PENALTY = 15;
+      const FULL_TEAM_XP = 50; 
+      const PARTIAL_TEAM_XP = 35;
 
       try {
           // Cria uma lista de atualizações para enviar tudo de uma vez
@@ -1696,7 +1517,7 @@ const handleDeleteRound = async (id) => {
               // Lógica de XP
               let xpGain = 0;
               if (student.submission?.status === 'approved') {
-                  xpGain = isCompleteTeam ? BASE_XP : (BASE_XP - PENALTY);
+                  xpGain = isCompleteTeam ? FULL_TEAM_XP : PARTIAL_TEAM_XP;
               }
 
               // Prepara a atualização: Dá XP, remove a estação e limpa a entrega
@@ -1987,271 +1808,6 @@ const handleFileSelect = (e) => {
       }
   };
   // --- UI COMPONENTS ---
-
-  // --- MODO TV (SALA DE ROBÓTICA) ---
-  const TvModePanel = () => {
-      if (!isTvMode) return null;
-
-      const [slide, setSlide] = useState(0);
-      const [isPaused, setIsPaused] = useState(false);
-      const slidesCount = 6;
-
-      useEffect(() => {
-          if (isPaused) return;
-          const timer = setInterval(() => {
-              setSlide(s => (s + 1) % slidesCount);
-          }, 8000); // Troca de slide a cada 8 segundos
-          return () => clearInterval(timer);
-      }, [isPaused]);
-
-      // Dados processados para os slides
-      const sortedStudents = [...students].sort((a, b) => (b.xp || 0) - (a.xp || 0));
-      const todayDate = new Date().toISOString().split('T')[0];
-      const upcomingEvents = events.filter(e => e.date >= todayDate).sort((a,b) => new Date(a.date) - new Date(b.date)).slice(0, 12);
-      
-      const totalXP = students.reduce((sum, s) => sum + (s.xp || 0), 0);
-      const totalTasksDone = tasks.filter(t => t.status === 'done').length;
-      const totalImpact = outreachEvents.reduce((sum, ev) => sum + (ev.people || 0), 0);
-
-      const closeTvMode = () => {
-          setIsTvMode(false);
-          try { if (document.fullscreenElement) document.exitFullscreen(); } catch(e){}
-      };
-
-      return (
-          <div className="fixed inset-0 z-[200] bg-[#0a0a0f] text-white flex flex-col font-sans overflow-hidden">
-              {/* HEADER TV */}
-              <div className="p-6 border-b border-white/10 flex justify-between items-center bg-[#151520] shadow-2xl z-10">
-                  <div className="flex items-center gap-6">
-                      <div className="w-20"><LogoNewGears /></div>
-                      <div>
-                          <h1 className="text-4xl font-black italic tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-500 to-fuchsia-500">NEW GEARS TV</h1>
-                          <p className="text-gray-400 font-mono text-xl uppercase font-bold mt-1 tracking-widest">
-                              {new Date().toLocaleDateString('pt-BR')} • {currentWeekData?.weekName || 'Temporada FLL'}
-                          </p>
-                      </div>
-                  </div>
-                  <div className="scale-150 origin-right mr-12">
-                      <Countdown targetDate="2026-12-01T08:00:00" title="TORNEIO FLL" compact={true} />
-                  </div>
-              </div>
-
-              {/* CONTEÚDO DOS SLIDES (Com animação de transição) */}
-              <div className="flex-1 p-10 relative overflow-hidden bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#1a1a2e] via-[#0a0a0f] to-black">
-                  <div key={slide} className="w-full h-full animate-in fade-in duration-1000">
-                      
-                      {/* SLIDE 0: CRONOGRAMA DA SEMANA */}
-                      {slide === 0 && (
-                          <div className="h-full flex flex-col max-w-7xl mx-auto w-full">
-                              <h2 className="text-4xl font-black mb-4 text-white flex items-center justify-center gap-4 uppercase tracking-widest"><Users size={40} className="text-yellow-500"/> Equipe da Semana</h2>
-                              
-                              <div className="flex justify-center mb-4">
-                                  <span className="bg-white/5 border border-white/10 text-yellow-500 font-bold px-6 py-1.5 rounded-full text-xl tracking-widest uppercase shadow-lg shadow-yellow-500/10">
-                                      {currentWeekData?.weekName || "Semana Atual"}
-                                  </span>
-                              </div>
-
-                              <div className="grid grid-cols-3 gap-6 flex-1 min-h-0 pb-4">
-                                  {['Engenharia', 'Inovação', 'Gestão'].map(st => {
-                                      const stationStudents = currentWeekData?.assignments?.[st] || [];
-                                      const style = st === 'Engenharia' ? { color: 'text-blue-500', border: 'border-blue-500/20', bgTop: 'bg-blue-500', iconBg: 'bg-blue-500/20', icon: <Rocket size={24}/> } 
-                                                  : st === 'Inovação' ? { color: 'text-pink-500', border: 'border-pink-500/20', bgTop: 'bg-pink-500', iconBg: 'bg-pink-500/20', icon: <Microscope size={24}/> } 
-                                                  : { color: 'text-purple-500', border: 'border-purple-500/20', bgTop: 'bg-purple-500', iconBg: 'bg-purple-500/20', icon: <BookOpen size={24}/> };
-                                      
-                                      return (
-                                          <div key={st} className={`bg-[#151520]/80 p-6 rounded-3xl border ${style.border} shadow-xl relative flex flex-col h-full min-h-0`}>
-                                              <div className={`absolute top-0 left-0 w-full h-2 rounded-t-3xl ${style.bgTop}`}></div>
-                                              <h3 className={`text-2xl font-black uppercase mb-4 tracking-widest text-center mt-1 ${style.color} flex items-center justify-center gap-2`}>
-                                                  {style.icon} {st}
-                                              </h3>
-                                              
-                                              <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-2 min-h-0">
-                                                  {stationStudents.map((s, idx) => {
-                                                      const sName = s?.name || "Vago";
-                                                      const isLeader = st === 'Gestão' && sName !== 'Sofia' && sName !== 'Heloise';
-                                                      
-                                                      return (
-                                                          <div key={idx} className={`flex items-center gap-3 p-3 rounded-2xl border ${isLeader ? 'bg-gradient-to-r from-yellow-500/10 to-transparent border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.15)]' : 'bg-black/40 border-white/5'}`}>
-                                                              <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${isLeader ? 'bg-yellow-500 text-black shadow-[0_0_10px_rgba(234,179,8,0.5)]' : `${style.iconBg} ${style.color}`}`}>
-                                                                  {isLeader ? <Crown size={24} /> : <UserCircle size={24} />}
-                                                              </div>
-                                                              <div className="flex-1 overflow-hidden">
-                                                                  <span className={`block font-bold text-xl truncate ${isLeader ? 'text-yellow-400' : 'text-gray-200'}`}>{sName}</span>
-                                                                  {isLeader && <span className="text-[10px] uppercase font-black tracking-widest text-yellow-500 flex items-center gap-1 mt-0.5"><Crown size={10}/> Líder da Semana</span>}
-                                                              </div>
-                                                          </div>
-                                                      )
-                                                  })}
-                                              </div>
-                                          </div>
-                                      )
-                                  })}
-                              </div>
-                          </div>
-                      )}
-
-                      {/* SLIDE 1: METAS DA SEMANA (3 COLUNAS) */}
-                      {slide === 1 && (
-                          <div className="h-full flex flex-col justify-center max-w-7xl mx-auto w-full">
-                              <h2 className="text-5xl font-black mb-12 text-white flex items-center justify-center gap-4 uppercase"><Target size={48} className="text-red-500"/> Foco da Semana</h2>
-                              <div className="grid grid-cols-3 gap-8">
-                                  {['Engenharia', 'Inovação', 'Gestão'].map(st => (
-                                      <div key={st} className="bg-[#151520]/80 p-8 rounded-3xl border border-white/10 shadow-xl relative flex flex-col h-[65vh]">
-                                          <div className={`absolute top-0 left-0 w-full h-2 rounded-t-3xl ${st==='Engenharia'?'bg-blue-500':st==='Inovação'?'bg-pink-500':'bg-purple-500'}`}></div>
-                                          <h3 className={`text-3xl font-black uppercase mb-6 tracking-widest text-center mt-2 ${st==='Engenharia'?'text-blue-500':st==='Inovação'?'text-pink-500':'text-purple-500'}`}>{st}</h3>
-                                          <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 min-h-0">
-                                              <p className="text-2xl font-medium text-gray-200 leading-relaxed whitespace-pre-wrap break-words">"{missions[st]?.text || "Aguardando definição..."}"</p>
-                                          </div>
-                                      </div>
-                                  ))}
-                              </div>
-                          </div>
-                      )}
-
-                      {/* SLIDE 2: KANBAN GIGANTE */}
-                      {slide === 2 && (
-                          <div className="h-full flex flex-col">
-                              <h2 className="text-4xl font-black text-gray-400 mb-6 flex items-center gap-3 uppercase tracking-widest"><ClipboardList size={40}/> Painel de Tarefas Kanban</h2>
-                              <div className="grid grid-cols-3 gap-6 flex-1 overflow-hidden">
-                                  {[
-                                      { status: 'todo', title: 'A Fazer', color: 'border-orange-500', icon: <AlertTriangle size={32}/> },
-                                      { status: 'doing', title: 'Fazendo', color: 'border-blue-500', icon: <Loader2 size={32} className="animate-spin"/> },
-                                      { status: 'done', title: 'Feito', color: 'border-green-500', icon: <CheckCircle size={32}/> }
-                                  ].map(col => (
-                                      <div key={col.status} className={`bg-[#151520]/80 border-t-8 ${col.color} rounded-2xl p-5 flex flex-col h-full shadow-2xl`}>
-                                          <h3 className="text-3xl font-black uppercase mb-4 flex items-center gap-3">{col.icon} {col.title}</h3>
-                                          <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-2 pb-2">
-                                              {tasks.filter(t => t.status === col.status).map(t => (
-                                                  <div key={t.id} className="bg-black/60 p-4 rounded-xl border border-white/10 shadow-lg flex flex-col">
-                                                      <div className="flex justify-between items-start mb-2">
-                                                          <span className="bg-white/10 px-2 py-1 rounded text-xs font-bold text-blue-400 uppercase tracking-wider">{t.author || "Equipe"}</span>
-                                                          {t.tag && <span className="text-[10px] uppercase font-bold text-gray-500 border border-gray-600 px-2 py-1 rounded">{t.tag}</span>}
-                                                      </div>
-                                                      <p className="text-xl font-bold text-gray-200 leading-snug">{t.text}</p>
-                                                  </div>
-                                              ))}
-                                          </div>
-                                      </div>
-                                  ))}
-                              </div>
-                          </div>
-                      )}
-
-                      {/* SLIDE 3: GRÁFICO DE EVOLUÇÃO (ROUNDS) */}
-                      {slide === 3 && (
-                          <div className="h-full flex flex-col max-w-7xl mx-auto w-full justify-center">
-                              <h2 className="text-5xl font-black mb-12 text-white flex items-center justify-center gap-4 uppercase tracking-widest"><TrendingUp size={48} className="text-green-500"/> Desempenho do Robô</h2>
-                              <div className="w-full transform scale-110 origin-center mt-8">
-                                  <ScoreEvolutionChart isTvMode={true} />
-                              </div>
-                          </div>
-                      )}
-
-                      {/* SLIDE 4: AGENDA / EVENTOS */}
-                      {slide === 4 && (
-                          <div className="h-full flex flex-col max-w-7xl mx-auto w-full">
-                              <h2 className="text-5xl font-black mb-10 text-white flex items-center justify-center gap-4 uppercase tracking-widest"><CalendarDays size={48} className="text-blue-500"/> Agenda da Equipe</h2>
-                              <div className="grid grid-cols-3 xl:grid-cols-4 gap-4 flex-1 overflow-hidden pt-4 pb-4 px-2">
-                                  {upcomingEvents.length === 0 ? (
-                                      <div className="col-span-full flex flex-col items-center justify-center text-gray-500 italic bg-[#151520]/50 rounded-3xl border border-white/5 h-64">
-                                          <CalendarDays size={64} className="mb-4 opacity-50"/>
-                                          <p className="text-2xl">Nenhum evento agendado para os próximos dias.</p>
-                                      </div>
-                                  ) : (
-                                      upcomingEvents.map((ev) => {
-                                          const isToday = ev.date === todayDate;
-                                          const typeColor = ev.type === 'Especialista' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : ev.type === 'Visita' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : ev.type === 'Reunião' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 'bg-gray-500/10 text-gray-400 border-gray-500/20';
-                                          return (
-                                              <div key={ev.id} className={`bg-[#151520] border p-5 rounded-2xl flex flex-col relative ${isToday ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-white/10'}`}>
-                                                  {isToday && (
-                                                      <div className="absolute -top-4 left-4 z-10 bg-red-600 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded shadow-md flex items-center gap-1 animate-pulse">
-                                                          <AlertTriangle size={10}/> Hoje
-                                                      </div>
-                                                  )}
-                                                  <div className="flex items-center gap-2 mb-3">
-                                                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${typeColor}`}>{ev.type}</span>
-                                                      <span className="text-xs text-gray-300 flex items-center gap-1 font-mono"><Calendar size={12} className="text-blue-500"/> {ev.date.split('-').reverse().join('/')}</span>
-                                                  </div>
-                                                  <h4 className="text-white font-bold text-lg mb-2 leading-tight">{ev.title}</h4>
-                                                  <div className="flex flex-col gap-1.5 pt-3 border-t border-white/5 mt-auto">
-                                                      <div className="flex items-center gap-2 text-xs text-gray-300"><Clock size={14} className="text-yellow-500"/> {ev.time}</div>
-                                                      {ev.location && <div className="flex items-center gap-2 text-xs text-gray-300 truncate"><MapPin size={14} className="text-green-500 shrink-0"/> {ev.location}</div>}
-                                                  </div>
-                                              </div>
-                                          )
-                                      })
-                                  )}
-                              </div>
-                          </div>
-                      )}
-
-                      {/* SLIDE 5: RAIO-X E RANKING */}
-                      {slide === 5 && (
-                          <div className="h-full flex flex-col justify-center max-w-7xl mx-auto w-full">
-                              <div className="grid grid-cols-2 gap-16">
-                                  {/* Ranking */}
-                                  <div>
-                                      <h2 className="text-4xl font-black mb-8 text-yellow-500 flex items-center gap-4 uppercase"><Trophy size={40}/> Ranking Geral XP</h2>
-                                      <div className="grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
-                                          {sortedStudents.map((s, i) => (
-                                              <div key={s.id} className="bg-[#151520]/80 p-4 rounded-xl flex items-center gap-3 border border-white/10 shadow-xl">
-                                                  <span className={`text-3xl font-black w-10 ${i===0?'text-yellow-500 drop-shadow-md':i===1?'text-gray-300':i===2?'text-orange-500':'text-gray-600'}`}>#{i+1}</span>
-                                                  {s.avatarImage ? <img src={s.avatarImage} alt="Avatar" className="w-10 h-10 rounded-full object-cover border-2 border-white/20" /> : <UserCircle size={40} className="text-gray-500" />}
-                                                  <h3 className="text-xl font-bold flex-1 truncate text-gray-200">{s.name}</h3>
-                                                  <span className={`text-xl font-black ${i===0?'text-yellow-500':'text-green-500'}`}>{s.xp}</span>
-                                              </div>
-                                          ))}
-                                      </div>
-                                  </div>
-                                  {/* Estatísticas */}
-                                  <div className="flex flex-col justify-center gap-8">
-                                      <div className="bg-blue-500/10 border border-blue-500/30 p-8 rounded-3xl text-center shadow-[0_0_50px_rgba(59,130,246,0.15)]">
-                                          <p className="text-blue-400 text-2xl font-bold uppercase tracking-widest mb-2">XP Total da Equipe</p>
-                                          <p className="text-8xl font-black text-white">{totalXP}</p>
-                                      </div>
-                                      <div className="grid grid-cols-2 gap-8">
-                                          <div className="bg-orange-500/10 border border-orange-500/30 p-8 rounded-3xl text-center">
-                                              <Megaphone size={40} className="mx-auto text-orange-500 mb-4"/>
-                                              <p className="text-6xl font-black text-white mb-2">{totalImpact}</p>
-                                              <p className="text-orange-400 font-bold uppercase tracking-widest">Alcançados</p>
-                                          </div>
-                                          <div className="bg-green-500/10 border border-green-500/30 p-8 rounded-3xl text-center">
-                                              <CheckCheck size={40} className="mx-auto text-green-500 mb-4"/>
-                                              <p className="text-6xl font-black text-white mb-2">{totalTasksDone}</p>
-                                              <p className="text-green-400 font-bold uppercase tracking-widest">Tarefas Feitas</p>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
-                          </div>
-                      )}
-                  </div>
-              </div>
-
-              {/* FOOTER TV (STATUS E NAVEGAÇÃO) */}
-              <div className="p-6 border-t border-white/10 flex justify-between items-center bg-[#151520] z-10">
-                  <div className="flex items-center gap-3 text-gray-500 uppercase font-bold tracking-widest">
-                      <div className={`w-3 h-3 rounded-full ${isPaused ? 'bg-yellow-500' : 'bg-red-500 animate-pulse'}`}></div> {isPaused ? 'PAUSADO' : 'AO VIVO'}
-                  </div>
-                  <div className="flex items-center gap-6">
-                      <button onClick={() => setSlide(s => (s - 1 + slidesCount) % slidesCount)} className="text-gray-500 hover:text-white p-2 bg-white/5 rounded-full hover:bg-white/10 transition-all" title="Canal Anterior"><ChevronLeft size={24}/></button>
-                      <button onClick={() => setIsPaused(!isPaused)} className={`text-gray-500 hover:text-white p-2 rounded-full transition-all ${isPaused ? 'bg-yellow-500/20 text-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.3)]' : 'bg-white/5 hover:bg-white/10'}`} title={isPaused ? "Retomar Auto-play" : "Pausar TV"}>
-                          {isPaused ? <Play size={24}/> : <Pause size={24}/>}
-                      </button>
-                      <div className="flex gap-4 cursor-pointer">
-                          {[...Array(slidesCount)].map((_, i) => (
-                              <button key={i} onClick={() => setSlide(i)} className={`h-2 rounded-full transition-all duration-500 ${i === slide ? 'w-12 bg-white' : 'w-4 bg-gray-700 hover:bg-gray-500'}`} />
-                          ))}
-                      </div>
-                      <button onClick={() => setSlide(s => (s + 1) % slidesCount)} className="text-gray-500 hover:text-white p-2 bg-white/5 rounded-full hover:bg-white/10 transition-all" title="Próximo Canal"><ChevronRight size={24}/></button>
-                  </div>
-                  <button onClick={closeTvMode} className="text-gray-500 hover:text-white bg-white/5 hover:bg-white/10 px-6 py-3 rounded-xl font-bold transition-all flex items-center gap-2">
-                      <X size={20} /> Sair da TV
-                  </button>
-              </div>
-          </div>
-      )
-  };
 
   // --- COMPONENTE DE ESTATÍSTICAS DA EQUIPE (VISÃO DOS JUÍZES) ---
   const TeamStatsPanel = () => {
@@ -4203,7 +3759,17 @@ const handleFileSelect = (e) => {
       <div className="relative z-10">
         <Notification />
         {renderModal()}
-        <TvModePanel />
+        <TvModePanel 
+            isTvMode={isTvMode} 
+            setIsTvMode={setIsTvMode} 
+            currentWeekData={currentWeekData} 
+            students={students} 
+            missions={missions} 
+            tasks={tasks} 
+            events={events} 
+            outreachEvents={outreachEvents} 
+            ScoreEvolutionChart={ScoreEvolutionChart} 
+        />
         <ScheduleModal />
 
 {/* --- MODAL DO TÉCNICO: ENTREGAR BADGES --- */}
@@ -4492,7 +4058,7 @@ const handleFileSelect = (e) => {
 
             {/* Dentro do seu <main> ou área de conteúdo central, junto com os outros 'ifs' de abas */}
 {activeTab === 'ranking' && (
-  <RankingPanel students={students} />
+  <RankingPanel students={students} setActiveTab={setActiveTab} />
 )}
           <div className="flex gap-4 mb-8 border-b border-white/10 pb-4 overflow-x-auto">
               <button onClick={() => setAdminTab('rotation')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'rotation' ? 'bg-white text-black' : 'text-gray-500 hover:bg-white/10'}`}><LayoutDashboard size={18}/> Rodízio & Equipe</button>
