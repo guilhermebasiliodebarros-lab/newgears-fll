@@ -2011,20 +2011,23 @@ const handleFileSelect = (e) => {
                       {/* SLIDE 0: KANBAN GIGANTE */}
                       {slide === 0 && (
                           <div className="h-full flex flex-col">
-                              <h2 className="text-3xl font-black text-gray-400 mb-8 flex items-center gap-3 uppercase tracking-widest"><ClipboardList size={36}/> Painel de Tarefas Kanban</h2>
-                              <div className="grid grid-cols-3 gap-8 flex-1 overflow-hidden">
+                              <h2 className="text-4xl font-black text-gray-400 mb-6 flex items-center gap-3 uppercase tracking-widest"><ClipboardList size={40}/> Painel de Tarefas Kanban</h2>
+                              <div className="grid grid-cols-3 gap-6 flex-1 overflow-hidden">
                                   {[
-                                      { status: 'todo', title: 'A Fazer', color: 'border-orange-500', icon: <AlertTriangle/> },
-                                      { status: 'doing', title: 'Fazendo', color: 'border-blue-500', icon: <Loader2 className="animate-spin"/> },
-                                      { status: 'done', title: 'Feito', color: 'border-green-500', icon: <CheckCircle/> }
+                                      { status: 'todo', title: 'A Fazer', color: 'border-orange-500', icon: <AlertTriangle size={32}/> },
+                                      { status: 'doing', title: 'Fazendo', color: 'border-blue-500', icon: <Loader2 size={32} className="animate-spin"/> },
+                                      { status: 'done', title: 'Feito', color: 'border-green-500', icon: <CheckCircle size={32}/> }
                                   ].map(col => (
-                                      <div key={col.status} className={`bg-[#151520]/80 border-t-8 ${col.color} rounded-2xl p-6 flex flex-col h-full shadow-2xl`}>
-                                          <h3 className="text-3xl font-black uppercase mb-6 flex items-center gap-3">{col.icon} {col.title}</h3>
-                                          <div className="space-y-4">
-                                              {tasks.filter(t => t.status === col.status).slice(0, 5).map(t => (
-                                                  <div key={t.id} className="bg-black/60 p-5 rounded-xl border border-white/10 shadow-lg">
-                                                      <span className="bg-white/10 px-3 py-1.5 rounded-lg text-sm font-bold text-blue-400 uppercase inline-block mb-3">{t.author || "Equipe"}</span>
-                                                      <p className="text-2xl font-bold text-gray-200 leading-tight">{t.text}</p>
+                                      <div key={col.status} className={`bg-[#151520]/80 border-t-8 ${col.color} rounded-2xl p-5 flex flex-col h-full shadow-2xl`}>
+                                          <h3 className="text-3xl font-black uppercase mb-4 flex items-center gap-3">{col.icon} {col.title}</h3>
+                                          <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-2 pb-2">
+                                              {tasks.filter(t => t.status === col.status).map(t => (
+                                                  <div key={t.id} className="bg-black/60 p-4 rounded-xl border border-white/10 shadow-lg flex flex-col">
+                                                      <div className="flex justify-between items-start mb-2">
+                                                          <span className="bg-white/10 px-2 py-1 rounded text-xs font-bold text-blue-400 uppercase tracking-wider">{t.author || "Equipe"}</span>
+                                                          {t.tag && <span className="text-[10px] uppercase font-bold text-gray-500 border border-gray-600 px-2 py-1 rounded">{t.tag}</span>}
+                                                      </div>
+                                                      <p className="text-xl font-bold text-gray-200 leading-snug">{t.text}</p>
                                                   </div>
                                               ))}
                                           </div>
@@ -2075,45 +2078,20 @@ const handleFileSelect = (e) => {
                           </div>
                       )}
 
-                      {/* SLIDE 2: AGENDA E METAS */}
+                      {/* SLIDE 2: METAS DA SEMANA (3 COLUNAS) */}
                       {slide === 2 && (
                           <div className="h-full flex flex-col justify-center max-w-7xl mx-auto w-full">
-                              <div className="grid grid-cols-2 gap-16">
-                                  {/* Metas da Semana */}
-                                  <div>
-                                      <h2 className="text-4xl font-black mb-8 text-white flex items-center gap-4 uppercase"><Target size={40} className="text-red-500"/> Foco da Semana</h2>
-                                      <div className="grid grid-cols-1 gap-5">
-                                          {['Engenharia', 'Inovação', 'Gestão'].map(st => (
-                                              <div key={st} className="bg-[#151520]/80 p-6 rounded-2xl border border-white/10 shadow-xl relative overflow-hidden">
-                                                  <div className={`absolute top-0 left-0 w-2 h-full ${st==='Engenharia'?'bg-blue-500':st==='Inovação'?'bg-pink-500':'bg-purple-500'}`}></div>
-                                                  <h3 className={`text-xl font-black uppercase mb-2 tracking-widest ${st==='Engenharia'?'text-blue-500':st==='Inovação'?'text-pink-500':'text-purple-500'}`}>{st}</h3>
-                                                  <p className="text-xl font-medium text-gray-200 leading-snug line-clamp-3">"{missions[st]?.text || "Aguardando definição..."}"</p>
-                                              </div>
-                                          ))}
+                              <h2 className="text-5xl font-black mb-12 text-white flex items-center justify-center gap-4 uppercase"><Target size={48} className="text-red-500"/> Foco da Semana</h2>
+                              <div className="grid grid-cols-3 gap-8">
+                                  {['Engenharia', 'Inovação', 'Gestão'].map(st => (
+                                      <div key={st} className="bg-[#151520]/80 p-8 rounded-3xl border border-white/10 shadow-xl relative flex flex-col h-[65vh]">
+                                          <div className={`absolute top-0 left-0 w-full h-2 rounded-t-3xl ${st==='Engenharia'?'bg-blue-500':st==='Inovação'?'bg-pink-500':'bg-purple-500'}`}></div>
+                                          <h3 className={`text-3xl font-black uppercase mb-6 tracking-widest text-center mt-2 ${st==='Engenharia'?'text-blue-500':st==='Inovação'?'text-pink-500':'text-purple-500'}`}>{st}</h3>
+                                          <div className="flex-1 overflow-y-auto custom-scrollbar pr-4 min-h-0">
+                                              <p className="text-2xl font-medium text-gray-200 leading-relaxed whitespace-pre-wrap break-words">"{missions[st]?.text || "Aguardando definição..."}"</p>
+                                          </div>
                                       </div>
-                                  </div>
-                                  {/* Próximos Eventos */}
-                                  <div>
-                                      <h2 className="text-4xl font-black mb-8 text-white flex items-center gap-4 uppercase"><CalendarDays size={40} className="text-indigo-500"/> Agenda de Eventos</h2>
-                                      {upcomingEvents.length === 0 ? (
-                                          <div className="bg-[#151520]/50 border-2 border-dashed border-white/10 p-12 rounded-3xl text-center">
-                                              <p className="text-3xl text-gray-500 font-bold">Nenhum evento futuro agendado.</p>
-                                          </div>
-                                      ) : (
-                                          <div className="space-y-6">
-                                              {upcomingEvents.map((ev, i) => (
-                                                  <div key={ev.id} className={`bg-[#151520]/80 p-8 rounded-3xl border shadow-xl flex flex-col justify-center ${i===0 ? 'border-yellow-500/50 bg-yellow-500/5 scale-105 transform origin-left' : 'border-white/10'}`}>
-                                                      {i===0 && <span className="text-yellow-500 font-black tracking-widest uppercase mb-2 block">O Mais Próximo!</span>}
-                                                      <h3 className="text-4xl font-black text-white mb-4">{ev.title}</h3>
-                                                      <div className="flex items-center gap-6 text-2xl text-gray-400 font-mono">
-                                                          <span className="flex items-center gap-2"><Calendar size={24}/> {ev.date.split('-').reverse().join('/')}</span>
-                                                          <span className="flex items-center gap-2 text-yellow-400"><Clock size={24}/> {ev.time}</span>
-                                                      </div>
-                                                  </div>
-                                              ))}
-                                          </div>
-                                      )}
-                                  </div>
+                                  ))}
                               </div>
                           </div>
                       )}
