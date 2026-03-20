@@ -1962,20 +1962,20 @@ const handleFileSelect = (e) => {
 
       const [slide, setSlide] = useState(0);
       const [isPaused, setIsPaused] = useState(false);
-      const slidesCount = 3;
+      const slidesCount = 6;
 
       useEffect(() => {
           if (isPaused) return;
           const timer = setInterval(() => {
               setSlide(s => (s + 1) % slidesCount);
-          }, 12000); // Troca de slide a cada 12 segundos
+          }, 8000); // Troca de slide a cada 8 segundos
           return () => clearInterval(timer);
       }, [isPaused]);
 
       // Dados processados para os slides
       const sortedStudents = [...students].sort((a, b) => (b.xp || 0) - (a.xp || 0));
       const todayDate = new Date().toISOString().split('T')[0];
-      const upcomingEvents = events.filter(e => e.date >= todayDate).sort((a,b) => new Date(a.date) - new Date(b.date)).slice(0, 4);
+      const upcomingEvents = events.filter(e => e.date >= todayDate).sort((a,b) => new Date(a.date) - new Date(b.date)).slice(0, 12);
       
       const totalXP = students.reduce((sum, s) => sum + (s.xp || 0), 0);
       const totalTasksDone = tasks.filter(t => t.status === 'done').length;
@@ -2006,7 +2006,7 @@ const handleFileSelect = (e) => {
 
               {/* CONTEÚDO DOS SLIDES (Com animação de transição) */}
               <div className="flex-1 p-10 relative overflow-hidden bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#1a1a2e] via-[#0a0a0f] to-black">
-                  <div key={slide} className="w-full h-full animate-in fade-in zoom-in-95 duration-700">
+                  <div key={slide} className="w-full h-full animate-in fade-in duration-1000">
                       
                       {/* SLIDE 0: KANBAN GIGANTE */}
                       {slide === 0 && (
@@ -2092,6 +2092,104 @@ const handleFileSelect = (e) => {
                                           </div>
                                       </div>
                                   ))}
+                              </div>
+                          </div>
+                      )}
+
+                      {/* SLIDE 3: AGENDA / EVENTOS */}
+                      {slide === 3 && (
+                          <div className="h-full flex flex-col max-w-7xl mx-auto w-full">
+                              <h2 className="text-5xl font-black mb-10 text-white flex items-center justify-center gap-4 uppercase tracking-widest"><CalendarDays size={48} className="text-blue-500"/> Agenda da Equipe</h2>
+                              <div className="grid grid-cols-3 xl:grid-cols-4 gap-4 flex-1 overflow-hidden pt-4 pb-4 px-2">
+                                  {upcomingEvents.length === 0 ? (
+                                      <div className="col-span-full flex flex-col items-center justify-center text-gray-500 italic bg-[#151520]/50 rounded-3xl border border-white/5 h-64">
+                                          <CalendarDays size={64} className="mb-4 opacity-50"/>
+                                          <p className="text-2xl">Nenhum evento agendado para os próximos dias.</p>
+                                      </div>
+                                  ) : (
+                                      upcomingEvents.map((ev) => {
+                                          const isToday = ev.date === todayDate;
+                                          const typeColor = ev.type === 'Especialista' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : ev.type === 'Visita' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : ev.type === 'Reunião' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' : 'bg-gray-500/10 text-gray-400 border-gray-500/20';
+                                          return (
+                                              <div key={ev.id} className={`bg-[#151520] border p-5 rounded-2xl flex flex-col relative ${isToday ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-white/10'}`}>
+                                                  {isToday && (
+                                                      <div className="absolute -top-4 left-4 z-10 bg-red-600 text-white text-[10px] font-black uppercase px-2 py-0.5 rounded shadow-md flex items-center gap-1 animate-pulse">
+                                                          <AlertTriangle size={10}/> Hoje
+                                                      </div>
+                                                  )}
+                                                  <div className="flex items-center gap-2 mb-3">
+                                                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${typeColor}`}>{ev.type}</span>
+                                                      <span className="text-xs text-gray-300 flex items-center gap-1 font-mono"><Calendar size={12} className="text-blue-500"/> {ev.date.split('-').reverse().join('/')}</span>
+                                                  </div>
+                                                  <h4 className="text-white font-bold text-lg mb-2 leading-tight">{ev.title}</h4>
+                                                  <div className="flex flex-col gap-1.5 pt-3 border-t border-white/5 mt-auto">
+                                                      <div className="flex items-center gap-2 text-xs text-gray-300"><Clock size={14} className="text-yellow-500"/> {ev.time}</div>
+                                                      {ev.location && <div className="flex items-center gap-2 text-xs text-gray-300 truncate"><MapPin size={14} className="text-green-500 shrink-0"/> {ev.location}</div>}
+                                                  </div>
+                                              </div>
+                                          )
+                                      })
+                                  )}
+                              </div>
+                          </div>
+                      )}
+
+                      {/* SLIDE 4: CRONOGRAMA DA SEMANA */}
+                      {slide === 4 && (
+                          <div className="h-full flex flex-col max-w-7xl mx-auto w-full">
+                              <h2 className="text-4xl font-black mb-4 text-white flex items-center justify-center gap-4 uppercase tracking-widest"><Users size={40} className="text-yellow-500"/> Equipe da Semana</h2>
+                              
+                              <div className="flex justify-center mb-4">
+                                  <span className="bg-white/5 border border-white/10 text-yellow-500 font-bold px-6 py-1.5 rounded-full text-xl tracking-widest uppercase shadow-lg shadow-yellow-500/10">
+                                      {currentWeekData?.weekName || "Semana Atual"}
+                                  </span>
+                              </div>
+
+                              <div className="grid grid-cols-3 gap-6 flex-1 min-h-0 pb-4">
+                                  {['Engenharia', 'Inovação', 'Gestão'].map(st => {
+                                      const stationStudents = currentWeekData?.assignments?.[st] || [];
+                                      const style = st === 'Engenharia' ? { color: 'text-blue-500', border: 'border-blue-500/20', bgTop: 'bg-blue-500', iconBg: 'bg-blue-500/20', icon: <Rocket size={24}/> } 
+                                                  : st === 'Inovação' ? { color: 'text-pink-500', border: 'border-pink-500/20', bgTop: 'bg-pink-500', iconBg: 'bg-pink-500/20', icon: <Microscope size={24}/> } 
+                                                  : { color: 'text-purple-500', border: 'border-purple-500/20', bgTop: 'bg-purple-500', iconBg: 'bg-purple-500/20', icon: <BookOpen size={24}/> };
+                                      
+                                      return (
+                                          <div key={st} className={`bg-[#151520]/80 p-6 rounded-3xl border ${style.border} shadow-xl relative flex flex-col h-full min-h-0`}>
+                                              <div className={`absolute top-0 left-0 w-full h-2 rounded-t-3xl ${style.bgTop}`}></div>
+                                              <h3 className={`text-2xl font-black uppercase mb-4 tracking-widest text-center mt-1 ${style.color} flex items-center justify-center gap-2`}>
+                                                  {style.icon} {st}
+                                              </h3>
+                                              
+                                              <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-2 min-h-0">
+                                                  {stationStudents.map((s, idx) => {
+                                                      const sName = s?.name || "Vago";
+                                                      const isLeader = st === 'Gestão' && sName !== 'Sofia' && sName !== 'Heloise';
+                                                      
+                                                      return (
+                                                          <div key={idx} className={`flex items-center gap-3 p-3 rounded-2xl border ${isLeader ? 'bg-gradient-to-r from-yellow-500/10 to-transparent border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.15)]' : 'bg-black/40 border-white/5'}`}>
+                                                              <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${isLeader ? 'bg-yellow-500 text-black shadow-[0_0_10px_rgba(234,179,8,0.5)]' : `${style.iconBg} ${style.color}`}`}>
+                                                                  {isLeader ? <Crown size={24} /> : <UserCircle size={24} />}
+                                                              </div>
+                                                              <div className="flex-1 overflow-hidden">
+                                                                  <span className={`block font-bold text-xl truncate ${isLeader ? 'text-yellow-400' : 'text-gray-200'}`}>{sName}</span>
+                                                                  {isLeader && <span className="text-[10px] uppercase font-black tracking-widest text-yellow-500 flex items-center gap-1 mt-0.5"><Crown size={10}/> Líder da Semana</span>}
+                                                              </div>
+                                                          </div>
+                                                      )
+                                                  })}
+                                              </div>
+                                          </div>
+                                      )
+                                  })}
+                              </div>
+                          </div>
+                      )}
+
+                      {/* SLIDE 5: GRÁFICO DE EVOLUÇÃO (ROUNDS) */}
+                      {slide === 5 && (
+                          <div className="h-full flex flex-col max-w-7xl mx-auto w-full justify-center">
+                              <h2 className="text-5xl font-black mb-12 text-white flex items-center justify-center gap-4 uppercase tracking-widest"><TrendingUp size={48} className="text-green-500"/> Desempenho do Robô</h2>
+                              <div className="w-full transform scale-110 origin-center mt-8">
+                                  <ScoreEvolutionChart isTvMode={true} />
                               </div>
                           </div>
                       )}
@@ -2983,7 +3081,7 @@ const handleFileSelect = (e) => {
   )
 
   // --- GRÁFICO DE EVOLUÇÃO (SVG PURO) ---
-  const ScoreEvolutionChart = () => {
+  const ScoreEvolutionChart = ({ isTvMode = false }) => {
       // Estado local para filtrar o gráfico
       const [chartFilter, setChartFilter] = useState('score_total'); // 'score_total' ou ID do round
       
@@ -3063,21 +3161,22 @@ const handleFileSelect = (e) => {
       const fillPathData = `${pathDataMain} L ${width - padding} ${height} L ${padding} ${height} Z`;
 
       return (
-          <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 mb-8">
+          <div className={`bg-[#151520] border border-white/10 rounded-2xl p-6 ${isTvMode ? 'shadow-2xl' : 'mb-8'}`}>
               <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-white font-bold flex items-center gap-2">
+                  <h3 className={`text-white font-bold flex items-center gap-2 ${isTvMode ? 'text-2xl' : ''}`}>
                       <TrendingUp style={{ color }}/> {isGeneral ? 'Evolução (Pontos vs Tempo)' : 'Melhoria de Tempo (Segundos)'}
                   </h3>
                   
                   <div className="flex items-center gap-2">
                   {/* Botão de Limpar Histórico */}
-                  {data.length > 0 && (
+                  {!isTvMode && data.length > 0 && (
                       <button onClick={handleClearChart} className="p-2 text-gray-500 hover:text-red-500 hover:bg-white/5 rounded-lg transition-colors" title="Zerar este gráfico">
                           <Trash2 size={16}/>
                       </button>
                   )}
 
                   {/* SELETOR DE GRÁFICO */}
+                  {!isTvMode && (
                   <select 
                     className="bg-black/40 border border-white/20 text-xs text-white rounded-lg p-2 outline-none focus:border-blue-500"
                     value={chartFilter}
@@ -3088,6 +3187,7 @@ const handleFileSelect = (e) => {
                           <option key={r.id} value={r.id}>⏱️ Tempo: {r.name}</option>
                       ))}
                   </select>
+                  )}
                   </div>
               </div>
 
