@@ -1574,7 +1574,8 @@ const handleDeleteRound = async (id) => {
           time: fd.get('time'),
           type: fd.get('type'),
           location: fd.get('location'),
-          description: fd.get('description')
+          description: fd.get('description'),
+          author: modal.data?.author || viewAsStudent?.name || "Técnico"
       };
 
       try {
@@ -2503,28 +2504,30 @@ const handleFileSelect = (e) => {
           {/* NOVO MODAL: EDITOR DE MISSÕES */}
 
           {modal.type === 'missionForm' && (
-
              <form onSubmit={handleMissionSubmit}>
-
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Settings className="text-blue-500"/> {modal.data ? 'Editar' : 'Nova'} Missão</h3>
-
                 <div className="grid grid-cols-3 gap-4 mb-4">
-
                     <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Código</label><input name="code" defaultValue={modal.data?.code} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="M01" /></div>
-
                     <div className="col-span-2"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome</label><input name="name" defaultValue={modal.data?.name} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Coral Nursery" /></div>
-
                 </div>
-
                 <div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Pontos (Máx)</label><input name="points" type="number" defaultValue={modal.data?.points} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div>
-
-                <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Missão</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}</div>
-
+                <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10">
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Missão</label>
+                    <input id="missionFileInput" type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />
+                    {selectedFile ? (
+                        <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1">
+                            <CheckCircle size={10}/> Selecionado: {selectedFile.name}
+                            <button type="button" onClick={() => { setSelectedFile(null); document.getElementById('missionFileInput').value = ''; }} className="text-red-500 hover:text-red-400 ml-2">Remover</button>
+                        </span>
+                    ) : modal.data?.image && (
+                        <div className="mt-2 text-xs text-blue-500 flex items-center gap-1">
+                            <CheckCircle size={10}/> Imagem já salva
+                            <button type="button" onClick={() => setModal(prev => ({ ...prev, data: { ...prev.data, image: null } }))} className="text-red-500 hover:text-red-400 ml-2 font-bold">Remover</button>
+                        </div>
+                    )}
+                </div>
                 <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar Missão</button>
-
              </form>
-             
-
           )}
 
 
@@ -2589,8 +2592,18 @@ const handleFileSelect = (e) => {
 
                 <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10">
                     <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto do Protótipo / Desenho</label>
-                    <input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-yellow-500/10 file:text-yellow-500 hover:file:bg-yellow-500/20 cursor-pointer" />
-                    {projectSummary?.image && !selectedFile && <div className="mt-2 text-xs text-green-500">Imagem atual já salva.</div>}
+                    <input id="projectFileInput" type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-yellow-500/10 file:text-yellow-500 hover:file:bg-yellow-500/20 cursor-pointer" />
+                    {selectedFile ? (
+                        <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1">
+                            <CheckCircle size={10}/> Selecionado: {selectedFile.name}
+                            <button type="button" onClick={() => { setSelectedFile(null); document.getElementById('projectFileInput').value = ''; }} className="text-red-500 hover:text-red-400 ml-2">Remover</button>
+                        </span>
+                    ) : projectSummary?.image && (
+                        <div className="mt-2 text-xs text-blue-500 flex items-center gap-1">
+                            <CheckCircle size={10}/> Imagem atual já salva
+                            <button type="button" onClick={() => setProjectSummary(prev => ({ ...prev, image: null }))} className="text-red-500 hover:text-red-400 ml-2 font-bold">Remover</button>
+                        </div>
+                    )}
                 </div>
 
                 <button className="w-full bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-3 rounded-lg">Salvar Projeto Oficial</button>
@@ -2720,7 +2733,7 @@ const handleFileSelect = (e) => {
 
                       const total = (item.impact*3) + (item.cost*2) + (item.feasibility) + (item.innovation*2);
 
-                      return (<tr key={item.id} className="border-b border-white/5 hover:bg-white/5 transition-colors"><td className="p-3 font-bold text-white">{item.name}</td><td className="p-3 text-center text-gray-400">{item.impact}</td><td className="p-3 text-center text-gray-400">{item.cost}</td><td className="p-3 text-center text-gray-400">{item.feasibility}</td><td className="p-3 text-center text-gray-400">{item.innovation}</td><td className="p-3 text-right font-black text-purple-400 text-lg">{total}</td><td className="p-3 text-right"><button onClick={() => handleDeleteMatrix(item.id)} className="text-gray-600 hover:text-red-500 p-1 transition-colors"><Trash2 size={16}/></button></td></tr>)
+                      return (<tr key={item.id} className="border-b border-white/5 hover:bg-white/5 transition-colors"><td className="p-3 font-bold text-white">{item.name}{item.author && <span className="block text-[10px] text-gray-500 font-normal mt-0.5 flex items-center gap-1"><UserCircle size={10}/> {item.author}</span>}</td><td className="p-3 text-center text-gray-400">{item.impact}</td><td className="p-3 text-center text-gray-400">{item.cost}</td><td className="p-3 text-center text-gray-400">{item.feasibility}</td><td className="p-3 text-center text-gray-400">{item.innovation}</td><td className="p-3 text-right font-black text-purple-400 text-lg">{total}</td><td className="p-3 text-right">{(isAdmin || item.author === viewAsStudent?.name) && <button onClick={() => handleDeleteMatrix(item.id)} className="text-gray-600 hover:text-red-500 p-1 transition-colors"><Trash2 size={16}/></button>}</td></tr>)
 
                   })}
 
@@ -2740,9 +2753,9 @@ const handleFileSelect = (e) => {
                     {/* Botões de Ação (Editar e Excluir) */}
                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                         <button onClick={(e) => { e.stopPropagation(); openExpertModal(exp); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
-                        <button onClick={(e) => handleDeleteExpert(e, exp.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>
+                        {(isAdmin || exp.author === viewAsStudent?.name) && <button onClick={(e) => handleDeleteExpert(e, exp.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
                     </div>
-                    <div className="flex justify-between items-start pr-6"><div><span className="text-white font-bold block text-sm">{exp.name}</span><span className="text-xs text-gray-400">{exp.role}</span></div>{exp.applied ? <span className="bg-green-500/20 text-green-500 text-[9px] px-2 py-1 rounded">APLICADO</span> : <span className="bg-gray-500/20 text-gray-500 text-[9px] px-2 py-1 rounded">CONSULTA</span>}</div><p className="text-xs text-gray-300 italic line-clamp-3">"{exp.notes}"</p>{exp.image && <div className="text-[10px] text-pink-400 flex items-center gap-1 mt-1"><ImageIcon size={10}/> Tem evidência</div>}<div className="h-1 rounded-full bg-gray-700 mt-1"><div className={`h-1 rounded-full ${exp.impact==='Alto'?'bg-green-500 w-full':exp.impact==='Médio'?'bg-yellow-500 w-1/2':'bg-gray-500 w-1/4'}`}></div></div></div>))}</div>
+                    <div className="flex justify-between items-start pr-6"><div><span className="text-white font-bold block text-sm">{exp.name}</span><span className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">{exp.role} {exp.author && <><span className="mx-1">•</span> <UserCircle size={10}/> {exp.author}</>}</span></div>{exp.applied ? <span className="bg-green-500/20 text-green-500 text-[9px] px-2 py-1 rounded">APLICADO</span> : <span className="bg-gray-500/20 text-gray-500 text-[9px] px-2 py-1 rounded">CONSULTA</span>}</div><p className="text-xs text-gray-300 italic line-clamp-3">"{exp.notes}"</p>{exp.image && <div className="text-[10px] text-pink-400 flex items-center gap-1 mt-1"><ImageIcon size={10}/> Tem evidência</div>}<div className="h-1 rounded-full bg-gray-700 mt-1"><div className={`h-1 rounded-full ${exp.impact==='Alto'?'bg-green-500 w-full':exp.impact==='Médio'?'bg-yellow-500 w-1/2':'bg-gray-500 w-1/4'}`}></div></div></div>))}</div>
 
             </div>
 
@@ -2754,9 +2767,9 @@ const handleFileSelect = (e) => {
                     {/* Botões de Ação (Editar e Excluir) */}
                     <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                         <button onClick={(e) => { e.stopPropagation(); openRobotModal(ver); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
-                        <button onClick={(e) => handleDeleteRobotVersion(e, ver.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>
+                        {(isAdmin || ver.author === viewAsStudent?.name) && <button onClick={(e) => handleDeleteRobotVersion(e, ver.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
                     </div>
-                    <div className="flex justify-between mb-2"><span className="text-blue-400 font-mono font-bold text-xs">{ver.version}</span><span className="text-[10px] text-gray-500">{ver.date.split('-').reverse().slice(0,2).join('/')}</span></div><h4 className="text-white font-bold mb-1 text-sm">{ver.name}</h4><p className="text-xs text-gray-400 line-clamp-2">{ver.changes}</p>{ver.image && <div className="text-[10px] text-blue-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Tem foto</div>}</div></div>))}</div>
+                    <div className="flex justify-between mb-2"><span className="text-blue-400 font-mono font-bold text-xs">{ver.version}</span><span className="text-[10px] text-gray-500 flex items-center gap-1">{ver.date.split('-').reverse().slice(0,2).join('/')} {ver.author && <><span className="mx-1">•</span> <UserCircle size={10}/> {ver.author}</>}</span></div><h4 className="text-white font-bold mb-1 text-sm">{ver.name}</h4><p className="text-xs text-gray-400 line-clamp-2">{ver.changes}</p>{ver.image && <div className="text-[10px] text-blue-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Tem foto</div>}</div></div>))}</div>
 
             </div>
 
@@ -2784,14 +2797,15 @@ const handleFileSelect = (e) => {
                         {outreachEvents.sort((a, b) => new Date(b.date) - new Date(a.date)).map(ev => (
                             <div key={ev.id} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col relative group hover:bg-white/5 transition-colors">
                                 <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                                    <button onClick={() => handleDeleteOutreach(ev.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>
+                                    {(isAdmin || ev.author === viewAsStudent?.name) && <button onClick={() => handleDeleteOutreach(ev.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
                                 </div>
                                 <div className="flex justify-between items-start mb-2 pr-6">
                                     <div>
                                         <span className="text-white font-bold text-sm block">{ev.name}</span>
-                                        <div className="flex items-center gap-2 mt-1">
+                                        <div className="flex items-center gap-2 mt-1 flex-wrap">
                                             <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-white/10 text-gray-300">{ev.type}</span>
                                             <span className="text-[10px] text-gray-500 flex items-center gap-1"><Calendar size={10}/> {ev.date.split('-').reverse().join('/')}</span>
+                                            {ev.author && <span className="text-[10px] text-gray-500 flex items-center gap-1 ml-1 border-l border-white/10 pl-2"><UserCircle size={10}/> {ev.author}</span>}
                                         </div>
                                     </div>
                                 </div>
@@ -3311,17 +3325,23 @@ const handleFileSelect = (e) => {
           const diffTime = due - today;
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
           
-          if (diffDays < 0) return { color: 'text-red-500', border: 'border-red-500', icon: <AlertTriangle size={12}/>, text: 'Atrasado' };
-          if (diffDays <= 2) return { color: 'text-yellow-500', border: 'border-yellow-500', icon: <Timer size={12}/>, text: 'Prazo Curto' };
-          return { color: 'text-gray-500', border: 'border-white/5', icon: <Calendar size={12}/>, text: new Date(date).toLocaleDateString() };
+          const parts = date.split('-');
+          const dateStr = parts.length === 3 ? `${parts[2]}/${parts[1]}` : date;
+
+          if (diffDays < 0) return { color: 'text-red-500', border: 'border-red-500', icon: <AlertTriangle size={12}/>, text: `Atrasado (${dateStr})`, isOverdue: true };
+          if (diffDays <= 2) return { color: 'text-yellow-500', border: 'border-yellow-500', icon: <Timer size={12}/>, text: `Prazo Curto (${dateStr})` };
+          return { color: 'text-gray-500', border: 'border-white/5', icon: <Calendar size={12}/>, text: dateStr };
       };
 
       const TaskCard = ({ t, showMoveRight, showDelete }) => {
           const status = getDeadlineStatus(t.dueDate);
           const tagObj = KANBAN_TAGS.find(tag => tag.id === (t.tag || 'geral')) || KANBAN_TAGS[3];
 
+          // Só pisca se estiver atrasado e ainda não foi concluída
+          const isPulsing = status?.isOverdue && t.status !== 'done';
+
           return (
-              <div className={`bg-black/40 p-3 rounded-xl border flex flex-col gap-2 group hover:border-white/20 transition-all ${status ? status.border : 'border-white/5'}`}>
+              <div className={`bg-black/40 p-3 rounded-xl border flex flex-col gap-2 group transition-all duration-500 ${status ? status.border : 'border-white/5'} ${isPulsing ? 'animate-pulse hover:animate-none shadow-[0_0_15px_rgba(239,68,68,0.15)]' : 'hover:border-white/20'}`}>
                   <div className="flex justify-between items-start gap-2">
                       <div className="flex flex-wrap gap-1.5">
                           <span className="text-[10px] font-bold uppercase bg-white/10 px-2 py-0.5 rounded text-gray-300 flex items-center gap-1">
@@ -3696,11 +3716,9 @@ const handleFileSelect = (e) => {
                       <h2 className="text-2xl font-bold text-white flex items-center gap-2"><CalendarDays className="text-blue-500"/> Agenda da Equipe</h2>
                       <p className="text-gray-400 text-sm mt-1">Acompanhe visitas, encontros com especialistas e eventos importantes.</p>
                   </div>
-                  {isAdmin && (
-                      <button onClick={() => setModal({type: 'eventForm'})} className="shrink-0 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-blue-900/20 transition-all">
-                          <Plus size={16}/> Novo Evento
-                      </button>
-                  )}
+                  <button onClick={() => setModal({type: 'eventForm'})} className="shrink-0 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-blue-900/20 transition-all">
+                      <Plus size={16}/> Novo Evento
+                  </button>
               </div>
 
               <div className="space-y-4">
@@ -3716,15 +3734,16 @@ const handleFileSelect = (e) => {
                                           <AlertTriangle size={10}/> Próximo
                                       </div>
                                   )}
-                                  {isAdmin && (
+                                  {(isAdmin || ev.author === viewAsStudent?.name) && (
                                       <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                           <button onClick={() => setModal({type: 'eventForm', data: ev})} className="text-gray-400 hover:text-white p-1.5 bg-black/50 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
                                           <button onClick={() => handleDeleteEvent(ev.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/50 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>
                                       </div>
                                   )}
-                                  <div className="flex items-center gap-2 mb-3">
+                                  <div className="flex items-center gap-2 mb-3 flex-wrap">
                                       <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${getTypeColor(ev.type)}`}>{ev.type}</span>
                                       <span className="text-xs text-gray-300 flex items-center gap-1 font-mono"><Calendar size={12} className="text-blue-500"/> {ev.date.split('-').reverse().join('/')}</span>
+                                      {ev.author && <span className="text-[10px] text-gray-500 flex items-center gap-1 ml-1 border-l border-white/10 pl-2"><UserCircle size={10}/> {ev.author}</span>}
                                   </div>
                                   <h4 className="text-white font-bold text-lg mb-2 leading-tight pr-12">{ev.title}</h4>
                                   {ev.description && <p className="text-sm text-gray-400 mb-4 line-clamp-2">{ev.description}</p>}
@@ -3744,7 +3763,7 @@ const handleFileSelect = (e) => {
                       <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-4">
                            {pastEvents.map(ev => (
                               <div key={ev.id} className="bg-black/40 border border-white/5 p-4 rounded-xl relative group">
-                                  {isAdmin && (
+                                      {(isAdmin || ev.author === viewAsStudent?.name) && (
                                       <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                           <button onClick={() => handleDeleteEvent(ev.id)} className="text-gray-500 hover:text-red-500 p-1 bg-black/80 rounded"><Trash2 size={12}/></button>
                                       </div>
@@ -3753,7 +3772,7 @@ const handleFileSelect = (e) => {
                                       <span className="text-gray-500 text-xs flex items-center gap-1"><Calendar size={10}/> {ev.date.split('-').reverse().join('/')}</span>
                                   </div>
                                   <h4 className="text-gray-400 font-bold text-sm mb-1">{ev.title}</h4>
-                                  <span className="text-[10px] text-gray-600">{ev.type} {ev.location && `• ${ev.location}`}</span>
+                                      <span className="text-[10px] text-gray-600">{ev.type} {ev.location && `• ${ev.location}`} {ev.author && `• Por: ${ev.author}`}</span>
                               </div>
                            ))}
                       </div>
@@ -4542,15 +4561,6 @@ const handleFileSelect = (e) => {
 
             {studentTab === 'mission' && (
                 <>
-                {/* CABEÇALHO DO ALUNO + ELOGIOS */}
-                <div className="mb-8 p-4 bg-white/5 rounded-xl border border-white/5 text-left flex justify-between items-center">
-                    <div>
-                        <h4 className="text-gray-400 text-xs font-bold uppercase mb-1">Mural de Equipe</h4>
-                        <p className="text-xs text-gray-500">Reconheça seus colegas!</p>
-                    </div>
-
-                </div>
-
                 {/* ESTAÇÃO ATUAL */}
                 <p className="text-xl text-white mb-6">Estação Atual: <strong className={`uppercase ${viewAsStudent.station==='Engenharia'?'text-blue-500':viewAsStudent.station==='Inovação'?'text-pink-500':viewAsStudent.station==='Gestão'?'text-purple-500':'text-gray-400'}`}>{viewAsStudent.station || "Aguardando..."}</strong></p>
                 
@@ -4593,7 +4603,7 @@ const handleFileSelect = (e) => {
             )}
 
             {studentTab === 'strategy' && <div className="text-left"><StrategyView /></div>}
-            {studentTab === 'rounds' && <div className="text-left"><RoundsView readonly={true} /></div>}
+            {studentTab === 'rounds' && <div className="text-left"><RoundsView /></div>}
             {studentTab === 'rubrics' && <div className="text-left"><RubricView /></div>}
             {studentTab === 'kanban' && <div className="text-left"><KanbanView /></div>}
             {studentTab === 'logbook' && <div className="text-left"><LogbookView /></div>}
