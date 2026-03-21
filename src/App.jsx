@@ -1958,10 +1958,10 @@ const handleFileSelect = (e) => {
       const totalExperts = experts.length;
 
       const achievements = [
-          { id: 'team_xp', name: 'Potência Máxima', icon: <Zap size={20}/>, color: 'text-yellow-400', bg: 'bg-yellow-500', desc: 'Atingir 6.000 XP somados por toda a equipe.', current: totalXP, target: 6000 },
-          { id: 'team_impact', name: 'Voz da Mudança', icon: <Megaphone size={20}/>, color: 'text-orange-500', bg: 'bg-orange-500', desc: 'Impactar mais de 350 pessoas com o projeto.', current: totalImpact, target: 350 },
-          { id: 'team_tasks', name: 'Máquina de Produtividade', icon: <CheckCheck size={20}/>, color: 'text-green-500', bg: 'bg-green-500', desc: 'Concluir 30 tarefas no Kanban da equipe.', current: totalTasksDone, target: 30 },
-          { id: 'team_experts', name: 'Mentes Conectadas', icon: <Briefcase size={20}/>, color: 'text-purple-500', bg: 'bg-purple-500', desc: 'Consultar 5 especialistas diferentes.', current: totalExperts, target: 5 }
+          { id: 'team_xp', name: 'Potência Máxima', icon: <Zap size={16}/>, color: 'text-yellow-400', bg: 'bg-yellow-500', desc: 'Atingir 6.000 XP somados por toda a equipe.', current: totalXP, target: 6000 },
+          { id: 'team_impact', name: 'Voz da Mudança', icon: <Megaphone size={16}/>, color: 'text-orange-500', bg: 'bg-orange-500', desc: 'Impactar mais de 350 pessoas com o projeto.', current: totalImpact, target: 350 },
+          { id: 'team_tasks', name: 'Máquina de Produtividade', icon: <CheckCheck size={16}/>, color: 'text-green-500', bg: 'bg-green-500', desc: 'Concluir 30 tarefas no Kanban da equipe.', current: totalTasksDone, target: 30 },
+          { id: 'team_experts', name: 'Mentes Conectadas', icon: <Briefcase size={16}/>, color: 'text-purple-500', bg: 'bg-purple-500', desc: 'Consultar 5 especialistas diferentes.', current: totalExperts, target: 5 }
       ];
 
       return (
@@ -1979,13 +1979,13 @@ const handleFileSelect = (e) => {
                       
                       return (
                           <div key={ach.id} className={`p-4 rounded-xl border flex flex-col relative overflow-hidden transition-all duration-500 ${isUnlocked ? 'bg-gradient-to-br from-white/10 to-transparent border-yellow-500/50 shadow-[0_0_20px_rgba(234,179,8,0.15)] scale-[1.02]' : 'bg-black/40 border-white/5 opacity-80'}`}>
-                              <div className="flex items-center gap-3 mb-3">
-                                  <div className={`p-2 rounded-lg ${isUnlocked ? ach.bg + '/20 ' + ach.color : 'bg-white/5 text-gray-500'}`}>
+                              <div className="flex items-start gap-1.5 mb-2">
+                                  <div className={`p-1 rounded-lg shrink-0 ${isUnlocked ? ach.bg + '/20 ' + ach.color : 'bg-white/5 text-gray-500'}`}>
                                       {ach.icon}
                                   </div>
-                                  <div>
-                                      <h4 className={`font-bold text-sm leading-tight ${isUnlocked ? 'text-white' : 'text-gray-400'}`}>{ach.name}</h4>
-                                      {isUnlocked ? <span className="text-[10px] text-green-400 font-bold flex items-center gap-1 uppercase tracking-wider mt-0.5"><CheckCircle size={10}/> Desbloqueado</span> : <span className="text-[10px] text-gray-500 uppercase tracking-wider mt-0.5 font-bold">Bloqueado</span>}
+                                  <div className="flex-1 min-w-0 pb-1">
+                                      <h4 className={`font-bold text-xs leading-tight break-words ${isUnlocked ? 'text-white' : 'text-gray-400'}`}>{ach.name}</h4>
+                                      {isUnlocked ? <span className="text-[9px] text-green-400 font-bold flex items-center gap-1 uppercase mt-0.5"><CheckCircle size={9} className="shrink-0"/> Desbloqueado</span> : <span className="text-[9px] text-gray-500 uppercase mt-0.5 font-bold flex items-center gap-1"><Lock size={9} className="shrink-0"/> Bloqueado</span>}
                                   </div>
                               </div>
                               <p className="text-xs text-gray-400 mb-3 flex-1">{ach.desc}</p>
@@ -4206,52 +4206,90 @@ const handleFileSelect = (e) => {
 {activeTab === 'ranking' && (
   <RankingPanel students={students} setActiveTab={setActiveTab} />
 )}
-          <div className="flex gap-4 mb-8 border-b border-white/10 pb-4 overflow-x-auto">
-              <button onClick={() => setAdminTab('rotation')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'rotation' ? 'bg-white text-black' : 'text-gray-500 hover:bg-white/10'}`}><LayoutDashboard size={18}/> Rodízio & Equipe</button>
-              <button onClick={() => setAdminTab('strategy')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'strategy' ? 'bg-purple-500 text-white shadow-lg shadow-purple-900/20' : 'text-gray-500 hover:text-purple-400'}`}><Lightbulb size={18}/> Estratégia & Inovação</button>
-              <button onClick={() => setAdminTab('rounds')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'rounds' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-gray-500 hover:text-blue-400'}`}><ListTodo size={18}/> Mesa do Robô</button>
-              <button onClick={() => setAdminTab('rubrics')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'rubrics' ? 'bg-gray-400 text-black shadow-lg shadow-gray-900/20' : 'text-gray-500 hover:text-gray-400'}`}><Scale size={18}/> Rubricas</button>
-              <button onClick={() => setAdminTab('kanban')} className={`relative flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'kanban' ? 'bg-orange-500 text-white shadow-lg shadow-orange-900/20' : 'text-gray-500 hover:text-orange-400'}`}>
-                  <ClipboardList size={18}/> Tarefas (Kanban)
-                  {urgentTasksCount > 0 && <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500"></span></span>}
-              </button>
-              <button onClick={() => setAdminTab('logbook')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'logbook' ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20' : 'text-gray-500 hover:text-yellow-400'}`}><Book size={18}/> Diário</button>
-              <button onClick={() => setAdminTab('agenda')} className={`relative flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${adminTab === 'agenda' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20' : 'text-gray-500 hover:text-indigo-400'}`}>
-                  <CalendarDays size={18}/> Agenda
-                  {urgentEventsCount > 0 && <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>}
-              </button>
-          </div>
+          <div className="flex flex-col lg:flex-row gap-8">
+            
+            {/* COLUNA ESQUERDA (SIDEBAR DO TÉCNICO) */}
+            <div className="w-full lg:w-80 shrink-0 space-y-6">
+                
+                {/* 1. PERFIL ADMIN */}
+                <div className="text-center py-6 bg-[#151520] rounded-2xl border border-white/10 shadow-xl relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 to-orange-500"></div>
+                    <div className="absolute top-4 right-4 text-gray-600">
+                        <Shield size={24} />
+                    </div>
+                    <div className="flex flex-col items-center justify-center gap-3">
+                        <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center border-2 border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
+                            <Bot size={40} className="text-red-500" />
+                        </div>
+                        <div className="text-center">
+                            <h2 className="text-2xl font-black text-white leading-none tracking-tight">Técnico</h2>
+                            <p className="text-red-400 text-xs font-mono mt-2 bg-red-500/10 inline-block px-3 py-1 rounded-full border border-red-500/20">Acesso Restrito</p>
+                        </div>
+                    </div>
+                </div>
 
-          {adminTab === 'rotation' && (
-            <>
-              <TeamStatsPanel />
-              <TeamAchievementsPanel />
-              
-              {/* CABEÇALHO DA SEMANA */}
-              <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-                  <div className="flex items-center gap-3 text-gray-400">
-                      <div>
-                          <h2 className="text-lg font-bold uppercase tracking-widest text-white">Painel da Semana</h2>
-                          <div className="flex items-center gap-2 mt-1">
-                              <span className="text-yellow-500 font-bold bg-yellow-500/10 px-2 py-0.5 rounded text-xs border border-yellow-500/20">
-                                  {currentWeekData ? currentWeekData.weekName : "Carregando..."}
-                              </span>
-                              <span className="text-xs text-gray-500 flex items-center gap-1">
-                                  <Calendar size={10}/> 
-                                  {currentWeekData ? `${currentWeekData.startDate.split('-').reverse().join('/')} até ${currentWeekData.endDate.split('-').reverse().join('/')}` : "..."}
-                              </span>
-                          </div>
-                      </div>
-                  </div>
-                  <div className="flex gap-2">
-                      <button onClick={handleApplyRotation} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 rounded-xl text-sm font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-lg shadow-blue-900/20"><RotateCcw size={18} /> Aplicar Rodízio</button>
-                      <button onClick={openAttendanceModal} className="bg-white/10 hover:bg-white/20 text-white px-4 py-3 rounded-xl text-sm font-bold uppercase tracking-wider flex items-center gap-2 transition-all"><ListTodo size={18} /> Chamada</button>
-                      <button onClick={() => openNewStudentModal()} className="bg-green-600 hover:bg-green-500 text-white px-4 py-3 rounded-xl text-sm font-bold uppercase tracking-wider flex items-center gap-2 transition-all shadow-lg shadow-green-900/20"><Plus size={18} /> Novo Aluno</button>
-                  </div>
-              </div>
+                {/* 2. SEMANA ATUAL */}
+                <div className="bg-[#151520] rounded-2xl border border-white/10 p-5 shadow-xl">
+                    <h3 className="text-white font-bold mb-4 flex items-center gap-2 border-b border-white/10 pb-3">
+                       <Calendar size={16} className="text-blue-500"/> Semana Atual
+                    </h3>
+                    <div className="text-center">
+                        <span className="text-yellow-500 font-bold bg-yellow-500/10 px-3 py-1.5 rounded-lg border border-yellow-500/20 block mb-2">
+                            {currentWeekData ? currentWeekData.weekName : "Carregando..."}
+                        </span>
+                        <span className="text-xs text-gray-400 flex items-center justify-center gap-1 mt-2">
+                            {currentWeekData ? `${currentWeekData.startDate.split('-').reverse().join('/')} até ${currentWeekData.endDate.split('-').reverse().join('/')}` : "..."}
+                        </span>
+                    </div>
+                </div>
 
-              {/* GRID DE COLUNAS */}
-              <div className="grid lg:grid-cols-4 gap-6">
+                {/* 3. AÇÕES RÁPIDAS */}
+                <div className="bg-[#151520] rounded-2xl border border-white/10 p-5 shadow-xl">
+                    <h3 className="text-white font-bold mb-4 flex items-center gap-2 border-b border-white/10 pb-3">
+                       <Zap size={16} className="text-yellow-500"/> Ações Rápidas
+                    </h3>
+                    <div className="flex flex-col gap-2">
+                        <button onClick={handleApplyRotation} className="w-full bg-blue-600/20 hover:bg-blue-600 text-blue-500 hover:text-white py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all border border-blue-500/30"><RotateCcw size={14} /> Aplicar Rodízio</button>
+                        <button onClick={openAttendanceModal} className="w-full bg-white/5 hover:bg-white/10 text-white py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all border border-white/10"><ListTodo size={14} /> Chamada</button>
+                        <button onClick={() => openNewStudentModal()} className="w-full bg-green-600/20 hover:bg-green-600 text-green-500 hover:text-white py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all border border-green-500/30"><UserPlus size={14} /> Novo Aluno</button>
+                    </div>
+                </div>
+            </div>
+
+            {/* COLUNA DIREITA (CONTEÚDO PRINCIPAL) */}
+            <div className="flex-1 min-w-0 flex flex-col gap-6">
+                
+                {/* WIDGETS LADO A LADO EM TELAS GRANDES */}
+                <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
+                    <div className="[&>div]:mb-0 h-full">
+                        <TeamStatsPanel />
+                    </div>
+                    <div className="[&>div]:mb-0 h-full">
+                        <TeamAchievementsPanel />
+                    </div>
+                </div>
+
+                {/* NAVEGAÇÃO DE ABAS */}
+                <div className="bg-[#151520] border border-white/10 rounded-2xl p-2 sticky top-[80px] z-30 shadow-2xl flex gap-1 overflow-x-auto custom-scrollbar">
+                    <button onClick={() => setAdminTab('rotation')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${adminTab === 'rotation' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}><LayoutDashboard size={16}/> Rodízio</button>
+                    <button onClick={() => setAdminTab('strategy')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${adminTab === 'strategy' ? 'bg-purple-500 text-white shadow-lg shadow-purple-900/20' : 'text-gray-400 hover:text-purple-400 hover:bg-purple-500/10'}`}><Lightbulb size={16}/> Estratégia</button>
+                    <button onClick={() => setAdminTab('rounds')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${adminTab === 'rounds' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-gray-400 hover:text-blue-400 hover:bg-blue-500/10'}`}><ListTodo size={16}/> Robô</button>
+                    <button onClick={() => setAdminTab('rubrics')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${adminTab === 'rubrics' ? 'bg-gray-400 text-black shadow-lg shadow-gray-900/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}><Scale size={16}/> Rubricas</button>
+                    <button onClick={() => setAdminTab('kanban')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all relative ${adminTab === 'kanban' ? 'bg-orange-500 text-white shadow-lg shadow-orange-900/20' : 'text-gray-400 hover:text-orange-400 hover:bg-orange-500/10'}`}>
+                        <ClipboardList size={16}/> Kanban
+                        {urgentTasksCount > 0 && <span className="absolute top-2 right-2 flex h-2.5 w-2.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span></span>}
+                    </button>
+                    <button onClick={() => setAdminTab('logbook')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${adminTab === 'logbook' ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20' : 'text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10'}`}><Book size={16}/> Diário</button>
+                    <button onClick={() => setAdminTab('agenda')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all relative ${adminTab === 'agenda' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20' : 'text-gray-400 hover:text-indigo-400 hover:bg-indigo-500/10'}`}>
+                        <CalendarDays size={16}/> Agenda
+                        {urgentEventsCount > 0 && <span className="absolute top-2 right-2 flex h-2.5 w-2.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span></span>}
+                    </button>
+                </div>
+
+                {/* CONTEÚDO DA ABA SELECIONADA */}
+                <div className="bg-[#151520]/50 rounded-2xl border border-white/5 p-4 md:p-6 min-h-[500px]">
+                    {adminTab === 'rotation' && (
+                      <div className="grid lg:grid-cols-4 gap-6">
                   
                   {/* COLUNA 1: EQUIPE (SEM ESTAÇÃO) */}
                   <div className="bg-[#0a0a0f] border border-white/5 rounded-2xl p-4 flex flex-col h-full min-h-[500px]">
@@ -4409,24 +4447,26 @@ const handleFileSelect = (e) => {
                           </div>
                       )
                   })}
-              </div>
-            </>
-          )}
+                      </div>
+                    )}
 
-          {adminTab === 'strategy' && <StrategyView />}
-          {adminTab === 'rounds' && <RoundsView />} {/* StrategyBoard agora mora dentro de RoundsView */}
-          {adminTab === 'rubrics' && <RubricView />}
-          
-          {/* --- VISUALIZAÇÃO KANBAN --- */}
-          {adminTab === 'kanban' && <KanbanView />}
-          {adminTab === 'logbook' && <LogbookView />}
-          {adminTab === 'agenda' && <AgendaView />}
+                    {adminTab === 'strategy' && <StrategyView />}
+                    {adminTab === 'rounds' && <RoundsView />} {/* StrategyBoard agora mora dentro de RoundsView */}
+                    {adminTab === 'rubrics' && <RubricView />}
+                    
+                    {/* --- VISUALIZAÇÃO KANBAN --- */}
+                    {adminTab === 'kanban' && <KanbanView />}
+                    {adminTab === 'logbook' && <LogbookView />}
+                    {adminTab === 'agenda' && <AgendaView />}
+                </div>
+            </div>
+          </div>
         </main>
       )}
 
       {/* --- ÁREA DO ALUNO --- */}
       {!isAdmin && viewAsStudent && (
-        <main className="p-4 md:p-8 max-w-4xl mx-auto animate-in slide-in-from-bottom-8">
+        <main className="p-4 md:p-8 w-full max-w-[1800px] mx-auto animate-in slide-in-from-bottom-8">
           <UrgentEventsBanner />
 
     {/* ALERTA DE LÍDER DE GESTÃO */}
@@ -4444,170 +4484,180 @@ const handleFileSelect = (e) => {
         </div>
     )}
 
-           <TeamStatsPanel />
-           <TeamAchievementsPanel />
-
-           <div onClick={() => openProfileModal(viewAsStudent)} className="text-center py-6 bg-[#151520] rounded-2xl border border-white/10 shadow-xl mb-8 cursor-pointer hover:bg-[#1a1a24] transition-colors group relative">
-                <div className="absolute top-4 right-4 text-gray-600 group-hover:text-white transition-colors">
-                    <UserCircle size={24} />
-                </div>
-                <div className="flex items-center justify-center gap-4">
-                    {viewAsStudent.avatarImage ? (
-     <img src={viewAsStudent.avatarImage} alt="Avatar" className="w-12 h-12 rounded-full object-cover" />
- ) : (
-     <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center">
-         <UserCircle size={32} className="text-gray-500" />
-     </div>
- )}
-                    <div className="text-left">
-                        <h2 className="text-2xl font-bold text-white leading-none">{viewAsStudent.name}</h2>
-                        <p className="text-gray-400 text-sm font-mono mt-1">{viewAsStudent.turma}</p>
-                    </div>
-                </div>
-           </div>
-{/* --- SALA DE TROFÉUS (BADGES) --- */}
-           <div className="mb-8">
-               <h3 className="text-white font-bold mb-4 flex items-center gap-2">
-                   <Trophy className="text-yellow-500" size={20}/> 
-                   Sala de Troféus
-                   <span className="text-xs font-normal text-gray-500 ml-auto">
-                       {viewAsStudent.badges?.length || 0}/{BADGES_LIST.length} Conquistados
-                   </span>
-               </h3>
-               
-               <div className="grid grid-cols-4 gap-2 md:gap-4 bg-[#151520] p-4 rounded-2xl border border-white/10">
-                   {BADGES_LIST.map(badge => {
-                       const hasBadge = viewAsStudent.badges?.includes(badge.id);
-                       
-                       return (
-                           <div 
-                             key={badge.id} 
-                             onClick={() => isAdmin && toggleBadge(viewAsStudent, badge.id)} // Só Admin clica para dar
-                             className={`relative group flex flex-col items-center justify-center p-3 rounded-xl border transition-all duration-300 ${
-                                 hasBadge 
-                                 ? 'bg-gradient-to-br from-white/10 to-transparent border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.2)]' 
-                                 : 'bg-black/40 border-white/5 opacity-40 grayscale cursor-help'
-                             } ${isAdmin ? 'cursor-pointer hover:bg-white/10' : ''}`}
-                           >
-                               {/* Ícone da Badge */}
-                               <div className={`mb-2 transform transition-transform ${hasBadge ? 'scale-110 group-hover:scale-125' : 'scale-90'} ${badge.color}`}>
-                                   {badge.icon}
-                               </div>
-
-                               {/* BOTÃO DE LIBERAR INGLÊS (Visão do Técnico) */}
-
-                               
-                               {/* Nome (Só aparece em telas maiores ou se tiver a badge) */}
-                               <span className={`text-[10px] md:text-xs text-center font-bold leading-tight ${hasBadge ? 'text-white' : 'text-gray-600'}`}>
-                                   {badge.name}
-                               </span>
-
-                               {/* Tooltip (Descrição ao passar o mouse) */}
-                               <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-48 bg-black border border-white/20 p-2 rounded-lg text-xs text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl hidden md:block">
-                                   <p className="font-bold text-white mb-1">{badge.name}</p>
-                                   {badge.desc}
-                                   {!hasBadge && <p className="text-yellow-500 mt-1 font-bold text-[10px] uppercase">Bloqueado</p>}
-                               </div>
-                           </div>
-                       );
-                   })}
-               </div>
-               
-               {/* Mensagem motivacional se não tiver nenhuma */}
-               {(!viewAsStudent.badges || viewAsStudent.badges.length === 0) && (
-                   <p className="text-center text-xs text-gray-500 mt-2 italic">
-                       Você ainda não tem badges lendárias. Trabalhe duro para o Técnico liberar!
-                   </p>
-               )}
-           </div>
-           {/* Lógica de Nível e XP */}
-           {(() => {
-                const currentLevel = getCurrentLevel(viewAsStudent.xp);
-                const nextLevel = getNextLevel(viewAsStudent.xp);
-                const progress = nextLevel ? ((viewAsStudent.xp - currentLevel.min) / (nextLevel.min - currentLevel.min)) * 100 : 100;
-
-                return (
-                    <div className="mb-8 px-4">
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                            <span className={`text-lg font-black uppercase ${currentLevel.color}`}>{currentLevel.name}</span>
-                            <span className="text-yellow-500 font-bold bg-yellow-500/10 px-3 py-1 rounded-lg border border-yellow-500/20 flex items-center gap-2"><Trophy size={14}/> {viewAsStudent.xp} XP</span>
-                        </div>
-                        <div className="w-full bg-gray-800 rounded-full h-3 mb-2 overflow-hidden border border-white/5">
-                            <div className={`h-full transition-all duration-1000 ${currentLevel.name === 'Mestre FLL' ? 'bg-yellow-500' : 'bg-gradient-to-r from-blue-500 to-purple-500'}`} style={{width: `${Math.min(100, progress)}%`}}></div>
-                        </div>
-                        {nextLevel ? 
-                            <p className="text-xs text-right text-gray-500">Próximo: <span className="text-white font-bold">{nextLevel.name}</span> (Faltam {nextLevel.min - viewAsStudent.xp} XP)</p> : 
-                            <p className="text-xs text-right text-yellow-500 font-bold">Nível Máximo Atingido!</p>
-                        }
-                    </div>
-                )
-           })()}
-
-            <div className="flex gap-2 justify-center mb-8 border-b border-white/10 pb-4 overflow-x-auto">
-                <button onClick={() => setStudentTab('mission')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'mission' ? 'bg-white text-black' : 'text-gray-500 hover:bg-white/10'}`}><Rocket size={18}/> Minha Missão</button>
-                <button onClick={() => setStudentTab('strategy')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'strategy' ? 'bg-purple-500 text-white shadow-lg shadow-purple-900/20' : 'text-gray-500 hover:text-purple-400'}`}><Lightbulb size={18}/> Estratégia</button>
-                <button onClick={() => setStudentTab('rubrics')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'rubrics' ? 'bg-gray-400 text-black shadow-lg shadow-gray-900/20' : 'text-gray-500 hover:text-gray-400'}`}><Scale size={18}/> Rubricas</button>
-                <button onClick={() => setStudentTab('rounds')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'rounds' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-gray-500 hover:text-blue-400'}`}><ListTodo size={18}/> Robô</button>
-                <button onClick={() => setStudentTab('kanban')} className={`relative flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'kanban' ? 'bg-orange-500 text-white shadow-lg shadow-orange-900/20' : 'text-gray-500 hover:text-orange-400'}`}>
-                    <ClipboardList size={18}/> Tarefas
-                    {urgentTasksCount > 0 && <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500"></span></span>}
-                </button>
-                <button onClick={() => setStudentTab('logbook')} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'logbook' ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20' : 'text-gray-500 hover:text-yellow-400'}`}><Book size={18}/> Diário</button>
-                <button onClick={() => setStudentTab('agenda')} className={`relative flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm transition-all whitespace-nowrap ${studentTab === 'agenda' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20' : 'text-gray-500 hover:text-indigo-400'}`}>
-                    <CalendarDays size={18}/> Agenda
-                    {urgentEventsCount > 0 && <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>}
-                </button>
-            </div>
-
-            {studentTab === 'mission' && (
-                <>
-                {/* ESTAÇÃO ATUAL */}
-                <p className="text-xl text-white mb-6">Estação Atual: <strong className={`uppercase ${viewAsStudent.station==='Engenharia'?'text-blue-500':viewAsStudent.station==='Inovação'?'text-pink-500':viewAsStudent.station==='Gestão'?'text-purple-500':'text-gray-400'}`}>{viewAsStudent.station || "Aguardando..."}</strong></p>
+          {/* GRID PRINCIPAL DO ALUNO (SIDEBAR + CONTEÚDO) */}
+          <div className="flex flex-col lg:flex-row gap-8">
+            
+            {/* COLUNA ESQUERDA (SIDEBAR DE PERFIL) */}
+            <div className="w-full lg:w-80 shrink-0 space-y-6">
                 
-                {viewAsStudent.station && (
-                    <div className="mt-6 p-8 bg-black/40 rounded-2xl border border-white/10 max-w-lg mx-auto relative overflow-hidden text-left">
-                        
-                        {/* FAIXAS DE STATUS (Aprovado/Pendente/Recusado) */}
-                        {viewAsStudent.submission?.status === 'pending' && <div className="bg-yellow-500/90 text-black font-bold p-2 text-sm absolute top-0 left-0 w-full flex items-center justify-center gap-2"><AlertCircle size={16}/> Atividade em análise pelo técnico.</div>}
-                        {viewAsStudent.submission?.status === 'approved' && <div className="bg-green-500/90 text-black font-bold p-2 text-sm absolute top-0 left-0 w-full flex items-center justify-center gap-2"><CheckCircle size={16}/> Atividade Aprovada!</div>}
-                        {viewAsStudent.submission?.status === 'rejected' && <div className="bg-red-500/90 text-white font-bold p-2 text-sm absolute top-0 left-0 w-full flex items-center justify-center gap-2"><AlertTriangle size={16}/> Atividade Recusada. Refaça.</div>}
-
-                        {/* TEXTO DA MISSÃO */}
-                        <p className="text-xs text-gray-400 uppercase font-bold mb-2 text-center mt-6">Missão Prioritária</p>
-                        <p className="italic text-gray-300 mb-8 text-lg text-center border-b border-white/10 pb-6">"{missions[viewAsStudent.station]?.text || "Aguarde orientação..."}"</p>
-
-                        {/* FORMULÁRIO DE ENVIO (Só aparece se não enviou ou se foi recusado) */}
-                        {(!viewAsStudent.submission || viewAsStudent.submission.status === 'rejected') && (
-                            <form onSubmit={handleSubmitActivity}>
-                                <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Relatório da Missão</label>
-                                <textarea required value={submissionText} onChange={(e) => setSubmissionText(e.target.value)} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white mb-4 focus:border-blue-500 outline-none min-h-[100px]" placeholder="Descreva aqui o que foi feito..." />
-                                
-        
-                                
-                                <button disabled={isSubmitting} className="w-full bg-blue-600 hover:bg-blue-500 transition-colors text-white font-bold py-3 rounded-lg uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                                    {isSubmitting ? <Loader2 className="animate-spin" size={20}/> : <><Upload size={20} /> Entregar Atividade</>}
-                                </button>
-                            </form>
-                        )}
-                        {/* VISUALIZAÇÃO DO ENVIO REALIZADO */}
-                        {viewAsStudent.submission && viewAsStudent.submission.status !== 'rejected' && (
-                            <div className="text-center p-4 bg-white/5 rounded-lg border border-white/10">
-                                <p className="text-gray-400 text-sm mb-2">Último envio: {viewAsStudent.submission.date}</p>
-                                <p className="text-white font-bold">"{viewAsStudent.submission.text}"</p>
-                                {viewAsStudent.submission.fileName !== "Sem arquivo" && <p className="text-blue-400 text-xs mt-2 flex items-center justify-center gap-1"><FileText size={10}/> {viewAsStudent.submission.fileName}</p>}
+                {/* 1. PERFIL COMPACTO */}
+                <div onClick={() => openProfileModal(viewAsStudent)} className="text-center py-6 bg-[#151520] rounded-2xl border border-white/10 shadow-xl cursor-pointer hover:bg-[#1a1a24] transition-colors group relative">
+                    <div className="absolute top-4 right-4 text-gray-600 group-hover:text-white transition-colors">
+                        <UserCircle size={24} />
+                    </div>
+                    <div className="flex flex-col items-center justify-center gap-3">
+                        {viewAsStudent.avatarImage ? (
+                            <img src={viewAsStudent.avatarImage} alt="Avatar" className="w-20 h-20 rounded-full object-cover border-2 border-white/10 group-hover:border-purple-500 transition-colors" />
+                        ) : (
+                            <div className="w-20 h-20 rounded-full bg-black/50 flex items-center justify-center border-2 border-white/10 group-hover:border-purple-500 transition-colors">
+                                <UserCircle size={40} className="text-gray-500" />
                             </div>
                         )}
+                        <div className="text-center">
+                            <h2 className="text-2xl font-black text-white leading-none tracking-tight">{viewAsStudent.name}</h2>
+                            <p className="text-gray-400 text-xs font-mono mt-2 bg-white/5 inline-block px-3 py-1 rounded-full border border-white/5">{viewAsStudent.turma}</p>
+                        </div>
                     </div>
-                )}
-                </>
-            )}
+                </div>
 
-            {studentTab === 'strategy' && <div className="text-left"><StrategyView /></div>}
-            {studentTab === 'rounds' && <div className="text-left"><RoundsView /></div>}
-            {studentTab === 'rubrics' && <div className="text-left"><RubricView /></div>}
-            {studentTab === 'kanban' && <div className="text-left"><KanbanView /></div>}
-            {studentTab === 'logbook' && <div className="text-left"><LogbookView /></div>}
-            {studentTab === 'agenda' && <div className="text-left"><AgendaView /></div>}
+                {/* 2. NÍVEL E XP (BARRA DE PROGRESSO) */}
+                <div className="bg-[#151520] rounded-2xl border border-white/10 p-5 shadow-xl">
+                    {(() => {
+                        const currentLevel = getCurrentLevel(viewAsStudent.xp);
+                        const nextLevel = getNextLevel(viewAsStudent.xp);
+                        const progress = nextLevel ? ((viewAsStudent.xp - currentLevel.min) / (nextLevel.min - currentLevel.min)) * 100 : 100;
+
+                        return (
+                            <div>
+                                <div className="flex items-center justify-between gap-2 mb-3">
+                                    <span className={`text-sm font-black uppercase tracking-wider ${currentLevel.color}`}>{currentLevel.name}</span>
+                                    <span className="text-yellow-500 font-bold bg-yellow-500/10 px-2 py-1 rounded border border-yellow-500/20 flex items-center gap-1 text-xs"><Trophy size={12}/> {viewAsStudent.xp} XP</span>
+                                </div>
+                                <div className="w-full bg-black/50 rounded-full h-2.5 mb-2 overflow-hidden border border-white/5 shadow-inner">
+                                    <div className={`h-full transition-all duration-1000 ${currentLevel.name === 'Mestre FLL' ? 'bg-yellow-500' : 'bg-gradient-to-r from-blue-500 to-purple-500'}`} style={{width: `${Math.min(100, progress)}%`}}></div>
+                                </div>
+                                {nextLevel ? 
+                                    <p className="text-[10px] text-right text-gray-500">Próximo: <strong className="text-white">{nextLevel.name}</strong> (-{nextLevel.min - viewAsStudent.xp} XP)</p> : 
+                                    <p className="text-[10px] text-right text-yellow-500 font-bold">Nível Máximo!</p>
+                                }
+                            </div>
+                        )
+                    })()}
+                </div>
+
+                {/* 3. SALA DE TROFÉUS (COMPACTA) */}
+                <div className="bg-[#151520] rounded-2xl border border-white/10 p-5 shadow-xl">
+                   <h3 className="text-white font-bold mb-4 flex items-center justify-between gap-2 border-b border-white/10 pb-3">
+                       <div className="flex items-center gap-2"><Medal className="text-yellow-500" size={16}/> Badges</div>
+                       <span className="text-[10px] font-black font-mono text-gray-400 bg-black/50 px-2 py-1 rounded border border-white/5">
+                           {viewAsStudent.badges?.length || 0}/{BADGES_LIST.length}
+                       </span>
+                   </h3>
+                   
+                   <div className="grid grid-cols-3 gap-2">
+                       {BADGES_LIST.map(badge => {
+                           const hasBadge = viewAsStudent.badges?.includes(badge.id);
+                           
+                           return (
+                               <div 
+                                 key={badge.id} 
+                                 className={`relative group flex flex-col items-center justify-center p-2 rounded-xl border transition-all duration-300 aspect-square ${
+                                     hasBadge 
+                                     ? 'bg-gradient-to-br from-white/10 to-transparent border-yellow-500/50 shadow-[0_0_10px_rgba(234,179,8,0.15)]' 
+                                     : 'bg-black/40 border-white/5 opacity-40 grayscale cursor-help'
+                                 }`}
+                               >
+                                   <div className={`mb-1 transform transition-transform ${hasBadge ? 'scale-110 group-hover:scale-125' : 'scale-90'} ${badge.color}`}>
+                                       {badge.icon}
+                                   </div>
+                                   <span className={`text-[8px] text-center font-bold leading-tight ${hasBadge ? 'text-white' : 'text-gray-600'} line-clamp-2`}>
+                                       {badge.name}
+                                   </span>
+
+                                   <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-40 bg-gray-900 text-white p-2 rounded-lg text-[10px] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-2xl border border-gray-700 hidden md:block text-center">
+                                       <p className="font-bold mb-1 text-yellow-400">{badge.name}</p>
+                                       {badge.desc}
+                                       {!hasBadge && <p className="text-red-400 mt-1 font-bold uppercase border-t border-gray-700 pt-1">Bloqueado</p>}
+                                   </div>
+                               </div>
+                           );
+                       })}
+                   </div>
+                   {(!viewAsStudent.badges || viewAsStudent.badges.length === 0) && (
+                       <p className="text-center text-[10px] text-gray-500 mt-3 italic bg-black/30 p-2 rounded-lg">
+                           Sem badges lendárias ainda.
+                       </p>
+                   )}
+                </div>
+            </div>
+
+            {/* COLUNA DIREITA (CONTEÚDO PRINCIPAL) */}
+            <div className="flex-1 min-w-0 flex flex-col gap-6">
+                
+                {/* WIDGETS EMPILHADOS PARA APROVEITAR A LARGURA TOTAL */}
+                <div className="flex flex-col gap-6">
+                    <div className="[&>div]:mb-0 w-full">
+                        <TeamStatsPanel />
+                    </div>
+                    <div className="[&>div]:mb-0 w-full">
+                        <TeamAchievementsPanel />
+                    </div>
+                </div>
+
+                {/* NAVEGAÇÃO DE ABAS */}
+                <div className="bg-[#151520] border border-white/10 rounded-2xl p-2 sticky top-[80px] z-30 shadow-2xl flex gap-1 overflow-x-auto custom-scrollbar">
+                    <button onClick={() => setStudentTab('mission')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${studentTab === 'mission' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}><Rocket size={16}/> Minha Missão</button>
+                    <button onClick={() => setStudentTab('strategy')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${studentTab === 'strategy' ? 'bg-purple-500 text-white shadow-lg shadow-purple-900/20' : 'text-gray-400 hover:text-purple-400 hover:bg-purple-500/10'}`}><Lightbulb size={16}/> Estratégia</button>
+                    <button onClick={() => setStudentTab('rubrics')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${studentTab === 'rubrics' ? 'bg-gray-400 text-black shadow-lg shadow-gray-900/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}><Scale size={16}/> Rubricas</button>
+                    <button onClick={() => setStudentTab('rounds')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${studentTab === 'rounds' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-gray-400 hover:text-blue-400 hover:bg-blue-500/10'}`}><ListTodo size={16}/> Robô</button>
+                    <button onClick={() => setStudentTab('kanban')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all relative ${studentTab === 'kanban' ? 'bg-orange-500 text-white shadow-lg shadow-orange-900/20' : 'text-gray-400 hover:text-orange-400 hover:bg-orange-500/10'}`}>
+                        <ClipboardList size={16}/> Tarefas
+                        {urgentTasksCount > 0 && <span className="absolute top-2 right-2 flex h-2.5 w-2.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span></span>}
+                    </button>
+                    <button onClick={() => setStudentTab('logbook')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${studentTab === 'logbook' ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20' : 'text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10'}`}><Book size={16}/> Diário</button>
+                    <button onClick={() => setStudentTab('agenda')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all relative ${studentTab === 'agenda' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20' : 'text-gray-400 hover:text-indigo-400 hover:bg-indigo-500/10'}`}>
+                        <CalendarDays size={16}/> Agenda
+                        {urgentEventsCount > 0 && <span className="absolute top-2 right-2 flex h-2.5 w-2.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span></span>}
+                    </button>
+                </div>
+
+                {/* CONTEÚDO DA ABA SELECIONADA */}
+                <div className="bg-[#151520]/50 rounded-2xl border border-white/5 p-4 md:p-6 min-h-[500px]">
+                    {studentTab === 'mission' && (
+                        <>
+                        {/* ESTAÇÃO ATUAL */}
+                        <p className="text-xl text-white mb-6">Estação Atual: <strong className={`uppercase ${viewAsStudent.station==='Engenharia'?'text-blue-500':viewAsStudent.station==='Inovação'?'text-pink-500':viewAsStudent.station==='Gestão'?'text-purple-500':'text-gray-400'}`}>{viewAsStudent.station || "Aguardando..."}</strong></p>
+                        
+                        {viewAsStudent.station && (
+                            <div className="mt-6 p-8 bg-black/40 rounded-2xl border border-white/10 max-w-lg mx-auto relative overflow-hidden text-left">
+                                {/* FAIXAS DE STATUS */}
+                                {viewAsStudent.submission?.status === 'pending' && <div className="bg-yellow-500/90 text-black font-bold p-2 text-sm absolute top-0 left-0 w-full flex items-center justify-center gap-2"><AlertCircle size={16}/> Atividade em análise pelo técnico.</div>}
+                                {viewAsStudent.submission?.status === 'approved' && <div className="bg-green-500/90 text-black font-bold p-2 text-sm absolute top-0 left-0 w-full flex items-center justify-center gap-2"><CheckCircle size={16}/> Atividade Aprovada!</div>}
+                                {viewAsStudent.submission?.status === 'rejected' && <div className="bg-red-500/90 text-white font-bold p-2 text-sm absolute top-0 left-0 w-full flex items-center justify-center gap-2"><AlertTriangle size={16}/> Atividade Recusada. Refaça.</div>}
+
+                                <p className="text-xs text-gray-400 uppercase font-bold mb-2 text-center mt-6">Missão Prioritária</p>
+                                <p className="italic text-gray-300 mb-8 text-lg text-center border-b border-white/10 pb-6">"{missions[viewAsStudent.station]?.text || "Aguarde orientação..."}"</p>
+
+                                {(!viewAsStudent.submission || viewAsStudent.submission.status === 'rejected') && (
+                                    <form onSubmit={handleSubmitActivity}>
+                                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Relatório da Missão</label>
+                                        <textarea required value={submissionText} onChange={(e) => setSubmissionText(e.target.value)} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white mb-4 focus:border-blue-500 outline-none min-h-[100px]" placeholder="Descreva aqui o que foi feito..." />
+                                        <button disabled={isSubmitting} className="w-full bg-blue-600 hover:bg-blue-500 transition-colors text-white font-bold py-3 rounded-lg uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                                            {isSubmitting ? <Loader2 className="animate-spin" size={20}/> : <><Upload size={20} /> Entregar Atividade</>}
+                                        </button>
+                                    </form>
+                                )}
+                                {viewAsStudent.submission && viewAsStudent.submission.status !== 'rejected' && (
+                                    <div className="text-center p-4 bg-white/5 rounded-lg border border-white/10">
+                                        <p className="text-gray-400 text-sm mb-2">Último envio: {viewAsStudent.submission.date}</p>
+                                        <p className="text-white font-bold">"{viewAsStudent.submission.text}"</p>
+                                        {viewAsStudent.submission.fileName !== "Sem arquivo" && <p className="text-blue-400 text-xs mt-2 flex items-center justify-center gap-1"><FileText size={10}/> {viewAsStudent.submission.fileName}</p>}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        </>
+                    )}
+
+                    {studentTab === 'strategy' && <div className="text-left"><StrategyView /></div>}
+                    {studentTab === 'rounds' && <div className="text-left"><RoundsView /></div>}
+                    {studentTab === 'rubrics' && <div className="text-left"><RubricView /></div>}
+                    {studentTab === 'kanban' && <div className="text-left"><KanbanView /></div>}
+                    {studentTab === 'logbook' && <div className="text-left"><LogbookView /></div>}
+                    {studentTab === 'agenda' && <div className="text-left"><AgendaView /></div>}
+                </div>
+            </div>
+          </div>
         </main>
       )}
     </div>
