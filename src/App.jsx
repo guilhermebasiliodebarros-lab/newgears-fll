@@ -4597,6 +4597,11 @@ const handleFileSelect = (e) => {
 
                                           <div className="flex items-center justify-between mt-1">
                                               <button onClick={() => openXPModal(s)} className="text-yellow-500 text-xs font-bold hover:text-yellow-400 bg-yellow-500/10 px-2 py-1 rounded flex items-center gap-1 transition-colors"><Trophy size={12}/> {s.xp} XP</button>
+                                              <div className="flex items-center gap-2">
+                                                  <button onClick={() => openGradesModal(s)} className="text-gray-500 hover:text-yellow-400 transition-colors" title="Lançar Notas"><GraduationCap size={14}/></button>
+                                                  <button onClick={() => setBadgeStudent(s)} className="text-gray-500 hover:text-yellow-500 transition-colors" title="Entregar Conquista"><Trophy size={14}/></button>
+                                                  <button onClick={() => toggleEnglishChallenge(s)} className={`transition-colors ${s.englishChallengeUnlocked ? 'text-green-500 animate-pulse drop-shadow-[0_0_5px_rgba(34,197,94,0.8)]' : 'text-gray-500 hover:text-blue-400'}`} title={s.englishChallengeUnlocked ? "Desativar Inglês" : "Ativar Inglês"}><span className="font-bold font-mono text-[10px] border border-current rounded px-1">EN</span></button>
+                                              </div>
                                           </div>
                                           {s.submission?.status === 'pending' && <button onClick={() => openReviewModal(s)} className="w-full mt-2 bg-yellow-500 text-black text-xs font-bold py-1.5 rounded hover:bg-yellow-400 flex items-center justify-center gap-2 shadow-lg shadow-yellow-900/20"><Eye size={12}/> Revisar Entrega</button>}
                                       </div>
