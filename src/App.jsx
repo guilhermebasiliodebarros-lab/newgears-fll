@@ -371,8 +371,111 @@ function App() {
       setLoginUser("");
       setLoginPass("");
       localStorage.removeItem("roboquest_user"); // Limpa a memória
+        localStorage.removeItem("roboquest_last_activity"); // Limpa o controle de tempo
   };
   // ----------------------------------
+
+    // --- AUTO LOGOUT POR INATIVIDADE E CONTROLE DE SESSÃO (30 MINUTOS) ---
+    const [logoutCountdown, setLogoutCountdown] = useState(null);
+
+    useEffect(() => {
+      let warningTimeoutId;
+      let countdownIntervalId;
+      let throttleTimer;
+
+      // O técnico (admin) não deve ser deslogado por inatividade
+      if (currentUser?.type === 'admin') return;
+
+      const TIMEOUT_MINUTES = 30; // 30 minutos totais
+      const WARNING_SECONDS = 60; // Aviso nos últimos 60 segundos
+      
+      const TIMEOUT_MS = TIMEOUT_MINUTES * 60 * 1000;
+      const WARNING_MS = WARNING_SECONDS * 1000;
+      const IDLE_TIME_BEFORE_WARNING = TIMEOUT_MS - WARNING_MS;
+
+      const checkInactivity = () => {
+        const lastActivity = localStorage.getItem("roboquest_last_activity");
+        const now = new Date().getTime();
+        
+        if (lastActivity) {
+            const timeIdle = now - parseInt(lastActivity);
+            // Se houve atividade recente (outra aba), não mostra o aviso e reseta
+            if (timeIdle < IDLE_TIME_BEFORE_WARNING) {
+                resetTimer();
+                return;
+            }
+        }
+        
+        let timeLeft = WARNING_SECONDS;
+        setLogoutCountdown(timeLeft);
+        
+        countdownIntervalId = setInterval(() => {
+            timeLeft -= 1;
+            
+            // Verifica se a outra aba foi mexida durante a contagem
+            const currentLastActivity = localStorage.getItem("roboquest_last_activity");
+            const currentNow = new Date().getTime();
+            if (currentLastActivity && (currentNow - parseInt(currentLastActivity)) < IDLE_TIME_BEFORE_WARNING) {
+                clearInterval(countdownIntervalId);
+                setLogoutCountdown(null);
+                resetTimer();
+                return;
+            }
+
+            if (timeLeft <= 0) {
+                clearInterval(countdownIntervalId);
+                setLogoutCountdown(null);
+                handleLogout();
+                alert("Sessão encerrada por inatividade (30 minutos). Por favor, faça login novamente para sua segurança.");
+            } else {
+                setLogoutCountdown(timeLeft);
+            }
+        }, 1000);
+      };
+
+      const resetTimer = () => {
+        if (currentUser) {
+          localStorage.setItem("roboquest_last_activity", new Date().getTime().toString());
+          clearTimeout(warningTimeoutId);
+          clearInterval(countdownIntervalId);
+          setLogoutCountdown(null);
+          warningTimeoutId = setTimeout(checkInactivity, IDLE_TIME_BEFORE_WARNING);
+        }
+      };
+
+      const handleActivity = () => {
+        if (!throttleTimer) {
+          resetTimer();
+          throttleTimer = setTimeout(() => { throttleTimer = null; }, 5000);
+        }
+      };
+
+      if (currentUser) {
+        const lastActivity = localStorage.getItem("roboquest_last_activity");
+        const now = new Date().getTime();
+        if (lastActivity && now - parseInt(lastActivity) > TIMEOUT_MS) {
+          handleLogout();
+          alert("Sessão encerrada por inatividade (30 minutos). Por favor, faça login novamente.");
+          return;
+        }
+        
+        resetTimer();
+        window.addEventListener('mousemove', handleActivity);
+        window.addEventListener('keydown', handleActivity);
+        window.addEventListener('click', handleActivity);
+        window.addEventListener('scroll', handleActivity);
+      }
+
+      return () => {
+        clearTimeout(warningTimeoutId);
+        clearInterval(countdownIntervalId);
+        clearTimeout(throttleTimer);
+        window.removeEventListener('mousemove', handleActivity);
+        window.removeEventListener('keydown', handleActivity);
+        window.removeEventListener('click', handleActivity);
+        window.removeEventListener('scroll', handleActivity);
+      };
+    }, [currentUser]);
 
   // Recupera estado inicial da memória também
   const [isAdmin, setIsAdmin] = useState(() => {
@@ -2202,7 +2305,14 @@ const handleFileSelect = (e) => {
         <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto de Perfil</label>
         <div className="flex items-center gap-4 bg-black/30 p-3 rounded-lg border border-white/10">
             {modal.data?.avatarImage ? ( <img src={modal.data.avatarImage} alt="Preview" className="w-16 h-16 rounded-full object-cover border-2 border-purple-500 shadow-lg"/> ) : ( <div className="w-16 h-16 rounded-full bg-black/50 flex items-center justify-center border-2 border-dashed border-gray-600"> <UserCircle size={32} className="text-gray-500" /> </div> )}
-            <input type="file" onChange={handleProfilePicSelect} accept="image/*" className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-purple-500/10 file:text-purple-500 hover:file:bg-purple-500/20 cursor-pointer"/>
+            <div className="flex flex-col gap-2">
+                <input type="file" onChange={handleProfilePicSelect} accept="image/*" className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-purple-500/10 file:text-purple-500 hover:file:bg-purple-500/20 cursor-pointer"/>
+                {modal.data?.avatarImage && (
+                    <button type="button" onClick={() => setModal(prev => ({ ...prev, data: { ...prev.data, avatarImage: null } }))} className="text-xs text-red-500 hover:text-red-400 font-bold self-start px-2 transition-colors">
+                        Remover Foto
+                    </button>
+                )}
+            </div>
         </div>
     </div>
     
@@ -3759,6 +3869,23 @@ const handleFileSelect = (e) => {
       <div className="relative z-10">
         <Notification />
         {renderModal()}
+
+        {/* --- ALERTA DE LOGOUT POR INATIVIDADE --- */}
+        {logoutCountdown !== null && (
+          <>
+            <div className="fixed top-0 left-0 w-full h-1 bg-gray-800 z-[200]">
+                <div className="h-full bg-red-500 transition-all duration-1000 ease-linear" style={{ width: `${(logoutCountdown / 60) * 100}%` }}></div>
+            </div>
+            <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-red-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in slide-in-from-top-4 border-2 border-red-400">
+                <AlertTriangle className="animate-pulse" size={20} />
+                <span className="font-bold text-sm">Sua sessão vai expirar em {logoutCountdown}s</span>
+                <button className="ml-2 bg-white text-red-600 px-3 py-1 rounded-full text-xs font-black hover:bg-red-100 transition-colors">
+                    Continuar Logado
+                </button>
+            </div>
+          </>
+        )}
+
         <TvModePanel 
             isTvMode={isTvMode} 
             setIsTvMode={setIsTvMode} 
