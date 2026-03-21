@@ -995,7 +995,13 @@ function App() {
 
   const moveTask = async (id, newStatus) => {
       try {
-          await updateDoc(doc(db, "tasks", id), { status: newStatus });
+          const updateData = { status: newStatus };
+          if (newStatus === 'done') {
+              updateData.completedAt = new Date().toISOString(); // Salva quando terminou
+          } else {
+              updateData.completedAt = null; // Limpa se voltar pra Fazendo/A Fazer
+          }
+          await updateDoc(doc(db, "tasks", id), updateData);
       } catch (error) {
           console.error("Erro ao mover tarefa:", error);
       }
@@ -2086,12 +2092,31 @@ const handleFileSelect = (e) => {
                                     <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-4">
                                         <h4 className="text-purple-500 font-bold text-xs uppercase mb-3 flex items-center gap-2"><BookOpen size={14}/> Gestão</h4>
                                         <div className="space-y-2">
-                                            {week.assignments.Gestão.map((item, i) => (
-                                                <div key={i} className="flex items-center gap-2 bg-black/40 p-2 rounded-lg border border-white/5">
-                                                    <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center text-[10px] text-purple-500 font-bold"><UserCircle size={14}/></div>
-                                                    <span className="text-sm text-gray-300">{resolveName(item)}</span>
-                                                </div>
-                                            ))}
+                                            {week.assignments.Gestão.map((item, i) => {
+                                                const studentName = resolveName(item);
+                                                // Verifica se é o aluno rotativo na gestão (que assume como líder)
+                                                const isLeader = studentName !== 'Sofia' && studentName !== 'Heloise' && studentName !== 'Vago';
+                                                
+                                                return (
+                                                    <div key={i} className={`flex items-center gap-2 p-2 rounded-lg border transition-all ${isLeader ? 'bg-gradient-to-r from-yellow-500/10 to-black/40 border-yellow-500/30 shadow-[0_0_10px_rgba(234,179,8,0.15)]' : 'bg-black/40 border-white/5'}`}>
+                                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${isLeader ? 'bg-yellow-500/20 text-yellow-500' : 'bg-purple-500/20 text-purple-500'}`}>
+                                                            {isLeader ? <Crown size={14}/> : <UserCircle size={14}/>}
+                                                        </div>
+                                                        <div className="flex flex-col justify-center">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className={`text-sm ${isLeader ? 'text-yellow-400 font-bold' : 'text-gray-300'}`}>
+                                                                    {studentName}
+                                                                </span>
+                                                                {isLeader && (
+                                                                    <span className="text-[8px] text-yellow-500 font-bold uppercase tracking-widest bg-yellow-500/10 px-1 py-0.5 rounded border border-yellow-500/20">
+                                                                        Líder
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
 
@@ -3333,15 +3358,34 @@ const handleFileSelect = (e) => {
           return { color: 'text-gray-500', border: 'border-white/5', icon: <Calendar size={12}/>, text: dateStr };
       };
 
+      // --- LÓGICA DE CÁLCULO DE TEMPO ---
+      const getTaskDuration = (createdAt, completedAt) => {
+          if (!createdAt || !completedAt) return null;
+          const start = new Date(createdAt);
+          const end = new Date(completedAt);
+          const diffMs = end.getTime() - start.getTime();
+          if (diffMs < 0) return '0 min';
+          
+          const diffMins = Math.floor(diffMs / 60000);
+          if (diffMins < 60) return `${diffMins} min`;
+          
+          const diffHours = Math.floor(diffMins / 60);
+          if (diffHours < 24) return `${diffHours}h ${diffMins % 60}m`;
+          
+          const diffDays = Math.floor(diffHours / 24);
+          return `${diffDays}d ${diffHours % 24}h`;
+      };
+
       const TaskCard = ({ t, showMoveRight, showDelete }) => {
           const status = getDeadlineStatus(t.dueDate);
           const tagObj = KANBAN_TAGS.find(tag => tag.id === (t.tag || 'geral')) || KANBAN_TAGS[3];
 
           // Só pisca se estiver atrasado e ainda não foi concluída
           const isPulsing = status?.isOverdue && t.status !== 'done';
+          const duration = t.status === 'done' ? getTaskDuration(t.createdAt, t.completedAt) : null;
 
           return (
-              <div className={`bg-black/40 p-3 rounded-xl border flex flex-col gap-2 group transition-all duration-500 ${status ? status.border : 'border-white/5'} ${isPulsing ? 'animate-pulse hover:animate-none shadow-[0_0_15px_rgba(239,68,68,0.15)]' : 'hover:border-white/20'}`}>
+              <div className={`bg-black/40 p-3 rounded-xl border flex flex-col gap-2 group transition-all duration-500 ${status && t.status !== 'done' ? status.border : 'border-white/5'} ${isPulsing ? 'animate-pulse hover:animate-none shadow-[0_0_15px_rgba(239,68,68,0.15)]' : 'hover:border-white/20'}`}>
                   <div className="flex justify-between items-start gap-2">
                       <div className="flex flex-wrap gap-1.5">
                           <span className="text-[10px] font-bold uppercase bg-white/10 px-2 py-0.5 rounded text-gray-300 flex items-center gap-1">
@@ -3351,7 +3395,8 @@ const handleFileSelect = (e) => {
                               <Tag size={8}/> {tagObj.label}
                           </span>
                       </div>
-                      {status && <span className={`text-[10px] font-bold flex items-center gap-1 whitespace-nowrap mt-0.5 ${status.color}`}>{status.icon} {status.text}</span>}
+                      {status && t.status !== 'done' && <span className={`text-[10px] font-bold flex items-center gap-1 whitespace-nowrap mt-0.5 ${status.color}`}>{status.icon} {status.text}</span>}
+                      {duration && <span className="text-[10px] font-bold text-green-500 flex items-center gap-1 mt-0.5 bg-green-500/10 px-1.5 py-0.5 rounded border border-green-500/20" title="Tempo total levado"><Clock size={10}/> {duration}</span>}
                   </div>
                   <p className="text-sm text-gray-200">{t.text}</p>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end pt-2 border-t border-white/5 mt-1">
@@ -4025,8 +4070,38 @@ const handleFileSelect = (e) => {
 
                     if (!viewAsStudent) {
                         return (
-                            <div className="text-center bg-white/5 border border-white/10 p-4 rounded-xl mb-6">
-                                <p className="text-sm text-gray-400">Modo Técnico: Acompanhe os registros da equipe abaixo.</p>
+                            <div className="bg-white/5 border border-white/10 p-4 rounded-xl mb-6">
+                                <p className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-3 text-center">Legenda da Bateria (Modo Técnico)</p>
+                                <div className="grid grid-cols-1 gap-2">
+                                    <div className="flex items-center gap-3 p-2 rounded-lg bg-green-500/10 border border-green-500/20">
+                                        <div className="p-1.5 bg-green-500/20 rounded-full"><BatteryFull size={18} className="text-green-500"/></div>
+                                        <div>
+                                            <span className="block font-bold text-green-500 text-xs">100% - Turbo Mode</span>
+                                            <span className="text-[10px] text-gray-400">Tô pronto pra tudo!</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                                        <div className="p-1.5 bg-blue-500/20 rounded-full"><BatteryMedium size={18} className="text-blue-500"/></div>
+                                        <div>
+                                            <span className="block font-bold text-blue-500 text-xs">75% - Focado</span>
+                                            <span className="text-[10px] text-gray-400">Estou bem, vamos nessa.</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                                        <div className="p-1.5 bg-yellow-500/20 rounded-full"><BatteryLow size={18} className="text-yellow-500"/></div>
+                                        <div>
+                                            <span className="block font-bold text-yellow-500 text-xs">50% - Economia de Energia</span>
+                                            <span className="text-[10px] text-gray-400">Cansado, mas aguento.</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 p-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                                        <div className="p-1.5 bg-red-500/20 rounded-full"><BatteryWarning size={18} className="text-red-500"/></div>
+                                        <div>
+                                            <span className="block font-bold text-red-500 text-xs">25% - Bateria Arriada</span>
+                                            <span className="text-[10px] text-gray-400">Preciso de ajuda ou pausa.</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         );
                     }
