@@ -328,7 +328,16 @@ function App() {
 
     // 1. Lógica de login de Admin (SIMPLIFICADA)
     // TODO: Substituir por Firebase Auth. Por enquanto, uma verificação simples.
-    const adminFound = ADMIN_USERS.find(a => a.user.toLowerCase() === userClean && a.pass === passClean);
+    let adminFound = ADMIN_USERS.find(a => a.user.toLowerCase() === userClean && a.pass === passClean);
+
+    // Verifica se tem senha personalizada no Firebase
+    if (!adminFound && adminProfile?.password) {
+        // Pode logar usando "admin", "tecnico" ou o próprio nome configurado no perfil
+        const allowedUsers = ['admin', 'técnico', 'tecnico', (adminProfile?.name || '').toLowerCase().trim()];
+        if (allowedUsers.includes(userClean) && passClean === adminProfile.password) {
+            adminFound = { user: adminProfile.name || 'Técnico' };
+        }
+    }
 
     if (adminFound) {
         // Logou com sucesso!
@@ -520,6 +529,7 @@ function App() {
   const [tasks, setTasks] = useState([]) // <--- NOVO ESTADO PARA TAREFAS
   const [logbookEntries, setLogbookEntries] = useState([]) // <--- NOVO ESTADO PARA DIÁRIO
   const [events, setEvents] = useState([]) // <--- NOVO ESTADO PARA AGENDA
+  const [adminProfile, setAdminProfile] = useState({ name: 'Técnico', avatarImage: null }) // <--- PERFIL DO TÉCNICO
 
   // --- LÓGICA DE NOTIFICAÇÕES DA AGENDA EM TEMPO REAL ---
   const getLocalYYYYMMDD = (dateObj) => {
@@ -861,6 +871,12 @@ function App() {
             setRobotDesignRubric(docSnap.data());
         }
     });
+    
+    const unsubAdminProfile = onSnapshot(doc(db, "settings", "admin_profile"), (docSnap) => {
+        if (docSnap.exists()) {
+            setAdminProfile(docSnap.data());
+        }
+    });
 
     // ... e não esqueça de adicionar no return para limpar:
     // return () => { ... unsubProject(); };
@@ -873,7 +889,7 @@ function App() {
         unsubStudents(); unsubExperts(); unsubRobot(); unsubRounds();
         unsubCompliments(); unsubMatrix(); unsubQuestions(); unsubScoreHistory();
         unsubEvents();
-        unsubOutreach(); unsubMissions(); unsubTasks(); unsubInnovationRubric(); unsubRobotDesignRubric(); if (unsubLogbook) unsubLogbook(); unsubPitStop();
+        unsubOutreach(); unsubMissions(); unsubTasks(); unsubInnovationRubric(); unsubRobotDesignRubric(); unsubAdminProfile(); if (unsubLogbook) unsubLogbook(); unsubPitStop();
     };
   }, []);
 
@@ -918,6 +934,8 @@ function App() {
   const getStudentName = (id) => { const s = students.find(stud => stud.id === id); return s ? s.name : "Vaga"; }
 
   const convertBase64 = (file) => new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result); reader.onerror = error => reject(error); });
+
+ 
 
   // --- FUNÇÃO ESPECÍFICA PARA FOTO DE PERFIL (COM CROP) ---
   const handleProfilePicSelect = async (e) => {
@@ -1677,6 +1695,32 @@ const handleDeleteRound = async (id) => {
       }
   };
 
+  // --- SALVAR PERFIL DO TÉCNICO ---
+  const handleAdminProfileSubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const newPassword = fd.get('password');
+      
+      const dataToSave = {
+          name: fd.get('name') || 'Técnico',
+          avatarImage: modal.data?.avatarImage || null
+      };
+
+      // Se digitou uma senha nova, envia pro banco
+      if (newPassword && newPassword.trim() !== '') {
+          dataToSave.password = newPassword.trim();
+      }
+
+      try {
+          await setDoc(doc(db, "settings", "admin_profile"), dataToSave, { merge: true });
+          closeModal();
+          showNotification("Perfil do técnico atualizado com sucesso!");
+      } catch (error) {
+          console.error("Erro ao salvar perfil do técnico:", error);
+          showNotification("Erro ao salvar perfil.", "error");
+      }
+  };
+
 
   // --- MODAIS ---
 
@@ -2347,6 +2391,43 @@ const handleFileSelect = (e) => {
     </button>
   </form>
 )}
+
+          {modal.type === 'editAdminProfile' && (
+            <form onSubmit={handleAdminProfileSubmit}>
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white">
+                <Shield className="text-red-500"/> Editar Perfil do Técnico
+              </h3>
+              
+              <div className="mb-4">
+                  <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome de Exibição</label>
+                  <input name="name" defaultValue={modal.data?.name} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-red-500 outline-none" placeholder="Ex: Técnico Guilherme" />
+              </div>
+
+              <div className="mb-4">
+                  <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nova Senha de Acesso (Opcional)</label>
+                  <input name="password" type="password" className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-red-500 outline-none" placeholder="Deixe em branco para não alterar" />
+                  <p className="text-[10px] text-gray-500 mt-1">Você poderá logar usando o usuário <strong className="text-gray-400">admin</strong> ou o seu <strong className="text-gray-400">Nome de Exibição</strong>.</p>
+              </div>
+
+              {/* UPLOAD DE FOTO */}
+              <div className="mb-6">
+                  <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto de Perfil</label>
+                  <div className="flex items-center gap-4 bg-black/30 p-3 rounded-lg border border-white/10">
+                      {modal.data?.avatarImage ? ( <img src={modal.data.avatarImage} alt="Preview" className="w-16 h-16 rounded-full object-cover border-2 border-red-500 shadow-lg"/> ) : ( <div className="w-16 h-16 rounded-full bg-black/50 flex items-center justify-center border-2 border-dashed border-gray-600"> <UserCircle size={32} className="text-gray-500" /> </div> )}
+                      <div className="flex flex-col gap-2">
+                          <input type="file" onChange={handleProfilePicSelect} accept="image/*" className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-red-500/10 file:text-red-500 hover:file:bg-red-500/20 cursor-pointer"/>
+                          {modal.data?.avatarImage && (
+                              <button type="button" onClick={() => setModal(prev => ({ ...prev, data: { ...prev.data, avatarImage: null } }))} className="text-xs text-red-500 hover:text-red-400 font-bold self-start px-2 transition-colors">
+                                  Remover Foto
+                              </button>
+                          )}
+                      </div>
+                  </div>
+              </div>
+              
+              <button type="submit" className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-red-900/20 transition-all">Salvar Alterações</button>
+            </form>
+          )}
           {modal.type === 'expertForm' && (<form onSubmit={handleExpertSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Briefcase className="text-purple-500"/> {modal.data ? 'Editar' : 'Novo'} Especialista</h3><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome</label><input name="name" defaultValue={modal.data?.name} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div><div className="grid grid-cols-2 gap-4 mb-4"><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Cargo</label><input name="role" defaultValue={modal.data?.role} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data</label><input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Anotações</label><textarea name="notes" defaultValue={modal.data?.notes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none h-20" /></div><div className="mb-4 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Evidência (Foto)</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-purple-500/10 file:text-purple-500 hover:file:bg-purple-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}</div><div className="mb-6 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/10"><div><span className="text-sm font-bold text-white">Impactou?</span></div><select name="impact" defaultValue={modal.data?.impact} className="bg-black/50 border border-white/20 text-white p-2 rounded text-sm"><option value="Baixo">Baixo</option><option value="Médio">Médio</option><option value="Alto">Alto</option></select><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="applied" defaultChecked={modal.data?.applied} className="w-5 h-5 accent-green-500" /><span className="text-xs text-white">Aplicado</span></label></div><button className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg">Salvar Registro</button></form>)}
 
           {modal.type === 'robotForm' && (<form onSubmit={handleRobotSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><GitCommit className="text-blue-500"/> {modal.data ? 'Editar' : 'Novo'} Versão</h3><div className="grid grid-cols-2 gap-4 mb-4"><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Versão</label><input name="version" defaultValue={modal.data?.version} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: V2.0" /></div><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data</label><input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Apelido</label><input name="name" defaultValue={modal.data?.name} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">O que mudou?</label><textarea name="changes" defaultValue={modal.data?.changes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none h-24" /></div><div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Evidência (Foto)</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}</div><button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar Versão</button></form>)}
@@ -4287,17 +4368,19 @@ const handleFileSelect = (e) => {
             <div className="w-full lg:w-80 shrink-0 space-y-6">
                 
                 {/* 1. PERFIL ADMIN */}
-                <div className="text-center py-6 bg-[#151520] rounded-2xl border border-white/10 shadow-xl relative overflow-hidden">
+                <div className="text-center py-6 bg-[#151520] rounded-2xl border border-white/10 shadow-xl relative overflow-hidden group">
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 to-orange-500"></div>
-                    <div className="absolute top-4 right-4 text-gray-600">
-                        <Shield size={24} />
-                    </div>
+                    <button onClick={() => setModal({ type: 'editAdminProfile', data: adminProfile })} className="absolute top-4 right-4 text-gray-600 hover:text-white transition-colors z-10 bg-black/40 p-1.5 rounded-lg" title="Editar Perfil">
+                        <Pencil size={18} />
+                    </button>
                     <div className="flex flex-col items-center justify-center gap-3">
-                        <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center border-2 border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
-                            <Bot size={40} className="text-red-500" />
-                        </div>
+                        {adminProfile?.avatarImage ? (
+                            <img src={adminProfile.avatarImage} alt="Admin" className="w-20 h-20 rounded-full object-cover border-2 border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]" />
+                        ) : (
+                            <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center border-2 border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]"><Bot size={40} className="text-red-500" /></div>
+                        )}
                         <div className="text-center">
-                            <h2 className="text-2xl font-black text-white leading-none tracking-tight">Técnico</h2>
+                            <h2 className="text-2xl font-black text-white leading-none tracking-tight">{adminProfile?.name || 'Técnico'}</h2>
                             <p className="text-red-400 text-xs font-mono mt-2 bg-red-500/10 inline-block px-3 py-1 rounded-full border border-red-500/20">Acesso Restrito</p>
                         </div>
                     </div>
