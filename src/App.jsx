@@ -1849,6 +1849,50 @@ const handleDeleteRound = async (id) => {
           showNotification("Erro ao salvar mudança.", "error");
       }
   }
+
+  // --- APROVAÇÃO RÁPIDA DE ATIVIDADES (EMAIL/EXTERNO) ---
+  const toggleActivityStatus = async (student, newStatus) => {
+      try {
+          const studentRef = doc(db, "students", student.id);
+          if (!newStatus) {
+              await updateDoc(studentRef, { submission: null });
+              showNotification("Status de entrega removido.");
+          } else {
+              const newSubmission = { 
+                  status: newStatus,
+                  text: "Avaliado manualmente pelo Técnico (E-mail/Externo)",
+                  date: new Date().toLocaleString(),
+                  fileName: "Sem arquivo na plataforma"
+              };
+              await updateDoc(studentRef, { submission: newSubmission });
+              showNotification(newStatus === 'approved' ? 'Atividade Aprovada!' : 'Atividade Recusada!', newStatus === 'approved' ? 'success' : 'error');
+          }
+      } catch (error) {
+          console.error("Erro ao alterar status da atividade:", error);
+          showNotification("Erro ao salvar.", "error");
+      }
+  };
+
+  // --- FUNÇÃO PARA RESETAR TODAS AS ATIVIDADES ---
+  const handleResetAllActivities = async () => {
+      if (!window.confirm("Tem certeza que deseja limpar as entregas de atividades de TODOS os alunos? Isso preparará o sistema para a próxima semana de treinos.")) return;
+      
+      try {
+          const updates = students.map(student => {
+              if (student.submission) {
+                  return updateDoc(doc(db, "students", student.id), { submission: null });
+              }
+              return Promise.resolve();
+          });
+
+          await Promise.all(updates);
+          showNotification("Todas as atividades foram resetadas!", "success");
+      } catch (error) {
+          console.error("Erro ao resetar atividades:", error);
+          showNotification("Erro ao resetar.", "error");
+      }
+  };
+
 // --- CARREGAR AS METAS DO BANCO (Memória Longa) ---
   useEffect(() => {
     const docRef = doc(db, "settings", "weekly_missions");
@@ -4410,6 +4454,7 @@ const handleFileSelect = (e) => {
                         <button onClick={handleApplyRotation} className="w-full bg-blue-600/20 hover:bg-blue-600 text-blue-500 hover:text-white py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all border border-blue-500/30"><RotateCcw size={14} /> Aplicar Rodízio</button>
                         <button onClick={openAttendanceModal} className="w-full bg-white/5 hover:bg-white/10 text-white py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all border border-white/10"><ListTodo size={14} /> Chamada</button>
                         <button onClick={() => openNewStudentModal()} className="w-full bg-green-600/20 hover:bg-green-600 text-green-500 hover:text-white py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all border border-green-500/30"><UserPlus size={14} /> Novo Aluno</button>
+                        <button onClick={handleResetAllActivities} className="w-full bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all border border-red-500/20"><Trash2 size={14} /> Resetar Atividades</button>
                     </div>
                 </div>
             </div>
@@ -4457,8 +4502,16 @@ const handleFileSelect = (e) => {
                       <div className="space-y-3 flex-1 overflow-y-auto pr-1 custom-scrollbar">
                           {students.filter(s => s.station === null).map(s => {
                               const level = getCurrentLevel(s.xp);
+                              
+                              let cardStyle = 'bg-[#151520] border-white/10';
+                              if (s.submission?.status === 'approved') {
+                                  cardStyle = 'bg-green-500/10 border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.15)]';
+                              } else if (s.submission?.status === 'rejected') {
+                                  cardStyle = 'bg-red-500/10 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.15)]';
+                              }
+
                               return (
-                                  <div key={s.id} className="border border-white/10 p-3 rounded-xl bg-[#151520] flex flex-col gap-3 group hover:border-white/30 transition-all">
+                                  <div key={s.id} className={`border p-3 rounded-xl flex flex-col gap-3 group hover:border-white/30 transition-all ${cardStyle}`}>
                                       <div className="flex items-center gap-3">
                                           {s.avatarImage ? (
      <img src={s.avatarImage} alt="Avatar" className="w-10 h-10 rounded-full object-cover" />
@@ -4503,6 +4556,21 @@ const handleFileSelect = (e) => {
                                           <button onClick={() => moveStudent(s.id, 'Engenharia')} className="flex-1 py-1.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-500 border border-blue-500/20 hover:bg-blue-500 hover:text-white transition-all">ENG</button>
                                           <button onClick={() => moveStudent(s.id, 'Inovação')} className="flex-1 py-1.5 rounded text-[10px] font-bold bg-pink-500/10 text-pink-500 border border-pink-500/20 hover:bg-pink-500 hover:text-white transition-all">INO</button>
                                           <button onClick={() => moveStudent(s.id, 'Gestão')} className="flex-1 py-1.5 rounded text-[10px] font-bold bg-purple-500/10 text-purple-500 border border-purple-500/20 hover:bg-purple-500 hover:text-white transition-all">GES</button>
+                                      </div>
+                                      
+                                      {/* --- STATUS DA ATIVIDADE NA EQUIPE --- */}
+                                      <div className="flex items-center justify-between border-t border-white/5 pt-2">
+                                          <div className="flex items-center gap-1 bg-black/40 p-1 rounded-md border border-white/10">
+                                              <button onClick={() => toggleActivityStatus(s, 'approved')} className={`p-1 rounded ${s.submission?.status === 'approved' ? 'bg-green-500 text-black shadow-[0_0_10px_rgba(34,197,94,0.4)]' : 'text-gray-500 hover:text-green-500'}`} title="Aprovar Atividade (Email/Externo)"><CheckCircle size={12}/></button>
+                                              <button onClick={() => toggleActivityStatus(s, 'rejected')} className={`p-1 rounded ${s.submission?.status === 'rejected' ? 'bg-red-500 text-white shadow-[0_0_10px_rgba(239,68,68,0.4)]' : 'text-gray-500 hover:text-red-500'}`} title="Recusar Atividade"><XCircle size={12}/></button>
+                                              {s.submission && <button onClick={() => toggleActivityStatus(s, null)} className="p-1 rounded text-gray-500 hover:text-gray-300" title="Limpar"><Trash2 size={10}/></button>}
+                                          </div>
+                                          <div className="flex justify-end">
+                                              {s.submission?.status === 'pending' && <span className="text-[9px] bg-yellow-500/20 text-yellow-500 px-1.5 py-0.5 rounded border border-yellow-500/50 uppercase font-black flex items-center gap-1 animate-pulse"><AlertCircle size={10}/> Avaliar</span>}
+                                              {s.submission?.status === 'approved' && <span className="text-[9px] bg-green-500/20 text-green-500 px-1.5 py-0.5 rounded border border-green-500/50 uppercase font-black flex items-center gap-1"><CheckCircle size={10}/> Aprovado</span>}
+                                              {s.submission?.status === 'rejected' && <span className="text-[9px] bg-red-500/20 text-red-500 px-1.5 py-0.5 rounded border border-red-500/50 uppercase font-black flex items-center gap-1"><AlertTriangle size={10}/> Recusado</span>}
+                                              {!s.submission && <span className="text-[9px] text-gray-600 uppercase font-bold px-1.5 py-0.5">Sem Entrega</span>}
+                                          </div>
                                       </div>
                                   </div>
                               )
@@ -4567,18 +4635,29 @@ const handleFileSelect = (e) => {
 
                                       const isLeader = st === 'Gestão' && s.name !== 'Sofia' && s.name !== 'Heloise';
 
+                                      let cardStyle = 'bg-[#151520] border-white/10';
+                                      if (s.submission?.status === 'approved') {
+                                          cardStyle = 'bg-green-500/10 border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.15)]';
+                                      } else if (s.submission?.status === 'rejected') {
+                                          cardStyle = 'bg-red-500/10 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.15)]';
+                                      } else if (isLeader) {
+                                          cardStyle = 'bg-gradient-to-r from-yellow-500/10 to-transparent border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.15)]';
+                                      }
+
                                       return (
-                                      <div key={s.id} className={`p-3 rounded-xl relative group animate-in slide-in-from-bottom-2 flex flex-col border transition-all ${isLeader ? 'bg-gradient-to-r from-yellow-500/10 to-transparent border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.15)]' : 'bg-[#151520] border-white/10'}`}>
+                                      <div key={s.id} className={`p-3 rounded-xl relative group animate-in slide-in-from-bottom-2 flex flex-col border transition-all ${cardStyle}`}>
                                           <div className="flex justify-between items-start mb-2">
                                               <div>
-                                                  <span className={`font-bold text-sm flex items-center gap-1.5 ${isLeader ? 'text-yellow-400' : 'text-white'}`}>
-                                                      {isLeader && <Crown size={14} className="text-yellow-500" />} {s.name}
+                                                  <span className={`font-bold text-sm flex items-center gap-1.5 ${isLeader && s.submission?.status !== 'approved' && s.submission?.status !== 'rejected' ? 'text-yellow-400' : 'text-white'}`}>
+                                                      {isLeader && <Crown size={14} className={s.submission?.status === 'approved' ? 'text-green-500' : 'text-yellow-500'} />} {s.name}
                                                   </span>
                                                   <span className="text-gray-500 text-[10px] font-mono bg-white/5 px-1.5 rounded inline-block mt-0.5">{s.turma} {isLeader && <span className="ml-1 text-yellow-500 font-bold uppercase tracking-widest bg-yellow-500/10 px-1 rounded border border-yellow-500/20">Líder</span>}</span>
                                               </div>
                                               <button onClick={() => moveStudent(s.id, null)} className="text-gray-500 hover:text-red-500 bg-black/20 hover:bg-red-500/10 p-1 rounded transition-colors" title="Remover da Estação"><X size={12}/></button>
                                           </div>
-                                          {s.submission?.status === 'pending' && <AlertCircle size={16} className="text-yellow-500 absolute top-2 right-8 animate-bounce"/>}
+                                          {s.submission?.status === 'pending' && <span className="absolute top-2 right-8 bg-yellow-500/20 text-yellow-500 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border border-yellow-500/50 flex items-center gap-1 shadow-[0_0_10px_rgba(234,179,8,0.2)] animate-pulse"><AlertCircle size={10}/> Avaliar</span>}
+                                          {s.submission?.status === 'approved' && <span className="absolute top-2 right-8 bg-green-500/20 text-green-500 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border border-green-500/50 flex items-center gap-1 shadow-[0_0_10px_rgba(34,197,94,0.2)]"><CheckCircle size={10}/> Aprovado</span>}
+                                          {s.submission?.status === 'rejected' && <span className="absolute top-2 right-8 bg-red-500/20 text-red-500 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border border-red-500/50 flex items-center gap-1 shadow-[0_0_10px_rgba(239,68,68,0.2)]"><AlertTriangle size={10}/> Recusado</span>}
                                           
                                           {/* --- INTEGRAÇÃO COM KANBAN (FOCO ATUAL) --- */}
                                           <div className="my-2 bg-black/40 rounded-lg p-2 border border-white/5 flex-1">
@@ -4598,6 +4677,13 @@ const handleFileSelect = (e) => {
                                           <div className="flex items-center justify-between mt-1">
                                               <button onClick={() => openXPModal(s)} className="text-yellow-500 text-xs font-bold hover:text-yellow-400 bg-yellow-500/10 px-2 py-1 rounded flex items-center gap-1 transition-colors"><Trophy size={12}/> {s.xp} XP</button>
                                               <div className="flex items-center gap-2">
+                                                  {/* --- NOVOS BOTÕES AQUI --- */}
+                                                  <div className="flex items-center gap-1 bg-black/40 p-1 rounded-md border border-white/10 mr-1">
+                                                      <button onClick={() => toggleActivityStatus(s, 'approved')} className={`p-1 rounded ${s.submission?.status === 'approved' ? 'bg-green-500 text-black shadow-[0_0_10px_rgba(34,197,94,0.4)]' : 'text-gray-500 hover:text-green-500'}`} title="Aprovar Atividade"><CheckCircle size={12}/></button>
+                                                      <button onClick={() => toggleActivityStatus(s, 'rejected')} className={`p-1 rounded ${s.submission?.status === 'rejected' ? 'bg-red-500 text-white shadow-[0_0_10px_rgba(239,68,68,0.4)]' : 'text-gray-500 hover:text-red-500'}`} title="Recusar Atividade"><XCircle size={12}/></button>
+                                                      {s.submission && <button onClick={() => toggleActivityStatus(s, null)} className="p-1 rounded text-gray-500 hover:text-gray-300" title="Limpar"><Trash2 size={10}/></button>}
+                                                  </div>
+
                                                   <button onClick={() => openGradesModal(s)} className="text-gray-500 hover:text-yellow-400 transition-colors" title="Lançar Notas"><GraduationCap size={14}/></button>
                                                   <button onClick={() => setBadgeStudent(s)} className="text-gray-500 hover:text-yellow-500 transition-colors" title="Entregar Conquista"><Trophy size={14}/></button>
                                                   <button onClick={() => toggleEnglishChallenge(s)} className={`transition-colors ${s.englishChallengeUnlocked ? 'text-green-500 animate-pulse drop-shadow-[0_0_5px_rgba(34,197,94,0.8)]' : 'text-gray-500 hover:text-blue-400'}`} title={s.englishChallengeUnlocked ? "Desativar Inglês" : "Ativar Inglês"}><span className="font-bold font-mono text-[10px] border border-current rounded px-1">EN</span></button>
