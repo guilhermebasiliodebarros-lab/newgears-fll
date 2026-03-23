@@ -1184,6 +1184,23 @@ const handleDeleteRound = async (id) => {
       }
   };
 
+  const handleDeleteMission = async (id) => {
+      if (window.confirm("Tem certeza que deseja excluir esta missão? Ela será removida permanentemente do banco de dados.")) {
+          try {
+              await deleteDoc(doc(db, "missions", id));
+              showNotification("Missão excluída com sucesso!");
+              // Se estava editando essa mesma missão, limpa o formulário
+              if (modal.data?.id === id) {
+                  setModal({ type: 'missionForm', data: null });
+                  setSelectedFile(null);
+              }
+          } catch (error) {
+              console.error("Erro ao excluir missão:", error);
+              showNotification("Erro ao excluir.", "error");
+          }
+      }
+  };
+
   // --- FUNÇÃO CORRIGIDA COM LOGS ---
   const handleRegisterSubmit = async (e) => { 
       e.preventDefault(); 
@@ -1420,41 +1437,9 @@ const handleDeleteRound = async (id) => {
           totalPoints
       };
 
-      // --- LÓGICA DE DESENHO AUTOMÁTICO NA ESTRATÉGIA ---
-      const pathColor = fd.get('pathColor') || '#ffff00';
-
       try {
-          // 1. Salva o Round
           await addDoc(collection(db, "rounds"), roundData);
-
-          // 2. Tenta criar o desenho automático da rota
-          // Coordenadas aproximadas das bases (considerando canvas 800x450)
-          let startX = 60; let startY = 225; // Base Esquerda (Padrão)
-          if (roundData.startBase === 'Direita') { startX = 740; startY = 225; }
-
-          // Constrói os pontos da linha [x1, y1, x2, y2, ...]
-          let points = [startX, startY];
-          
-          selectedMissions.forEach(mId => {
-              const m = missionsList.find(miss => miss.id === mId);
-              if (m && m.x > 0 && m.y > 0) {
-                  points.push(m.x, m.y);
-              }
-          });
-
-          // Só cria se tivermos um caminho traçado (Base + pelo menos 1 missão com coordenadas)
-          if (points.length > 2) {
-              await addDoc(collection(db, "strategies"), {
-                  name: `[AUTO] ${roundData.name}`,
-                  mapId: 'mapa_padrao_local', // ID fixo usado no StrategyBoard
-                  lines: [{ tool: 'pen', color: pathColor, points: points }],
-                  createdAt: new Date().toISOString()
-              });
-              showNotification(`Rota automática criada com ${points.length/2} pontos! 🗺️`);
-          } else {
-              showNotification("Round salvo! (Sem rota automática)");
-          }
-
+          showNotification("Round salvo!");
           closeModal();
       } catch (error) {
           console.error("Erro ao salvar round:", error);
@@ -1504,8 +1489,6 @@ const handleDeleteRound = async (id) => {
           code: fd.get('code'),
           name: fd.get('name'),
           points: parseInt(fd.get('points')),
-          x: parseInt(fd.get('x')) || 0, // <--- COORDENADA X
-          y: parseInt(fd.get('y')) || 0, // <--- COORDENADA Y
           image: img
       };
 
@@ -1515,7 +1498,9 @@ const handleDeleteRound = async (id) => {
           } else {
               await addDoc(collection(db, "missions"), missionData);
           }
-          closeModal();
+          // Após salvar, não fecha o modal: apenas limpa para que você possa adicionar/ver outras
+          setModal({ type: 'missionForm', data: null });
+          setSelectedFile(null);
           showNotification("Missão salva!");
       } catch (error) {
           console.error("Erro ao salvar missão:", error);
@@ -2056,7 +2041,7 @@ const handleFileSelect = (e) => {
       const achievements = [
           { id: 'team_xp', name: 'Potência Máxima', icon: <Zap size={16}/>, color: 'text-yellow-400', bg: 'bg-yellow-500', desc: 'Atingir 6.000 XP somados por toda a equipe.', current: totalXP, target: 6000 },
           { id: 'team_impact', name: 'Voz da Mudança', icon: <Megaphone size={16}/>, color: 'text-orange-500', bg: 'bg-orange-500', desc: 'Impactar mais de 350 pessoas com o projeto.', current: totalImpact, target: 350 },
-          { id: 'team_tasks', name: 'Máquina de Produtividade', icon: <CheckCheck size={16}/>, color: 'text-green-500', bg: 'bg-green-500', desc: 'Concluir 30 tarefas no Kanban da equipe.', current: totalTasksDone, target: 30 },
+          { id: 'team_tasks', name: 'Máquina de Produtividade', icon: <CheckCheck size={16}/>, color: 'text-green-500', bg: 'bg-green-500', desc: 'Concluir 300 tarefas no Kanban da equipe.', current: totalTasksDone, target: 300 },
           { id: 'team_experts', name: 'Mentes Conectadas', icon: <Briefcase size={16}/>, color: 'text-purple-500', bg: 'bg-purple-500', desc: 'Consultar 5 especialistas diferentes.', current: totalExperts, target: 5 }
       ];
 
@@ -2591,20 +2576,6 @@ const handleFileSelect = (e) => {
                   </div>
               </div>
 
-              {/* SELEÇÃO DE COR DA ROTA (NOVO) */}
-              <div className="mb-4">
-                  <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Cor da Rota (Desenho Automático)</label>
-                  <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
-                      {['#ef4444', '#3b82f6', '#22c55e', '#eab308', '#a855f7', '#f97316', '#ffffff'].map(c => (
-                          <label key={c} className="cursor-pointer">
-                              <input type="radio" name="pathColor" value={c} className="peer sr-only" defaultChecked={c==='#eab308'}/>
-                              <div className="w-8 h-8 rounded-full border-2 border-transparent peer-checked:border-white peer-checked:scale-110 transition-all shadow-lg" style={{backgroundColor: c}}></div>
-                          </label>
-                      ))}
-                  </div>
-                  <p className="text-[10px] text-gray-500">Se as missões tiverem coordenadas X/Y configuradas, o sistema desenhará o caminho na mesa.</p>
-              </div>
-
               <div className="mb-6 max-h-40 overflow-y-auto custom-scrollbar border border-white/10 rounded-lg p-2"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block sticky top-0 bg-[#151520] pb-2">Missões (Selecione)</label>{missionsList.map(m => (<label key={m.id} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded cursor-pointer"><input type="checkbox" name="missions" value={m.id} className="accent-blue-500 w-4 h-4"/><div className="flex items-center gap-2 flex-1">{m.image && <img src={m.image} className="w-6 h-6 rounded object-cover" alt="M" />}<span className="text-sm text-gray-300">{m.code} - {m.name}</span></div><span className="text-xs font-bold text-blue-500">+{m.points}pts</span></label>))}</div><button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar Saída</button></form>)}
 
     
@@ -2654,32 +2625,71 @@ const handleFileSelect = (e) => {
           {modal.type === 'pitstop' && <PitStopModal viewAsStudent={viewAsStudent} pitStopRecords={pitStopRecords} showNotification={showNotification} />}
 
           {/* NOVO MODAL: EDITOR DE MISSÕES */}
-
           {modal.type === 'missionForm' && (
-             <form onSubmit={handleMissionSubmit}>
-                <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Settings className="text-blue-500"/> {modal.data ? 'Editar' : 'Nova'} Missão</h3>
-                <div className="grid grid-cols-3 gap-4 mb-4">
-                    <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Código</label><input name="code" defaultValue={modal.data?.code} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="M01" /></div>
-                    <div className="col-span-2"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome</label><input name="name" defaultValue={modal.data?.name} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Coral Nursery" /></div>
-                </div>
-                <div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Pontos (Máx)</label><input name="points" type="number" defaultValue={modal.data?.points} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div>
-                <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10">
-                    <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Missão</label>
-                    <input id="missionFileInput" type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />
-                    {selectedFile ? (
-                        <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1">
-                            <CheckCircle size={10}/> Selecionado: {selectedFile.name}
-                            <button type="button" onClick={() => { setSelectedFile(null); document.getElementById('missionFileInput').value = ''; }} className="text-red-500 hover:text-red-400 ml-2">Remover</button>
-                        </span>
-                    ) : modal.data?.image && (
-                        <div className="mt-2 text-xs text-blue-500 flex items-center gap-1">
-                            <CheckCircle size={10}/> Imagem já salva
-                            <button type="button" onClick={() => setModal(prev => ({ ...prev, data: { ...prev.data, image: null } }))} className="text-red-500 hover:text-red-400 ml-2 font-bold">Remover</button>
-                        </div>
-                    )}
-                </div>
-                <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar Missão</button>
-             </form>
+             <div>
+                 <form onSubmit={handleMissionSubmit} className="mb-8 pb-8 border-b border-white/10">
+                    <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Settings className="text-blue-500"/> {modal.data ? 'Editar' : 'Nova'} Missão</h3>
+                    <div className="grid grid-cols-3 gap-4 mb-4">
+                        <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Código</label><input name="code" defaultValue={modal.data?.code} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: M01" /></div>
+                        <div className="col-span-2"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome</label><input name="name" defaultValue={modal.data?.name} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Coral Nursery" /></div>
+                    </div>
+                    <div className="mb-4">
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Pontos (Máx)</label>
+                        <input name="points" type="number" defaultValue={modal.data?.points} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" />
+                    </div>
+                    <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10">
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Missão</label>
+                        <input id="missionFileInput" type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />
+                        {selectedFile ? (
+                            <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1">
+                                <CheckCircle size={10}/> Selecionado: {selectedFile.name}
+                                <button type="button" onClick={() => { setSelectedFile(null); document.getElementById('missionFileInput').value = ''; }} className="text-red-500 hover:text-red-400 ml-2">Remover</button>
+                            </span>
+                        ) : modal.data?.image && (
+                            <div className="mt-2 text-xs text-blue-500 flex items-center gap-1">
+                                <CheckCircle size={10}/> Imagem já salva
+                                <button type="button" onClick={() => setModal(prev => ({ ...prev, data: { ...prev.data, image: null } }))} className="text-red-500 hover:text-red-400 ml-2 font-bold">Remover</button>
+                            </div>
+                        )}
+                    </div>
+                    <div className="flex gap-2">
+                        <button className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-colors">Salvar Missão</button>
+                        {modal.data && <button type="button" onClick={() => { setModal({type: 'missionForm', data: null}); setSelectedFile(null); }} className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancelar</button>}
+                    </div>
+                 </form>
+
+                 {/* LISTA GERENCIADORA DE MISSÕES */}
+                 <div>
+                    <h4 className="text-sm font-bold text-gray-400 uppercase mb-3 flex items-center gap-2"><ListTodo size={16}/> Missões Cadastradas</h4>
+                    <div className="max-h-60 overflow-y-auto custom-scrollbar space-y-2 pr-2">
+                       {missionsList.length === 0 ? (
+                           <p className="text-xs text-gray-500 italic">Nenhuma missão cadastrada. Adicione no formulário acima.</p>
+                       ) : (
+                           [...missionsList].sort((a,b) => a.code.localeCompare(b.code)).map(m => (
+                               <div key={m.id} className="flex items-center justify-between bg-black/40 p-3 rounded-lg border border-white/5 hover:bg-white/5 transition-colors group">
+                                   <div className="flex items-center gap-3">
+                                       {m.image ? (
+                                           <img src={m.image} className="w-10 h-10 rounded-lg object-cover border border-white/10" alt="M" />
+                                       ) : (
+                                           <div className="w-10 h-10 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center"><Settings size={16} className="text-blue-500"/></div>
+                                       )}
+                                       <div>
+                                           <p className="text-sm font-bold text-white">{m.code} - {m.name}</p>
+                                           <div className="flex items-center gap-2 mt-0.5">
+                                              <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">+{m.points} pts</span>
+                                           </div>
+                                       </div>
+                                   </div>
+                                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                       <button type="button" onClick={() => setModal({type: 'missionForm', data: m})} className="text-gray-400 hover:text-white p-2 bg-black/60 rounded-lg transition-colors" title="Editar"><Pencil size={14}/></button>
+                                       <button type="button" onClick={() => handleDeleteMission(m.id)} className="text-gray-400 hover:text-red-500 p-2 bg-black/60 rounded-lg transition-colors" title="Excluir"><Trash2 size={14}/></button>
+                                   </div>
+                               </div>
+                           ))
+                       )}
+                    </div>
+                 </div>
+             </div>
           )}
 
 

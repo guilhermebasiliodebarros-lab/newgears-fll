@@ -23,7 +23,7 @@ const TvModePanel = ({
 
     const [slide, setSlide] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
-    const slidesCount = 6;
+    const slidesCount = 7;
 
     useEffect(() => {
         if (isPaused) return;
@@ -245,6 +245,39 @@ const TvModePanel = ({
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* SLIDE 6: APROVADOS DA SEMANA */}
+                    {slide === 6 && (
+                        <div className="h-full flex flex-col max-w-7xl mx-auto w-full">
+                            <h2 className="text-5xl font-black mb-12 text-white flex items-center justify-center gap-4 uppercase tracking-widest">
+                                <CheckCircle size={48} className="text-green-500" /> Missões Concluídas
+                            </h2>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 flex-1 overflow-y-auto custom-scrollbar pr-2 pb-4">
+                                {students.filter(s => s.submission?.status === 'approved').length === 0 ? (
+                                    <div className="col-span-full flex flex-col items-center justify-center text-gray-500 italic bg-[#151520]/50 rounded-3xl border border-white/5 h-64">
+                                        <CheckCircle size={64} className="mb-4 opacity-50"/>
+                                        <p className="text-2xl">Nenhuma missão aprovada ainda nesta semana.</p>
+                                    </div>
+                                ) : (
+                                    students.filter(s => s.submission?.status === 'approved').map(student => (
+                                        <div key={student.id} className="bg-green-500/10 border border-green-500/30 p-6 rounded-3xl flex flex-col items-center justify-center text-center shadow-[0_0_30px_rgba(34,197,94,0.15)] transform transition-transform hover:scale-105">
+                                            {student.avatarImage ? (
+                                                <img src={student.avatarImage} alt="Avatar" className="w-32 h-32 rounded-full object-cover border-4 border-green-500 mb-4 shadow-lg" />
+                                            ) : (
+                                                <div className="w-32 h-32 rounded-full bg-black/50 flex items-center justify-center border-4 border-green-500 mb-4 shadow-lg">
+                                                    <UserCircle size={64} className="text-green-500" />
+                                                </div>
+                                            )}
+                                            <h3 className="text-2xl font-bold text-white mb-2">{student.name}</h3>
+                                            <span className="text-sm font-black uppercase tracking-widest text-green-400 bg-green-500/20 px-4 py-1.5 rounded-full border border-green-500/30">
+                                                Aprovado
+                                            </span>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </div>
                     )}

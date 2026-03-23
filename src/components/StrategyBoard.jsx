@@ -167,14 +167,20 @@ const StrategyBoard = () => {
         {/* Lado Esquerdo: Cores */}
         <div className="flex items-center gap-2">
           <span className="text-gray-400 text-xs uppercase font-bold">Cores:</span>
-          {colors.map((c) => (
+          {colors.map((c, index) => (
             <button
               key={c.code}
               onClick={() => { setColor(c.code); setTool('pen'); }}
-              className={`w-8 h-8 rounded-full border-2 transition-all ${color === c.code && tool === 'pen' ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-70 hover:opacity-100'}`}
-              style={{ backgroundColor: c.code }}
+              className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold text-xs transition-all ${color === c.code && tool === 'pen' ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-70 hover:opacity-100'}`}
+              style={{ 
+                  backgroundColor: c.code,
+                  color: c.code === '#ffffff' ? '#000000' : '#ffffff',
+                  textShadow: c.code === '#ffffff' ? 'none' : '0px 1px 2px rgba(0,0,0,0.8)'
+              }}
               title={c.name}
-            />
+            >
+              {index + 1}
+            </button>
           ))}
         </div>
 
