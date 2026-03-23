@@ -2016,6 +2016,7 @@ const handleFileSelect = (e) => {
       const totalExperts = experts.length;
       const totalRobotVersions = robotVersions.length;
       const maxScore = scoreHistory.reduce((max, h) => Math.max(max, h.score || 0), 0);
+      const approvedStudentsThisWeek = students.filter(s => s.submission?.status === 'approved').length;
 
       const stats = [
           { label: 'Pessoas Impactadas', value: totalImpact, icon: <Megaphone size={16}/>, color: 'text-orange-500' },
@@ -2024,14 +2025,15 @@ const handleFileSelect = (e) => {
           { label: 'Recorde de Pontos', value: maxScore, icon: <Trophy size={16}/>, color: 'text-green-500' },
           { label: 'Tarefas Entregues', value: totalTasksDone, icon: <CheckCheck size={16}/>, color: 'text-pink-500' },
           { label: 'Badges Coletadas', value: totalBadges, icon: <Medal size={16}/>, color: 'text-cyan-500' },
-          { label: 'XP da Equipe', value: totalXP, icon: <Zap size={16}/>, color: 'text-yellow-500' }
+          { label: 'XP da Equipe', value: totalXP, icon: <Zap size={16}/>, color: 'text-yellow-500' },
+          { label: 'Aprovados (Semana)', value: approvedStudentsThisWeek, icon: <CheckCircle size={16}/>, color: 'text-green-400' }
       ];
 
       return (
           <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 mb-4 shadow-xl relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><BarChart3 size={150} /></div>
               <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2 relative z-10"><BarChart3 className="text-blue-500"/> Raio-X da Temporada (Dados para Juízes)</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 relative z-10">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8 gap-4 relative z-10">
                   {stats.map((st, idx) => (
                       <div key={idx} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col items-center justify-center text-center hover:bg-white/5 transition-colors">
                           <div className={`mb-2 ${st.color}`}>{st.icon}</div>
