@@ -5,7 +5,7 @@ import {
   Users, Rocket, Microscope, BookOpen, Crown, UserCircle, 
   Target, ClipboardList, AlertTriangle, Loader2, CheckCircle, 
   TrendingUp, CalendarDays, Calendar, Clock, MapPin, 
-  Trophy, Megaphone, CheckCheck, ChevronLeft, Play, Pause, ChevronRight, X 
+  Trophy, Megaphone, CheckCheck, ChevronLeft, Play, Pause, ChevronRight, X, Search 
 } from 'lucide-react';
 
 const TvModePanel = ({ 
@@ -135,10 +135,11 @@ const TvModePanel = ({
                     {slide === 2 && (
                         <div className="h-full flex flex-col">
                             <h2 className="text-4xl font-black text-gray-400 mb-6 flex items-center gap-3 uppercase tracking-widest"><ClipboardList size={40}/> Painel de Tarefas Kanban</h2>
-                            <div className="grid grid-cols-3 gap-6 flex-1 overflow-hidden">
+                            <div className="grid grid-cols-4 gap-6 flex-1 overflow-hidden">
                                 {[
                                     { status: 'todo', title: 'A Fazer', color: 'border-orange-500', icon: <AlertTriangle size={32}/> },
                                     { status: 'doing', title: 'Fazendo', color: 'border-blue-500', icon: <Loader2 size={32} className="animate-spin"/> },
+                                    { status: 'review', title: 'Em Revisão', color: 'border-purple-500', icon: <Search size={32}/> },
                                     { status: 'done', title: 'Feito', color: 'border-green-500', icon: <CheckCircle size={32}/> }
                                 ].map(col => (
                                     <div key={col.status} className={`bg-[#151520]/80 border-t-8 ${col.color} rounded-2xl p-5 flex flex-col h-full shadow-2xl`}>

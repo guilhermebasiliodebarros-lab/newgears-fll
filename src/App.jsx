@@ -1012,6 +1012,28 @@ function App() {
   }
 
   const moveTask = async (id, newStatus) => {
+      // --- TRAVA PARA MOVER PARA FEITO (SÓ TÉCNICO) ---
+      if (newStatus === 'done' && !isAdmin) {
+          alert("🛑 Acesso Bloqueado!\n\nApenas o Técnico pode mover tarefas para 'Feito' após aprová-las na coluna 'Em Revisão'.");
+          return;
+      }
+
+      // --- TRAVA DE 3 HORAS (SÓ PARA ALUNOS) ---
+      if (newStatus === 'review' && !isAdmin) {
+          const task = tasks.find(t => t.id === id);
+          if (task && task.createdAt) {
+              const createdTime = new Date(task.createdAt).getTime();
+              const now = new Date().getTime();
+              const hoursDiff = (now - createdTime) / (1000 * 60 * 60);
+              
+              if (hoursDiff < 3) {
+                  const hoursLeft = (3 - hoursDiff).toFixed(1);
+                  alert(`🛑 Acesso Bloqueado!\n\nAs tarefas precisam de pelo menos 3 horas desde a criação para irem para "Em Revisão". Isso garante que vocês planejem ANTES de executar.\n\nAguarde mais ${hoursLeft} hora(s) para avançar.`);
+                  return; // Cancela a movimentação
+              }
+          }
+      }
+
       try {
           const updateData = { status: newStatus };
           if (newStatus === 'done') {
@@ -3513,7 +3535,7 @@ const handleFileSelect = (e) => {
           return `${diffDays}d ${diffHours % 24}h`;
       };
 
-      const TaskCard = ({ t, showMoveRight, showDelete }) => {
+      const TaskCard = ({ t, showMoveRight, showMoveLeft, showDelete }) => {
           const status = getDeadlineStatus(t.dueDate);
           const tagObj = KANBAN_TAGS.find(tag => tag.id === (t.tag || 'geral')) || KANBAN_TAGS[3];
 
@@ -3542,6 +3564,7 @@ const handleFileSelect = (e) => {
                               <UserCheck size={14}/> Assumir
                           </button>
                       )}
+                      {showMoveLeft && <button onClick={() => moveTask(t.id, showMoveLeft)} className="text-orange-500 hover:bg-orange-500/20 p-1.5 rounded" title="Devolver tarefa (Incompleta)"><ChevronLeft size={16}/></button>}
                       {showMoveRight && <button onClick={() => moveTask(t.id, showMoveRight)} className="text-blue-500 hover:bg-blue-500/20 p-1.5 rounded" title="Avançar"><ChevronRight size={16}/></button>}
                       {showDelete && <button onClick={() => removeTask(t.id)} className="text-red-500 hover:bg-red-500/20 p-1.5 rounded" title="Excluir"><Trash2 size={16}/></button>}
                   </div>
@@ -3551,7 +3574,7 @@ const handleFileSelect = (e) => {
 
       return (
       <div className="animate-in fade-in duration-500">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full min-h-[600px]">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 h-full min-h-[600px]">
               
               {/* COLUNA 1: A FAZER */}
               <div className="bg-[#151520] border border-white/10 rounded-2xl p-4 flex flex-col">
@@ -3577,11 +3600,19 @@ const handleFileSelect = (e) => {
               <div className="bg-[#151520] border border-blue-500/20 rounded-2xl p-4 flex flex-col bg-blue-500/5">
                   <h3 className="text-blue-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-blue-500/10 pb-2"><Loader2 size={16} className="animate-spin"/> Fazendo ({tasks.filter(t=>t.status==='doing').length})</h3>
                   <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                      {tasks.filter(t => t.status === 'doing').map(t => <TaskCard key={t.id} t={t} showMoveRight="done" showDelete={true} />)}
+                      {tasks.filter(t => t.status === 'doing').map(t => <TaskCard key={t.id} t={t} showMoveRight="review" showDelete={true} />)}
                   </div>
               </div>
 
-              {/* COLUNA 3: FEITO */}
+              {/* COLUNA 3: EM REVISÃO */}
+              <div className="bg-[#151520] border border-purple-500/20 rounded-2xl p-4 flex flex-col bg-purple-500/5">
+                  <h3 className="text-purple-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-purple-500/10 pb-2"><Search size={16}/> Em Revisão ({tasks.filter(t=>t.status==='review').length})</h3>
+                  <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
+                      {tasks.filter(t => t.status === 'review').map(t => <TaskCard key={t.id} t={t} showMoveLeft={isAdmin ? "doing" : null} showMoveRight={isAdmin ? "done" : null} showDelete={true} />)}
+                  </div>
+              </div>
+
+              {/* COLUNA 4: FEITO */}
               <div className="bg-[#151520] border border-green-500/20 rounded-2xl p-4 flex flex-col bg-green-500/5">
                   <h3 className="text-green-500 font-bold uppercase mb-4 flex items-center gap-2 border-b border-green-500/10 pb-2"><CheckCircle size={16}/> Feito ({tasks.filter(t=>t.status==='done').length})</h3>
                   <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
