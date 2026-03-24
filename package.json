@@ -14,6 +14,7 @@
     "konva": "^10.2.0",
     "lucide-react": "^0.562.0",
     "react": "^19.2.0",
+    "react-confetti": "^6.4.0",
     "react-dom": "^19.2.0",
     "react-konva": "^19.2.2",
     "use-image": "^1.1.4"

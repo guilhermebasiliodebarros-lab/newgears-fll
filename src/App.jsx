@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy, limit } from "firebase/firestore";
 import { db } from './firebase'; // Importa a instância já inicializada
 import StrategyBoard from './components/StrategyBoard';
@@ -7,6 +7,7 @@ import PitStopModal from './components/PitStopModal';
 import RankingPanel from './components/RankingPanel';
 import LogoNewGears from './components/LogoNewGears';
 import TvModePanel from './components/TvModePanel';
+import Confetti from 'react-confetti';
 import { 
   User, 
   LogOut, 
@@ -149,6 +150,80 @@ const Header = ({ title, userType, onLogout }) => (
 );
 
 function App() {
+  // === TODOS OS ESTADOS (HOOKS) ===
+  const [currentUser, setCurrentUser] = useState(() => {
+    const saved = localStorage.getItem("roboquest_user");
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [loginUser, setLoginUser] = useState("");
+  const [loginPass, setLoginPass] = useState("");
+  const [loginError, setLoginError] = useState("");
+
+  const [isAdmin, setIsAdmin] = useState(() => {
+    const saved = localStorage.getItem("roboquest_user");
+    return saved ? JSON.parse(saved).type === 'admin' : false;
+  });
+
+  const [viewAsStudent, setViewAsStudent] = useState(() => {
+    const saved = localStorage.getItem("roboquest_user");
+    const parsed = saved ? JSON.parse(saved) : null;
+    return parsed?.type === 'student' ? parsed.data : null;
+  });
+
+  const [logoutCountdown, setLogoutCountdown] = useState(null);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [badgeStudent, setBadgeStudent] = useState(null);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const prevXpRef = useRef(null);
+  const [showBatteryModal, setShowBatteryModal] = useState(false);
+  const [teamMoods, setTeamMoods] = useState([]);
+  const [isStudentLink, setIsStudentLink] = useState(false);
+  const [currentWeekData, setCurrentWeekData] = useState(null);
+  const [adminTab, setAdminTab] = useState('rotation');
+  const [studentTab, setStudentTab] = useState('mission');
+  const [isTvMode, setIsTvMode] = useState(false);
+  const [robotSubTab, setRobotSubTab] = useState('overview');
+  const [missionsList, setMissionsList] = useState([]);
+  const [decisionMatrix, setDecisionMatrix] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [logbookEntries, setLogbookEntries] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [adminProfile, setAdminProfile] = useState({ name: 'Técnico', avatarImage: null });
+  const [isCropping, setIsCropping] = useState(false);
+  const [cropImgSrc, setCropImgSrc] = useState(null);
+  const [cropScale, setCropScale] = useState(1);
+  const [cropPos, setCropPos] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [experts, setExperts] = useState([]);
+  const [robotVersions, setRobotVersions] = useState([]);
+  const [attachments, setAttachments] = useState([]);
+  const [codeSnippets, setCodeSnippets] = useState([]);
+  const [rounds, setRounds] = useState([]);
+  const [scoreHistory, setScoreHistory] = useState([]);
+  const [activeTimer, setActiveTimer] = useState(null);
+  const [timerDisplay, setTimerDisplay] = useState(0); 
+  const [roundFormValues, setRoundFormValues] = useState({});
+  const [pitStopRecords, setPitStopRecords] = useState([]);
+  const [compliments, setCompliments] = useState([]);
+  const [innovationRubric, setInnovationRubric] = useState({ identificacao: 1, design: 1, criacao: 1, iteracao: 1, comunicacao: 1 });
+  const [robotDesignRubric, setRobotDesignRubric] = useState({ durabilidade: 1, eficiencia: 1, programacao: 1, estrategia: 1 });
+  const [questions, setQuestions] = useState([]);
+  const [outreachEvents, setOutreachEvents] = useState([]);
+  const [projectSummary, setProjectSummary] = useState({ title: "Nome do Projeto", problem: "", solution: "", sharing: "", image: null });
+  const [modal, setModal] = useState({ type: null, data: null });
+  const [notification, setNotification] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionText, setSubmissionText] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [showFullSchedule, setShowFullSchedule] = useState(false); 
+  const today = new Date().toISOString().split('T')[0];
+  const [missions, setMissions] = useState({
+    Engenharia: { text: "Definir estratégia do robô.", deadline: today },
+    Inovação: { text: "Pesquisar especialistas.", deadline: today },
+    Gestão: { text: "Atualizar o Cronograma.", deadline: today }
+  });
 
 // --- LISTA DE BADGES (VERSÃO FINAL) ---
   const BADGES_LIST = [
@@ -242,13 +317,59 @@ function App() {
         prevStudents.map(s => s.id === student.id ? updatedStudent : s)
       );
   };
-  // Adicione esta linha junto com os seus outros useState:
-  const [activeTab, setActiveTab] = useState('dashboard');
-// Estado para saber qual aluno o técnico está dando badge
-  const [badgeStudent, setBadgeStudent] = useState(null);
-    // --- VARIÁVEIS DA BATERIA DA EQUIPE ---
-  const [showBatteryModal, setShowBatteryModal] = useState(false);
-  const [teamMoods, setTeamMoods] = useState([]); // Guarda o humor de todo mundo hoje
+  // --- LÓGICA DA CHUVA DE CONFETES (LEVEL UP E GRANDES GANHOS DE XP) ---
+
+  useEffect(() => {
+      if (viewAsStudent) {
+          const currentXp = viewAsStudent.xp || 0;
+
+          // 1. Descobre o nível atual baseado no XP do aluno
+          const currentLevelObj = getCurrentLevel(currentXp);
+          // Encontra a posição numérica desse nível (0 = Novato, 1 = Aprendiz, etc)
+          const currentLevelIndex = LEVELS.findIndex(l => l.name === currentLevelObj.name);
+          
+          // 2. Busca na memória qual foi o último nível que esse aluno assistiu
+          const storageKey = `last_seen_level_${viewAsStudent.id}`;
+          const lastSeenLevel = localStorage.getItem(storageKey);
+
+          let triggerConfetti = false;
+          let msg = "";
+
+          // 3. Se não for o primeiro carregamento da tela, verifica as vitórias
+          if (prevXpRef.current !== null) {
+              const prevXp = prevXpRef.current;
+              const gainedXp = currentXp - prevXp;
+
+              // Condição A: Subiu de nível!
+              if (lastSeenLevel !== null && currentLevelIndex > parseInt(lastSeenLevel)) {
+                  triggerConfetti = true;
+                  msg = `🎉 PARABÉNS! Você alcançou o nível ${currentLevelObj.name.toUpperCase()}!`;
+              } 
+              // Condição B: Recebeu recompensa de Fechamento de Semana (35 ou 50 XP) ou outra bonificação alta
+              else if (gainedXp >= 35) {
+                  triggerConfetti = true;
+                  msg = `🎉 RECOMPENSA COLETADA! Você ganhou +${gainedXp} XP!`;
+              }
+          }
+
+          if (triggerConfetti) {
+              setShowConfetti(true);
+              if (msg) showNotification(msg, "success");
+              
+              // Desliga os confetes depois de 8 segundos para não travar a tela
+              setTimeout(() => setShowConfetti(false), 8000);
+          }
+
+          // 4. Salva o nível atual para não repetir a animação toda hora
+          localStorage.setItem(storageKey, currentLevelIndex.toString());
+          
+          // Atualiza o valor anterior para a próxima renderização
+          prevXpRef.current = currentXp;
+      } else {
+          // Se deslogar, limpa a memória temporária do XP
+          prevXpRef.current = null;
+      }
+  }, [viewAsStudent?.xp, viewAsStudent?.id]);
 
   // Função para carregar a bateria de hoje do banco
   useEffect(() => {
@@ -311,14 +432,6 @@ function App() {
   const teamAverage = teamMoods.length > 0 
       ? Math.round(teamMoods.reduce((acc, curr) => acc + curr.level, 0) / teamMoods.length) 
       : 0;
-    // --- LÓGICA DE LOGIN (INSERIDO) ---
-  const [currentUser, setCurrentUser] = useState(() => {
-    const saved = localStorage.getItem("roboquest_user");
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [loginUser, setLoginUser] = useState("");
-  const [loginPass, setLoginPass] = useState("");
-  const [loginError, setLoginError] = useState("");
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -386,8 +499,6 @@ function App() {
   };
   // ----------------------------------
 
-    // --- AUTO LOGOUT POR INATIVIDADE E CONTROLE DE SESSÃO (30 MINUTOS) ---
-    const [logoutCountdown, setLogoutCountdown] = useState(null);
 
     useEffect(() => {
       let warningTimeoutId;
@@ -488,50 +599,6 @@ function App() {
       };
     }, [currentUser]);
 
-  // Recupera estado inicial da memória também
-  const [isAdmin, setIsAdmin] = useState(() => {
-    const saved = localStorage.getItem("roboquest_user");
-    return saved ? JSON.parse(saved).type === 'admin' : false;
-  });
-
-  const [viewAsStudent, setViewAsStudent] = useState(() => {
-    const saved = localStorage.getItem("roboquest_user");
-    const parsed = saved ? JSON.parse(saved) : null;
-    return parsed?.type === 'student' ? parsed.data : null;
-  });
-
-  const [isStudentLink, setIsStudentLink] = useState(false)
-
-  const [currentWeekData, setCurrentWeekData] = useState(null)
-
-  const [adminTab, setAdminTab] = useState('rotation') 
-
-  const [studentTab, setStudentTab] = useState('mission')
-
-  
-  // --- ESTADO DO MODO TV ---
-  const [isTvMode, setIsTvMode] = useState(false);
-
-  const [robotSubTab, setRobotSubTab] = useState('overview'); // 'overview' | 'map'
-
-  // --- DADOS EDITÁVEIS DE MISSÕES (Mestre das Missões) ---
-
-  const [missionsList, setMissionsList] = useState([])
-
-
-
-  // --- DADOS DA MATRIZ DE DECISÃO (Estratégia de Campeão) ---
-
-  const [decisionMatrix, setDecisionMatrix] = useState([])
-
-
-
-  const [students, setStudents] = useState([])
- 
-  const [tasks, setTasks] = useState([]) // <--- NOVO ESTADO PARA TAREFAS
-  const [logbookEntries, setLogbookEntries] = useState([]) // <--- NOVO ESTADO PARA DIÁRIO
-  const [events, setEvents] = useState([]) // <--- NOVO ESTADO PARA AGENDA
-  const [adminProfile, setAdminProfile] = useState({ name: 'Técnico', avatarImage: null }) // <--- PERFIL DO TÉCNICO
 
   // --- LÓGICA DE NOTIFICAÇÕES DA AGENDA EM TEMPO REAL ---
   const getLocalYYYYMMDD = (dateObj) => {
@@ -590,14 +657,6 @@ function App() {
       );
   }
 
-  // --- ESTADOS PARA O EDITOR DE CORTE (CROP) ---
-  const [isCropping, setIsCropping] = useState(false);
-  const [cropImgSrc, setCropImgSrc] = useState(null);
-  const [cropScale, setCropScale] = useState(1);
-  const [cropPos, setCropPos] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-
   // --- NOVO: Sincroniza dados do aluno logado com o Firebase em tempo real ---
   useEffect(() => {
     if (currentUser?.type === 'student' && students.length > 0) {
@@ -609,63 +668,6 @@ function App() {
     }
   }, [students, currentUser]);
 
-  const [experts, setExperts] = useState([])
-
-  const [robotVersions, setRobotVersions] = useState([])
-  const [attachments, setAttachments] = useState([]) // <--- NOVO: Diário de Garras
-  const [codeSnippets, setCodeSnippets] = useState([]) // <--- NOVO: Biblioteca de Códigos
-
-  const [rounds, setRounds] = useState([])
-
-  const [scoreHistory, setScoreHistory] = useState([]) // <--- NOVO: Histórico de pontuações
-
-  // --- ESTADOS DO CRONÔMETRO ---
-  const [activeTimer, setActiveTimer] = useState(null); // { roundId, start, name }
-  const [timerDisplay, setTimerDisplay] = useState(0); 
-  const [roundFormValues, setRoundFormValues] = useState({}); // { [roundId]: value }
-  const [pitStopRecords, setPitStopRecords] = useState([]); // <--- NOVO: Ranking de Pit Stop
-
-  const [compliments, setCompliments] = useState([]) 
-
-  const [innovationRubric, setInnovationRubric] = useState({ identificacao: 1, design: 1, criacao: 1, iteracao: 1, comunicacao: 1 })
-  const [robotDesignRubric, setRobotDesignRubric] = useState({ durabilidade: 1, eficiencia: 1, programacao: 1, estrategia: 1 })
-
-  // --- NOVOS ESTADOS NECESSÁRIOS ---
-  const [questions, setQuestions] = useState([])
-  const [outreachEvents, setOutreachEvents] = useState([])
-  const [projectSummary, setProjectSummary] = useState({ 
-      title: "Nome do Projeto", 
-      problem: "", 
-      solution: "", 
-      sharing: "", 
-      image: null 
-  })
-
-  const [modal, setModal] = useState({ type: null, data: null }) 
-
-  const [notification, setNotification] = useState(null)
-
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  const [submissionText, setSubmissionText] = useState("")
-
-  const [selectedFile, setSelectedFile] = useState(null)
-
-  const [showFullSchedule, setShowFullSchedule] = useState(false) 
-
-
-
-  const today = new Date().toISOString().split('T')[0];
-
-  const [missions, setMissions] = useState({
-
-    Engenharia: { text: "Definir estratégia do robô.", deadline: today },
-
-    Inovação: { text: "Pesquisar especialistas.", deadline: today },
-
-    Gestão: { text: "Atualizar o Cronograma.", deadline: today }
-
-  })
 
 
 
@@ -4368,6 +4370,14 @@ const handleFileSelect = (e) => {
 
       {/* Conteúdo fica por cima */}
       <div className="relative z-10">
+        
+        {/* EFEITO DE CONFETES (Fica no topo de tudo, z-index gigante) */}
+        {showConfetti && (
+          <div className="fixed inset-0 z-[9999] pointer-events-none">
+             <Confetti width={window.innerWidth} height={window.innerHeight} recycle={false} numberOfPieces={800} gravity={0.15} />
+          </div>
+        )}
+
         <Notification />
         {renderModal()}
 
