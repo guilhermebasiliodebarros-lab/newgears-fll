@@ -3092,6 +3092,15 @@ const handleFileSelect = (e) => {
       // Cria o caminho para o preenchimento (area fill)
       const fillPathData = `${pathDataMain} L ${width - padding} ${height} L ${padding} ${height} Z`;
 
+      // Cálculos de Média
+      const avgScore = data.length > 0 ? (data.reduce((sum, d) => sum + (d.score || 0), 0) / data.length).toFixed(1) : 0;
+      const avgTime = data.length > 0 ? (data.reduce((sum, d) => sum + (d.time || 0), 0) / data.length).toFixed(1) : 0;
+
+      // Coordenadas da Média para o Gradiente
+      const currentAvg = isGeneral ? parseFloat(avgScore) : parseFloat(avgTime);
+      const avgY = getY(currentAvg, isGeneral ? 'score' : 'time');
+      const avgPercent = Math.max(0, Math.min(100, (avgY / height) * 100));
+
       return (
           <div className={`bg-[#151520] border border-white/10 rounded-2xl p-6 ${isTvMode ? 'shadow-2xl' : 'mb-8'}`}>
               <div className="flex justify-between items-center mb-6">
@@ -3132,9 +3141,15 @@ const handleFileSelect = (e) => {
                   <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto drop-shadow-2xl">
                       {/* Gradiente de Fundo */}
                       <defs>
-                          <linearGradient id="scoreGradient" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor={color} stopOpacity="0.2"/>
-                              <stop offset="100%" stopColor={color} stopOpacity="0"/>
+                          <linearGradient id="trendLineGradient" x1="0" y1="0" x2="0" y2={height} gradientUnits="userSpaceOnUse">
+                              <stop offset={`${avgPercent}%`} stopColor={isGeneral ? "#22c55e" : "#ef4444"} />
+                              <stop offset={`${avgPercent}%`} stopColor={isGeneral ? "#ef4444" : "#22c55e"} />
+                          </linearGradient>
+                          <linearGradient id="trendFillGradient" x1="0" y1="0" x2="0" y2={height} gradientUnits="userSpaceOnUse">
+                              <stop offset="0%" stopColor={isGeneral ? "#22c55e" : "#ef4444"} stopOpacity="0.2"/>
+                              <stop offset={`${avgPercent}%`} stopColor={isGeneral ? "#22c55e" : "#ef4444"} stopOpacity="0.1"/>
+                              <stop offset={`${avgPercent}%`} stopColor={isGeneral ? "#ef4444" : "#22c55e"} stopOpacity="0.1"/>
+                              <stop offset="100%" stopColor={isGeneral ? "#ef4444" : "#22c55e"} stopOpacity="0"/>
                           </linearGradient>
                       </defs>
 
@@ -3144,8 +3159,12 @@ const handleFileSelect = (e) => {
                           return <line key={p} x1={padding} y1={y} x2={width-padding} y2={y} stroke="#333" strokeDasharray="4 4" strokeWidth="1"/>
                       })}
 
+                      {/* Linha da Média */}
+                      <line x1={padding} y1={avgY} x2={width-padding} y2={avgY} stroke="#facc15" strokeDasharray="5 5" strokeWidth="1" opacity="0.6"/>
+                      <text x={padding + 5} y={avgY - 5} fill="#facc15" fontSize="10" fontWeight="bold" opacity="0.8">MÉDIA: {currentAvg}</text>
+
                       {/* Área Preenchida (Apenas Principal) */}
-                      <path d={fillPathData} fill={isGeneral ? "url(#scoreGradient)" : "none"} />
+                      <path d={fillPathData} fill={isGeneral ? "url(#trendFillGradient)" : "none"} />
 
                       {/* SEGUNDA LINHA: TEMPO (AZUL) - Só no Geral */}
                       {isGeneral && (
@@ -3158,7 +3177,7 @@ const handleFileSelect = (e) => {
                       )}
 
                       {/* LINHA PRINCIPAL (VERDE ou AZUL) */}
-                      <path d={pathDataMain} fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d={pathDataMain} fill="none" stroke="url(#trendLineGradient)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
 
                       {/* Pontos */}
                       {data.map((d, i) => (
@@ -3166,10 +3185,18 @@ const handleFileSelect = (e) => {
                             const yPos = getY(d[valKey], isGeneral ? 'score' : 'time');
                             const dateText = new Date(d.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 
+                            const isBetter = isGeneral ? d[valKey] >= currentAvg : d[valKey] <= currentAvg;
+                            const ptColor = isBetter ? "#22c55e" : "#ef4444";
+
                             return (
                                 <g key={d.id} className="group">
-                                    <circle cx={getX(i)} cy={yPos} r="4" fill="#151520" stroke={color} strokeWidth="2" />
+                                    <circle cx={getX(i)} cy={yPos} r="4" fill="#151520" stroke={ptColor} strokeWidth="2" />
                                     
+                                    {/* Textos fixos (Sempre visíveis, alternando altura para não encavalar) */}
+                                    <text x={getX(i)} y={yPos - (i % 2 === 0 ? 12 : -18)} textAnchor="middle" fill={ptColor} fontSize="10" fontWeight="bold">
+                                        {d[valKey]}
+                                    </text>
+
                                     {/* Tooltip Aprimorado */}
                                     <g className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                                         <rect 
@@ -3210,6 +3237,43 @@ const handleFileSelect = (e) => {
                       <span>{new Date(data[data.length-1].date).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})}</span>
                   </div>
               </div>
+              )}
+
+              {/* HISTÓRICO COMPLETO ABAIXO DO GRÁFICO (SÓ FORA DO MODO TV) */}
+              {!isTvMode && data.length > 0 && (
+                  <div className="mt-8 pt-6 border-t border-white/10">
+                      <div className="flex justify-between items-center mb-4">
+                          <h4 className="text-gray-400 font-bold uppercase text-xs flex items-center gap-2"><ListTodo size={14}/> Histórico Detalhado</h4>
+                          <div className="flex gap-4">
+                              <div className="text-right bg-white/5 px-3 py-1 rounded-lg">
+                                  <span className="text-[10px] text-gray-500 uppercase font-bold block">Média Pontos</span>
+                                  <span className="text-green-500 font-bold">{avgScore} pts</span>
+                              </div>
+                              <div className="text-right bg-white/5 px-3 py-1 rounded-lg">
+                                  <span className="text-[10px] text-gray-500 uppercase font-bold block">Média Tempo</span>
+                                  <span className="text-blue-500 font-bold">{avgTime} s</span>
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div className="max-h-64 overflow-y-auto custom-scrollbar pr-2 space-y-2">
+                          {[...data].reverse().map((d, i) => (
+                              <div key={d.id} className="flex items-center justify-between bg-black/40 p-3 rounded-lg border border-white/5 hover:bg-white/5 transition-colors">
+                                  <div className="flex items-center gap-3">
+                                      <span className="text-gray-500 text-xs font-mono font-bold w-6">#{data.length - i}</span>
+                                      <div className="flex flex-col">
+                                          <span className="text-gray-200 text-xs font-bold">{new Date(d.date).toLocaleDateString('pt-BR')} às {new Date(d.date).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</span>
+                                          {d.author && <span className="text-[10px] text-gray-500 flex items-center gap-1 mt-0.5"><UserCircle size={10}/> {d.author}</span>}
+                                      </div>
+                                  </div>
+                                  <div className="flex items-center gap-4 text-right">
+                                      <div className="w-16"><span className="text-[9px] text-gray-500 uppercase block">Tempo</span><span className="text-blue-400 font-bold text-sm">{d.time || '--'}s</span></div>
+                                      <div className="w-16"><span className="text-[9px] text-gray-500 uppercase block">Pontos</span><span className="text-green-400 font-bold text-sm">{d.score || '--'}</span></div>
+                                  </div>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
               )}
           </div>
       );
@@ -4673,8 +4737,6 @@ const handleFileSelect = (e) => {
                                   {students.filter(s => s.station === st).map(s => {
                                       // Busca a tarefa principal do aluno no Kanban
                                       const studentTasks = tasks.filter(t => t.author === s.name && t.status !== 'done');
-                                      // Prioriza a que ele está fazendo, se não houver, pega a próxima "A Fazer"
-                                      const activeTask = studentTasks.find(t => t.status === 'doing') || studentTasks[0];
 
                                       const isLeader = st === 'Gestão' && s.name !== 'Sofia' && s.name !== 'Heloise';
 
@@ -4705,12 +4767,16 @@ const handleFileSelect = (e) => {
                                           {/* --- INTEGRAÇÃO COM KANBAN (FOCO ATUAL) --- */}
                                           <div className="my-2 bg-black/40 rounded-lg p-2 border border-white/5 flex-1">
                                               <span className="text-[9px] text-gray-500 font-bold uppercase flex items-center gap-1 mb-1">
-                                                  <ClipboardList size={10}/> Foco Atual
+                                                  <ClipboardList size={10}/> Kanban ({studentTasks.length})
                                               </span>
-                                              {activeTask ? (
-                                                  <div className="flex items-start gap-1.5">
-                                                      {activeTask.status === 'doing' ? <Loader2 size={12} className="text-blue-500 animate-spin shrink-0 mt-0.5"/> : <Square size={12} className="text-orange-500 shrink-0 mt-0.5"/>}
-                                                      <p className={`text-xs line-clamp-2 ${activeTask.status === 'doing' ? 'text-blue-200' : 'text-gray-400'}`} title={activeTask.text}>{activeTask.text}</p>
+                                              {studentTasks.length > 0 ? (
+                                                  <div className="space-y-1.5 max-h-24 overflow-y-auto custom-scrollbar pr-1">
+                                                      {studentTasks.map(t => (
+                                                          <div key={t.id} className="flex items-start gap-1.5">
+                                                              {t.status === 'doing' ? <Loader2 size={12} className="text-blue-500 animate-spin shrink-0 mt-0.5"/> : t.status === 'review' ? <Search size={12} className="text-purple-400 shrink-0 mt-0.5"/> : <Square size={12} className="text-orange-500 shrink-0 mt-0.5"/>}
+                                                              <p className={`text-[11px] leading-tight line-clamp-2 ${t.status === 'doing' ? 'text-blue-200' : t.status === 'review' ? 'text-purple-300' : 'text-gray-400'}`} title={t.text}>{t.text}</p>
+                                                          </div>
+                                                      ))}
                                                   </div>
                                               ) : (
                                                   <p className="text-[10px] text-gray-600 italic">Livre (Sem tarefas pendentes)</p>
