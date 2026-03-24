@@ -107,6 +107,8 @@ import {
   Clock,         // <--- NOVO: Ícone de Relógio (Agenda)
   MapPin,        // <--- NOVO: Ícone de Localização (Agenda)
   MonitorPlay,   // <--- NOVO: Ícone do Modo TV
+  Maximize,      // <--- NOVO: Expandir gráfico
+  Minimize,      // <--- NOVO: Minimizar gráfico
 } from 'lucide-react';
 
 
@@ -610,6 +612,8 @@ function App() {
   const [experts, setExperts] = useState([])
 
   const [robotVersions, setRobotVersions] = useState([])
+  const [attachments, setAttachments] = useState([]) // <--- NOVO: Diário de Garras
+  const [codeSnippets, setCodeSnippets] = useState([]) // <--- NOVO: Biblioteca de Códigos
 
   const [rounds, setRounds] = useState([])
 
@@ -816,6 +820,8 @@ function App() {
     const unsubStudents = createListener("students", setStudents);
     const unsubExperts = createListener("experts", setExperts);
     const unsubRobot = createListener("robotVersions", setRobotVersions);
+    const unsubAttachments = createListener("attachments", setAttachments); // <--- LISTENER DE GARRAS
+    const unsubCodeSnippets = createListener("codeSnippets", setCodeSnippets); // <--- LISTENER DE CÓDIGOS
     const unsubRounds = createListener("rounds", setRounds);
     const unsubCompliments = createListener("compliments", setCompliments);
     const unsubMatrix = createListener("decisionMatrix", setDecisionMatrix);
@@ -888,7 +894,7 @@ function App() {
     return () => {
         unsubStudents(); unsubExperts(); unsubRobot(); unsubRounds();
         unsubCompliments(); unsubMatrix(); unsubQuestions(); unsubScoreHistory();
-        unsubEvents();
+        unsubEvents(); unsubAttachments(); unsubCodeSnippets();
         unsubOutreach(); unsubMissions(); unsubTasks(); unsubInnovationRubric(); unsubRobotDesignRubric(); unsubAdminProfile(); if (unsubLogbook) unsubLogbook(); unsubPitStop();
     };
   }, []);
@@ -1010,6 +1016,87 @@ function App() {
           console.error("Erro ao criar tarefa:", error);
       }
   }
+
+  // --- FUNÇÕES DA GARRA / ANEXO ---
+  const handleAttachmentSubmit = async (e) => { 
+      e.preventDefault(); 
+      const fd = new FormData(e.target); 
+      
+      let img = modal.data?.image || null; 
+      if (selectedFile) img = await convertBase64(selectedFile); 
+      
+      const attachmentData = { 
+          name: fd.get('name'), 
+          roundId: fd.get('roundId'), 
+          date: fd.get('date'), 
+          changes: fd.get('changes'), 
+          image: img,
+          author: modal.data?.author || viewAsStudent?.name || "Técnico"
+      };
+
+      try {
+          if (modal.data?.id) {
+              await updateDoc(doc(db, "attachments", modal.data.id), attachmentData);
+          } else {
+              await addDoc(collection(db, "attachments"), attachmentData);
+          }
+          closeModal(); 
+          showNotification("Garra/Anexo salva com sucesso!");
+      } catch (error) {
+          console.error("Erro ao salvar anexo:", error);
+          showNotification("Erro ao salvar.", "error");
+      }
+  }
+
+  const handleDeleteAttachment = async (e, id) => {
+      e.stopPropagation();
+      if (window.confirm("Tem certeza que deseja excluir esta garra/anexo?")) {
+          try { await deleteDoc(doc(db, "attachments", id)); showNotification("Garra excluída!"); } catch (error) {}
+      }
+  };
+
+  // --- FUNÇÕES DO COFRE DE CÓDIGOS ---
+  const handleCodeSubmit = async (e) => { 
+      e.preventDefault(); 
+      const fd = new FormData(e.target); 
+      
+      let img = modal.data?.image || null; 
+      if (selectedFile) img = await convertBase64(selectedFile); 
+      
+      const codeData = { 
+          title: fd.get('title'), 
+          description: fd.get('description'), 
+          date: modal.data?.date || new Date().toISOString().split('T')[0], 
+          image: img,
+          author: modal.data?.author || viewAsStudent?.name || "Técnico"
+      };
+
+      try {
+          if (modal.data?.id) {
+              await updateDoc(doc(db, "codeSnippets", modal.data.id), codeData);
+          } else {
+              await addDoc(collection(db, "codeSnippets"), codeData);
+          }
+          closeModal(); 
+          showNotification("Código salvo no cofre!");
+      } catch (error) {
+          console.error("Erro ao salvar código:", error);
+          showNotification("Erro ao salvar.", "error");
+      }
+  }
+
+  const handleDeleteCode = async (e, id) => {
+      e.stopPropagation();
+      if (window.confirm("Tem certeza que deseja excluir este código?")) {
+          try { 
+              await deleteDoc(doc(db, "codeSnippets", id)); 
+              showNotification("Código excluído!"); 
+          } catch (error) {
+              console.error("Erro ao excluir código:", error);
+              showNotification("Erro ao excluir.", "error");
+          }
+      }
+  };
 
   const moveTask = async (id, newStatus) => {
       // --- TRAVA PARA MOVER PARA FEITO (SÓ TÉCNICO) ---
@@ -1738,6 +1825,8 @@ const handleDeleteRound = async (id) => {
   const openExpertModal = (data = null) => { setSelectedFile(null); setModal({ type: 'expertForm', data }); }
 
   const openRobotModal = (data = null) => { setSelectedFile(null); setModal({ type: 'robotForm', data }); }
+  const openAttachmentModal = (data = null) => { setSelectedFile(null); setModal({ type: 'attachmentForm', data }); } // <--- NOVO
+  const openCodeModal = (data = null) => { setSelectedFile(null); setModal({ type: 'codeForm', data }); } // <--- NOVO
 
   const openRubricModal = () => setModal({ type: 'rubric' });
 
@@ -1752,6 +1841,8 @@ const handleDeleteRound = async (id) => {
   const openExpertView = (data) => setModal({ type: 'expertView', data });
 
   const openRobotView = (data) => setModal({ type: 'robotView', data });
+  const openAttachmentView = (data) => setModal({ type: 'attachmentView', data }); // <--- NOVO
+  const openCodeView = (data) => setModal({ type: 'codeView', data }); // <--- NOVO
 
   const openGradesModal = (student) => setModal({ type: 'grades', data: student });
 
@@ -2581,6 +2672,63 @@ const handleFileSelect = (e) => {
 
           {modal.type === 'robotView' && (<div><div className="flex justify-between items-start mb-2"><h3 className="text-xl font-bold text-white">{modal.data.name}</h3><span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-mono font-bold">{modal.data.version}</span></div><p className="text-xs text-gray-500 mb-6">{modal.data.date}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Mudanças e Testes</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.changes}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto do Protótipo</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10" alt="Robô" /></div>)}</div>)}
 
+          {modal.type === 'attachmentForm' && (
+              <form onSubmit={handleAttachmentSubmit}>
+                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Wrench className="text-blue-500"/> {modal.data ? 'Editar' : 'Nova'} Garra / Anexo</h3>
+                  <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div>
+                          <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome do Anexo</label>
+                          <input name="name" defaultValue={modal.data?.name} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Garra 1" />
+                      </div>
+                      <div>
+                          <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Saída Associada</label>
+                          <select name="roundId" defaultValue={modal.data?.roundId} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none">
+                              <option value="">Selecione...</option>
+                              {rounds.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                          </select>
+                      </div>
+                  </div>
+                  <div className="mb-4">
+                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data da Modificação</label>
+                      <input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" />
+                  </div>
+                  <div className="mb-4">
+                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Mudanças / Funcionalidade</label>
+                      <textarea name="changes" defaultValue={modal.data?.changes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none h-24" placeholder="Para quais missões serve e o que foi alterado?" />
+                  </div>
+                  <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10">
+                      <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Garra</label>
+                      <input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />
+                      {selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}
+                  </div>
+                  <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar Garra</button>
+              </form>
+          )}
+
+          {modal.type === 'attachmentView' && (<div><div className="flex justify-between items-start mb-2"><h3 className="text-xl font-bold text-white">{modal.data.name}</h3>{(() => { const roundName = rounds.find(r => r.id === modal.data.roundId)?.name || 'Saída Desconhecida'; return <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-mono font-bold">{roundName}</span> })()}</div><p className="text-xs text-gray-500 mb-6">{modal.data.date?.split('-').reverse().join('/')} {modal.data.author && `• Por ${modal.data.author}`}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Mudanças / Funcionalidade</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.changes}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Garra</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10 cursor-pointer hover:opacity-80 transition-opacity" alt="Garra" onClick={() => openImageModal(modal.data.image)} title="Clique para ampliar" /></div>)}</div>)}
+
+          {modal.type === 'codeForm' && (
+              <form onSubmit={handleCodeSubmit}>
+                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Code className="text-green-500"/> {modal.data ? 'Editar' : 'Novo'} Código</h3>
+                  <div className="mb-4">
+                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Título do Código</label>
+                      <input name="title" defaultValue={modal.data?.title} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-green-500 outline-none" placeholder="Ex: Seguidor de Linha PID" />
+                  </div>
+                  <div className="mb-4">
+                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Como funciona? (Explicação)</label>
+                      <textarea name="description" defaultValue={modal.data?.description} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-green-500 outline-none h-32" placeholder="Explique a lógica dos blocos/código passo a passo..." />
+                  </div>
+                  <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10">
+                      <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Print do Código (Blocos ou Python)</label>
+                      <input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-green-500/10 file:text-green-500 hover:file:bg-green-500/20 cursor-pointer" />
+                      {selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-green-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}
+                  </div>
+                  <button className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-green-900/20">Salvar no Cofre</button>
+              </form>
+          )}
+
+          {modal.type === 'codeView' && (<div><h3 className="text-xl font-bold text-white mb-2">{modal.data.title}</h3><p className="text-xs text-gray-500 mb-6 flex items-center gap-2"><Calendar size={12}/> {modal.data.date?.split('-').reverse().join('/')} {modal.data.author && <><UserCircle size={12} className="ml-2"/> Por {modal.data.author}</>}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block flex items-center gap-1"><Lightbulb size={12}/> Lógica de Funcionamento</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.description}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block flex items-center gap-1"><ImageIcon size={12}/> Print do Código</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10 cursor-pointer hover:opacity-80 transition-opacity" alt="Código" onClick={() => openImageModal(modal.data.image)} title="Clique para ampliar" /></div>)}</div>)}
+
           {modal.type === 'newRound' && (<form onSubmit={handleRoundSubmit}>
               <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><ListTodo className="text-blue-500"/> Planejar Saída</h3>
               
@@ -2957,6 +3105,37 @@ const handleFileSelect = (e) => {
 
             </div>
 
+            {/* DIÁRIO DE GARRAS / ANEXOS */}
+            <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
+                <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><Wrench className="text-blue-500"/> Diário de Garras</h3><button onClick={() => openAttachmentModal()} className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-3 py-1.5 rounded-lg hover:bg-blue-500 hover:text-white font-bold">+ Garra</button></div>
+                <div className="relative pl-4 border-l border-white/10 space-y-8">
+                    {attachments.sort((a,b) => new Date(b.date) - new Date(a.date)).map((att, idx) => (
+                        <div key={att.id} onClick={() => openAttachmentView(att)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-[#151520]"></div><div className="bg-black/40 border border-white/5 p-4 rounded-xl relative hover:bg-white/5 transition-colors">
+                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                            <button onClick={(e) => { e.stopPropagation(); openAttachmentModal(att); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
+                            {(isAdmin || att.author === viewAsStudent?.name) && <button onClick={(e) => handleDeleteAttachment(e, att.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
+                        </div>
+                        <div className="flex justify-between mb-2"><span className="text-blue-400 font-mono font-bold text-xs">{rounds.find(r => r.id === att.roundId)?.name || 'Geral'}</span><span className="text-[10px] text-gray-500 flex items-center gap-1">{att.date.split('-').reverse().slice(0,2).join('/')} {att.author && <><span className="mx-1">•</span> <UserCircle size={10}/> {att.author}</>}</span></div><h4 className="text-white font-bold mb-1 text-sm">{att.name}</h4><p className="text-xs text-gray-400 line-clamp-2">{att.changes}</p>{att.image && <div className="text-[10px] text-blue-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Tem foto</div>}</div></div>
+                    ))}
+                </div>
+            </div>
+
+            {/* BIBLIOTECA DE CÓDIGOS */}
+            <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
+                <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><Code className="text-green-500"/> Cofre de Códigos</h3><button onClick={() => openCodeModal()} className="text-xs bg-green-500/10 text-green-500 border border-green-500/20 px-3 py-1.5 rounded-lg hover:bg-green-500 hover:text-white font-bold">+ Código</button></div>
+                <div className="relative pl-4 border-l border-white/10 space-y-8">
+                    {codeSnippets.sort((a,b) => new Date(b.date) - new Date(a.date)).map((code, idx) => (
+                        <div key={code.id} onClick={() => openCodeView(code)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-green-500 border-2 border-[#151520]"></div><div className="bg-black/40 border border-white/5 p-4 rounded-xl relative hover:bg-white/5 transition-colors">
+                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                            <button onClick={(e) => { e.stopPropagation(); openCodeModal(code); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
+                            {(isAdmin || code.author === viewAsStudent?.name) && <button onClick={(e) => handleDeleteCode(e, code.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
+                        </div>
+                        <div className="flex justify-between mb-2"><span className="text-green-400 font-mono font-bold text-xs">{code.date?.split('-').reverse().slice(0,2).join('/')}</span><span className="text-[10px] text-gray-500 flex items-center gap-1">{code.author && <><UserCircle size={10}/> {code.author}</>}</span></div><h4 className="text-white font-bold mb-1 text-sm">{code.title}</h4><p className="text-xs text-gray-400 line-clamp-2">{code.description}</p>{code.image && <div className="text-[10px] text-green-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Ver print</div>}</div></div>
+                    ))}
+                    {codeSnippets.length === 0 && <p className="text-xs text-gray-500 italic mt-2">Nenhum código documentado.</p>}
+                </div>
+            </div>
+
             {/* COMPARTILHAMENTO E IMPACTO */}
             <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
                 <div className="flex justify-between items-center mb-6">
@@ -3016,6 +3195,7 @@ const handleFileSelect = (e) => {
   const ScoreEvolutionChart = ({ isTvMode = false }) => {
       // Estado local para filtrar o gráfico
       const [chartFilter, setChartFilter] = useState('score_total'); // 'score_total' ou ID do round
+      const [isFullscreen, setIsFullscreen] = useState(false);
       
       // Prepara os dados baseado no filtro
       let rawData = [];
@@ -3101,10 +3281,10 @@ const handleFileSelect = (e) => {
       const avgY = getY(currentAvg, isGeneral ? 'score' : 'time');
       const avgPercent = Math.max(0, Math.min(100, (avgY / height) * 100));
 
-      return (
-          <div className={`bg-[#151520] border border-white/10 rounded-2xl p-6 ${isTvMode ? 'shadow-2xl' : 'mb-8'}`}>
+      const renderChartContent = () => (
+          <>
               <div className="flex justify-between items-center mb-6">
-                  <h3 className={`text-white font-bold flex items-center gap-2 ${isTvMode ? 'text-2xl' : ''}`}>
+                  <h3 className={`text-white font-bold flex items-center gap-2 ${isTvMode || isFullscreen ? 'text-2xl' : ''}`}>
                       <TrendingUp style={{ color }}/> {isGeneral ? 'Evolução (Pontos vs Tempo)' : 'Melhoria de Tempo (Segundos)'}
                   </h3>
                   
@@ -3113,6 +3293,13 @@ const handleFileSelect = (e) => {
                   {!isTvMode && data.length > 0 && (
                       <button onClick={handleClearChart} className="p-2 text-gray-500 hover:text-red-500 hover:bg-white/5 rounded-lg transition-colors" title="Zerar este gráfico">
                           <Trash2 size={16}/>
+                      </button>
+                  )}
+
+                  {/* BOTÃO TELA CHEIA */}
+                  {!isTvMode && (
+                      <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-2 text-gray-500 hover:text-white hover:bg-white/5 rounded-lg transition-colors" title={isFullscreen ? "Minimizar" : "Tela Cheia"}>
+                          {isFullscreen ? <Minimize size={16}/> : <Maximize size={16}/>}
                       </button>
                   )}
 
@@ -3133,12 +3320,12 @@ const handleFileSelect = (e) => {
               </div>
 
               {data.length === 0 ? (
-                  <div className="h-32 flex items-center justify-center text-gray-500 text-xs italic border border-dashed border-white/10 rounded-xl">
+                  <div className={`flex items-center justify-center text-gray-500 text-xs italic border border-dashed border-white/10 rounded-xl ${isFullscreen ? 'flex-1 min-h-[400px]' : 'h-32'}`}>
                       Sem dados registrados para este gráfico ainda.
                   </div>
               ) : (
-              <div className="w-full overflow-hidden relative">
-                  <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto drop-shadow-2xl">
+              <div className="w-full overflow-hidden relative flex-1 flex flex-col justify-center">
+                  <svg viewBox={`0 0 ${width} ${height}`} className={`w-full h-auto drop-shadow-2xl ${isFullscreen ? 'max-h-[60vh]' : ''}`}>
                       {/* Gradiente de Fundo */}
                       <defs>
                           <linearGradient id="trendLineGradient" x1="0" y1="0" x2="0" y2={height} gradientUnits="userSpaceOnUse">
@@ -3239,8 +3426,8 @@ const handleFileSelect = (e) => {
               </div>
               )}
 
-              {/* HISTÓRICO COMPLETO ABAIXO DO GRÁFICO (SÓ FORA DO MODO TV) */}
-              {!isTvMode && data.length > 0 && (
+              {/* HISTÓRICO COMPLETO ABAIXO DO GRÁFICO (SÓ FORA DO MODO TV E NÃO EM TELA CHEIA) */}
+              {!isTvMode && !isFullscreen && data.length > 0 && (
                   <div className="mt-8 pt-6 border-t border-white/10">
                       <div className="flex justify-between items-center mb-4">
                           <h4 className="text-gray-400 font-bold uppercase text-xs flex items-center gap-2"><ListTodo size={14}/> Histórico Detalhado</h4>
@@ -3275,6 +3462,24 @@ const handleFileSelect = (e) => {
                       </div>
                   </div>
               )}
+          </>
+      );
+
+      if (isFullscreen) {
+          return (
+              <div className="fixed inset-0 z-[150] bg-black/95 backdrop-blur-sm p-4 md:p-8 flex flex-col overflow-auto animate-in fade-in">
+                  <div className="max-w-7xl w-full mx-auto flex-1 flex flex-col">
+                      <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 md:p-10 flex-1 flex flex-col shadow-2xl relative">
+                          {renderChartContent()}
+                      </div>
+                  </div>
+              </div>
+          );
+      }
+
+      return (
+          <div className={`bg-[#151520] border border-white/10 rounded-2xl p-6 ${isTvMode ? 'shadow-2xl' : 'mb-8'}`}>
+              {renderChartContent()}
           </div>
       );
   };
