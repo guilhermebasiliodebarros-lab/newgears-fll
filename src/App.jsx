@@ -2068,7 +2068,7 @@ const handleFileSelect = (e) => {
 
       try {
           const submissionData = { 
-              text: submissionText, // Apenas se houver campo de texto para o aluno responder
+              text: "Atividade enviada por e-mail/externo.",
               fileName: "Enviado por email/externo", 
               fileUrl: "", // Removendo links
               date: new Date().toLocaleString(), 
@@ -3763,6 +3763,24 @@ const handleFileSelect = (e) => {
 
   // --- COMPONENTE KANBAN (REUTILIZÁVEL) ---
   const KanbanView = () => {
+      const [searchTerm, setSearchTerm] = useState("");
+      const [showAllTodo, setShowAllTodo] = useState(false);
+      const [showAllDoing, setShowAllDoing] = useState(false);
+      const [showAllReview, setShowAllReview] = useState(false);
+      const [showAllDone, setShowAllDone] = useState(false);
+      const [editingTaskId, setEditingTaskId] = useState(null);
+      const [editingTaskText, setEditingTaskText] = useState("");
+
+      const handleSaveTaskEdit = async (taskId) => {
+          if (!editingTaskText.trim()) return;
+          try {
+              await updateDoc(doc(db, "tasks", taskId), { text: editingTaskText });
+              setEditingTaskId(null);
+              setEditingTaskText("");
+          } catch (error) {
+              console.error("Erro ao editar tarefa:", error);
+          }
+      };
       
       const KANBAN_TAGS = [
           { id: 'engenharia', label: 'Engenharia', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
@@ -3828,10 +3846,31 @@ const handleFileSelect = (e) => {
                       {status && t.status !== 'done' && <span className={`text-[10px] font-bold flex items-center gap-1 whitespace-nowrap mt-0.5 ${status.color}`}>{status.icon} {status.text}</span>}
                       {duration && <span className="text-[10px] font-bold text-green-500 flex items-center gap-1 mt-0.5 bg-green-500/10 px-1.5 py-0.5 rounded border border-green-500/20" title="Tempo total levado"><Clock size={10}/> {duration}</span>}
                   </div>
-                  <p className="text-sm text-gray-200">{t.text}</p>
+                  {editingTaskId === t.id ? (
+                      <div className="flex flex-col gap-2 mt-1">
+                          <textarea 
+                              value={editingTaskText} 
+                              onChange={(e) => setEditingTaskText(e.target.value)} 
+                              className="w-full bg-black/60 border border-blue-500/50 rounded-lg p-2 text-xs text-white outline-none resize-none focus:border-blue-400" 
+                              rows={3}
+                              autoFocus 
+                          />
+                          <div className="flex justify-end gap-2">
+                              <button onClick={() => setEditingTaskId(null)} className="text-[10px] text-gray-400 hover:text-white px-2 py-1">Cancelar</button>
+                              <button onClick={() => handleSaveTaskEdit(t.id)} className="text-[10px] bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded font-bold">Salvar</button>
+                          </div>
+                      </div>
+                  ) : (
+                      <p className="text-sm text-gray-200">{t.text}</p>
+                  )}
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end pt-2 border-t border-white/5 mt-1">
+                      {isAdmin && editingTaskId !== t.id && (
+                          <button onClick={() => { setEditingTaskId(t.id); setEditingTaskText(t.text); }} className="mr-auto text-blue-400 hover:bg-blue-500/20 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition-colors" title="Editar Tarefa">
+                              <Pencil size={14}/> Editar
+                          </button>
+                      )}
                       {viewAsStudent && t.author !== viewAsStudent.name && t.status !== 'done' && (
-                          <button onClick={() => takeoverTask(t.id)} className="mr-auto text-green-500 hover:bg-green-500/20 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition-colors" title="Assumir esta tarefa para você">
+                          <button onClick={() => takeoverTask(t.id)} className={`${isAdmin ? '' : 'mr-auto'} text-green-500 hover:bg-green-500/20 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition-colors`} title="Assumir esta tarefa para você">
                               <UserCheck size={14}/> Assumir
                           </button>
                       )}
@@ -3843,13 +3882,49 @@ const handleFileSelect = (e) => {
           );
       };
 
+      // Lógica de Filtro e Ordenação
+      const filteredTasks = tasks.filter(t => 
+          t.text.toLowerCase().includes(searchTerm.toLowerCase()) || 
+          (t.author && t.author.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (t.tag && t.tag.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+
+      const todoTasks = filteredTasks.filter(t => t.status === 'todo')
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      const doingTasks = filteredTasks.filter(t => t.status === 'doing')
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      const reviewTasks = filteredTasks.filter(t => t.status === 'review')
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      
+      // Ordena Feitos: Mais recentes primeiro
+      const doneTasks = filteredTasks.filter(t => t.status === 'done')
+          .sort((a, b) => new Date(b.completedAt || b.createdAt) - new Date(a.completedAt || a.createdAt));
+
+      const displayedTodoTasks = (showAllTodo || searchTerm !== "") ? todoTasks : todoTasks.slice(0, 10);
+      const displayedDoingTasks = (showAllDoing || searchTerm !== "") ? doingTasks : doingTasks.slice(0, 10);
+      const displayedReviewTasks = (showAllReview || searchTerm !== "") ? reviewTasks : reviewTasks.slice(0, 10);
+
+      const displayedDoneTasks = (showAllDone || searchTerm !== "") ? doneTasks : doneTasks.slice(0, 10);
+
       return (
-      <div className="animate-in fade-in duration-500">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 h-full min-h-[600px]">
+      <div className="animate-in fade-in duration-500 flex flex-col h-full">
+          {/* BARRA DE BUSCA KANBAN */}
+          <div className="mb-6 relative">
+              <Search size={18} className="absolute left-4 top-3.5 text-gray-500" />
+              <input 
+                  type="text"
+                  placeholder="Buscar tarefas por nome, tag ou responsável..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-[#151520] border border-white/10 rounded-xl p-3 pl-12 text-white focus:border-orange-500 outline-none transition-all"
+              />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 flex-1 min-h-[600px]">
               
               {/* COLUNA 1: A FAZER */}
               <div className="bg-[#151520] border border-white/10 rounded-2xl p-4 flex flex-col">
-                  <h3 className="text-gray-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-white/5 pb-2"><ListTodo size={16}/> A Fazer ({tasks.filter(t=>t.status==='todo').length})</h3>
+                  <h3 className="text-gray-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-white/5 pb-2"><ListTodo size={16}/> A Fazer ({todoTasks.length})</h3>
                   <form onSubmit={handleAddTask} className="mb-4 space-y-2">
                       <input name="taskText" placeholder="+ Nova Tarefa..." className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-orange-500 outline-none transition-all" />
                       <div className="flex gap-2">
@@ -3863,31 +3938,76 @@ const handleFileSelect = (e) => {
                       </div>
                   </form>
                   <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                      {tasks.filter(t => t.status === 'todo').map(t => <TaskCard key={t.id} t={t} showMoveRight="doing" showDelete={true} />)}
+                      {displayedTodoTasks.map(t => <TaskCard key={t.id} t={t} showMoveRight="doing" showDelete={true} />)}
+                      {todoTasks.length === 0 && searchTerm && <p className="text-xs text-gray-500 text-center mt-4">Nenhuma tarefa encontrada.</p>}
+                      
+                      {!showAllTodo && !searchTerm && todoTasks.length > 10 && (
+                          <button onClick={() => setShowAllTodo(true)} className="w-full py-2 mt-2 bg-white/5 hover:bg-white/10 text-gray-400 border border-white/10 rounded-xl text-xs font-bold transition-colors">
+                              Ver mais {todoTasks.length - 10} tarefas...
+                          </button>
+                      )}
+                      {showAllTodo && !searchTerm && todoTasks.length > 10 && (
+                          <button onClick={() => setShowAllTodo(false)} className="w-full py-2 mt-2 bg-black/40 hover:bg-white/5 text-gray-500 border border-white/5 rounded-xl text-xs font-bold transition-colors">
+                              Ocultar tarefas
+                          </button>
+                      )}
                   </div>
               </div>
 
               {/* COLUNA 2: FAZENDO */}
               <div className="bg-[#151520] border border-blue-500/20 rounded-2xl p-4 flex flex-col bg-blue-500/5">
-                  <h3 className="text-blue-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-blue-500/10 pb-2"><Loader2 size={16} className="animate-spin"/> Fazendo ({tasks.filter(t=>t.status==='doing').length})</h3>
+                  <h3 className="text-blue-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-blue-500/10 pb-2"><Loader2 size={16} className="animate-spin"/> Fazendo ({doingTasks.length})</h3>
                   <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                      {tasks.filter(t => t.status === 'doing').map(t => <TaskCard key={t.id} t={t} showMoveRight="review" showDelete={true} />)}
+                      {displayedDoingTasks.map(t => <TaskCard key={t.id} t={t} showMoveRight="review" showDelete={true} />)}
+                      
+                      {!showAllDoing && !searchTerm && doingTasks.length > 10 && (
+                          <button onClick={() => setShowAllDoing(true)} className="w-full py-2 mt-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-xl text-xs font-bold transition-colors">
+                              Ver mais {doingTasks.length - 10} tarefas...
+                          </button>
+                      )}
+                      {showAllDoing && !searchTerm && doingTasks.length > 10 && (
+                          <button onClick={() => setShowAllDoing(false)} className="w-full py-2 mt-2 bg-black/40 hover:bg-white/5 text-gray-500 border border-white/5 rounded-xl text-xs font-bold transition-colors">
+                              Ocultar tarefas
+                          </button>
+                      )}
                   </div>
               </div>
 
               {/* COLUNA 3: EM REVISÃO */}
               <div className="bg-[#151520] border border-purple-500/20 rounded-2xl p-4 flex flex-col bg-purple-500/5">
-                  <h3 className="text-purple-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-purple-500/10 pb-2"><Search size={16}/> Em Revisão ({tasks.filter(t=>t.status==='review').length})</h3>
+                  <h3 className="text-purple-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-purple-500/10 pb-2"><Search size={16}/> Em Revisão ({reviewTasks.length})</h3>
                   <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                      {tasks.filter(t => t.status === 'review').map(t => <TaskCard key={t.id} t={t} showMoveLeft={isAdmin ? "doing" : null} showMoveRight={isAdmin ? "done" : null} showDelete={true} />)}
+                      {displayedReviewTasks.map(t => <TaskCard key={t.id} t={t} showMoveLeft={isAdmin ? "doing" : null} showMoveRight={isAdmin ? "done" : null} showDelete={true} />)}
+                      
+                      {!showAllReview && !searchTerm && reviewTasks.length > 10 && (
+                          <button onClick={() => setShowAllReview(true)} className="w-full py-2 mt-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 rounded-xl text-xs font-bold transition-colors">
+                              Ver mais {reviewTasks.length - 10} tarefas...
+                          </button>
+                      )}
+                      {showAllReview && !searchTerm && reviewTasks.length > 10 && (
+                          <button onClick={() => setShowAllReview(false)} className="w-full py-2 mt-2 bg-black/40 hover:bg-white/5 text-gray-500 border border-white/5 rounded-xl text-xs font-bold transition-colors">
+                              Ocultar tarefas
+                          </button>
+                      )}
                   </div>
               </div>
 
               {/* COLUNA 4: FEITO */}
               <div className="bg-[#151520] border border-green-500/20 rounded-2xl p-4 flex flex-col bg-green-500/5">
-                  <h3 className="text-green-500 font-bold uppercase mb-4 flex items-center gap-2 border-b border-green-500/10 pb-2"><CheckCircle size={16}/> Feito ({tasks.filter(t=>t.status==='done').length})</h3>
+                  <h3 className="text-green-500 font-bold uppercase mb-4 flex items-center gap-2 border-b border-green-500/10 pb-2"><CheckCircle size={16}/> Feito ({doneTasks.length})</h3>
                   <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                      {tasks.filter(t => t.status === 'done').map(t => <TaskCard key={t.id} t={t} showMoveRight={null} showDelete={true} />)}
+                      {displayedDoneTasks.map(t => <TaskCard key={t.id} t={t} showMoveRight={null} showDelete={true} />)}
+                      
+                      {!showAllDone && !searchTerm && doneTasks.length > 10 && (
+                          <button onClick={() => setShowAllDone(true)} className="w-full py-2 mt-2 bg-green-500/10 hover:bg-green-500/20 text-green-500 border border-green-500/20 rounded-xl text-xs font-bold transition-colors">
+                              Ver mais {doneTasks.length - 10} antigas...
+                          </button>
+                      )}
+                      {showAllDone && !searchTerm && doneTasks.length > 10 && (
+                          <button onClick={() => setShowAllDone(false)} className="w-full py-2 mt-2 bg-black/40 hover:bg-white/5 text-gray-500 border border-white/5 rounded-xl text-xs font-bold transition-colors">
+                              Ocultar antigas
+                          </button>
+                      )}
                   </div>
               </div>
           </div>
@@ -5203,8 +5323,7 @@ const handleFileSelect = (e) => {
 
                                 {(!viewAsStudent.submission || viewAsStudent.submission.status === 'rejected') && (
                                     <form onSubmit={handleSubmitActivity}>
-                                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Relatório da Missão</label>
-                                        <textarea required value={submissionText} onChange={(e) => setSubmissionText(e.target.value)} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white mb-4 focus:border-blue-500 outline-none min-h-[100px]" placeholder="Descreva aqui o que foi feito..." />
+                                        <p className="text-sm text-gray-400 mb-4 text-center">Clique abaixo para avisar o técnico que você enviou a atividade por e-mail.</p>
                                         <button disabled={isSubmitting} className="w-full bg-blue-600 hover:bg-blue-500 transition-colors text-white font-bold py-3 rounded-lg uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                                             {isSubmitting ? <Loader2 className="animate-spin" size={20}/> : <><Upload size={20} /> Entregar Atividade</>}
                                         </button>
