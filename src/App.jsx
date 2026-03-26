@@ -3904,13 +3904,35 @@ const handleFileSelect = (e) => {
               displayAuthor = `${authors[0]}, ${authors[1]}...`;
           }
 
+          // Busca os dados completos dos autores para poder exibir a foto
+          const authorStudents = authors.map(authorName => students.find(s => s.name === authorName)).filter(Boolean);
+
+          // Renderiza os avatares dos responsáveis (com sobreposição se houver mais de um)
+          const renderAvatars = () => {
+              if (authorStudents.length === 0) return <UserCircle size={12} className={isAdmin ? "text-blue-400 shrink-0" : "text-gray-400 shrink-0"} />;
+              
+              return (
+                  <div className="flex -space-x-1.5 shrink-0 mr-1">
+                      {authorStudents.map((s, idx) => (
+                          s.avatarImage ? (
+                              <img key={idx} src={s.avatarImage} alt={s.name} className="w-4 h-4 rounded-full object-cover border border-[#151520] relative z-10 hover:z-20 hover:scale-125 transition-transform" title={s.name} />
+                          ) : (
+                              <div key={idx} className="w-4 h-4 rounded-full bg-gray-800 border border-[#151520] flex items-center justify-center relative z-10 hover:z-20" title={s.name}>
+                                  <span className="text-[6px] font-bold text-gray-300">{s.name.charAt(0)}</span>
+                              </div>
+                          )
+                      ))}
+                  </div>
+              );
+          };
+
           return (
               <div className={`bg-black/40 p-3 rounded-xl border flex flex-col gap-2 group transition-all duration-500 ${status && t.status !== 'done' ? status.border : 'border-white/5'} ${isPulsing ? 'animate-pulse hover:animate-none shadow-[0_0_15px_rgba(239,68,68,0.15)]' : 'hover:border-white/20'}`}>
                   <div className="flex justify-between items-start gap-2">
                       <div className="flex flex-wrap gap-1.5">
                           {isAdmin ? (
                               <div className="relative flex items-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 transition-colors px-2 py-0.5 rounded border border-blue-500/30 group focus-within:border-blue-500/50">
-                                  <UserCircle size={10} className="text-blue-400 shrink-0"/>
+                                  {renderAvatars()}
                                   <select
                                       value={authors.length === 1 ? authors[0] : ''} // Só pré-seleciona se for um único autor
                                       onChange={(e) => assignTaskToStudent(t.id, e.target.value)}
@@ -3927,7 +3949,7 @@ const handleFileSelect = (e) => {
                               </div>
                           ) : (
                               <span className="text-[10px] font-bold uppercase bg-white/10 px-2 py-0.5 rounded text-gray-300 flex items-center gap-1" title={t.author || "Equipe"}>
-                                  <UserCircle size={10}/> {displayAuthor}
+                                  {renderAvatars()} {displayAuthor}
                               </span>
                           )}
                           <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border flex items-center gap-1 ${tagObj.color}`}>
