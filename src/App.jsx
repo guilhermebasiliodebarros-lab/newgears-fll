@@ -15,6 +15,7 @@ import {
   CheckCircle, 
   X, 
   ChevronRight, 
+  ChevronDown,
   ChevronLeft,
   Pause,
   Upload, 
@@ -1193,6 +1194,25 @@ function App() {
             showNotification("Você saiu da tarefa!");
         } catch (error) {
             console.error("Erro ao sair da tarefa:", error);
+        }
+    };
+
+    const assignTaskToStudent = async (taskId, studentName) => {
+        if (!isAdmin) return;
+        
+        // Se o valor for vazio, desatribui (author: null). Senão, atribui.
+        const newAuthor = studentName === "" ? null : studentName;
+
+        try {
+            await updateDoc(doc(db, "tasks", taskId), { author: newAuthor });
+            if (newAuthor) {
+              showNotification(`Tarefa atribuída para ${studentName}!`);
+            } else {
+              showNotification(`Tarefa agora é da equipe.`);
+            }
+        } catch (error) {
+            console.error("Erro ao atribuir tarefa:", error);
+            showNotification("Erro ao atribuir tarefa.", "error");
         }
     };
 
@@ -3876,22 +3896,40 @@ const handleFileSelect = (e) => {
           const isPulsing = status?.isOverdue && t.status !== 'done';
           const duration = t.status === 'done' ? getTaskDuration(t.createdAt, t.completedAt) : null;
 
-          // Lógica para limitar a exibição de autores
+          // Lógica de exibição de autores
+          const authors = t.author ? t.author.split(',').map(a => a.trim()) : [];
+          const isMultiAuthor = authors.length > 1;
           let displayAuthor = t.author || "Equipe";
-          if (t.author) {
-              const authors = t.author.split(',').map(a => a.trim());
-              if (authors.length > 2) {
-                  displayAuthor = `${authors[0]}, ${authors[1]}...`;
-              }
+          if (isMultiAuthor) {
+              displayAuthor = `${authors[0]}, ${authors[1]}...`;
           }
 
           return (
               <div className={`bg-black/40 p-3 rounded-xl border flex flex-col gap-2 group transition-all duration-500 ${status && t.status !== 'done' ? status.border : 'border-white/5'} ${isPulsing ? 'animate-pulse hover:animate-none shadow-[0_0_15px_rgba(239,68,68,0.15)]' : 'hover:border-white/20'}`}>
                   <div className="flex justify-between items-start gap-2">
                       <div className="flex flex-wrap gap-1.5">
-                          <span className="text-[10px] font-bold uppercase bg-white/10 px-2 py-0.5 rounded text-gray-300 flex items-center gap-1" title={t.author || "Equipe"}>
-                              <UserCircle size={10}/> {displayAuthor}
-                          </span>
+                          {isAdmin ? (
+                              <div className="relative flex items-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 transition-colors px-2 py-0.5 rounded border border-blue-500/30 group focus-within:border-blue-500/50">
+                                  <UserCircle size={10} className="text-blue-400 shrink-0"/>
+                                  <select
+                                      value={authors.length === 1 ? authors[0] : ''} // Só pré-seleciona se for um único autor
+                                      onChange={(e) => assignTaskToStudent(t.id, e.target.value)}
+                                      className="text-[10px] font-bold uppercase bg-transparent border-none text-blue-100 focus:ring-0 outline-none appearance-none cursor-pointer pr-3"
+                                      title={t.author || "Atribuir tarefa"}
+                                  >
+                                      <option value="" className="bg-zinc-900 text-gray-400">Equipe (Livre)</option>
+                                      {students.sort((a,b) => a.name.localeCompare(b.name)).map(s => (
+                                          <option key={s.id} value={s.name} className="bg-zinc-900 text-white">{s.name}</option>
+                                      ))}
+                                  </select>
+                                  <ChevronDown size={10} className="text-blue-400 absolute right-1 pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity"/>
+                                  {isMultiAuthor && <span className="text-[10px] text-blue-300 ml-1" title={t.author}>+{authors.length - 1}</span>}
+                              </div>
+                          ) : (
+                              <span className="text-[10px] font-bold uppercase bg-white/10 px-2 py-0.5 rounded text-gray-300 flex items-center gap-1" title={t.author || "Equipe"}>
+                                  <UserCircle size={10}/> {displayAuthor}
+                              </span>
+                          )}
                           <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border flex items-center gap-1 ${tagObj.color}`}>
                               <Tag size={8}/> {tagObj.label}
                           </span>
