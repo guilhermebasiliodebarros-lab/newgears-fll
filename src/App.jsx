@@ -1001,6 +1001,7 @@ function App() {
       const text = e.target.taskText.value;
       const date = e.target.taskDate.value;
       const tag = e.target.taskTag ? e.target.taskTag.value : 'geral';
+      const priority = e.target.taskPriority ? e.target.taskPriority.value : 'normal';
       if(!text) return;
       
       const author = isAdmin ? "Técnico" : (viewAsStudent?.name || "Equipe");
@@ -1012,7 +1013,8 @@ function App() {
               createdAt: new Date().toISOString(),
               author: author,
               dueDate: date,
-              tag: tag
+              tag: tag,
+              priority: priority
           });
           e.target.reset();
       } catch (error) {
@@ -3846,6 +3848,28 @@ const handleFileSelect = (e) => {
           }
       };
       
+      const handleDragStart = (e, taskId) => {
+          e.dataTransfer.setData("taskId", taskId);
+          e.target.style.opacity = "0.5";
+      };
+
+      const handleDragEnd = (e) => {
+          e.target.style.opacity = "1";
+      };
+
+      const handleDragOver = (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+      };
+
+      const handleDrop = async (e, targetStatus) => {
+          e.preventDefault();
+          const taskId = e.dataTransfer.getData("taskId");
+          if (taskId) {
+              await moveTask(taskId, targetStatus);
+          }
+      };
+
       const KANBAN_TAGS = [
           { id: 'engenharia', label: 'Engenharia', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
           { id: 'inovacao', label: 'Inovação', color: 'bg-pink-500/10 text-pink-400 border-pink-500/20' },
@@ -3927,7 +3951,12 @@ const handleFileSelect = (e) => {
           };
 
           return (
-              <div className={`bg-black/40 p-3 rounded-xl border flex flex-col gap-2 group transition-all duration-500 ${status && t.status !== 'done' ? status.border : 'border-white/5'} ${isPulsing ? 'animate-pulse hover:animate-none shadow-[0_0_15px_rgba(239,68,68,0.15)]' : 'hover:border-white/20'}`}>
+              <div 
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, t.id)}
+                  onDragEnd={handleDragEnd}
+                  className={`bg-black/40 p-3 rounded-xl border flex flex-col gap-2 group transition-all duration-500 cursor-grab active:cursor-grabbing ${status && t.status !== 'done' ? status.border : 'border-white/5'} ${isPulsing ? 'animate-pulse hover:animate-none shadow-[0_0_15px_rgba(239,68,68,0.15)]' : 'hover:border-white/20'}`}
+              >
                   <div className="flex justify-between items-start gap-2">
                       <div className="flex flex-wrap gap-1.5">
                           {isAdmin ? (
@@ -4050,17 +4079,28 @@ const handleFileSelect = (e) => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 flex-1 min-h-[600px]">
               
               {/* COLUNA 1: A FAZER */}
-              <div className="bg-[#151520] border border-white/10 rounded-2xl p-4 flex flex-col">
+              <div 
+                  className="bg-[#151520] border border-white/10 rounded-2xl p-4 flex flex-col transition-colors"
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, 'todo')}
+              >
                   <h3 className="text-gray-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-white/5 pb-2"><ListTodo size={16}/> A Fazer ({todoTasks.length})</h3>
                   <form onSubmit={handleAddTask} className="mb-4 space-y-2">
                       <input name="taskText" placeholder="+ Nova Tarefa..." className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-orange-500 outline-none transition-all" />
                       <div className="flex gap-2">
-                          <select name="taskTag" className="bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-400 focus:border-orange-500 outline-none w-1/3">
+                          <select name="taskTag" className="bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-400 focus:border-orange-500 outline-none w-1/4">
                               <option value="engenharia">Engenharia</option>
                               <option value="inovacao">Inovação</option>
                               <option value="gestao">Gestão</option>
+                              <option value="geral">Geral</option>
                           </select>
-                          <input type="date" name="taskDate" className="bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-400 focus:border-orange-500 outline-none w-1/3" title="Prazo"/>
+                          <select name="taskPriority" className="bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-400 focus:border-orange-500 outline-none w-1/4" title="Prioridade">
+                              <option value="normal">Normal</option>
+                              <option value="baixa">Baixa</option>
+                              <option value="alta">Alta</option>
+                              <option value="urgente">Urgente 🔥</option>
+                          </select>
+                          <input type="date" name="taskDate" className="bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-400 focus:border-orange-500 outline-none w-1/4" title="Prazo"/>
                           <button className="flex-1 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-bold uppercase">Add</button>
                       </div>
                   </form>
@@ -4082,7 +4122,11 @@ const handleFileSelect = (e) => {
               </div>
 
               {/* COLUNA 2: FAZENDO */}
-              <div className="bg-[#151520] border border-blue-500/20 rounded-2xl p-4 flex flex-col bg-blue-500/5">
+              <div 
+                  className="bg-[#151520] border border-blue-500/20 rounded-2xl p-4 flex flex-col bg-blue-500/5 transition-colors"
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, 'doing')}
+              >
                   <h3 className="text-blue-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-blue-500/10 pb-2"><Loader2 size={16} className="animate-spin"/> Fazendo ({doingTasks.length})</h3>
                   <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
                       {displayedDoingTasks.map(t => <TaskCard key={t.id} t={t} showMoveRight="review" showDelete={true} />)}
@@ -4101,7 +4145,11 @@ const handleFileSelect = (e) => {
               </div>
 
               {/* COLUNA 3: EM REVISÃO */}
-              <div className="bg-[#151520] border border-purple-500/20 rounded-2xl p-4 flex flex-col bg-purple-500/5">
+              <div 
+                  className="bg-[#151520] border border-purple-500/20 rounded-2xl p-4 flex flex-col bg-purple-500/5 transition-colors"
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, 'review')}
+              >
                   <h3 className="text-purple-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-purple-500/10 pb-2"><Search size={16}/> Em Revisão ({reviewTasks.length})</h3>
                   <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
                       {displayedReviewTasks.map(t => <TaskCard key={t.id} t={t} showMoveLeft={isAdmin ? "doing" : null} showMoveRight={isAdmin ? "done" : null} showDelete={true} />)}
@@ -4120,7 +4168,11 @@ const handleFileSelect = (e) => {
               </div>
 
               {/* COLUNA 4: FEITO */}
-              <div className="bg-[#151520] border border-green-500/20 rounded-2xl p-4 flex flex-col bg-green-500/5">
+              <div 
+                  className="bg-[#151520] border border-green-500/20 rounded-2xl p-4 flex flex-col bg-green-500/5 transition-colors"
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, 'done')}
+              >
                   <h3 className="text-green-500 font-bold uppercase mb-4 flex items-center gap-2 border-b border-green-500/10 pb-2"><CheckCircle size={16}/> Feito ({doneTasks.length})</h3>
                   <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
                       {displayedDoneTasks.map(t => <TaskCard key={t.id} t={t} showMoveRight={null} showDelete={true} />)}
