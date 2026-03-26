@@ -1152,6 +1152,50 @@ function App() {
           }
       }
 
+    const joinTask = async (id) => {
+        if (!viewAsStudent) return;
+        try {
+            const task = tasks.find(t => t.id === id);
+            if (!task) return;
+            
+            let newAuthor = viewAsStudent.name;
+            if (task.author) {
+                if (task.author.includes(viewAsStudent.name)) return;
+                
+                const authorsArray = task.author.split(',').map(a => a.trim());
+                if (authorsArray.length >= 3) {
+                    showNotification("Esta tarefa já atingiu o limite de 3 participantes.", "error");
+                    return;
+                }
+                
+                newAuthor = `${task.author}, ${viewAsStudent.name}`;
+            }
+            
+            await updateDoc(doc(db, "tasks", id), { author: newAuthor });
+            showNotification("Você entrou na tarefa!");
+        } catch (error) {
+            console.error("Erro ao participar da tarefa:", error);
+        }
+    };
+
+    const leaveTask = async (id) => {
+        if (!viewAsStudent) return;
+        try {
+            const task = tasks.find(t => t.id === id);
+            if (!task || !task.author) return;
+            
+            let authorsArray = task.author.split(',').map(a => a.trim());
+            authorsArray = authorsArray.filter(a => a !== viewAsStudent.name);
+            
+            const newAuthor = authorsArray.length > 0 ? authorsArray.join(', ') : null;
+            
+            await updateDoc(doc(db, "tasks", id), { author: newAuthor });
+            showNotification("Você saiu da tarefa!");
+        } catch (error) {
+            console.error("Erro ao sair da tarefa:", error);
+        }
+    };
+
   // --- FUNÇÃO PARA SALVAR DIÁRIO DE BORDO ---
   const handleLogbookSubmit = async (e) => {
       e.preventDefault();
@@ -3832,12 +3876,21 @@ const handleFileSelect = (e) => {
           const isPulsing = status?.isOverdue && t.status !== 'done';
           const duration = t.status === 'done' ? getTaskDuration(t.createdAt, t.completedAt) : null;
 
+          // Lógica para limitar a exibição de autores
+          let displayAuthor = t.author || "Equipe";
+          if (t.author) {
+              const authors = t.author.split(',').map(a => a.trim());
+              if (authors.length > 2) {
+                  displayAuthor = `${authors[0]}, ${authors[1]}...`;
+              }
+          }
+
           return (
               <div className={`bg-black/40 p-3 rounded-xl border flex flex-col gap-2 group transition-all duration-500 ${status && t.status !== 'done' ? status.border : 'border-white/5'} ${isPulsing ? 'animate-pulse hover:animate-none shadow-[0_0_15px_rgba(239,68,68,0.15)]' : 'hover:border-white/20'}`}>
                   <div className="flex justify-between items-start gap-2">
                       <div className="flex flex-wrap gap-1.5">
-                          <span className="text-[10px] font-bold uppercase bg-white/10 px-2 py-0.5 rounded text-gray-300 flex items-center gap-1">
-                              <UserCircle size={10}/> {t.author || "Equipe"}
+                          <span className="text-[10px] font-bold uppercase bg-white/10 px-2 py-0.5 rounded text-gray-300 flex items-center gap-1" title={t.author || "Equipe"}>
+                              <UserCircle size={10}/> {displayAuthor}
                           </span>
                           <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border flex items-center gap-1 ${tagObj.color}`}>
                               <Tag size={8}/> {tagObj.label}
@@ -3863,20 +3916,34 @@ const handleFileSelect = (e) => {
                   ) : (
                       <p className="text-sm text-gray-200">{t.text}</p>
                   )}
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end pt-2 border-t border-white/5 mt-1">
-                      {isAdmin && editingTaskId !== t.id && (
-                          <button onClick={() => { setEditingTaskId(t.id); setEditingTaskText(t.text); }} className="mr-auto text-blue-400 hover:bg-blue-500/20 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition-colors" title="Editar Tarefa">
-                              <Pencil size={14}/> Editar
-                          </button>
-                      )}
-                      {viewAsStudent && t.author !== viewAsStudent.name && t.status !== 'done' && (
-                          <button onClick={() => takeoverTask(t.id)} className={`${isAdmin ? '' : 'mr-auto'} text-green-500 hover:bg-green-500/20 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition-colors`} title="Assumir esta tarefa para você">
-                              <UserCheck size={14}/> Assumir
-                          </button>
-                      )}
-                      {showMoveLeft && <button onClick={() => moveTask(t.id, showMoveLeft)} className="text-orange-500 hover:bg-orange-500/20 p-1.5 rounded" title="Devolver tarefa (Incompleta)"><ChevronLeft size={16}/></button>}
-                      {showMoveRight && <button onClick={() => moveTask(t.id, showMoveRight)} className="text-blue-500 hover:bg-blue-500/20 p-1.5 rounded" title="Avançar"><ChevronRight size={16}/></button>}
-                      {showDelete && <button onClick={() => removeTask(t.id)} className="text-red-500 hover:bg-red-500/20 p-1.5 rounded" title="Excluir"><Trash2 size={16}/></button>}
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-between pt-2 border-t border-white/5 mt-1">
+                      <div className="flex gap-1 flex-wrap">
+                          {isAdmin && editingTaskId !== t.id && (
+                              <button onClick={() => { setEditingTaskId(t.id); setEditingTaskText(t.text); }} className="text-blue-400 hover:bg-blue-500/20 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition-colors" title="Editar Tarefa">
+                                  <Pencil size={14}/> Editar
+                              </button>
+                          )}
+                          {viewAsStudent && (!t.author || !t.author.includes(viewAsStudent.name)) && t.status !== 'done' && (
+                              <>
+                                  <button onClick={() => joinTask(t.id)} className="text-green-500 hover:bg-green-500/20 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition-colors" title="Participar junto na tarefa">
+                                      <UserPlus size={14}/> Participar
+                                  </button>
+                                  <button onClick={() => takeoverTask(t.id)} className="text-orange-500 hover:bg-orange-500/20 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition-colors" title="Assumir sozinho (Substituir atuais)">
+                                      <UserCheck size={14}/> Assumir
+                                  </button>
+                              </>
+                          )}
+                          {viewAsStudent && t.author && t.author.includes(viewAsStudent.name) && t.status !== 'done' && (
+                              <button onClick={() => leaveTask(t.id)} className="text-red-500 hover:bg-red-500/20 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition-colors" title="Sair desta tarefa">
+                                  <UserX size={14}/> Sair
+                              </button>
+                          )}
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                          {showMoveLeft && <button onClick={() => moveTask(t.id, showMoveLeft)} className="text-orange-500 hover:bg-orange-500/20 p-1.5 rounded" title="Devolver tarefa (Incompleta)"><ChevronLeft size={16}/></button>}
+                          {showMoveRight && <button onClick={() => moveTask(t.id, showMoveRight)} className="text-blue-500 hover:bg-blue-500/20 p-1.5 rounded" title="Avançar"><ChevronRight size={16}/></button>}
+                          {showDelete && <button onClick={() => removeTask(t.id)} className="text-red-500 hover:bg-red-500/20 p-1.5 rounded" title="Excluir"><Trash2 size={16}/></button>}
+                      </div>
                   </div>
               </div>
           );
@@ -5162,6 +5229,24 @@ const handleFileSelect = (e) => {
         <main className="p-4 md:p-8 w-full max-w-[1800px] mx-auto animate-in slide-in-from-bottom-8">
           <UrgentEventsBanner />
 
+          {/* ALERTA DE TAREFAS ATRASADAS DO ALUNO */}
+          {tasks.filter(t => t.status !== 'done' && t.dueDate && t.dueDate < localTodayStr && t.author && t.author.includes(viewAsStudent.name)).length > 0 && (
+              <div className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.2)] mb-6 flex items-center justify-between animate-pulse hover:animate-none transition-all">
+                  <div className="flex items-center gap-4">
+                      <div className="bg-red-500/20 p-3 rounded-full">
+                          <AlertTriangle size={24} className="text-red-500" />
+                      </div>
+                      <div>
+                          <h3 className="text-red-400 font-bold text-xs uppercase tracking-widest mb-1">Ação Necessária</h3>
+                          <p className="text-white font-bold md:text-lg leading-tight">Você possui tarefas atrasadas no Kanban!</p>
+                      </div>
+                  </div>
+                  <button onClick={() => setStudentTab('kanban')} className="hidden md:block bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-lg shadow-red-900/20 transition-colors whitespace-nowrap">
+                      Resolver Agora
+                  </button>
+              </div>
+          )}
+
     {/* ALERTA DE LÍDER DE GESTÃO */}
     {currentWeekData?.assignments?.Gestão?.some(s => s.id === viewAsStudent.id) && !["Heloise", "Sofia"].includes(viewAsStudent.name) && (
         <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-4 rounded-xl border border-purple-400/30 shadow-lg mb-6 animate-pulse flex items-center justify-between">
@@ -5354,7 +5439,7 @@ const handleFileSelect = (e) => {
       )}
     </div>
     </div>
-        )
-      }
-      
-      export default App
+  );
+}
+
+export default App;
