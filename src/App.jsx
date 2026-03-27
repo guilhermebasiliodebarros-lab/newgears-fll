@@ -3836,6 +3836,7 @@ const handleFileSelect = (e) => {
       const [showAllDone, setShowAllDone] = useState(false);
       const [editingTaskId, setEditingTaskId] = useState(null);
       const [editingTaskText, setEditingTaskText] = useState("");
+      const [draggedOverCol, setDraggedOverCol] = useState(null);
 
       const handleSaveTaskEdit = async (taskId) => {
           if (!editingTaskText.trim()) return;
@@ -3857,13 +3858,19 @@ const handleFileSelect = (e) => {
           e.target.style.opacity = "1";
       };
 
-      const handleDragOver = (e) => {
+      const handleDragOver = (e, colId) => {
           e.preventDefault();
           e.dataTransfer.dropEffect = "move";
+          setDraggedOverCol(colId);
+      };
+
+      const handleDragLeave = () => {
+          setDraggedOverCol(null);
       };
 
       const handleDrop = async (e, targetStatus) => {
           e.preventDefault();
+          setDraggedOverCol(null);
           const taskId = e.dataTransfer.getData("taskId");
           if (taskId) {
               await moveTask(taskId, targetStatus);
@@ -3984,6 +3991,9 @@ const handleFileSelect = (e) => {
                           <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border flex items-center gap-1 ${tagObj.color}`}>
                               <Tag size={8}/> {tagObj.label}
                           </span>
+                          {t.priority === 'urgente' && <span className="text-[9px] bg-red-500/20 text-red-500 border border-red-500/30 px-1.5 py-0.5 rounded font-black uppercase flex items-center gap-1" title="Prioridade Urgente"><AlertTriangle size={8}/> Urgente</span>}
+                          {t.priority === 'alta' && <span className="text-[9px] bg-orange-500/20 text-orange-500 border border-orange-500/30 px-1.5 py-0.5 rounded font-bold uppercase" title="Prioridade Alta">Alta</span>}
+                          {t.priority === 'baixa' && <span className="text-[9px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded font-bold uppercase" title="Prioridade Baixa">Baixa</span>}
                       </div>
                       {status && t.status !== 'done' && <span className={`text-[10px] font-bold flex items-center gap-1 whitespace-nowrap mt-0.5 ${status.color}`}>{status.icon} {status.text}</span>}
                       {duration && <span className="text-[10px] font-bold text-green-500 flex items-center gap-1 mt-0.5 bg-green-500/10 px-1.5 py-0.5 rounded border border-green-500/20" title="Tempo total levado"><Clock size={10}/> {duration}</span>}
@@ -4076,12 +4086,13 @@ const handleFileSelect = (e) => {
               />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 flex-1 min-h-[600px]">
+          <div className="flex overflow-x-auto snap-x md:grid md:grid-cols-4 gap-6 flex-1 min-h-[600px] pb-4 custom-scrollbar">
               
               {/* COLUNA 1: A FAZER */}
               <div 
-                  className="bg-[#151520] border border-white/10 rounded-2xl p-4 flex flex-col transition-colors"
-                  onDragOver={handleDragOver}
+                  className={`shrink-0 w-[85vw] md:w-auto snap-center rounded-2xl p-4 flex flex-col transition-all duration-300 border ${draggedOverCol === 'todo' ? 'bg-[#1a1a2a] border-white/40 shadow-lg' : 'bg-[#151520] border-white/10'}`}
+                  onDragOver={(e) => handleDragOver(e, 'todo')}
+                  onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, 'todo')}
               >
                   <h3 className="text-gray-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-white/5 pb-2"><ListTodo size={16}/> A Fazer ({todoTasks.length})</h3>
@@ -4123,8 +4134,9 @@ const handleFileSelect = (e) => {
 
               {/* COLUNA 2: FAZENDO */}
               <div 
-                  className="bg-[#151520] border border-blue-500/20 rounded-2xl p-4 flex flex-col bg-blue-500/5 transition-colors"
-                  onDragOver={handleDragOver}
+                  className={`shrink-0 w-[85vw] md:w-auto snap-center rounded-2xl p-4 flex flex-col transition-all duration-300 border ${draggedOverCol === 'doing' ? 'bg-blue-500/10 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'bg-blue-500/5 border-blue-500/20'}`}
+                  onDragOver={(e) => handleDragOver(e, 'doing')}
+                  onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, 'doing')}
               >
                   <h3 className="text-blue-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-blue-500/10 pb-2"><Loader2 size={16} className="animate-spin"/> Fazendo ({doingTasks.length})</h3>
@@ -4146,8 +4158,9 @@ const handleFileSelect = (e) => {
 
               {/* COLUNA 3: EM REVISÃO */}
               <div 
-                  className="bg-[#151520] border border-purple-500/20 rounded-2xl p-4 flex flex-col bg-purple-500/5 transition-colors"
-                  onDragOver={handleDragOver}
+                  className={`shrink-0 w-[85vw] md:w-auto snap-center rounded-2xl p-4 flex flex-col transition-all duration-300 border ${draggedOverCol === 'review' ? 'bg-purple-500/10 border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'bg-purple-500/5 border-purple-500/20'}`}
+                  onDragOver={(e) => handleDragOver(e, 'review')}
+                  onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, 'review')}
               >
                   <h3 className="text-purple-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-purple-500/10 pb-2"><Search size={16}/> Em Revisão ({reviewTasks.length})</h3>
@@ -4169,8 +4182,9 @@ const handleFileSelect = (e) => {
 
               {/* COLUNA 4: FEITO */}
               <div 
-                  className="bg-[#151520] border border-green-500/20 rounded-2xl p-4 flex flex-col bg-green-500/5 transition-colors"
-                  onDragOver={handleDragOver}
+                  className={`shrink-0 w-[85vw] md:w-auto snap-center rounded-2xl p-4 flex flex-col transition-all duration-300 border ${draggedOverCol === 'done' ? 'bg-green-500/10 border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.2)]' : 'bg-green-500/5 border-green-500/20'}`}
+                  onDragOver={(e) => handleDragOver(e, 'done')}
+                  onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, 'done')}
               >
                   <h3 className="text-green-500 font-bold uppercase mb-4 flex items-center gap-2 border-b border-green-500/10 pb-2"><CheckCircle size={16}/> Feito ({doneTasks.length})</h3>
