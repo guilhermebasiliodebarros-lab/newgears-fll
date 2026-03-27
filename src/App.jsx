@@ -183,6 +183,7 @@ function App() {
   const [adminTab, setAdminTab] = useState('rotation');
   const [studentTab, setStudentTab] = useState('mission');
   const [isTvMode, setIsTvMode] = useState(false);
+  const [strategySubTab, setStrategySubTab] = useState('innovation');
   const [robotSubTab, setRobotSubTab] = useState('overview');
   const [missionsList, setMissionsList] = useState([]);
   const [decisionMatrix, setDecisionMatrix] = useState([]);
@@ -1687,6 +1688,12 @@ const handleDeleteRound = async (id) => {
 
   const handleGradesSubmit = async (e) => {
       e.preventDefault();
+      if (currentUser?.type !== 'admin') {
+          showNotification("Apenas técnicos podem lançar notas.", "error");
+          closeModal();
+          return;
+      }
+
       const fd = new FormData(e.target);
       const student = modal.data; // Dados do aluno vindo do modal
 
@@ -1927,6 +1934,11 @@ const handleDeleteRound = async (id) => {
 
   // --- MODAL DE XP E APROVAÇÃO (CONECTADO) ---
   const openXPModal = (student, context = "manual") => { 
+      if (currentUser?.type !== 'admin') {
+          showNotification("Apenas técnicos podem gerenciar XP.", "error");
+          return;
+      }
+
       setModal({ 
           type: 'xp', 
           data: { 
@@ -2732,7 +2744,11 @@ const handleFileSelect = (e) => {
 
     <div className="flex gap-3">
       <button onClick={() => handleRejectClick(modal.data)} className="flex-1 py-3 bg-red-500/10 text-red-500 font-bold rounded-xl hover:bg-red-500 hover:text-white transition-colors border border-red-500/20">Recusar</button>
-      <button onClick={() => openXPModal(modal.data, 'approval')} className="flex-1 py-3 bg-green-500 text-black font-bold rounded-xl hover:bg-green-400 transition-colors shadow-lg shadow-green-900/20">Aprovar (+XP)</button>
+      <button 
+        onClick={() => openXPModal(modal.data, 'approval')} 
+        disabled={currentUser?.type !== 'admin'}
+        className={`flex-1 py-3 bg-green-500 text-black font-bold rounded-xl transition-colors shadow-lg shadow-green-900/20 ${currentUser?.type === 'admin' ? 'hover:bg-green-400' : 'opacity-50 cursor-not-allowed'}`}
+      >Aprovar (+XP)</button>
     </div>
   </div>
 )}
@@ -3116,147 +3132,147 @@ const handleFileSelect = (e) => {
   // --- COMPONENTE DE ESTRATÉGIA ---
 
   const StrategyView = () => (
-
-      <div className="animate-in fade-in duration-300 space-y-8">
-
+      <div className="animate-in fade-in duration-300 space-y-6">
           
-
-          {/* MATRIZ DE DECISÃO (NOVO) */}
-
-          <div className="bg-[#151520] border border-white/10 rounded-2xl p-6">
-
-              <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><BarChart3 className="text-purple-500"/> Matriz de Decisão (Pugh Matrix)</h3><button onClick={openMatrixForm} className="text-xs bg-purple-500/10 text-purple-500 border border-purple-500/20 px-3 py-1.5 rounded-lg hover:bg-purple-500 hover:text-white font-bold">+ Nova Ideia</button></div>
-
-              <div className="overflow-x-auto"><table className="w-full text-left border-collapse"><thead className="text-xs text-gray-500 uppercase border-b border-white/10"><tr><th className="p-3">Ideia</th><th className="p-3 text-center">Impacto (x3)</th><th className="p-3 text-center">Custo (x2)</th><th className="p-3 text-center">Fácil (x1)</th><th className="p-3 text-center">Inovação (x2)</th><th className="p-3 text-right text-white">Total</th><th className="p-3"></th></tr></thead><tbody>
-
-                  {decisionMatrix.sort((a,b) => (b.impact*3 + b.cost*2 + b.feasibility + b.innovation*2) - (a.impact*3 + a.cost*2 + a.feasibility + a.innovation*2)).map(item => {
-
-                      const total = (item.impact*3) + (item.cost*2) + (item.feasibility) + (item.innovation*2);
-
-                      return (<tr key={item.id} className="border-b border-white/5 hover:bg-white/5 transition-colors"><td className="p-3 font-bold text-white">{item.name}{item.author && <span className="block text-[10px] text-gray-500 font-normal mt-0.5 flex items-center gap-1"><UserCircle size={10}/> {item.author}</span>}</td><td className="p-3 text-center text-gray-400">{item.impact}</td><td className="p-3 text-center text-gray-400">{item.cost}</td><td className="p-3 text-center text-gray-400">{item.feasibility}</td><td className="p-3 text-center text-gray-400">{item.innovation}</td><td className="p-3 text-right font-black text-purple-400 text-lg">{total}</td><td className="p-3 text-right">{(isAdmin || item.author === viewAsStudent?.name) && <button onClick={() => handleDeleteMatrix(item.id)} className="text-gray-600 hover:text-red-500 p-1 transition-colors"><Trash2 size={16}/></button>}</td></tr>)
-
-                  })}
-
-              </tbody></table></div>
-
+          {/* --- NAVEGAÇÃO DA ÁREA DE ESTRATÉGIA --- */}
+          <div className="flex justify-center bg-black/20 p-1 rounded-xl w-fit mx-auto border border-white/10 mb-4">
+              <button 
+                  onClick={() => setStrategySubTab('innovation')}
+                  className={`px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${strategySubTab === 'innovation' ? 'bg-yellow-500 text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
+              >
+                  <Lightbulb size={16}/> Projeto de Inovação
+              </button>
+              <button 
+                  onClick={() => setStrategySubTab('robot_design')}
+                  className={`px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${strategySubTab === 'robot_design' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+              >
+                  <Wrench size={16}/> Design do Robô
+              </button>
           </div>
 
+          {strategySubTab === 'innovation' && (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                  {/* MATRIZ DE DECISÃO (NOVO) */}
+                  <div className="bg-[#151520] border border-white/10 rounded-2xl p-6">
+                      <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><BarChart3 className="text-purple-500"/> Matriz de Decisão (Pugh Matrix)</h3><button onClick={openMatrixForm} className="text-xs bg-purple-500/10 text-purple-500 border border-purple-500/20 px-3 py-1.5 rounded-lg hover:bg-purple-500 hover:text-white font-bold">+ Nova Ideia</button></div>
+                      <div className="overflow-x-auto"><table className="w-full text-left border-collapse"><thead className="text-xs text-gray-500 uppercase border-b border-white/10"><tr><th className="p-3">Ideia</th><th className="p-3 text-center">Impacto (x3)</th><th className="p-3 text-center">Custo (x2)</th><th className="p-3 text-center">Fácil (x1)</th><th className="p-3 text-center">Inovação (x2)</th><th className="p-3 text-right text-white">Total</th><th className="p-3"></th></tr></thead><tbody>
+                          {decisionMatrix.sort((a,b) => (b.impact*3 + b.cost*2 + b.feasibility + b.innovation*2) - (a.impact*3 + a.cost*2 + a.feasibility + a.innovation*2)).map(item => {
+                              const total = (item.impact*3) + (item.cost*2) + (item.feasibility) + (item.innovation*2);
+                              return (<tr key={item.id} className="border-b border-white/5 hover:bg-white/5 transition-colors"><td className="p-3 font-bold text-white">{item.name}{item.author && <span className="block text-[10px] text-gray-500 font-normal mt-0.5 flex items-center gap-1"><UserCircle size={10}/> {item.author}</span>}</td><td className="p-3 text-center text-gray-400">{item.impact}</td><td className="p-3 text-center text-gray-400">{item.cost}</td><td className="p-3 text-center text-gray-400">{item.feasibility}</td><td className="p-3 text-center text-gray-400">{item.innovation}</td><td className="p-3 text-right font-black text-purple-400 text-lg">{total}</td><td className="p-3 text-right">{(isAdmin || item.author === viewAsStudent?.name) && <button onClick={() => handleDeleteMatrix(item.id)} className="text-gray-600 hover:text-red-500 p-1 transition-colors"><Trash2 size={16}/></button>}</td></tr>)
+                          })}
+                      </tbody></table></div>
+                  </div>
 
+                  <div className="grid lg:grid-cols-2 gap-6">
+                      <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
+                          <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><MessageSquare className="text-pink-500"/> Especialistas</h3><button onClick={() => openExpertModal()} className="text-xs bg-pink-500/10 text-pink-500 border border-pink-500/20 px-3 py-1.5 rounded-lg hover:bg-pink-500 hover:text-white font-bold">+ Novo</button></div>
+                          <div className="space-y-4">{experts.map(exp => (<div key={exp.id} onClick={() => openExpertView(exp)} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col gap-2 relative group cursor-pointer hover:bg-white/5 transition-colors">
+                              {/* Botões de Ação (Editar e Excluir) */}
+                              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                  <button onClick={(e) => { e.stopPropagation(); openExpertModal(exp); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
+                                  {(isAdmin || exp.author === viewAsStudent?.name) && <button onClick={(e) => handleDeleteExpert(e, exp.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
+                              </div>
+                              <div className="flex justify-between items-start pr-6"><div><span className="text-white font-bold block text-sm">{exp.name}</span><span className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">{exp.role} {exp.author && <><span className="mx-1">•</span> <UserCircle size={10}/> {exp.author}</>}</span></div>{exp.applied ? <span className="bg-green-500/20 text-green-500 text-[9px] px-2 py-1 rounded">APLICADO</span> : <span className="bg-gray-500/20 text-gray-500 text-[9px] px-2 py-1 rounded">CONSULTA</span>}</div><p className="text-xs text-gray-300 italic line-clamp-3">"{exp.notes}"</p>{exp.image && <div className="text-[10px] text-pink-400 flex items-center gap-1 mt-1"><ImageIcon size={10}/> Tem evidência</div>}<div className="h-1 rounded-full bg-gray-700 mt-1"><div className={`h-1 rounded-full ${exp.impact==='Alto'?'bg-green-500 w-full':exp.impact==='Médio'?'bg-yellow-500 w-1/2':'bg-gray-500 w-1/4'}`}></div></div></div>))}</div>
+                      </div>
 
-          <div className="grid lg:grid-cols-3 gap-6">
+                      {/* COMPARTILHAMENTO E IMPACTO */}
+                      <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
+                          <div className="flex justify-between items-center mb-6">
+                              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                  <Megaphone className="text-orange-500"/> Impacto
+                              </h3>
+                              <button onClick={() => openOutreachForm()} className="text-xs bg-orange-500/10 text-orange-500 border border-orange-500/20 px-3 py-1.5 rounded-lg hover:bg-orange-500 hover:text-white font-bold">+ Registro</button>
+                          </div>
 
-            <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
+                          <div className="flex flex-col gap-4">
+                              {/* Resumo de Impacto */}
+                              <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl flex items-center justify-between">
+                                  <div>
+                                      <p className="text-[10px] text-orange-400 uppercase font-bold">Pessoas Alcançadas</p>
+                                      <h4 className="text-3xl font-black text-white">{outreachEvents.reduce((acc, ev) => acc + (ev.people || 0), 0)}</h4>
+                                  </div>
+                                  <Users size={32} className="text-orange-500 opacity-50"/>
+                              </div>
 
-                <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><MessageSquare className="text-pink-500"/> Especialistas</h3><button onClick={() => openExpertModal()} className="text-xs bg-pink-500/10 text-pink-500 border border-pink-500/20 px-3 py-1.5 rounded-lg hover:bg-pink-500 hover:text-white font-bold">+ Novo</button></div>
+                              {/* Lista de Eventos */}
+                              <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-2 border-t border-white/10 pt-4">
+                                  {outreachEvents.sort((a, b) => new Date(b.date) - new Date(a.date)).map(ev => (
+                                      <div key={ev.id} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col relative group hover:bg-white/5 transition-colors">
+                                          <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                              {(isAdmin || ev.author === viewAsStudent?.name) && <button onClick={() => handleDeleteOutreach(ev.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
+                                          </div>
+                                          <div className="flex justify-between items-start mb-2 pr-6">
+                                              <div>
+                                                  <span className="text-white font-bold text-sm block">{ev.name}</span>
+                                                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                                      <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-white/10 text-gray-300">{ev.type}</span>
+                                                      <span className="text-[10px] text-gray-500 flex items-center gap-1"><Calendar size={10}/> {ev.date.split('-').reverse().join('/')}</span>
+                                                      {ev.author && <span className="text-[10px] text-gray-500 flex items-center gap-1 ml-1 border-l border-white/10 pl-2"><UserCircle size={10}/> {ev.author}</span>}
+                                                  </div>
+                                              </div>
+                                          </div>
+                                          <div className="mt-2 text-sm text-orange-400 font-bold">
+                                              +{ev.people} pessoas
+                                          </div>
+                                          {ev.feedback && <p className="text-xs text-gray-300 italic mt-2 pt-2 border-t border-white/5">"{ev.feedback}"</p>}
+                                      </div>
+                                  ))}
+                                  {outreachEvents.length === 0 && (
+                                      <div className="text-center text-gray-500 text-sm italic py-4">Nenhum registro de impacto ainda.</div>
+                                  )}
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          )}
 
-                <div className="space-y-4">{experts.map(exp => (<div key={exp.id} onClick={() => openExpertView(exp)} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col gap-2 relative group cursor-pointer hover:bg-white/5 transition-colors">
-                    {/* Botões de Ação (Editar e Excluir) */}
-                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                        <button onClick={(e) => { e.stopPropagation(); openExpertModal(exp); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
-                        {(isAdmin || exp.author === viewAsStudent?.name) && <button onClick={(e) => handleDeleteExpert(e, exp.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
-                    </div>
-                    <div className="flex justify-between items-start pr-6"><div><span className="text-white font-bold block text-sm">{exp.name}</span><span className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">{exp.role} {exp.author && <><span className="mx-1">•</span> <UserCircle size={10}/> {exp.author}</>}</span></div>{exp.applied ? <span className="bg-green-500/20 text-green-500 text-[9px] px-2 py-1 rounded">APLICADO</span> : <span className="bg-gray-500/20 text-gray-500 text-[9px] px-2 py-1 rounded">CONSULTA</span>}</div><p className="text-xs text-gray-300 italic line-clamp-3">"{exp.notes}"</p>{exp.image && <div className="text-[10px] text-pink-400 flex items-center gap-1 mt-1"><ImageIcon size={10}/> Tem evidência</div>}<div className="h-1 rounded-full bg-gray-700 mt-1"><div className={`h-1 rounded-full ${exp.impact==='Alto'?'bg-green-500 w-full':exp.impact==='Médio'?'bg-yellow-500 w-1/2':'bg-gray-500 w-1/4'}`}></div></div></div>))}</div>
+          {strategySubTab === 'robot_design' && (
+              <div className="grid lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
+                  <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
+                      <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><GitCommit className="text-blue-500"/> Diário do Robô</h3><button onClick={() => openRobotModal()} className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-3 py-1.5 rounded-lg hover:bg-blue-500 hover:text-white font-bold">+ Versão</button></div>
+                      <div className="relative pl-4 border-l border-white/10 space-y-8">{robotVersions.map((ver, idx) => (<div key={ver.id} onClick={() => openRobotView(ver)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-[#151520]"></div><div className="bg-black/40 border border-white/5 p-4 rounded-xl relative hover:bg-white/5 transition-colors">
+                          {/* Botões de Ação (Editar e Excluir) */}
+                          <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                              <button onClick={(e) => { e.stopPropagation(); openRobotModal(ver); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
+                              {(isAdmin || ver.author === viewAsStudent?.name) && <button onClick={(e) => handleDeleteRobotVersion(e, ver.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
+                          </div>
+                          <div className="flex justify-between mb-2"><span className="text-blue-400 font-mono font-bold text-xs">{ver.version}</span><span className="text-[10px] text-gray-500 flex items-center gap-1">{ver.date.split('-').reverse().slice(0,2).join('/')} {ver.author && <><span className="mx-1">•</span> <UserCircle size={10}/> {ver.author}</>}</span></div><h4 className="text-white font-bold mb-1 text-sm">{ver.name}</h4><p className="text-xs text-gray-400 line-clamp-2">{ver.changes}</p>{ver.image && <div className="text-[10px] text-blue-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Tem foto</div>}</div></div>))}</div>
+                  </div>
 
-            </div>
+                  {/* DIÁRIO DE GARRAS / ANEXOS */}
+                  <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
+                      <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><Wrench className="text-blue-500"/> Diário de Garras</h3><button onClick={() => openAttachmentModal()} className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-3 py-1.5 rounded-lg hover:bg-blue-500 hover:text-white font-bold">+ Garra</button></div>
+                      <div className="relative pl-4 border-l border-white/10 space-y-8">
+                          {attachments.sort((a,b) => new Date(b.date) - new Date(a.date)).map((att, idx) => (
+                              <div key={att.id} onClick={() => openAttachmentView(att)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-[#151520]"></div><div className="bg-black/40 border border-white/5 p-4 rounded-xl relative hover:bg-white/5 transition-colors">
+                              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                  <button onClick={(e) => { e.stopPropagation(); openAttachmentModal(att); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
+                                  {(isAdmin || att.author === viewAsStudent?.name) && <button onClick={(e) => handleDeleteAttachment(e, att.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
+                              </div>
+                              <div className="flex justify-between mb-2"><span className="text-blue-400 font-mono font-bold text-xs">{rounds.find(r => r.id === att.roundId)?.name || 'Geral'}</span><span className="text-[10px] text-gray-500 flex items-center gap-1">{att.date.split('-').reverse().slice(0,2).join('/')} {att.author && <><span className="mx-1">•</span> <UserCircle size={10}/> {att.author}</>}</span></div><h4 className="text-white font-bold mb-1 text-sm">{att.name}</h4><p className="text-xs text-gray-400 line-clamp-2">{att.changes}</p>{att.image && <div className="text-[10px] text-blue-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Tem foto</div>}</div></div>
+                          ))}
+                      </div>
+                  </div>
 
-            <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
-
-                <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><GitCommit className="text-blue-500"/> Diário do Robô</h3><button onClick={() => openRobotModal()} className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-3 py-1.5 rounded-lg hover:bg-blue-500 hover:text-white font-bold">+ Versão</button></div>
-
-                <div className="relative pl-4 border-l border-white/10 space-y-8">{robotVersions.map((ver, idx) => (<div key={ver.id} onClick={() => openRobotView(ver)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-[#151520]"></div><div className="bg-black/40 border border-white/5 p-4 rounded-xl relative hover:bg-white/5 transition-colors">
-                    {/* Botões de Ação (Editar e Excluir) */}
-                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                        <button onClick={(e) => { e.stopPropagation(); openRobotModal(ver); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
-                        {(isAdmin || ver.author === viewAsStudent?.name) && <button onClick={(e) => handleDeleteRobotVersion(e, ver.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
-                    </div>
-                    <div className="flex justify-between mb-2"><span className="text-blue-400 font-mono font-bold text-xs">{ver.version}</span><span className="text-[10px] text-gray-500 flex items-center gap-1">{ver.date.split('-').reverse().slice(0,2).join('/')} {ver.author && <><span className="mx-1">•</span> <UserCircle size={10}/> {ver.author}</>}</span></div><h4 className="text-white font-bold mb-1 text-sm">{ver.name}</h4><p className="text-xs text-gray-400 line-clamp-2">{ver.changes}</p>{ver.image && <div className="text-[10px] text-blue-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Tem foto</div>}</div></div>))}</div>
-
-            </div>
-
-            {/* DIÁRIO DE GARRAS / ANEXOS */}
-            <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
-                <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><Wrench className="text-blue-500"/> Diário de Garras</h3><button onClick={() => openAttachmentModal()} className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-3 py-1.5 rounded-lg hover:bg-blue-500 hover:text-white font-bold">+ Garra</button></div>
-                <div className="relative pl-4 border-l border-white/10 space-y-8">
-                    {attachments.sort((a,b) => new Date(b.date) - new Date(a.date)).map((att, idx) => (
-                        <div key={att.id} onClick={() => openAttachmentView(att)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-[#151520]"></div><div className="bg-black/40 border border-white/5 p-4 rounded-xl relative hover:bg-white/5 transition-colors">
-                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                            <button onClick={(e) => { e.stopPropagation(); openAttachmentModal(att); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
-                            {(isAdmin || att.author === viewAsStudent?.name) && <button onClick={(e) => handleDeleteAttachment(e, att.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
-                        </div>
-                        <div className="flex justify-between mb-2"><span className="text-blue-400 font-mono font-bold text-xs">{rounds.find(r => r.id === att.roundId)?.name || 'Geral'}</span><span className="text-[10px] text-gray-500 flex items-center gap-1">{att.date.split('-').reverse().slice(0,2).join('/')} {att.author && <><span className="mx-1">•</span> <UserCircle size={10}/> {att.author}</>}</span></div><h4 className="text-white font-bold mb-1 text-sm">{att.name}</h4><p className="text-xs text-gray-400 line-clamp-2">{att.changes}</p>{att.image && <div className="text-[10px] text-blue-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Tem foto</div>}</div></div>
-                    ))}
-                </div>
-            </div>
-
-            {/* BIBLIOTECA DE CÓDIGOS */}
-            <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
-                <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><Code className="text-green-500"/> Cofre de Códigos</h3><button onClick={() => openCodeModal()} className="text-xs bg-green-500/10 text-green-500 border border-green-500/20 px-3 py-1.5 rounded-lg hover:bg-green-500 hover:text-white font-bold">+ Código</button></div>
-                <div className="relative pl-4 border-l border-white/10 space-y-8">
-                    {codeSnippets.sort((a,b) => new Date(b.date) - new Date(a.date)).map((code, idx) => (
-                        <div key={code.id} onClick={() => openCodeView(code)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-green-500 border-2 border-[#151520]"></div><div className="bg-black/40 border border-white/5 p-4 rounded-xl relative hover:bg-white/5 transition-colors">
-                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                            <button onClick={(e) => { e.stopPropagation(); openCodeModal(code); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
-                            {(isAdmin || code.author === viewAsStudent?.name) && <button onClick={(e) => handleDeleteCode(e, code.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
-                        </div>
-                        <div className="flex justify-between mb-2"><span className="text-green-400 font-mono font-bold text-xs">{code.date?.split('-').reverse().slice(0,2).join('/')}</span><span className="text-[10px] text-gray-500 flex items-center gap-1">{code.author && <><UserCircle size={10}/> {code.author}</>}</span></div><h4 className="text-white font-bold mb-1 text-sm">{code.title}</h4><p className="text-xs text-gray-400 line-clamp-2">{code.description}</p>{code.image && <div className="text-[10px] text-green-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Ver print</div>}</div></div>
-                    ))}
-                    {codeSnippets.length === 0 && <p className="text-xs text-gray-500 italic mt-2">Nenhum código documentado.</p>}
-                </div>
-            </div>
-
-            {/* COMPARTILHAMENTO E IMPACTO */}
-            <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
-                <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                        <Megaphone className="text-orange-500"/> Impacto
-                    </h3>
-                    <button onClick={() => openOutreachForm()} className="text-xs bg-orange-500/10 text-orange-500 border border-orange-500/20 px-3 py-1.5 rounded-lg hover:bg-orange-500 hover:text-white font-bold">+ Registro</button>
-                </div>
-
-                <div className="flex flex-col gap-4">
-                    {/* Resumo de Impacto */}
-                    <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl flex items-center justify-between">
-                        <div>
-                            <p className="text-[10px] text-orange-400 uppercase font-bold">Pessoas Alcançadas</p>
-                            <h4 className="text-3xl font-black text-white">{outreachEvents.reduce((acc, ev) => acc + (ev.people || 0), 0)}</h4>
-                        </div>
-                        <Users size={32} className="text-orange-500 opacity-50"/>
-                    </div>
-
-                    {/* Lista de Eventos */}
-                    <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-2 border-t border-white/10 pt-4">
-                        {outreachEvents.sort((a, b) => new Date(b.date) - new Date(a.date)).map(ev => (
-                            <div key={ev.id} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col relative group hover:bg-white/5 transition-colors">
-                                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                                    {(isAdmin || ev.author === viewAsStudent?.name) && <button onClick={() => handleDeleteOutreach(ev.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
-                                </div>
-                                <div className="flex justify-between items-start mb-2 pr-6">
-                                    <div>
-                                        <span className="text-white font-bold text-sm block">{ev.name}</span>
-                                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                            <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-white/10 text-gray-300">{ev.type}</span>
-                                            <span className="text-[10px] text-gray-500 flex items-center gap-1"><Calendar size={10}/> {ev.date.split('-').reverse().join('/')}</span>
-                                            {ev.author && <span className="text-[10px] text-gray-500 flex items-center gap-1 ml-1 border-l border-white/10 pl-2"><UserCircle size={10}/> {ev.author}</span>}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="mt-2 text-sm text-orange-400 font-bold">
-                                    +{ev.people} pessoas
-                                </div>
-                                {ev.feedback && <p className="text-xs text-gray-300 italic mt-2 pt-2 border-t border-white/5">"{ev.feedback}"</p>}
-                            </div>
-                        ))}
-                        {outreachEvents.length === 0 && (
-                            <div className="text-center text-gray-500 text-sm italic py-4">Nenhum registro de impacto ainda.</div>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-          </div>
-
+                  {/* BIBLIOTECA DE CÓDIGOS */}
+                  <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
+                      <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><Code className="text-green-500"/> Cofre de Códigos</h3><button onClick={() => openCodeModal()} className="text-xs bg-green-500/10 text-green-500 border border-green-500/20 px-3 py-1.5 rounded-lg hover:bg-green-500 hover:text-white font-bold">+ Código</button></div>
+                      <div className="relative pl-4 border-l border-white/10 space-y-8">
+                          {codeSnippets.sort((a,b) => new Date(b.date) - new Date(a.date)).map((code, idx) => (
+                              <div key={code.id} onClick={() => openCodeView(code)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-green-500 border-2 border-[#151520]"></div><div className="bg-black/40 border border-white/5 p-4 rounded-xl relative hover:bg-white/5 transition-colors">
+                              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                  <button onClick={(e) => { e.stopPropagation(); openCodeModal(code); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
+                                  {(isAdmin || code.author === viewAsStudent?.name) && <button onClick={(e) => handleDeleteCode(e, code.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
+                              </div>
+                              <div className="flex justify-between mb-2"><span className="text-green-400 font-mono font-bold text-xs">{code.date?.split('-').reverse().slice(0,2).join('/')}</span><span className="text-[10px] text-gray-500 flex items-center gap-1">{code.author && <><UserCircle size={10}/> {code.author}</>}</span></div><h4 className="text-white font-bold mb-1 text-sm">{code.title}</h4><p className="text-xs text-gray-400 line-clamp-2">{code.description}</p>{code.image && <div className="text-[10px] text-green-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Ver print</div>}</div></div>
+                          ))}
+                          {codeSnippets.length === 0 && <p className="text-xs text-gray-500 italic mt-2">Nenhum código documentado.</p>}
+                      </div>
+                  </div>
+              </div>
+          )}
       </div>
-
   )
 
   // --- GRÁFICO DE EVOLUÇÃO (SVG PURO) ---
@@ -5159,9 +5175,17 @@ const handleFileSelect = (e) => {
                                               <span className="text-white font-bold text-sm block truncate">{s.name}</span>
                                               <div className="flex items-center mt-1 gap-2">
                                                   <span className={`text-[9px] font-bold uppercase px-1.5 rounded bg-white/5 ${level.color}`}>{level.name}</span>
-                                                  <button onClick={() => openXPModal(s)} className="text-yellow-500 text-[10px] font-bold hover:underline flex items-center gap-1"><Trophy size={10}/> {s.xp}</button>
+                                                  <button 
+                                                    onClick={() => openXPModal(s)} 
+                                                    disabled={currentUser?.type !== 'admin'}
+                                                    className={`text-yellow-500 text-[10px] font-bold flex items-center gap-1 ${currentUser?.type === 'admin' ? 'hover:underline' : 'cursor-not-allowed opacity-50'}`}
+                                                  ><Trophy size={10}/> {s.xp}</button>
                                               </div>
-                                              <button onClick={() => openGradesModal(s)} className="text-gray-500 hover:text-yellow-400 text-[10px] mt-1 flex items-center gap-1"><GraduationCap size={10}/> Lançar Notas</button>
+                                              <button 
+                                                onClick={() => openGradesModal(s)} 
+                                                disabled={currentUser?.type !== 'admin'}
+                                                className={`text-gray-500 text-[10px] mt-1 flex items-center gap-1 ${currentUser?.type === 'admin' ? 'hover:text-yellow-400' : 'cursor-not-allowed opacity-50'}`}
+                                              ><GraduationCap size={10}/> Lançar Notas</button>
                                           </div>
                                           <div className="flex flex-col gap-2">
                                               <button onClick={() => openProfileModal(s)} className="text-gray-500 hover:text-green-400" title="Ver Perfil Completo"><UserCircle size={16}/></button>
@@ -5312,7 +5336,11 @@ const handleFileSelect = (e) => {
                                           </div>
 
                                           <div className="flex items-center justify-between mt-1">
-                                              <button onClick={() => openXPModal(s)} className="text-yellow-500 text-xs font-bold hover:text-yellow-400 bg-yellow-500/10 px-2 py-1 rounded flex items-center gap-1 transition-colors"><Trophy size={12}/> {s.xp} XP</button>
+                                              <button 
+                                                onClick={() => openXPModal(s)} 
+                                                disabled={currentUser?.type !== 'admin'}
+                                                className={`text-yellow-500 text-xs font-bold bg-yellow-500/10 px-2 py-1 rounded flex items-center gap-1 transition-colors ${currentUser?.type === 'admin' ? 'hover:text-yellow-400' : 'cursor-not-allowed opacity-50'}`}
+                                              ><Trophy size={12}/> {s.xp} XP</button>
                                               <div className="flex items-center gap-2">
                                                   {/* --- NOVOS BOTÕES AQUI --- */}
                                                   <div className="flex items-center gap-1 bg-black/40 p-1 rounded-md border border-white/10 mr-1">
@@ -5321,7 +5349,11 @@ const handleFileSelect = (e) => {
                                                       {s.submission && <button onClick={() => toggleActivityStatus(s, null)} className="p-1 rounded text-gray-500 hover:text-gray-300" title="Limpar"><Trash2 size={10}/></button>}
                                                   </div>
 
-                                                  <button onClick={() => openGradesModal(s)} className="text-gray-500 hover:text-yellow-400 transition-colors" title="Lançar Notas"><GraduationCap size={14}/></button>
+                                                  <button 
+                                                    onClick={() => openGradesModal(s)} 
+                                                    disabled={currentUser?.type !== 'admin'}
+                                                    className={`transition-colors ${currentUser?.type === 'admin' ? 'text-gray-500 hover:text-yellow-400' : 'text-gray-700 cursor-not-allowed'}`} 
+                                                    title="Lançar Notas"><GraduationCap size={14}/></button>
                                                   <button onClick={() => setBadgeStudent(s)} className="text-gray-500 hover:text-yellow-500 transition-colors" title="Entregar Conquista"><Trophy size={14}/></button>
                                                   <button onClick={() => toggleEnglishChallenge(s)} className={`transition-colors ${s.englishChallengeUnlocked ? 'text-green-500 animate-pulse drop-shadow-[0_0_5px_rgba(34,197,94,0.8)]' : 'text-gray-500 hover:text-blue-400'}`} title={s.englishChallengeUnlocked ? "Desativar Inglês" : "Ativar Inglês"}><span className="font-bold font-mono text-[10px] border border-current rounded px-1">EN</span></button>
                                               </div>
