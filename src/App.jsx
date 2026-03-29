@@ -679,7 +679,7 @@ function App() {
   // Usamos useMemo para reconectar os dados assim que os alunos carregarem do Firebase
   const rotationSchedule = useMemo(() => { 
       const schedule = []; 
-      let currentDate = new Date("2026-03-23"); // Data de Início
+      let currentDate = new Date("2026-03-22"); // Data de Início (Domingo)
 
       // 1. CAPITÃS (Sempre Fixas em Gestão - Tarde)
       const capitasNames = ["Heloise", "Sofia"];
@@ -709,7 +709,7 @@ function App() {
 
       for (let i = 1; i <= 35; i++) { 
           const endDate = new Date(currentDate); 
-          endDate.setDate(currentDate.getDate() + 4); 
+          endDate.setDate(currentDate.getDate() + 6); // Agora a semana vai de Domingo a Sábado
           
           // --- LÓGICA DE ROTAÇÃO (CICLO DE 7) ---
           // A cada semana, giramos a lista dos 7 alunos uma posição
@@ -773,24 +773,34 @@ function App() {
     // Se não tiver cronograma, não faz nada
     if (!rotationSchedule || rotationSchedule.length === 0) return;
     
-    const now = new Date();
-    
-    // Procura qual semana engloba o dia de hoje
-    const found = rotationSchedule.find(w => {
-        const start = new Date(w.startDate);
-        const end = new Date(w.endDate);
-        end.setHours(23, 59, 59); // Ajuste para pegar o final do dia
-        return now >= start && now <= end;
-    });
+    const calculateCurrentWeek = () => {
+        const now = new Date();
+        
+        // Procura qual semana engloba o dia de hoje
+        const found = rotationSchedule.find(w => {
+            const start = new Date(w.startDate);
+            const end = new Date(w.endDate);
+            end.setHours(23, 59, 59); // Ajuste para pegar o final do dia
+            return now >= start && now <= end;
+        });
 
-    if (found) {
-        setCurrentWeekData(found);
-    } else {
-        // Fallback: Se hoje não estiver no cronograma, pega a primeira semana
-        // Isso evita que o site fique carregando infinitamente nas férias
-        console.log("Data fora do cronograma, usando semana 1 como padrão.");
-        setCurrentWeekData(rotationSchedule[0]);
-    }
+        if (found) {
+            // Atualiza apenas se mudou de semana para não causar re-renders atoa
+            setCurrentWeekData(prev => prev?.id !== found.id ? found : prev);
+        } else {
+            // Fallback: Se hoje não estiver no cronograma, pega a primeira semana
+            setCurrentWeekData(prev => prev?.id !== rotationSchedule[0].id ? rotationSchedule[0] : prev);
+        }
+    };
+
+    // 1. Calcula imediatamente ao carregar
+    calculateCurrentWeek();
+
+    // 2. Configura um timer para checar a data a cada 1 minuto (60000 milissegundos)
+    const intervalId = setInterval(calculateCurrentWeek, 60000);
+
+    // 3. Limpa o timer para não dar vazamento de memória
+    return () => clearInterval(intervalId);
   }, [rotationSchedule]);
 
 
