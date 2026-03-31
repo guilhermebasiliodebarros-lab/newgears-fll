@@ -7,6 +7,9 @@ import PitStopModal from './components/PitStopModal';
 import RankingPanel from './components/RankingPanel';
 import LogoNewGears from './components/LogoNewGears';
 import TvModePanel from './components/TvModePanel';
+import RubricViewPanel from './components/RubricView';
+import JudgePresentationView from './components/JudgePresentationView';
+import ChampionCommandCenter from './components/ChampionCommandCenter';
 import Confetti from 'react-confetti';
 import { 
   User, 
@@ -58,7 +61,6 @@ import {
   Lock,
   Eye,
   EyeOff,
-  ArrowRight,
   CalendarDays,
   Rocket,
   Lightbulb,     
@@ -134,6 +136,29 @@ const ADMIN_USERS = [
   { user: "admin", pass: "admin123" }
 ];
 
+const DEFAULT_INNOVATION_RUBRIC = {
+  identificacao: 1,
+  design: 1,
+  criacao: 1,
+  iteracao: 1,
+  comunicacao: 1
+};
+
+const DEFAULT_ROBOT_DESIGN_RUBRIC = {
+  identificacao: 1,
+  design: 1,
+  criacao: 1,
+  iteracao: 1,
+  comunicacao: 1
+};
+
+const normalizeRubricValues = (data, defaults) => ({
+  ...defaults,
+  ...Object.fromEntries(
+    Object.keys(defaults).map((key) => [key, parseInt(data?.[key] ?? defaults[key], 10)])
+  )
+});
+
 const Header = ({ title, userType, onLogout }) => (
   <>
     <div className="flex justify-between items-center my-8">
@@ -183,6 +208,8 @@ function App() {
   const [adminTab, setAdminTab] = useState('rotation');
   const [studentTab, setStudentTab] = useState('mission');
   const [isTvMode, setIsTvMode] = useState(false);
+  const [isJudgeMode, setIsJudgeMode] = useState(false);
+  const [isCommandCenterMode, setIsCommandCenterMode] = useState(false);
   const [strategySubTab, setStrategySubTab] = useState('innovation');
   const [robotSubTab, setRobotSubTab] = useState('overview');
   const [missionsList, setMissionsList] = useState([]);
@@ -209,8 +236,8 @@ function App() {
   const [roundFormValues, setRoundFormValues] = useState({});
   const [pitStopRecords, setPitStopRecords] = useState([]);
   const [compliments, setCompliments] = useState([]);
-  const [innovationRubric, setInnovationRubric] = useState({ identificacao: 1, design: 1, criacao: 1, iteracao: 1, comunicacao: 1 });
-  const [robotDesignRubric, setRobotDesignRubric] = useState({ durabilidade: 1, eficiencia: 1, programacao: 1, estrategia: 1 });
+  const [innovationRubric, setInnovationRubric] = useState(DEFAULT_INNOVATION_RUBRIC);
+  const [robotDesignRubric, setRobotDesignRubric] = useState(DEFAULT_ROBOT_DESIGN_RUBRIC);
   const [questions, setQuestions] = useState([]);
   const [outreachEvents, setOutreachEvents] = useState([]);
   const [projectSummary, setProjectSummary] = useState({ title: "Nome do Projeto", problem: "", solution: "", sharing: "", image: null });
@@ -226,6 +253,48 @@ function App() {
     Inovação: { text: "Pesquisar especialistas.", deadline: today },
     Gestão: { text: "Atualizar o Cronograma.", deadline: today }
   });
+
+  const openImmersiveMode = async (setter) => {
+      setter(true);
+      try {
+          if (!document.fullscreenElement) {
+              await document.documentElement.requestFullscreen();
+          }
+      } catch {
+          return;
+      }
+  };
+
+  const closeImmersiveMode = async (setter) => {
+      setter(false);
+      try {
+          if (document.fullscreenElement) {
+              await document.exitFullscreen();
+          }
+      } catch {
+          return;
+      }
+  };
+
+  const openJudgeMode = () => {
+      void openImmersiveMode(setIsJudgeMode);
+  };
+
+  const closeJudgeMode = () => {
+      void closeImmersiveMode(setIsJudgeMode);
+  };
+
+  const openCommandCenterMode = () => {
+      void openImmersiveMode(setIsCommandCenterMode);
+  };
+
+  const closeCommandCenterMode = () => {
+      void closeImmersiveMode(setIsCommandCenterMode);
+  };
+
+  const openTvMode = () => {
+      void openImmersiveMode(setIsTvMode);
+  };
 
 // --- LISTA DE BADGES (VERSÃO FINAL) ---
   const BADGES_LIST = [
@@ -883,12 +952,12 @@ function App() {
     // Listeners para as Rubricas
     const unsubInnovationRubric = onSnapshot(doc(db, "settings", "rubric_innovation"), (docSnap) => {
         if (docSnap.exists()) {
-            setInnovationRubric(docSnap.data());
+            setInnovationRubric(normalizeRubricValues(docSnap.data(), DEFAULT_INNOVATION_RUBRIC));
         }
     });
     const unsubRobotDesignRubric = onSnapshot(doc(db, "settings", "rubric_robot_design"), (docSnap) => {
         if (docSnap.exists()) {
-            setRobotDesignRubric(docSnap.data());
+            setRobotDesignRubric(normalizeRubricValues(docSnap.data(), DEFAULT_ROBOT_DESIGN_RUBRIC));
         }
     });
     
@@ -1111,6 +1180,25 @@ function App() {
               console.error("Erro ao excluir código:", error);
               showNotification("Erro ao excluir.", "error");
           }
+      }
+  };
+
+  const handleApplyCodeSnippet = async (snippet) => {
+      try {
+          const updates = codeSnippets.map((item) =>
+              updateDoc(doc(db, "codeSnippets", item.id), { applied: item.id === snippet.id })
+          );
+          await Promise.all(updates);
+
+          setCodeSnippets(prev => prev.map((item) => ({ ...item, applied: item.id === snippet.id })));
+          setModal(prev => ({
+              ...prev,
+              data: prev?.data ? { ...prev.data, applied: true } : prev.data
+          }));
+          showNotification(`Programacao "${snippet.title}" definida como ativa!`, "success");
+      } catch (error) {
+          console.error("Erro ao aplicar programacao:", error);
+          showNotification("Erro ao aplicar a nova programacao.", "error");
       }
   };
 
@@ -1942,6 +2030,63 @@ const handleDeleteRound = async (id) => {
   const openOutreachForm = () => { setSelectedFile(null); setModal({ type: 'outreachForm' }); }
 
 
+  const activeCommandCode = codeSnippets.find(code => code.applied);
+  const totalImpactPeople = outreachEvents.reduce((sum, ev) => sum + (ev.people || 0), 0);
+  const totalRoundTime = rounds.reduce((sum, round) => sum + (round.estimatedTime || 0), 0);
+  const appliedExpertsCount = experts.filter(exp => exp.applied).length;
+  const iterationRecords = robotVersions.length + attachments.length;
+  const projectStoryFields = ['title', 'problem', 'solution', 'impact'].filter((field) => `${projectSummary?.[field] || ''}`.trim()).length;
+  const innovationAverage = Object.values(normalizeRubricValues(innovationRubric, DEFAULT_INNOVATION_RUBRIC)).reduce((sum, value) => sum + value, 0) / 5;
+  const robotAverage = Object.values(normalizeRubricValues(robotDesignRubric, DEFAULT_ROBOT_DESIGN_RUBRIC)).reduce((sum, value) => sum + value, 0) / 5;
+
+  const runCommandCenterAction = (callback) => () => {
+      closeCommandCenterMode();
+      callback();
+  };
+
+  const commandCenterReadinessItems = [
+      { label: 'Narrativa do Projeto', ready: projectStoryFields >= 4, detail: `${projectStoryFields}/4 blocos fechados`, icon: <FileText size={14} /> },
+      { label: 'Especialistas Aplicados', ready: appliedExpertsCount >= 2, detail: `${appliedExpertsCount} sugestoes viraram acao`, icon: <Briefcase size={14} /> },
+      { label: 'Impacto Real', ready: totalImpactPeople >= 30, detail: `${totalImpactPeople} pessoas alcancadas`, icon: <Megaphone size={14} /> },
+      { label: 'Programacao Oficial', ready: Boolean(activeCommandCode), detail: activeCommandCode ? activeCommandCode.title : 'Escolha um codigo principal', icon: <Laptop size={14} /> },
+      { label: 'Iteracoes Documentadas', ready: iterationRecords >= 4, detail: `${iterationRecords} registros do robo`, icon: <GitCommit size={14} /> },
+      { label: 'Plano de Saidas', ready: rounds.length >= 3, detail: `${rounds.length} saidas planejadas`, icon: <Rocket size={14} /> },
+      { label: 'Tempo Competitivo', ready: rounds.length > 0 && totalRoundTime <= 150, detail: rounds.length > 0 ? `${totalRoundTime}s estimados` : 'Planeje as saidas', icon: <Timer size={14} /> },
+      { label: 'Rubricas Fortes', ready: innovationAverage >= 2.5 && robotAverage >= 2.5, detail: `Inovacao ${innovationAverage.toFixed(1)} | Robo ${robotAverage.toFixed(1)}`, icon: <Scale size={14} /> }
+  ];
+
+  const commandCenterReadinessScore = Math.round((commandCenterReadinessItems.filter(item => item.ready).length / commandCenterReadinessItems.length) * 100);
+  const commandCenterReadinessTone = commandCenterReadinessScore >= 85
+      ? { label: 'Pronto para juiz', color: 'text-green-400', border: 'border-green-500/20', bg: 'bg-green-500/10' }
+      : commandCenterReadinessScore >= 60
+          ? { label: 'Competitivo', color: 'text-yellow-400', border: 'border-yellow-500/20', bg: 'bg-yellow-500/10' }
+          : { label: 'Em construcao', color: 'text-red-400', border: 'border-red-500/20', bg: 'bg-red-500/10' };
+
+  const commandCenterCards = [
+      { label: 'Prontidao', value: `${commandCenterReadinessScore}%`, helper: commandCenterReadinessTone.label, icon: <Crown size={18} />, accent: 'from-yellow-500/30 to-orange-500/10 border-yellow-500/20 text-yellow-400' },
+      { label: 'Impacto', value: totalImpactPeople, helper: 'pessoas impactadas', icon: <Users size={18} />, accent: 'from-orange-500/30 to-transparent border-orange-500/20 text-orange-400' },
+      { label: 'Iteracoes', value: iterationRecords, helper: 'registros de robo', icon: <GitCommit size={18} />, accent: 'from-blue-500/30 to-transparent border-blue-500/20 text-blue-400' },
+      { label: 'Rubricas', value: `${((innovationAverage + robotAverage) / 2).toFixed(1)}/4`, helper: 'media geral da equipe', icon: <Award size={18} />, accent: 'from-purple-500/30 to-transparent border-purple-500/20 text-purple-400' }
+  ];
+
+  const commandCenterPriorityCards = [
+      !activeCommandCode && { title: 'Definir a programacao oficial', description: 'Escolha um codigo principal para a equipe treinar sempre na mesma base.', action: runCommandCenterAction(() => openCodeModal()), actionLabel: 'Abrir cofre', tone: 'green', icon: <Laptop size={16} /> },
+      projectStoryFields < 4 && { title: 'Fechar narrativa dos juizes', description: 'Complete problema, solucao e impacto para a equipe contar a historia sem improviso.', action: runCommandCenterAction(() => setModal({ type: 'projectForm' })), actionLabel: 'Editar projeto', tone: 'yellow', icon: <FileText size={16} /> },
+      appliedExpertsCount < 2 && { title: 'Aplicar mais opinioes externas', description: 'Mostrem evidencias de especialistas que realmente mudaram o projeto ou o robo.', action: runCommandCenterAction(() => openExpertModal()), actionLabel: 'Novo especialista', tone: 'pink', icon: <Briefcase size={16} /> },
+      totalImpactPeople < 30 && { title: 'Expandir o alcance', description: 'Uma equipe forte mostra impacto concreto e numero de pessoas alcancadas.', action: runCommandCenterAction(() => openOutreachForm()), actionLabel: 'Registrar impacto', tone: 'orange', icon: <Megaphone size={16} /> },
+      totalRoundTime > 150 && rounds.length > 0 && { title: 'Cortar tempo das saidas', description: 'O plano atual passa do limite. Revisem trajetos, anexo e prioridade de missoes.', action: runCommandCenterAction(() => isAdmin ? setAdminTab('rounds') : setStudentTab('rounds')), actionLabel: 'Ver rounds', tone: 'red', icon: <Timer size={16} /> },
+      iterationRecords < 4 && { title: 'Documentar mais iteracoes', description: 'Equipes campeas mostram a evolucao do robo com antes, depois e justificativa tecnica.', action: runCommandCenterAction(() => openRobotModal()), actionLabel: 'Nova versao', tone: 'blue', icon: <GitCommit size={16} /> }
+  ].filter(Boolean).slice(0, 3);
+
+  const commandCenterQuickActions = [
+      { label: 'Projeto', onClick: runCommandCenterAction(() => setModal({ type: 'projectForm' })), icon: <Lightbulb size={14} />, style: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20 hover:bg-yellow-500 hover:text-black' },
+      { label: 'Especialista', onClick: runCommandCenterAction(() => openExpertModal()), icon: <Briefcase size={14} />, style: 'bg-pink-500/10 text-pink-400 border-pink-500/20 hover:bg-pink-500 hover:text-white' },
+      { label: 'Impacto', onClick: runCommandCenterAction(() => openOutreachForm()), icon: <Megaphone size={14} />, style: 'bg-orange-500/10 text-orange-400 border-orange-500/20 hover:bg-orange-500 hover:text-white' },
+      { label: 'Codigo', onClick: runCommandCenterAction(() => openCodeModal()), icon: <Laptop size={14} />, style: 'bg-green-500/10 text-green-400 border-green-500/20 hover:bg-green-500 hover:text-white' },
+      { label: 'Juizes', onClick: runCommandCenterAction(() => openJudgeMode()), icon: <Gavel size={14} />, style: 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500 hover:text-black' }
+  ];
+
+
   // --- MODAL DE XP E APROVAÇÃO (CONECTADO) ---
   const openXPModal = (student, context = "manual") => { 
       if (currentUser?.type !== 'admin') {
@@ -2108,12 +2253,13 @@ const handleDeleteRound = async (id) => {
       const currentRubric = isInnovation ? innovationRubric : robotDesignRubric;
       const setRubricState = isInnovation ? setInnovationRubric : setRobotDesignRubric;
       const docId = isInnovation ? 'rubric_innovation' : 'rubric_robot_design';
+      const defaults = isInnovation ? DEFAULT_INNOVATION_RUBRIC : DEFAULT_ROBOT_DESIGN_RUBRIC;
  
-      const newRubric = { ...currentRubric, [category]: parseInt(value) };
+      const newRubric = normalizeRubricValues({ ...currentRubric, [category]: value }, defaults);
       setRubricState(newRubric); // Atualiza na tela imediatamente
       try {
           // Salva no banco de dados sem precisar de botão "Salvar"
-          await setDoc(doc(db, "settings", docId), newRubric, { merge: true });
+          await setDoc(doc(db, "settings", docId), newRubric);
       } catch (error) {
           console.error(`Erro ao salvar rubrica de ${rubricType}:`, error);
           showNotification("Erro ao salvar auto-avaliação.", "error");
@@ -3141,7 +3287,8 @@ const handleFileSelect = (e) => {
 
   // --- COMPONENTE DE ESTRATÉGIA ---
 
-  const StrategyView = () => (
+  const StrategyView = () => {
+      return (
       <div className="animate-in fade-in duration-300 space-y-6">
           
           {/* --- NAVEGAÇÃO DA ÁREA DE ESTRATÉGIA --- */}
@@ -3241,7 +3388,7 @@ const handleFileSelect = (e) => {
               <div className="grid lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
                   <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
                       <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><GitCommit className="text-blue-500"/> Diário do Robô</h3><button onClick={() => openRobotModal()} className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-3 py-1.5 rounded-lg hover:bg-blue-500 hover:text-white font-bold">+ Versão</button></div>
-                      <div className="relative pl-4 border-l border-white/10 space-y-8">{robotVersions.map((ver, idx) => (<div key={ver.id} onClick={() => openRobotView(ver)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-[#151520]"></div><div className="bg-black/40 border border-white/5 p-4 rounded-xl relative hover:bg-white/5 transition-colors">
+                      <div className="relative pl-4 border-l border-white/10 space-y-8">{robotVersions.map((ver) => (<div key={ver.id} onClick={() => openRobotView(ver)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-[#151520]"></div><div className="bg-black/40 border border-white/5 p-4 rounded-xl relative hover:bg-white/5 transition-colors">
                           {/* Botões de Ação (Editar e Excluir) */}
                           <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                               <button onClick={(e) => { e.stopPropagation(); openRobotModal(ver); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
@@ -3254,7 +3401,7 @@ const handleFileSelect = (e) => {
                   <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
                       <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><Wrench className="text-blue-500"/> Diário de Garras</h3><button onClick={() => openAttachmentModal()} className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-3 py-1.5 rounded-lg hover:bg-blue-500 hover:text-white font-bold">+ Garra</button></div>
                       <div className="relative pl-4 border-l border-white/10 space-y-8">
-                          {attachments.sort((a,b) => new Date(b.date) - new Date(a.date)).map((att, idx) => (
+                          {attachments.sort((a,b) => new Date(b.date) - new Date(a.date)).map((att) => (
                               <div key={att.id} onClick={() => openAttachmentView(att)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-[#151520]"></div><div className="bg-black/40 border border-white/5 p-4 rounded-xl relative hover:bg-white/5 transition-colors">
                               <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                                   <button onClick={(e) => { e.stopPropagation(); openAttachmentModal(att); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
@@ -3268,14 +3415,30 @@ const handleFileSelect = (e) => {
                   {/* BIBLIOTECA DE CÓDIGOS */}
                   <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
                       <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><Code className="text-green-500"/> Cofre de Códigos</h3><button onClick={() => openCodeModal()} className="text-xs bg-green-500/10 text-green-500 border border-green-500/20 px-3 py-1.5 rounded-lg hover:bg-green-500 hover:text-white font-bold">+ Código</button></div>
-                      <div className="relative pl-4 border-l border-white/10 space-y-8">
-                          {codeSnippets.sort((a,b) => new Date(b.date) - new Date(a.date)).map((code, idx) => (
-                              <div key={code.id} onClick={() => openCodeView(code)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-green-500 border-2 border-[#151520]"></div><div className="bg-black/40 border border-white/5 p-4 rounded-xl relative hover:bg-white/5 transition-colors">
-                              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                                  <button onClick={(e) => { e.stopPropagation(); openCodeModal(code); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
-                                  {(isAdmin || code.author === viewAsStudent?.name) && <button onClick={(e) => handleDeleteCode(e, code.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
+                      {(() => {
+                          const activeCode = codeSnippets.find(code => code.applied);
+                          return (
+                              <div className={`mb-4 rounded-2xl border p-4 ${activeCode ? 'bg-green-500/10 border-green-500/20' : 'bg-black/30 border-white/10'}`}>
+                                  <div className="flex items-center justify-between gap-3">
+                                      <div>
+                                          <p className={`text-[10px] uppercase tracking-[0.2em] font-bold ${activeCode ? 'text-green-400' : 'text-gray-500'}`}>Programacao Ativa</p>
+                                          <p className="text-sm font-bold text-white mt-1">{activeCode ? activeCode.title : 'Nenhuma programacao definida ainda'}</p>
+                                      </div>
+                                      <div className={`px-3 py-1 rounded-full text-[10px] font-bold border ${activeCode ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-white/5 text-gray-400 border-white/10'}`}>
+                                          {activeCode ? 'Pronta para teste' : 'Escolha um codigo'}
+                                      </div>
+                                  </div>
                               </div>
-                              <div className="flex justify-between mb-2"><span className="text-green-400 font-mono font-bold text-xs">{code.date?.split('-').reverse().slice(0,2).join('/')}</span><span className="text-[10px] text-gray-500 flex items-center gap-1">{code.author && <><UserCircle size={10}/> {code.author}</>}</span></div><h4 className="text-white font-bold mb-1 text-sm">{code.title}</h4><p className="text-xs text-gray-400 line-clamp-2">{code.description}</p>{code.image && <div className="text-[10px] text-green-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Ver print</div>}</div></div>
+                          );
+                      })()}
+                      <div className="relative pl-4 border-l border-white/10 space-y-8">
+                          {codeSnippets.sort((a,b) => new Date(b.date) - new Date(a.date)).map((code) => (
+                              <div key={code.id} onClick={() => openCodeView(code)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-green-500 border-2 border-[#151520]"></div><div className={`border p-4 rounded-xl relative transition-colors ${code.applied ? 'bg-green-500/10 border-green-500/30 hover:bg-green-500/15' : 'bg-black/40 border-white/5 hover:bg-white/5'}`}> 
+                              <div className="absolute top-2 right-2 flex gap-1 opacity-100 z-10">
+                                  <button onClick={(e) => { e.stopPropagation(); openCodeModal(code); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
+                                  {isAdmin && !code.applied && <button onClick={(e) => { e.stopPropagation(); handleApplyCodeSnippet(code); }} className="text-green-400 hover:text-white p-1.5 bg-green-500/20 rounded-lg backdrop-blur-sm" title="Aplicar nova programacao"><Laptop size={14}/></button>}
+                                  {(isAdmin || code.author === viewAsStudent?.name) && <button onClick={(e) => handleDeleteCode(e, code.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}</div>
+                              <div className="flex justify-between mb-2"><span className="text-green-400 font-mono font-bold text-xs">{code.date?.split('-').reverse().slice(0,2).join('/')}</span><span className="text-[10px] text-gray-500 flex items-center gap-1">{code.author && <><UserCircle size={10}/> {code.author}</>}</span></div><h4 className="text-white font-bold mb-1 text-sm">{code.title}</h4><p className="text-xs text-gray-400 line-clamp-2">{code.description}</p>{code.applied && <div className="text-[10px] text-green-400 flex items-center gap-1 mt-2 font-bold"><CheckCircle size={10}/> Programacao ativa</div>}{code.image && <div className="text-[10px] text-green-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Ver print</div>}</div></div>
                           ))}
                           {codeSnippets.length === 0 && <p className="text-xs text-gray-500 italic mt-2">Nenhum código documentado.</p>}
                       </div>
@@ -3284,6 +3447,8 @@ const handleFileSelect = (e) => {
           )}
       </div>
   )
+
+  }
 
   // --- GRÁFICO DE EVOLUÇÃO (SVG PURO) ---
   const ScoreEvolutionChart = ({ isTvMode = false }) => {
@@ -3851,7 +4016,8 @@ const handleFileSelect = (e) => {
 
       </div>
 
-  )}
+  );
+  };
 
   // --- COMPONENTE KANBAN (REUTILIZÁVEL) ---
   const KanbanView = () => {
@@ -4231,131 +4397,8 @@ const handleFileSelect = (e) => {
               </div>
           </div>
       </div>
-  )}
-
-  // --- COMPONENTE DE AUTO-AVALIAÇÃO (RUBRICAS) ---
-  const RubricView = () => {
-      // --- DADOS DA RUBRICA: PROJETO DE INOVAÇÃO ---
-      const innovationRubricItems = [
-          { key: 'identificacao', name: 'Identificação', icon: <Search size={16} />, color: 'text-blue-400' },
-          { key: 'design', name: 'Design', icon: <Lightbulb size={16} />, color: 'text-yellow-400' },
-          { key: 'criacao', name: 'Criação', icon: <Wrench size={16} />, color: 'text-pink-400' },
-          { key: 'iteracao', name: 'Iteração', icon: <RotateCcw size={16} />, color: 'text-green-400' },
-          { key: 'comunicacao', name: 'Comunicação', icon: <Megaphone size={16} />, color: 'text-purple-400' },
-      ];
-  
-      // --- LÓGICA DO GRÁFICO DE INOVAÇÃO ---
-      const innovationSize = 300;
-      const innovationCenter = innovationSize / 2;
-      const innovationRadius = (innovationSize / 2) - 60;
-      const innovationMaxVal = 4;
-      const innovationAngleSlice = (Math.PI * 2) / innovationRubricItems.length;
-  
-      const getInnovationCoords = (value, index) => {
-          const angle = index * innovationAngleSlice - (Math.PI / 2);
-          const r = (value / innovationMaxVal) * innovationRadius;
-          return {
-              x: innovationCenter + Math.cos(angle) * r,
-              y: innovationCenter + Math.sin(angle) * r
-          };
-      };
-  
-      const innovationPoints = innovationRubricItems.map((item, i) => {
-          const val = innovationRubric[item.key] || 1;
-          const { x, y } = getInnovationCoords(val, i);
-          return `${x},${y}`;
-      }).join(' ');
-
-      // --- DADOS DA RUBRICA: DESIGN DO ROBÔ ---
-      const robotDesignRubricItems = [
-          { key: 'durabilidade', name: 'Durabilidade', icon: <Shield size={16} />, color: 'text-gray-400' },
-          { key: 'eficiencia', name: 'Eficiência Mecânica', icon: <Settings size={16} />, color: 'text-blue-400' },
-          { key: 'programacao', name: 'Qualidade da Prog.', icon: <Code size={16} />, color: 'text-green-400' },
-          { key: 'estrategia', name: 'Estratégia & Inovação', icon: <Brain size={16} />, color: 'text-purple-400' },
-      ];
-
-      // --- LÓGICA DO GRÁFICO DO ROBÔ ---
-      const robotSize = 300;
-      const robotCenter = robotSize / 2;
-      const robotRadius = (robotSize / 2) - 60;
-      const robotMaxVal = 4;
-      const robotAngleSlice = (Math.PI * 2) / robotDesignRubricItems.length;
-
-      const getRobotCoords = (value, index) => {
-          const angle = index * robotAngleSlice - (Math.PI / 2);
-          const r = (value / robotMaxVal) * robotRadius;
-          return {
-              x: robotCenter + Math.cos(angle) * r,
-              y: robotCenter + Math.sin(angle) * r
-          };
-      };
-
-      const robotPoints = robotDesignRubricItems.map((item, i) => {
-          const val = robotDesignRubric[item.key] || 1;
-          const { x, y } = getRobotCoords(val, i);
-          return `${x},${y}`;
-      }).join(' ');
-
-      return (
-          <div className="space-y-8 animate-in fade-in duration-500">
-              {/* Card do Projeto de Inovação */}
-              <div className="bg-[#151520] border border-white/10 rounded-2xl p-6">
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-6"><Lightbulb className="text-yellow-500"/> Rubrica: Projeto de Inovação</h3>
-                  <div className="flex flex-col md:flex-row gap-8 items-center">
-                      <div className="relative flex-shrink-0">
-                          <svg width={innovationSize} height={innovationSize} className="mx-auto bg-black/20 rounded-full border border-white/5">
-                              {[1, 2, 3, 4].map(level => <circle key={level} cx={innovationCenter} cy={innovationCenter} r={(level / innovationMaxVal) * innovationRadius} fill="none" stroke="#333" strokeWidth="1" strokeDasharray="4 4" />)}
-                              {innovationRubricItems.map((_, i) => { const { x, y } = getInnovationCoords(innovationMaxVal, i); return <line key={i} x1={innovationCenter} y1={innovationCenter} x2={x} y2={y} stroke="#333" strokeWidth="1" />; })}
-                              <polygon points={innovationPoints} fill="rgba(234, 179, 8, 0.3)" stroke="#eab308" strokeWidth="2" />
-                              {innovationRubricItems.map((item, i) => { const val = innovationRubric[item.key] || 1; const { x, y } = getInnovationCoords(val, i); return <circle key={i} cx={x} cy={y} r="4" fill="#eab308" />; })}
-                              {innovationRubricItems.map((item, i) => { const { x, y } = getInnovationCoords(innovationMaxVal + 1.2, i); return <text key={i} x={x} y={y} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="10" fontWeight="bold">{item.name}</text>; })}
-                          </svg>
-                      </div>
-                      <div className="flex-1 w-full grid grid-cols-1 gap-6">
-                          {innovationRubricItems.map(item => (
-                              <div key={item.key}>
-                                  <div className="flex justify-between items-center mb-2">
-                                      <label className={`font-bold text-sm flex items-center gap-2 ${item.color}`}>{item.icon} {item.name}</label>
-                                      <span className="text-white font-black text-lg bg-black/30 px-2 rounded">{innovationRubric[item.key] || 1}</span>
-                                  </div>
-                                  <input type="range" min="1" max="4" value={innovationRubric[item.key] || 1} onChange={(e) => handleRubricUpdate('innovation', item.key, e.target.value)} className={`w-full h-2 rounded-lg appearance-none cursor-pointer slider-${item.key} bg-gray-700`} />
-                                  <div className="flex justify-between text-[10px] text-gray-500 mt-1 px-1"><span>Iniciante</span><span>Em Desenv.</span><span>Praticante</span><span>Exemplar</span></div>
-                              </div>
-                          ))}
-                      </div>
-                  </div>
-              </div>
-
-              {/* Card do Design do Robô */}
-              <div className="bg-[#151520] border border-white/10 rounded-2xl p-6">
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-6"><Wrench className="text-blue-500"/> Rubrica: Design do Robô</h3>
-                  <div className="flex flex-col md:flex-row gap-8 items-center">
-                      <div className="relative flex-shrink-0">
-                          <svg width={robotSize} height={robotSize} className="mx-auto bg-black/20 rounded-full border border-white/5">
-                              {[1, 2, 3, 4].map(level => <circle key={level} cx={robotCenter} cy={robotCenter} r={(level / robotMaxVal) * robotRadius} fill="none" stroke="#333" strokeWidth="1" strokeDasharray="4 4" />)}
-                              {robotDesignRubricItems.map((_, i) => { const { x, y } = getRobotCoords(robotMaxVal, i); return <line key={i} x1={robotCenter} y1={robotCenter} x2={x} y2={y} stroke="#333" strokeWidth="1" />; })}
-                              <polygon points={robotPoints} fill="rgba(59, 130, 246, 0.3)" stroke="#3b82f6" strokeWidth="2" />
-                              {robotDesignRubricItems.map((item, i) => { const val = robotDesignRubric[item.key] || 1; const { x, y } = getRobotCoords(val, i); return <circle key={i} cx={x} cy={y} r="4" fill="#3b82f6" />; })}
-                              {robotDesignRubricItems.map((item, i) => { const { x, y } = getRobotCoords(robotMaxVal + 1.2, i); return <text key={i} x={x} y={y} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="10" fontWeight="bold">{item.name}</text>; })}
-                          </svg>
-                      </div>
-                      <div className="flex-1 w-full grid grid-cols-1 gap-6">
-                          {robotDesignRubricItems.map(item => (
-                              <div key={item.key}>
-                                  <div className="flex justify-between items-center mb-2">
-                                      <label className={`font-bold text-sm flex items-center gap-2 ${item.color}`}>{item.icon} {item.name}</label>
-                                      <span className="text-white font-black text-lg bg-black/30 px-2 rounded">{robotDesignRubric[item.key] || 1}</span>
-                                  </div>
-                                  <input type="range" min="1" max="4" value={robotDesignRubric[item.key] || 1} onChange={(e) => handleRubricUpdate('robot_design', item.key, e.target.value)} className={`w-full h-2 rounded-lg appearance-none cursor-pointer slider-${item.key} bg-gray-700`} />
-                                  <div className="flex justify-between text-[10px] text-gray-500 mt-1 px-1"><span>Iniciante</span><span>Em Desenv.</span><span>Praticante</span><span>Exemplar</span></div>
-                              </div>
-                          ))}
-                      </div>
-                  </div>
-              </div>
-          </div>
-      )
-  }
+      );
+  };
 
   // --- COMPONENTE DIÁRIO DE BORDO ---
   const LogbookView = () => {
@@ -4736,6 +4779,29 @@ const handleFileSelect = (e) => {
           </>
         )}
 
+        <ChampionCommandCenter
+            isOpen={isCommandCenterMode}
+            onClose={closeCommandCenterMode}
+            readinessTone={commandCenterReadinessTone}
+            commandCards={commandCenterCards}
+            readinessScore={commandCenterReadinessScore}
+            readinessItems={commandCenterReadinessItems}
+            quickActions={commandCenterQuickActions}
+            priorityCards={commandCenterPriorityCards}
+        />
+        <JudgePresentationView
+            isOpen={isJudgeMode}
+            onClose={closeJudgeMode}
+            projectSummary={projectSummary}
+            experts={experts}
+            outreachEvents={outreachEvents}
+            robotVersions={robotVersions}
+            attachments={attachments}
+            codeSnippets={codeSnippets}
+            rounds={rounds}
+            innovationRubric={innovationRubric}
+            robotDesignRubric={robotDesignRubric}
+        />
         <TvModePanel 
             isTvMode={isTvMode} 
             setIsTvMode={setIsTvMode} 
@@ -5003,9 +5069,21 @@ const handleFileSelect = (e) => {
                       {teamMoods.length > 0 ? `${teamAverage}%` : 'Check-in'}
                   </span>
               </button>
+              <button
+                onClick={openCommandCenterMode}
+                className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 p-2 rounded-full hover:bg-yellow-500 hover:text-black transition-all md:px-4 md:py-2 md:rounded-lg flex items-center gap-2 shadow-[0_0_15px_rgba(234,179,8,0.15)]"
+              >
+                  <Crown size={18} /> <span className="hidden md:inline text-xs font-bold uppercase tracking-wider">Central de Comando</span>
+              </button>
+              <button
+                onClick={openJudgeMode}
+                className="bg-amber-500/10 border border-amber-500/20 text-amber-400 p-2 rounded-full hover:bg-amber-500 hover:text-black transition-all md:px-4 md:py-2 md:rounded-lg flex items-center gap-2 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+              >
+                  <Gavel size={18} /> <span className="hidden md:inline text-xs font-bold uppercase tracking-wider">Modo Juizes</span>
+              </button>
               {/* --- BOTÃO MODO TV (TODOS PODEM ACESSAR) --- */}
               <button 
-                onClick={() => { setIsTvMode(true); try { document.documentElement.requestFullscreen() } catch(e){} }} 
+                onClick={openTvMode} 
                 className="bg-fuchsia-500/10 border border-fuchsia-500/20 text-fuchsia-400 p-2 rounded-full hover:bg-fuchsia-500 hover:text-white transition-all md:px-4 md:py-2 md:rounded-lg flex items-center gap-2 shadow-[0_0_15px_rgba(217,70,239,0.15)]"
               >
                   <MonitorPlay size={18} /> <span className="hidden md:inline text-xs font-bold uppercase tracking-wider">Modo TV</span>
@@ -5380,7 +5458,7 @@ const handleFileSelect = (e) => {
 
                     {adminTab === 'strategy' && <StrategyView />}
                     {adminTab === 'rounds' && <RoundsView />} {/* StrategyBoard agora mora dentro de RoundsView */}
-                    {adminTab === 'rubrics' && <RubricView />}
+                    {adminTab === 'rubrics' && <RubricViewPanel innovationRubric={innovationRubric} robotDesignRubric={robotDesignRubric} handleRubricUpdate={handleRubricUpdate} />}
                     
                     {/* --- VISUALIZAÇÃO KANBAN --- */}
                     {adminTab === 'kanban' && <KanbanView />}
@@ -5596,7 +5674,7 @@ const handleFileSelect = (e) => {
 
                     {studentTab === 'strategy' && <div className="text-left"><StrategyView /></div>}
                     {studentTab === 'rounds' && <div className="text-left"><RoundsView /></div>}
-                    {studentTab === 'rubrics' && <div className="text-left"><RubricView /></div>}
+                    {studentTab === 'rubrics' && <div className="text-left"><RubricViewPanel innovationRubric={innovationRubric} robotDesignRubric={robotDesignRubric} handleRubricUpdate={handleRubricUpdate} /></div>}
                     {studentTab === 'kanban' && <div className="text-left"><KanbanView /></div>}
                     {studentTab === 'logbook' && <div className="text-left"><LogbookView /></div>}
                     {studentTab === 'agenda' && <div className="text-left"><AgendaView /></div>}
@@ -5611,3 +5689,5 @@ const handleFileSelect = (e) => {
 }
 
 export default App;
+
+
