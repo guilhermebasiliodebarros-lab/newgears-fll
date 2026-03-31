@@ -10,6 +10,10 @@ import TvModePanel from './components/TvModePanel';
 import RubricViewPanel from './components/RubricView';
 import JudgePresentationView from './components/JudgePresentationView';
 import ChampionCommandCenter from './components/ChampionCommandCenter';
+import CompetitionPrepPanel from './components/CompetitionPrepPanel';
+import JudgeStoryPanel from './components/JudgeStoryPanel';
+import InnovationStrategyPanel from './components/InnovationStrategyPanel';
+import { WorkspaceHero, WorkspaceTabs, WorkspaceScene, WorkspaceCollapsible } from './components/WorkspaceChrome';
 import Confetti from 'react-confetti';
 import { 
   User, 
@@ -113,6 +117,7 @@ import {
   MonitorPlay,   // <--- NOVO: Ícone do Modo TV
   Maximize,      // <--- NOVO: Expandir gráfico
   Minimize,      // <--- NOVO: Minimizar gráfico
+  Sparkles,
 } from 'lucide-react';
 
 
@@ -158,6 +163,34 @@ const normalizeRubricValues = (data, defaults) => ({
     Object.keys(defaults).map((key) => [key, parseInt(data?.[key] ?? defaults[key], 10)])
   )
 });
+
+const ADMIN_PANEL_DEFAULTS = {
+  dashboard: false
+};
+
+const STUDENT_PANEL_DEFAULTS = {
+  dashboard: false
+};
+
+const readStoredPrefs = (storageKey, defaults) => {
+  if (typeof window === 'undefined') return defaults;
+
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return defaults;
+    const parsed = JSON.parse(raw);
+    return { ...defaults, ...parsed };
+  } catch {
+    return defaults;
+  }
+};
+
+const getNextOrSameWeekday = (dateObj, weekday) => {
+  const result = new Date(dateObj);
+  const diff = (weekday - result.getDay() + 7) % 7;
+  result.setDate(result.getDate() + diff);
+  return result;
+};
 
 const Header = ({ title, userType, onLogout }) => (
   <>
@@ -205,6 +238,12 @@ function App() {
   const [teamMoods, setTeamMoods] = useState([]);
   const [isStudentLink, setIsStudentLink] = useState(false);
   const [currentWeekData, setCurrentWeekData] = useState(null);
+  const [adminPanelState, setAdminPanelState] = useState(() => readStoredPrefs('newgears_admin_panel_prefs', ADMIN_PANEL_DEFAULTS));
+  const [studentPanelState, setStudentPanelState] = useState(() => readStoredPrefs('newgears_student_panel_prefs', STUDENT_PANEL_DEFAULTS));
+  const [studentMissionMode, setStudentMissionMode] = useState(() => {
+    if (typeof window === 'undefined') return 'compact';
+    return localStorage.getItem('newgears_student_mission_mode') || 'compact';
+  });
   const [adminTab, setAdminTab] = useState('rotation');
   const [studentTab, setStudentTab] = useState('mission');
   const [isTvMode, setIsTvMode] = useState(false);
@@ -253,6 +292,18 @@ function App() {
     Inovação: { text: "Pesquisar especialistas.", deadline: today },
     Gestão: { text: "Atualizar o Cronograma.", deadline: today }
   });
+
+  useEffect(() => {
+      localStorage.setItem('newgears_admin_panel_prefs', JSON.stringify(adminPanelState));
+  }, [adminPanelState]);
+
+  useEffect(() => {
+      localStorage.setItem('newgears_student_panel_prefs', JSON.stringify(studentPanelState));
+  }, [studentPanelState]);
+
+  useEffect(() => {
+      localStorage.setItem('newgears_student_mission_mode', studentMissionMode);
+  }, [studentMissionMode]);
 
   const openImmersiveMode = async (setter) => {
       setter(true);
@@ -683,6 +734,8 @@ function App() {
   const localTomorrowObj = new Date();
   localTomorrowObj.setDate(localTodayObj.getDate() + 1);
   const localTomorrowStr = getLocalYYYYMMDD(localTomorrowObj);
+  const officialStudentDeadlineObj = getNextOrSameWeekday(localTodayObj, 3);
+  const officialStudentDeadlineStr = getLocalYYYYMMDD(officialStudentDeadlineObj);
 
   const eventsToday = events.filter(e => e.date === localTodayStr);
   const eventsTomorrow = events.filter(e => e.date === localTomorrowStr);
@@ -2145,6 +2198,549 @@ const handleDeleteRound = async (id) => {
       { label: 'Juizes', onClick: runCommandCenterAction(() => openJudgeMode()), icon: <Gavel size={14} />, style: 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500 hover:text-black' }
   ];
 
+  const nextUpcomingEvent = [...events]
+      .filter((event) => event.date >= localTodayStr)
+      .sort((a, b) => new Date(a.date) - new Date(b.date))[0];
+
+  const studentOpenTasksCount = viewAsStudent
+      ? tasks.filter((task) => task.status !== 'done' && task.author && task.author.includes(viewAsStudent.name)).length
+      : 0;
+
+  const studentOverdueTasksCount = viewAsStudent
+      ? tasks.filter((task) => task.status !== 'done' && task.dueDate && task.dueDate < localTodayStr && task.author && task.author.includes(viewAsStudent.name)).length
+      : 0;
+
+  const studentCurrentLevel = viewAsStudent ? getCurrentLevel(viewAsStudent.xp || 0) : null;
+  const studentNextLevel = viewAsStudent ? getNextLevel(viewAsStudent.xp || 0) : null;
+  const overallRubricAverage = ((innovationAverage + robotAverage) / 2).toFixed(1);
+  const studentLevelProgress = viewAsStudent && studentCurrentLevel && studentNextLevel
+      ? Math.min(100, ((viewAsStudent.xp - studentCurrentLevel.min) / (studentNextLevel.min - studentCurrentLevel.min)) * 100)
+      : 100;
+  const unlockedStudentBadges = BADGES_LIST.filter((badge) => viewAsStudent?.badges?.includes(badge.id));
+  const totalTeamXP = students.reduce((sum, student) => sum + (student.xp || 0), 0);
+  const totalTeamImpact = outreachEvents.reduce((sum, event) => sum + (event.people || 0), 0);
+  const totalTeamTasksDone = tasks.filter((task) => task.status === 'done').length;
+  const totalTeamExperts = experts.length;
+  const teamAchievementsSummary = [
+      { id: 'team_xp', name: 'Potencia Maxima', current: totalTeamXP, target: 6000, icon: <Zap size={14} className="text-yellow-300" /> },
+      { id: 'team_impact', name: 'Voz da Mudanca', current: totalTeamImpact, target: 350, icon: <Megaphone size={14} className="text-orange-300" /> },
+      { id: 'team_tasks', name: 'Maquina de Produtividade', current: totalTeamTasksDone, target: 300, icon: <CheckCheck size={14} className="text-emerald-300" /> },
+      { id: 'team_experts', name: 'Mentes Conectadas', current: totalTeamExperts, target: 5, icon: <Briefcase size={14} className="text-violet-300" /> }
+  ];
+  const unlockedTeamAchievements = teamAchievementsSummary.filter((achievement) => achievement.current >= achievement.target);
+  const nextTeamAchievement = teamAchievementsSummary
+      .filter((achievement) => achievement.current < achievement.target)
+      .sort((left, right) => (right.current / right.target) - (left.current / left.target))[0];
+  const studentHeroFooter = viewAsStudent ? (
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr,0.95fr,0.95fr,1fr]">
+          <button
+              onClick={() => openProfileModal(viewAsStudent)}
+              className="rounded-[24px] border border-white/10 bg-black/25 p-4 backdrop-blur-sm text-left transition-all hover:bg-white/10"
+          >
+              <div className="flex items-center gap-4">
+                  {viewAsStudent.avatarImage ? (
+                      <img src={viewAsStudent.avatarImage} alt={viewAsStudent.name} className="w-16 h-16 rounded-2xl object-cover border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.2)]" />
+                  ) : (
+                      <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+                          <UserCircle size={30} className="text-gray-400" />
+                      </div>
+                  )}
+
+                  <div className="min-w-0">
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Identidade do piloto</p>
+                      <h3 className="text-lg font-black text-white leading-tight mt-2 truncate">{viewAsStudent.name}</h3>
+                      <div className="flex flex-wrap items-center gap-2 mt-3 text-[10px] font-bold uppercase tracking-[0.16em]">
+                          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-gray-200">{viewAsStudent.turma || 'Turma nao definida'}</span>
+                          <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-cyan-200">{viewAsStudent.station || 'Equipe'}</span>
+                      </div>
+                  </div>
+              </div>
+          </button>
+
+          <div className="rounded-[24px] border border-white/10 bg-black/25 p-4 backdrop-blur-sm">
+              <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">XP e nivel</span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-[10px] font-bold text-yellow-200">
+                      <Trophy size={12} /> {viewAsStudent.xp || 0} XP
+                  </span>
+              </div>
+              <p className={`text-lg font-black mt-3 ${studentCurrentLevel?.color || 'text-white'}`}>{studentCurrentLevel?.name || 'Equipe'}</p>
+              <div className="w-full h-2 rounded-full bg-black/40 overflow-hidden mt-4">
+                  <div className="h-full rounded-full bg-gradient-to-r from-sky-400 via-blue-500 to-violet-500" style={{ width: `${studentLevelProgress}%` }}></div>
+              </div>
+              <p className="text-xs text-gray-400 mt-3">
+                  {studentNextLevel ? `${Math.max(0, studentNextLevel.min - (viewAsStudent.xp || 0))} XP para ${studentNextLevel.name}` : 'Nivel maximo atingido.'}
+              </p>
+          </div>
+
+          <div className="rounded-[24px] border border-white/10 bg-black/25 p-4 backdrop-blur-sm">
+              <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Badges</span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-[10px] font-bold text-yellow-100">
+                      <Medal size={12} /> {unlockedStudentBadges.length}/{BADGES_LIST.length}
+                  </span>
+              </div>
+              <div className="flex flex-wrap gap-2 mt-4">
+                  {unlockedStudentBadges.slice(0, 4).map((badge) => (
+                      <span key={badge.id} className={`inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-3 py-2 ${badge.color}`}>
+                          {badge.icon}
+                      </span>
+                  ))}
+                  {unlockedStudentBadges.length === 0 && (
+                      <span className="text-xs text-gray-500">Nenhuma badge desbloqueada ainda.</span>
+                  )}
+              </div>
+              <p className="text-xs text-gray-400 mt-3">
+                  {unlockedStudentBadges.length > 0 ? 'Suas conquistas principais continuam visiveis aqui no topo.' : 'Conquiste badges nas entregas para fortalecer seu perfil.'}
+              </p>
+          </div>
+
+          <div className="rounded-[24px] border border-white/10 bg-black/25 p-4 backdrop-blur-sm">
+              <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Conquistas da equipe</span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-bold text-emerald-200">
+                      <Crown size={12} /> {unlockedTeamAchievements.length}/{teamAchievementsSummary.length}
+                  </span>
+              </div>
+              <div className="space-y-2 mt-4">
+                  {teamAchievementsSummary.slice(0, 2).map((achievement) => {
+                      const progress = Math.min(100, (achievement.current / achievement.target) * 100);
+
+                      return (
+                          <div key={achievement.id} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                              <div className="flex items-center justify-between gap-3">
+                                  <span className="inline-flex items-center gap-2 text-xs font-bold text-white">
+                                      {achievement.icon}
+                                      {achievement.name}
+                                  </span>
+                                  <span className="text-[10px] text-gray-400 font-bold">{achievement.current}/{achievement.target}</span>
+                              </div>
+                              <div className="w-full h-1.5 rounded-full bg-black/40 overflow-hidden mt-3">
+                                  <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400" style={{ width: `${progress}%` }}></div>
+                              </div>
+                          </div>
+                      );
+                  })}
+              </div>
+              <p className="text-xs text-gray-400 mt-3">
+                  {nextTeamAchievement ? `Proxima meta: ${nextTeamAchievement.name}.` : 'Todas as conquistas coletivas foram desbloqueadas.'}
+              </p>
+          </div>
+      </div>
+  ) : null;
+
+  const adminHeroMetrics = [
+      { label: 'Prontidao FLL', value: `${commandCenterReadinessScore}%`, helper: commandCenterReadinessTone.label, icon: <Crown size={16} />, tone: `${commandCenterReadinessTone.border} ${commandCenterReadinessTone.bg} ${commandCenterReadinessTone.color}` },
+      { label: 'Rubricas', value: `${overallRubricAverage}/4`, helper: 'media oficial da equipe', icon: <Scale size={16} />, tone: 'border-purple-500/20 bg-purple-500/10 text-purple-300' },
+      { label: 'Alertas', value: urgentTasksCount, helper: urgentTasksCount > 0 ? 'tarefas exigem atencao' : 'kanban controlado', icon: <AlertTriangle size={16} />, tone: 'border-orange-500/20 bg-orange-500/10 text-orange-300' },
+      { label: 'Proximo Evento', value: nextUpcomingEvent ? nextUpcomingEvent.date.split('-').reverse().join('/') : 'Sem agenda', helper: nextUpcomingEvent ? nextUpcomingEvent.title : 'registre o proximo marco', icon: <CalendarDays size={16} />, tone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-300' }
+  ];
+
+  const adminHeroActions = [
+      { label: 'Central de Comando', onClick: openCommandCenterMode, icon: <Crown size={14} />, style: 'bg-yellow-500/10 text-yellow-300 border-yellow-500/20 hover:bg-yellow-500 hover:text-black' },
+      { label: 'Abrir Rubricas', onClick: () => setAdminTab('rubrics'), icon: <Scale size={14} />, style: 'bg-white/10 text-white border-white/15 hover:bg-white hover:text-black' },
+      { label: 'Kanban da Semana', onClick: () => setAdminTab('kanban'), icon: <ClipboardList size={14} />, style: 'bg-orange-500/10 text-orange-300 border-orange-500/20 hover:bg-orange-500 hover:text-white' },
+      { label: 'Agenda', onClick: () => setAdminTab('agenda'), icon: <CalendarDays size={14} />, style: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20 hover:bg-indigo-500 hover:text-white' }
+  ];
+
+  const studentHeroMetrics = [
+      { label: 'Nivel', value: studentCurrentLevel?.name || 'Equipe', helper: 'patamar atual no XP', icon: <Trophy size={16} />, tone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-300' },
+      { label: 'Tarefas Abertas', value: studentOpenTasksCount, helper: studentOpenTasksCount > 0 ? 'frente pessoal da semana' : 'sem pendencias abertas', icon: <ClipboardList size={16} />, tone: 'border-orange-500/20 bg-orange-500/10 text-orange-300' },
+      { label: 'Atrasos', value: studentOverdueTasksCount, helper: studentOverdueTasksCount > 0 ? 'precisam de resolucao' : 'sem atrasos ativos', icon: <AlertTriangle size={16} />, tone: 'border-red-500/20 bg-red-500/10 text-red-300' },
+      { label: 'Rubrica da Equipe', value: `${overallRubricAverage}/4`, helper: 'media da temporada', icon: <Scale size={16} />, tone: 'border-purple-500/20 bg-purple-500/10 text-purple-300' }
+  ];
+
+  const studentHeroActions = [
+      { label: 'Minha Missao', onClick: () => setStudentTab('mission'), icon: <Rocket size={14} />, style: 'bg-white/10 text-white border-white/15 hover:bg-white hover:text-black' },
+      { label: 'Rubricas', onClick: () => setStudentTab('rubrics'), icon: <Scale size={14} />, style: 'bg-purple-500/10 text-purple-200 border-purple-500/20 hover:bg-purple-500 hover:text-white' },
+      { label: 'Kanban', onClick: () => setStudentTab('kanban'), icon: <ClipboardList size={14} />, style: 'bg-orange-500/10 text-orange-300 border-orange-500/20 hover:bg-orange-500 hover:text-white' },
+      { label: 'Agenda', onClick: () => setStudentTab('agenda'), icon: <CalendarDays size={14} />, style: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20 hover:bg-indigo-500 hover:text-white' }
+  ];
+
+  const adminWorkspaceTabs = [
+      { id: 'rotation', label: 'Rodizio', icon: <LayoutDashboard size={16} />, description: 'Escalas da semana, atribuicoes e distribuicao da equipe.', pill: currentWeekData?.weekName || 'Semana', pillTone: 'border-white/10 bg-white/5 text-gray-200', activeClass: 'bg-white text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
+      { id: 'strategy', label: 'Estrategia', icon: <Lightbulb size={16} />, description: 'Projeto, impacto, decisao e narrativa para os juizes.', pillTone: 'border-purple-500/20 bg-purple-500/10 text-purple-200', activeClass: 'bg-purple-500 text-white shadow-lg shadow-purple-900/20', inactiveClass: 'text-gray-400 hover:text-purple-300 hover:bg-purple-500/10' },
+      { id: 'rounds', label: 'Robo', icon: <ListTodo size={16} />, description: 'Saidas, anexos, codigo e evolucao tecnica do robo.', pillTone: 'border-blue-500/20 bg-blue-500/10 text-blue-200', activeClass: 'bg-blue-600 text-white shadow-lg shadow-blue-900/20', inactiveClass: 'text-gray-400 hover:text-blue-300 hover:bg-blue-500/10' },
+      { id: 'rubrics', label: 'Rubricas', icon: <Scale size={16} />, description: 'Leitura oficial da equipe com diagnostico e plano semanal.', pill: `${overallRubricAverage}/4`, pillTone: 'border-gray-400/20 bg-gray-400/10 text-gray-100', activeClass: 'bg-gray-300 text-black shadow-lg shadow-gray-900/20', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
+      { id: 'kanban', label: 'Kanban', icon: <ClipboardList size={16} />, description: 'Execucao da semana, prioridades, fluxo e entregas.', badge: urgentTasksCount > 0 ? urgentTasksCount : null, pillTone: 'border-orange-500/20 bg-orange-500/10 text-orange-200', activeClass: 'bg-orange-500 text-white shadow-lg shadow-orange-900/20', inactiveClass: 'text-gray-400 hover:text-orange-300 hover:bg-orange-500/10' },
+      { id: 'logbook', label: 'Diario', icon: <Book size={16} />, description: 'Aprendizados da equipe e memoria viva da temporada.', pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
+      { id: 'agenda', label: 'Agenda', icon: <CalendarDays size={16} />, description: 'Compromissos, prazos e marcos oficiais da equipe.', badge: urgentEventsCount > 0 ? urgentEventsCount : null, pillTone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200', activeClass: 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20', inactiveClass: 'text-gray-400 hover:text-indigo-300 hover:bg-indigo-500/10' }
+  ];
+
+  const studentWorkspaceTabs = [
+      { id: 'mission', label: 'Minha Missao', icon: <Rocket size={16} />, description: 'Seu foco da semana, status de entrega e orientacao atual.', pill: viewAsStudent?.station || 'Equipe', pillTone: 'border-white/10 bg-white/5 text-gray-200', activeClass: 'bg-white text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
+      { id: 'strategy', label: 'Estrategia', icon: <Lightbulb size={16} />, description: 'Entenda o projeto, impacto e caminho competitivo da equipe.', pillTone: 'border-purple-500/20 bg-purple-500/10 text-purple-200', activeClass: 'bg-purple-500 text-white shadow-lg shadow-purple-900/20', inactiveClass: 'text-gray-400 hover:text-purple-300 hover:bg-purple-500/10' },
+      { id: 'rubrics', label: 'Rubricas', icon: <Scale size={16} />, description: 'Veja o nivel da equipe e o que falta para subir a nota.', pill: `${overallRubricAverage}/4`, pillTone: 'border-gray-400/20 bg-gray-400/10 text-gray-100', activeClass: 'bg-gray-300 text-black shadow-lg shadow-gray-900/20', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
+      { id: 'rounds', label: 'Robo', icon: <ListTodo size={16} />, description: 'Rounds, estrategia de mesa, codigo e anexos do robo.', pillTone: 'border-blue-500/20 bg-blue-500/10 text-blue-200', activeClass: 'bg-blue-600 text-white shadow-lg shadow-blue-900/20', inactiveClass: 'text-gray-400 hover:text-blue-300 hover:bg-blue-500/10' },
+      { id: 'kanban', label: 'Tarefas', icon: <ClipboardList size={16} />, description: 'Seu quadro de execucao para agir durante a semana.', badge: urgentTasksCount > 0 ? urgentTasksCount : null, pillTone: 'border-orange-500/20 bg-orange-500/10 text-orange-200', activeClass: 'bg-orange-500 text-white shadow-lg shadow-orange-900/20', inactiveClass: 'text-gray-400 hover:text-orange-300 hover:bg-orange-500/10' },
+      { id: 'logbook', label: 'Diario', icon: <Book size={16} />, description: 'Registre o que aprendeu, testou e ajustou na temporada.', pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
+      { id: 'agenda', label: 'Agenda', icon: <CalendarDays size={16} />, description: 'Prazos, encontros e marcos importantes da equipe.', badge: urgentEventsCount > 0 ? urgentEventsCount : null, pillTone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200', activeClass: 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20', inactiveClass: 'text-gray-400 hover:text-indigo-300 hover:bg-indigo-500/10' }
+  ];
+
+  const isDashboardPanelVisible = isAdmin ? adminPanelState.dashboard : studentPanelState.dashboard;
+
+  const toggleDashboardPanel = () => {
+      if (isAdmin) {
+          setAdminPanelState((prev) => ({ ...prev, dashboard: !prev.dashboard }));
+          return;
+      }
+
+      setStudentPanelState((prev) => ({ ...prev, dashboard: !prev.dashboard }));
+  };
+
+  const adminBatteryTone = teamAverage > 75
+      ? 'border-green-500/20 bg-green-500/10 text-green-300'
+      : teamAverage > 50
+          ? 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200'
+          : teamAverage > 0
+              ? 'border-red-500/20 bg-red-500/10 text-red-300'
+              : 'border-white/10 bg-white/5 text-gray-300';
+
+  const adminExecutiveSignals = [
+      { label: 'Prontidao FLL', value: `${commandCenterReadinessScore}%`, helper: commandCenterReadinessTone.label, icon: <Crown size={14} />, tone: `${commandCenterReadinessTone.border} ${commandCenterReadinessTone.bg} ${commandCenterReadinessTone.color}` },
+      { label: 'Tarefas Criticas', value: urgentTasksCount, helper: urgentTasksCount > 0 ? 'demandam resposta hoje' : 'fluxo controlado', icon: <ClipboardList size={14} />, tone: 'border-orange-500/20 bg-orange-500/10 text-orange-300' },
+      { label: 'Agenda Imediata', value: urgentEventsCount, helper: urgentEventsCount > 0 ? 'eventos proximos' : 'agenda sem pressao', icon: <CalendarDays size={14} />, tone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-300' },
+      { label: 'Energia da Equipe', value: teamMoods.length > 0 ? `${teamAverage}%` : 'Check-in', helper: teamMoods.length > 0 ? 'media do humor da equipe' : 'sem registro do dia', icon: <Battery size={14} />, tone: adminBatteryTone }
+  ];
+
+  const adminPriorityFocus = [
+      commandCenterPriorityCards[0] && { title: commandCenterPriorityCards[0].title, detail: commandCenterPriorityCards[0].description, actionLabel: commandCenterPriorityCards[0].actionLabel, onClick: commandCenterPriorityCards[0].action, tone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-100' },
+      urgentTasksCount > 0 && { title: 'Resolver gargalos do Kanban', detail: `${urgentTasksCount} tarefa(s) venceram ou vencem agora.`, actionLabel: 'Abrir Kanban', onClick: () => setAdminTab('kanban'), tone: 'border-orange-500/20 bg-orange-500/10 text-orange-100' },
+      urgentEventsCount > 0 && { title: 'Blindar compromissos da agenda', detail: `${urgentEventsCount} marco(s) exigem preparacao proxima.`, actionLabel: 'Ver Agenda', onClick: () => setAdminTab('agenda'), tone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-100' }
+  ].filter(Boolean).slice(0, 3);
+
+  const adminHeroFooter = (
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.05fr,1.1fr,1fr,1fr]">
+          <div className="rounded-[24px] border border-white/10 bg-black/25 p-4 backdrop-blur-sm">
+              <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-4 min-w-0">
+                  {adminProfile?.avatarImage ? (
+                      <img src={adminProfile.avatarImage} alt={adminProfile?.name || 'Tecnico'} className="w-16 h-16 rounded-2xl object-cover border border-red-500/25 shadow-[0_10px_30px_rgba(0,0,0,0.2)]" />
+                  ) : (
+                      <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/25 flex items-center justify-center">
+                          <Bot size={30} className="text-red-300" />
+                      </div>
+                  )}
+
+                  <div className="min-w-0">
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Cockpit do tecnico</p>
+                      <h3 className="text-lg font-black text-white mt-2 leading-tight truncate">{adminProfile?.name || 'Tecnico'}</h3>
+                      <div className="flex flex-wrap items-center gap-2 mt-3 text-[10px] font-bold uppercase tracking-[0.16em]">
+                          <span className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-red-200">Acesso restrito</span>
+                          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-gray-200">{currentWeekData?.weekName || 'Semana ativa'}</span>
+                      </div>
+                  </div>
+                  </div>
+                  <button
+                      onClick={() => setModal({ type: 'editAdminProfile', data: adminProfile })}
+                      className="rounded-2xl border border-white/10 bg-white/5 p-3 text-gray-300 hover:bg-white/10 hover:text-white transition-all"
+                      title="Editar perfil"
+                  >
+                      <Pencil size={14} />
+                  </button>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Janela da semana</p>
+                  <p className="text-sm text-white font-bold mt-2">
+                      {currentWeekData ? `${currentWeekData.startDate.split('-').reverse().join('/')} ate ${currentWeekData.endDate.split('-').reverse().join('/')}` : 'Semana em sincronizacao'}
+                  </p>
+              </div>
+          </div>
+
+          <div className="rounded-[24px] border border-white/10 bg-black/25 p-4 backdrop-blur-sm">
+              <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Radar executivo</span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-[10px] font-bold text-cyan-200">
+                      <BarChart3 size={12} /> Operacao
+                  </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 mt-4">
+                  {adminExecutiveSignals.map((signal) => (
+                      <div key={signal.label} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                              <span className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">{signal.label}</span>
+                              <span className={`rounded-xl border px-2 py-1 ${signal.tone}`}>{signal.icon}</span>
+                          </div>
+                          <p className="text-lg font-black text-white mt-3">{signal.value}</p>
+                          <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">{signal.helper}</p>
+                      </div>
+                  ))}
+              </div>
+          </div>
+
+          <div className="rounded-[24px] border border-white/10 bg-black/25 p-4 backdrop-blur-sm">
+              <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Foco imediato</span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-[10px] font-bold text-yellow-200">
+                      <Target size={12} /> Prioridades
+                  </span>
+              </div>
+
+              <div className="space-y-2 mt-4">
+                  {adminPriorityFocus.length > 0 ? adminPriorityFocus.slice(0, 2).map((item, index) => (
+                      <button
+                          key={`${item.title}-${index}`}
+                          onClick={item.onClick}
+                          className={`w-full text-left rounded-2xl border p-3 transition-all hover:bg-black/20 ${item.tone}`}
+                      >
+                          <p className="text-sm font-bold">{item.title}</p>
+                          <p className="text-[11px] mt-2 opacity-90 leading-relaxed">{item.detail}</p>
+                      </button>
+                  )) : (
+                      <div className="rounded-2xl border border-green-500/20 bg-green-500/10 p-3 text-green-100">
+                          <p className="text-sm font-bold">Painel estabilizado</p>
+                          <p className="text-[11px] mt-2 leading-relaxed">Sem alertas imediatos. Aproveite para lapidar rubricas e narrativa.</p>
+                      </div>
+                  )}
+              </div>
+
+              <div className="mt-4">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold mb-2">Controle rapido</p>
+                  <div className="grid grid-cols-2 gap-2">
+                      <button onClick={handleApplyRotation} className="rounded-2xl border border-blue-500/20 bg-blue-500/10 px-3 py-3 text-xs font-bold text-blue-100 hover:bg-blue-500 hover:text-white transition-all">
+                          Aplicar rodizio
+                      </button>
+                      <button onClick={openAttendanceModal} className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-xs font-bold text-white hover:bg-white/10 transition-all">
+                          Chamada
+                      </button>
+                      <button onClick={() => openNewStudentModal()} className="rounded-2xl border border-green-500/20 bg-green-500/10 px-3 py-3 text-xs font-bold text-green-100 hover:bg-green-500 hover:text-white transition-all">
+                          Novo aluno
+                      </button>
+                      <button onClick={handleResetAllActivities} className="rounded-2xl border border-red-500/20 bg-red-500/10 px-3 py-3 text-xs font-bold text-red-100 hover:bg-red-500 hover:text-white transition-all">
+                          Reset geral
+                      </button>
+                  </div>
+              </div>
+          </div>
+
+          <div className="rounded-[24px] border border-white/10 bg-black/25 p-4 backdrop-blur-sm">
+              <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Raio-X e conquistas</span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-bold text-emerald-200">
+                      <Crown size={12} /> {unlockedTeamAchievements.length}/{teamAchievementsSummary.length}
+                  </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 mt-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Impacto</p>
+                      <p className="text-lg font-black text-white mt-2">{totalTeamImpact}</p>
+                      <p className="text-[11px] text-gray-400 mt-1">pessoas alcancadas</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">XP da equipe</p>
+                      <p className="text-lg font-black text-white mt-2">{totalTeamXP}</p>
+                      <p className="text-[11px] text-gray-400 mt-1">forca acumulada</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Entregas</p>
+                      <p className="text-lg font-black text-white mt-2">{totalTeamTasksDone}</p>
+                      <p className="text-[11px] text-gray-400 mt-1">tarefas concluidas</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Especialistas</p>
+                      <p className="text-lg font-black text-white mt-2">{totalTeamExperts}</p>
+                      <p className="text-[11px] text-gray-400 mt-1">consultas registradas</p>
+                  </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Conquista em destaque</p>
+                  <p className="text-sm font-bold text-white mt-2">{nextTeamAchievement ? nextTeamAchievement.name : 'Todas as metas destravadas'}</p>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                      {nextTeamAchievement ? `${nextTeamAchievement.current}/${nextTeamAchievement.target} no objetivo atual.` : 'A equipe ja concluiu os marcos coletivos definidos.'}
+                  </p>
+              </div>
+          </div>
+      </div>
+  );
+
+  const studentMissionTone = viewAsStudent?.station === 'Engenharia'
+      ? {
+          text: 'text-cyan-300',
+          border: 'border-cyan-500/20',
+          bg: 'from-cyan-500/15 via-sky-500/10 to-transparent',
+          button: 'bg-cyan-500/15 text-cyan-100 border-cyan-500/30 hover:bg-cyan-500/25'
+        }
+      : viewAsStudent?.station === 'Inovação'
+          ? {
+              text: 'text-pink-300',
+              border: 'border-pink-500/20',
+              bg: 'from-pink-500/15 via-fuchsia-500/10 to-transparent',
+              button: 'bg-pink-500/15 text-pink-100 border-pink-500/30 hover:bg-pink-500/25'
+            }
+          : viewAsStudent?.station === 'Gestão'
+              ? {
+                  text: 'text-violet-300',
+                  border: 'border-violet-500/20',
+                  bg: 'from-violet-500/15 via-indigo-500/10 to-transparent',
+                  button: 'bg-violet-500/15 text-violet-100 border-violet-500/30 hover:bg-violet-500/25'
+                }
+              : {
+                  text: 'text-gray-200',
+                  border: 'border-white/10',
+                  bg: 'from-white/10 via-white/5 to-transparent',
+                  button: 'bg-white/10 text-white border-white/15 hover:bg-white/20'
+                };
+
+  const studentMissionData = viewAsStudent?.station ? missions[viewAsStudent.station] : null;
+  const isStudentMissionDetailed = studentMissionMode === 'detailed';
+  const studentMissionDeadlineLabel = officialStudentDeadlineStr.split('-').reverse().join('/');
+  const studentMissionNextStep = studentOpenTasksCount > 0
+      ? 'Abra o Kanban, escolha a tarefa mais urgente ligada a sua frente e avance nela ainda hoje.'
+      : 'Converse com a equipe e assuma uma tarefa da sua estacao para transformar a missao em entrega concreta.';
+  const studentSubmissionStatus = viewAsStudent?.submission?.status || 'idle';
+  const studentSubmissionTone = studentSubmissionStatus === 'approved'
+      ? { label: 'Entrega aprovada', detail: 'Sua entrega foi validada pelo tecnico.', bar: 'bg-green-500/90 text-black', card: 'border-green-500/20 bg-green-500/10 text-green-100', icon: <CheckCircle size={16} /> }
+      : studentSubmissionStatus === 'pending'
+          ? { label: 'Em analise', detail: 'O tecnico ainda esta avaliando sua entrega.', bar: 'bg-yellow-500/90 text-black', card: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-100', icon: <AlertCircle size={16} /> }
+          : studentSubmissionStatus === 'rejected'
+              ? { label: 'Refazer e reenviar', detail: 'A entrega precisa de ajuste antes da aprovacao.', bar: 'bg-red-500/90 text-white', card: 'border-red-500/20 bg-red-500/10 text-red-100', icon: <AlertTriangle size={16} /> }
+              : { label: 'Pronto para agir', detail: 'Ainda nao ha entrega registrada para esta missao.', bar: 'bg-white/15 text-white', card: 'border-white/10 bg-white/5 text-gray-100', icon: <Rocket size={16} /> };
+
+  const studentMissionCards = [
+      { label: 'Estacao', value: viewAsStudent?.station || 'Equipe', helper: studentMissionData ? 'frente principal da semana' : 'aguardando definicao', icon: <Target size={16} />, tone: studentMissionTone.button },
+      { label: 'Prazo', value: studentMissionDeadlineLabel, helper: 'quarta-feira da semana atual', icon: <CalendarDays size={16} />, tone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-100' },
+      { label: 'Tarefas', value: studentOpenTasksCount, helper: studentOpenTasksCount > 0 ? 'tarefas abertas no Kanban' : 'nenhuma pendencia aberta', icon: <ClipboardList size={16} />, tone: 'border-orange-500/20 bg-orange-500/10 text-orange-100' },
+      { label: 'Status', value: studentSubmissionTone.label, helper: studentSubmissionTone.detail, icon: studentSubmissionTone.icon, tone: studentSubmissionTone.card }
+  ];
+
+  const studentMissionActions = [
+      { label: 'Abrir Kanban', onClick: () => setStudentTab('kanban'), icon: <ClipboardList size={14} />, style: 'bg-orange-500/10 text-orange-200 border-orange-500/20 hover:bg-orange-500 hover:text-white' },
+      { label: 'Ver Rubricas', onClick: () => setStudentTab('rubrics'), icon: <Scale size={14} />, style: 'bg-purple-500/10 text-purple-100 border-purple-500/20 hover:bg-purple-500 hover:text-white' },
+      { label: 'Registrar Diario', onClick: () => setStudentTab('logbook'), icon: <Book size={14} />, style: 'bg-yellow-500/10 text-yellow-100 border-yellow-500/20 hover:bg-yellow-500 hover:text-black' }
+  ];
+
+  const championshipChecklistItems = [
+      ...commandCenterReadinessItems,
+      {
+          label: 'Energia da Equipe',
+          ready: teamMoods.length > 0 && teamAverage >= 60,
+          detail: teamMoods.length > 0 ? `${teamAverage}% de humor medio registrado.` : 'Fazer check-in da equipe.',
+          icon: <Battery size={14} />
+      },
+      {
+          label: 'Urgencias sob controle',
+          ready: urgentTasksCount === 0 && urgentEventsCount === 0,
+          detail: urgentTasksCount === 0 && urgentEventsCount === 0 ? 'Sem alertas imediatos no Kanban e na agenda.' : `${urgentTasksCount} tarefa(s) e ${urgentEventsCount} alerta(s) ainda exigem resposta.`,
+          icon: <AlertTriangle size={14} />
+      }
+  ];
+
+  const championshipFocusCards = isAdmin
+      ? [
+          ...adminPriorityFocus,
+          innovationAverage < 3 && {
+              title: 'Fortalecer narrativa do projeto',
+              detail: `A media de Inovacao esta em ${innovationAverage.toFixed(1)}/4. Usem problema, pesquisa e iteracao com mais evidencia.`,
+              actionLabel: 'Abrir Rubricas',
+              onClick: () => setAdminTab('rubrics'),
+              tone: 'border-purple-500/20 bg-purple-500/10 text-purple-100'
+          },
+          robotAverage < 3 && {
+              title: 'Provar processo do robo',
+              detail: `A media de Robo esta em ${robotAverage.toFixed(1)}/4. Mostrem estrategia de missoes, testes e explicacao tecnica.`,
+              actionLabel: 'Ver Robo',
+              onClick: () => setAdminTab('rounds'),
+              tone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-100'
+          }
+        ].filter(Boolean).slice(0, 4)
+      : [
+          studentOverdueTasksCount > 0 && {
+              title: 'Zerar atrasos da semana',
+              detail: `${studentOverdueTasksCount} tarefa(s) ja passaram do prazo e precisam de resposta imediata.`,
+              actionLabel: 'Abrir Kanban',
+              onClick: () => setStudentTab('kanban'),
+              tone: 'border-red-500/20 bg-red-500/10 text-red-100'
+          },
+          studentOpenTasksCount > 0 && {
+              title: 'Transformar missao em entrega',
+              detail: `${studentOpenTasksCount} tarefa(s) abertas no seu fluxo atual. Escolha a mais importante e avance hoje.`,
+              actionLabel: 'Ver tarefas',
+              onClick: () => setStudentTab('kanban'),
+              tone: 'border-orange-500/20 bg-orange-500/10 text-orange-100'
+          },
+          innovationAverage < 3 && {
+              title: 'Estudar a rubrica de inovacao',
+              detail: `A equipe esta em ${innovationAverage.toFixed(1)}/4 em Inovacao. Entender os criterios ajuda voce a falar melhor com os juizes.`,
+              actionLabel: 'Abrir Rubricas',
+              onClick: () => setStudentTab('rubrics'),
+              tone: 'border-purple-500/20 bg-purple-500/10 text-purple-100'
+          },
+          robotAverage < 3 && {
+              title: 'Melhorar explicacao tecnica do robo',
+              detail: `A media de Robo esta em ${robotAverage.toFixed(1)}/4. Treine como explicar estrategia, testes e melhorias.`,
+              actionLabel: 'Ver Robo',
+              onClick: () => setStudentTab('rounds'),
+              tone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-100'
+          }
+        ].filter(Boolean).slice(0, 4);
+
+  const championshipActionButtons = isAdmin
+      ? [
+          { label: 'Modo Juizes', onClick: openJudgeMode, icon: <Gavel size={14} />, style: 'bg-amber-500/10 text-amber-300 border-amber-500/20 hover:bg-amber-500 hover:text-black' },
+          { label: 'Central de Comando', onClick: openCommandCenterMode, icon: <Crown size={14} />, style: 'bg-yellow-500/10 text-yellow-300 border-yellow-500/20 hover:bg-yellow-500 hover:text-black' },
+          { label: 'Kanban', onClick: () => setAdminTab('kanban'), icon: <ClipboardList size={14} />, style: 'bg-orange-500/10 text-orange-200 border-orange-500/20 hover:bg-orange-500 hover:text-white' }
+        ]
+      : [
+          { label: 'Abrir Rubricas', onClick: () => setStudentTab('rubrics'), icon: <Scale size={14} />, style: 'bg-purple-500/10 text-purple-200 border-purple-500/20 hover:bg-purple-500 hover:text-white' },
+          { label: 'Meu Kanban', onClick: () => setStudentTab('kanban'), icon: <ClipboardList size={14} />, style: 'bg-orange-500/10 text-orange-200 border-orange-500/20 hover:bg-orange-500 hover:text-white' },
+          { label: 'Minha Missao', onClick: () => setStudentTab('mission'), icon: <Rocket size={14} />, style: 'bg-white/10 text-white border-white/15 hover:bg-white hover:text-black' }
+        ];
+
+  const projectImpactNarrative = `${projectSummary?.impact || projectSummary?.sharing || ''}`.trim();
+  const projectName = `${projectSummary?.title || ''}`.trim() && projectSummary?.title !== 'Nome do Projeto' ? projectSummary.title : 'nosso projeto';
+  const judgeStoryCards = [
+      {
+          label: 'Projeto de Inovacao',
+          title: 'Contem a historia do problema',
+          icon: <Lightbulb size={16} />,
+          tone: 'border-yellow-500/20 bg-yellow-500/10',
+          pitch: projectSummary?.problem
+              ? `No ${projectName}, nos concentramos em ${projectSummary.problem}. Nossa solucao e ${projectSummary.solution || 'uma resposta em desenvolvimento'} e buscamos gerar impacto real na comunidade.`
+              : 'Definam claramente o problema, a solucao e por que isso importa para a comunidade antes da apresentacao.',
+          proofs: [
+              projectSummary?.problem ? `Problema mapeado: ${projectSummary.problem}` : 'O problema ainda precisa aparecer com clareza.',
+              projectSummary?.solution ? `Solucao atual: ${projectSummary.solution}` : 'Detalhem melhor a solucao proposta.',
+              totalImpactPeople > 0 ? `Impacto registrado: ${totalImpactPeople} pessoas alcancadas.` : projectImpactNarrative || 'Registrem impacto real ou compartilhamento da ideia.'
+          ]
+      },
+      {
+          label: 'Design do Robo',
+          title: 'Mostrem processo tecnico',
+          icon: <Wrench size={16} />,
+          tone: 'border-cyan-500/20 bg-cyan-500/10',
+          pitch: activeCommandCode
+              ? `Nossa estrategia do robo hoje parte do codigo ${activeCommandCode.title}, com ${rounds.length} saida(s) planejada(s) e ${iterationRecords} iteracao(oes) documentada(s).`
+              : `Nossa equipe esta estruturando a estrategia do robo com ${rounds.length} saida(s) planejada(s) e ${iterationRecords} iteracao(oes) registradas.`,
+          proofs: [
+              rounds.length > 0 ? `${rounds.length} round(s) planejado(s) para a mesa.` : 'Planejem rounds com prioridade clara de missoes.',
+              activeCommandCode ? `Programacao oficial definida: ${activeCommandCode.title}.` : 'Definam e apliquem um codigo oficial no cofre.',
+              `Media da rubrica de robo: ${robotAverage.toFixed(1)}/4.`
+          ]
+      },
+      {
+          label: 'Equipe',
+          title: 'Transmitam maturidade de torneio',
+          icon: <Users size={16} />,
+          tone: 'border-pink-500/20 bg-pink-500/10',
+          pitch: `Somos uma equipe que aprende com iteracao, organiza execucao no Kanban e conecta projeto, robo e impacto para competir com consistencia.`,
+          proofs: [
+              `${iterationRecords} registro(s) de iteracao no robo e anexos.`,
+              `${overallRubricAverage}/4 de media geral nas rubricas oficiais.`,
+              urgentTasksCount === 0 ? 'Kanban sem urgencias imediatas.' : `${urgentTasksCount} urgencia(s) ainda precisam de resposta.`
+          ]
+      }
+  ];
+
+  const judgeSpotlightQuestion = innovationAverage < 3
+      ? 'Como a equipe definiu o problema e quais evidencias mostram que a pesquisa sustentou a solucao?'
+      : robotAverage < 3
+          ? 'Que testes e iteracoes provam que a estrategia do robo melhorou ao longo da temporada?'
+          : 'Qual feedback externo mais mudou o projeto ou o robo e como essa mudanca apareceu na pratica?';
+
 
   // --- MODAL DE XP E APROVAÇÃO (CONECTADO) ---
   const openXPModal = (student, context = "manual") => { 
@@ -2266,7 +2862,7 @@ const handleDeleteRound = async (id) => {
   };
 
   // --- FUNÇÃO PARA RESETAR TODAS AS ATIVIDADES ---
-  const handleResetAllActivities = async () => {
+  async function handleResetAllActivities() {
       if (!window.confirm("Tem certeza que deseja limpar as entregas de atividades de TODOS os alunos? Isso preparará o sistema para a próxima semana de treinos.")) return;
       
       try {
@@ -2283,7 +2879,7 @@ const handleDeleteRound = async (id) => {
           console.error("Erro ao resetar atividades:", error);
           showNotification("Erro ao resetar.", "error");
       }
-  };
+  }
 
 // --- CARREGAR AS METAS DO BANCO (Memória Longa) ---
   useEffect(() => {
@@ -3367,6 +3963,28 @@ const handleFileSelect = (e) => {
           </div>
 
           {strategySubTab === 'innovation' && (
+              <InnovationStrategyPanel
+                  projectSummary={projectSummary}
+                  projectImpactNarrative={projectImpactNarrative}
+                  decisionMatrix={decisionMatrix}
+                  experts={experts}
+                  outreachEvents={outreachEvents}
+                  totalImpactPeople={totalImpactPeople}
+                  isAdmin={isAdmin}
+                  viewAsStudent={viewAsStudent}
+                  onOpenProject={() => setModal({ type: 'projectForm' })}
+                  onOpenMatrix={openMatrixForm}
+                  onDeleteMatrix={handleDeleteMatrix}
+                  onOpenExpert={() => openExpertModal()}
+                  onOpenExpertEdit={openExpertModal}
+                  onOpenExpertView={openExpertView}
+                  onDeleteExpert={handleDeleteExpert}
+                  onOpenImpact={() => openOutreachForm()}
+                  onDeleteOutreach={handleDeleteOutreach}
+              />
+          )}
+
+          {strategySubTab === 'innovation_legacy' && (
               <div className="space-y-6 animate-in fade-in duration-300">
                   {/* MATRIZ DE DECISÃO (NOVO) */}
                   <div className="bg-[#151520] border border-white/10 rounded-2xl p-6">
@@ -4624,8 +5242,8 @@ const handleFileSelect = (e) => {
 
       return (
       <div className="animate-in fade-in duration-500 flex flex-col h-full">
-          <div className="grid xl:grid-cols-[1.35fr,0.65fr] gap-6 mb-6">
-              <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[#151520] shadow-2xl">
+          <div className="grid xl:grid-cols-[1.35fr,0.65fr] gap-6 mb-6 items-start">
+              <div className="relative self-start overflow-hidden rounded-[28px] border border-white/10 bg-[#151520] shadow-2xl">
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(249,115,22,0.16),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.16),transparent_35%)]"></div>
                   <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)', backgroundSize: '28px 28px' }}></div>
                   <div className="relative p-6 md:p-8">
@@ -5640,6 +6258,14 @@ const handleFileSelect = (e) => {
                   </span>
               </button>
               <button
+                onClick={toggleDashboardPanel}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all border ${isDashboardPanelVisible ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.15)]' : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:text-white'}`}
+                title={isDashboardPanelVisible ? 'Ocultar dashboard' : 'Mostrar dashboard'}
+              >
+                  <LayoutDashboard size={18} />
+                  <span className="font-bold text-xs">{isDashboardPanelVisible ? 'Ocultar Dashboard' : 'Dashboard'}</span>
+              </button>
+              <button
                 onClick={openCommandCenterMode}
                 className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 p-2 rounded-full hover:bg-yellow-500 hover:text-black transition-all md:px-4 md:py-2 md:rounded-lg flex items-center gap-2 shadow-[0_0_15px_rgba(234,179,8,0.15)]"
               >
@@ -5711,95 +6337,63 @@ const handleFileSelect = (e) => {
         <main className="p-4 md:p-8 max-w-[1600px] mx-auto animate-in fade-in duration-500">
           <UrgentEventsBanner />
 
+          <div className="mb-6">
+            <WorkspaceHero
+              eyebrow="Season Operations"
+              title="Central tatica da temporada para conduzir a equipe como candidata a campea."
+              subtitle={`Semana ativa: ${currentWeekData?.weekName || 'Em sincronizacao'}. Use esta camada para priorizar rubricas, controlar execucao e manter a narrativa da equipe forte para mesa, entrevistas e impacto.`}
+              metrics={adminHeroMetrics}
+              actions={adminHeroActions}
+              accent="from-[#271534] via-[#151520] to-[#09131f]"
+              footerContent={adminHeroFooter}
+            />
+          </div>
+
+          <WorkspaceCollapsible isOpen={adminPanelState.dashboard}>
+            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6 mb-6">
+              <CompetitionPrepPanel
+                title="Preparacao de campeonato com visao executiva."
+                summary="Este painel cruza rubricas, operacao, energia da equipe, codigo oficial e agenda para mostrar o que ainda separa o time de uma postura realmente campea."
+                readinessScore={commandCenterReadinessScore}
+                readinessLabel={commandCenterReadinessTone.label}
+                weekLabel={currentWeekData?.weekName || 'Semana em andamento'}
+                checklistItems={championshipChecklistItems}
+                focusItems={championshipFocusCards}
+                actionButtons={championshipActionButtons}
+              />
+              <JudgeStoryPanel
+                title="Roteiro de fala para a equipe chegar afiada com os juizes."
+                summary="Use estes blocos para ensaiar explicacoes curtas, fortes e conectadas a evidencias reais do site."
+                cards={judgeStoryCards}
+                spotlightQuestion={judgeSpotlightQuestion}
+              />
+            </div>
+          </WorkspaceCollapsible>
+
             {/* Dentro do seu <main> ou área de conteúdo central, junto com os outros 'ifs' de abas */}
 {activeTab === 'ranking' && (
   <RankingPanel students={students} setActiveTab={setActiveTab} />
 )}
-          <div className="flex flex-col lg:flex-row gap-8">
+          <div className="flex flex-col gap-6">
             
-            {/* COLUNA ESQUERDA (SIDEBAR DO TÉCNICO) */}
-            <div className="w-full lg:w-80 shrink-0 space-y-6">
+            <div className="flex flex-col gap-6">
                 
-                {/* 1. PERFIL ADMIN */}
-                <div className="text-center py-6 bg-[#151520] rounded-2xl border border-white/10 shadow-xl relative overflow-hidden group">
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 to-orange-500"></div>
-                    <button onClick={() => setModal({ type: 'editAdminProfile', data: adminProfile })} className="absolute top-4 right-4 text-gray-600 hover:text-white transition-colors z-10 bg-black/40 p-1.5 rounded-lg" title="Editar Perfil">
-                        <Pencil size={18} />
-                    </button>
-                    <div className="flex flex-col items-center justify-center gap-3">
-                        {adminProfile?.avatarImage ? (
-                            <img src={adminProfile.avatarImage} alt="Admin" className="w-20 h-20 rounded-full object-cover border-2 border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]" />
-                        ) : (
-                            <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center border-2 border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.2)]"><Bot size={40} className="text-red-500" /></div>
-                        )}
-                        <div className="text-center">
-                            <h2 className="text-2xl font-black text-white leading-none tracking-tight">{adminProfile?.name || 'Técnico'}</h2>
-                            <p className="text-red-400 text-xs font-mono mt-2 bg-red-500/10 inline-block px-3 py-1 rounded-full border border-red-500/20">Acesso Restrito</p>
-                        </div>
-                    </div>
-                </div>
+                <WorkspaceCollapsible isOpen={adminPanelState.dashboard}>
+                  <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
+                      <div className="[&>div]:mb-0 h-full">
+                          <TeamStatsPanel />
+                      </div>
+                      <div className="[&>div]:mb-0 h-full">
+                          <TeamAchievementsPanel />
+                      </div>
+                  </div>
+                </WorkspaceCollapsible>
 
-                {/* 2. SEMANA ATUAL */}
-                <div className="bg-[#151520] rounded-2xl border border-white/10 p-5 shadow-xl">
-                    <h3 className="text-white font-bold mb-4 flex items-center gap-2 border-b border-white/10 pb-3">
-                       <Calendar size={16} className="text-blue-500"/> Semana Atual
-                    </h3>
-                    <div className="text-center">
-                        <span className="text-yellow-500 font-bold bg-yellow-500/10 px-3 py-1.5 rounded-lg border border-yellow-500/20 block mb-2">
-                            {currentWeekData ? currentWeekData.weekName : "Carregando..."}
-                        </span>
-                        <span className="text-xs text-gray-400 flex items-center justify-center gap-1 mt-2">
-                            {currentWeekData ? `${currentWeekData.startDate.split('-').reverse().join('/')} até ${currentWeekData.endDate.split('-').reverse().join('/')}` : "..."}
-                        </span>
-                    </div>
-                </div>
-
-                {/* 3. AÇÕES RÁPIDAS */}
-                <div className="bg-[#151520] rounded-2xl border border-white/10 p-5 shadow-xl">
-                    <h3 className="text-white font-bold mb-4 flex items-center gap-2 border-b border-white/10 pb-3">
-                       <Zap size={16} className="text-yellow-500"/> Ações Rápidas
-                    </h3>
-                    <div className="flex flex-col gap-2">
-                        <button onClick={handleApplyRotation} className="w-full bg-blue-600/20 hover:bg-blue-600 text-blue-500 hover:text-white py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all border border-blue-500/30"><RotateCcw size={14} /> Aplicar Rodízio</button>
-                        <button onClick={openAttendanceModal} className="w-full bg-white/5 hover:bg-white/10 text-white py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all border border-white/10"><ListTodo size={14} /> Chamada</button>
-                        <button onClick={() => openNewStudentModal()} className="w-full bg-green-600/20 hover:bg-green-600 text-green-500 hover:text-white py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all border border-green-500/30"><UserPlus size={14} /> Novo Aluno</button>
-                        <button onClick={handleResetAllActivities} className="w-full bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all border border-red-500/20"><Trash2 size={14} /> Resetar Atividades</button>
-                    </div>
-                </div>
-            </div>
-
-            {/* COLUNA DIREITA (CONTEÚDO PRINCIPAL) */}
-            <div className="flex-1 min-w-0 flex flex-col gap-6">
-                
-                {/* WIDGETS LADO A LADO EM TELAS GRANDES */}
-                <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
-                    <div className="[&>div]:mb-0 h-full">
-                        <TeamStatsPanel />
-                    </div>
-                    <div className="[&>div]:mb-0 h-full">
-                        <TeamAchievementsPanel />
-                    </div>
-                </div>
-
-                {/* NAVEGAÇÃO DE ABAS */}
-                <div className="bg-[#151520] border border-white/10 rounded-2xl p-2 sticky top-[80px] z-30 shadow-2xl flex gap-1 overflow-x-auto custom-scrollbar">
-                    <button onClick={() => setAdminTab('rotation')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${adminTab === 'rotation' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}><LayoutDashboard size={16}/> Rodízio</button>
-                    <button onClick={() => setAdminTab('strategy')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${adminTab === 'strategy' ? 'bg-purple-500 text-white shadow-lg shadow-purple-900/20' : 'text-gray-400 hover:text-purple-400 hover:bg-purple-500/10'}`}><Lightbulb size={16}/> Estratégia</button>
-                    <button onClick={() => setAdminTab('rounds')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${adminTab === 'rounds' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-gray-400 hover:text-blue-400 hover:bg-blue-500/10'}`}><ListTodo size={16}/> Robô</button>
-                    <button onClick={() => setAdminTab('rubrics')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${adminTab === 'rubrics' ? 'bg-gray-400 text-black shadow-lg shadow-gray-900/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}><Scale size={16}/> Rubricas</button>
-                    <button onClick={() => setAdminTab('kanban')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all relative ${adminTab === 'kanban' ? 'bg-orange-500 text-white shadow-lg shadow-orange-900/20' : 'text-gray-400 hover:text-orange-400 hover:bg-orange-500/10'}`}>
-                        <ClipboardList size={16}/> Kanban
-                        {urgentTasksCount > 0 && <span className="absolute top-2 right-2 flex h-2.5 w-2.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span></span>}
-                    </button>
-                    <button onClick={() => setAdminTab('logbook')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${adminTab === 'logbook' ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20' : 'text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10'}`}><Book size={16}/> Diário</button>
-                    <button onClick={() => setAdminTab('agenda')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all relative ${adminTab === 'agenda' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20' : 'text-gray-400 hover:text-indigo-400 hover:bg-indigo-500/10'}`}>
-                        <CalendarDays size={16}/> Agenda
-                        {urgentEventsCount > 0 && <span className="absolute top-2 right-2 flex h-2.5 w-2.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span></span>}
-                    </button>
-                </div>
+                <WorkspaceTabs eyebrow="Centro de Navegacao" tabs={adminWorkspaceTabs} activeId={adminTab} onChange={setAdminTab} />
 
                 {/* CONTEÚDO DA ABA SELECIONADA */}
-                <div className="bg-[#151520]/50 rounded-2xl border border-white/5 p-4 md:p-6 min-h-[500px]">
+                <div className="bg-gradient-to-b from-[#161621] to-[#101018] rounded-[30px] border border-white/10 p-4 md:p-7 min-h-[500px] shadow-[0_20px_60px_rgba(0,0,0,0.28)]">
+                  <WorkspaceScene sceneId={`admin-${adminTab}`}>
                     {adminTab === 'rotation' && (
                       <div className="grid lg:grid-cols-4 gap-6">
                   
@@ -6043,6 +6637,7 @@ const handleFileSelect = (e) => {
                     {adminTab === 'kanban' && <KanbanView />}
                     {adminTab === 'logbook' && <LogbookView />}
                     {adminTab === 'agenda' && <AgendaView />}
+                  </WorkspaceScene>
                 </div>
             </div>
           </div>
@@ -6053,6 +6648,41 @@ const handleFileSelect = (e) => {
       {!isAdmin && viewAsStudent && (
         <main className="p-4 md:p-8 w-full max-w-[1800px] mx-auto animate-in slide-in-from-bottom-8">
           <UrgentEventsBanner />
+
+          <div className="mb-6">
+            <WorkspaceHero
+              eyebrow="Pilot Hub"
+              title={`Painel pessoal de ${viewAsStudent.name} para executar, evoluir e chegar pronto no torneio.`}
+              subtitle={`Estacao atual: ${viewAsStudent.station || 'Equipe'}. Use esta area para acompanhar suas entregas, entender as rubricas, agir no Kanban e manter seu papel claro na estrategia da temporada.`}
+              metrics={studentHeroMetrics}
+              actions={studentHeroActions}
+              accent="from-[#132034] via-[#151520] to-[#101018]"
+              footerContent={studentHeroFooter}
+            />
+          </div>
+
+          <WorkspaceCollapsible isOpen={studentPanelState.dashboard}>
+            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6 mb-6">
+              <CompetitionPrepPanel
+                eyebrow="Mapa para o Torneio"
+                title="Visao de equipe campea para estudar e agir durante a semana."
+                summary="Esses blocos ajudam voce a entender onde a equipe esta forte, onde precisa subir e como falar com mais seguranca no torneio."
+                readinessScore={commandCenterReadinessScore}
+                readinessLabel={commandCenterReadinessTone.label}
+                weekLabel={currentWeekData?.weekName || 'Semana em andamento'}
+                checklistItems={championshipChecklistItems}
+                focusItems={championshipFocusCards}
+                actionButtons={championshipActionButtons}
+              />
+              <JudgeStoryPanel
+                eyebrow="Treino de Apresentacao"
+                title="Roteiro rapido para voce falar como equipe preparada."
+                summary="Estude estes blocos para conectar projeto, robo e impacto com mais clareza nas conversas com a equipe e com os juizes."
+                cards={judgeStoryCards}
+                spotlightQuestion={judgeSpotlightQuestion}
+              />
+            </div>
+          </WorkspaceCollapsible>
 
           {/* ALERTA DE TAREFAS ATRASADAS DO ALUNO */}
           {tasks.filter(t => t.status !== 'done' && t.dueDate && t.dueDate < localTodayStr && t.author && t.author.includes(viewAsStudent.name)).length > 0 && (
@@ -6087,167 +6717,227 @@ const handleFileSelect = (e) => {
         </div>
     )}
 
-          {/* GRID PRINCIPAL DO ALUNO (SIDEBAR + CONTEÚDO) */}
-          <div className="flex flex-col lg:flex-row gap-8">
-            
-            {/* COLUNA ESQUERDA (SIDEBAR DE PERFIL) */}
-            <div className="w-full lg:w-80 shrink-0 space-y-6">
+          {/* GRID PRINCIPAL DO ALUNO */}
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-6">
                 
-                {/* 1. PERFIL COMPACTO */}
-                <div onClick={() => openProfileModal(viewAsStudent)} className="text-center py-6 bg-[#151520] rounded-2xl border border-white/10 shadow-xl cursor-pointer hover:bg-[#1a1a24] transition-colors group relative">
-                    <div className="absolute top-4 right-4 text-gray-600 group-hover:text-white transition-colors">
-                        <UserCircle size={24} />
-                    </div>
-                    <div className="flex flex-col items-center justify-center gap-3">
-                        {viewAsStudent.avatarImage ? (
-                            <img src={viewAsStudent.avatarImage} alt="Avatar" className="w-20 h-20 rounded-full object-cover border-2 border-white/10 group-hover:border-purple-500 transition-colors" />
-                        ) : (
-                            <div className="w-20 h-20 rounded-full bg-black/50 flex items-center justify-center border-2 border-white/10 group-hover:border-purple-500 transition-colors">
-                                <UserCircle size={40} className="text-gray-500" />
-                            </div>
-                        )}
-                        <div className="text-center">
-                            <h2 className="text-2xl font-black text-white leading-none tracking-tight">{viewAsStudent.name}</h2>
-                            <p className="text-gray-400 text-xs font-mono mt-2 bg-white/5 inline-block px-3 py-1 rounded-full border border-white/5">{viewAsStudent.turma}</p>
-                        </div>
-                    </div>
-                </div>
+                <WorkspaceCollapsible isOpen={studentPanelState.dashboard}>
+                  <div className="flex flex-col gap-6">
+                      <div className="[&>div]:mb-0 w-full">
+                          <TeamStatsPanel />
+                      </div>
+                      <div className="[&>div]:mb-0 w-full">
+                          <TeamAchievementsPanel />
+                      </div>
+                  </div>
+                </WorkspaceCollapsible>
 
-                {/* 2. NÍVEL E XP (BARRA DE PROGRESSO) */}
-                <div className="bg-[#151520] rounded-2xl border border-white/10 p-5 shadow-xl">
-                    {(() => {
-                        const currentLevel = getCurrentLevel(viewAsStudent.xp);
-                        const nextLevel = getNextLevel(viewAsStudent.xp);
-                        const progress = nextLevel ? ((viewAsStudent.xp - currentLevel.min) / (nextLevel.min - currentLevel.min)) * 100 : 100;
-
-                        return (
-                            <div>
-                                <div className="flex items-center justify-between gap-2 mb-3">
-                                    <span className={`text-sm font-black uppercase tracking-wider ${currentLevel.color}`}>{currentLevel.name}</span>
-                                    <span className="text-yellow-500 font-bold bg-yellow-500/10 px-2 py-1 rounded border border-yellow-500/20 flex items-center gap-1 text-xs"><Trophy size={12}/> {viewAsStudent.xp} XP</span>
-                                </div>
-                                <div className="w-full bg-black/50 rounded-full h-2.5 mb-2 overflow-hidden border border-white/5 shadow-inner">
-                                    <div className={`h-full transition-all duration-1000 ${currentLevel.name === 'Mestre FLL' ? 'bg-yellow-500' : 'bg-gradient-to-r from-blue-500 to-purple-500'}`} style={{width: `${Math.min(100, progress)}%`}}></div>
-                                </div>
-                                {nextLevel ? 
-                                    <p className="text-[10px] text-right text-gray-500">Próximo: <strong className="text-white">{nextLevel.name}</strong> (-{nextLevel.min - viewAsStudent.xp} XP)</p> : 
-                                    <p className="text-[10px] text-right text-yellow-500 font-bold">Nível Máximo!</p>
-                                }
-                            </div>
-                        )
-                    })()}
-                </div>
-
-                {/* 3. SALA DE TROFÉUS (COMPACTA) */}
-                <div className="bg-[#151520] rounded-2xl border border-white/10 p-5 shadow-xl">
-                   <h3 className="text-white font-bold mb-4 flex items-center justify-between gap-2 border-b border-white/10 pb-3">
-                       <div className="flex items-center gap-2"><Medal className="text-yellow-500" size={16}/> Badges</div>
-                       <span className="text-[10px] font-black font-mono text-gray-400 bg-black/50 px-2 py-1 rounded border border-white/5">
-                           {viewAsStudent.badges?.length || 0}/{BADGES_LIST.length}
-                       </span>
-                   </h3>
-                   
-                   <div className="grid grid-cols-3 gap-2">
-                       {BADGES_LIST.map(badge => {
-                           const hasBadge = viewAsStudent.badges?.includes(badge.id);
-                           
-                           return (
-                               <div 
-                                 key={badge.id} 
-                                 className={`relative group flex flex-col items-center justify-center p-2 rounded-xl border transition-all duration-300 aspect-square ${
-                                     hasBadge 
-                                     ? 'bg-gradient-to-br from-white/10 to-transparent border-yellow-500/50 shadow-[0_0_10px_rgba(234,179,8,0.15)]' 
-                                     : 'bg-black/40 border-white/5 opacity-40 grayscale cursor-help'
-                                 }`}
-                               >
-                                   <div className={`mb-1 transform transition-transform ${hasBadge ? 'scale-110 group-hover:scale-125' : 'scale-90'} ${badge.color}`}>
-                                       {badge.icon}
-                                   </div>
-                                   <span className={`text-[8px] text-center font-bold leading-tight ${hasBadge ? 'text-white' : 'text-gray-600'} line-clamp-2`}>
-                                       {badge.name}
-                                   </span>
-
-                                   <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-40 bg-gray-900 text-white p-2 rounded-lg text-[10px] opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-2xl border border-gray-700 hidden md:block text-center">
-                                       <p className="font-bold mb-1 text-yellow-400">{badge.name}</p>
-                                       {badge.desc}
-                                       {!hasBadge && <p className="text-red-400 mt-1 font-bold uppercase border-t border-gray-700 pt-1">Bloqueado</p>}
-                                   </div>
-                               </div>
-                           );
-                       })}
-                   </div>
-                   {(!viewAsStudent.badges || viewAsStudent.badges.length === 0) && (
-                       <p className="text-center text-[10px] text-gray-500 mt-3 italic bg-black/30 p-2 rounded-lg">
-                           Sem badges lendárias ainda.
-                       </p>
-                   )}
-                </div>
-            </div>
-
-            {/* COLUNA DIREITA (CONTEÚDO PRINCIPAL) */}
-            <div className="flex-1 min-w-0 flex flex-col gap-6">
-                
-                {/* WIDGETS EMPILHADOS PARA APROVEITAR A LARGURA TOTAL */}
-                <div className="flex flex-col gap-6">
-                    <div className="[&>div]:mb-0 w-full">
-                        <TeamStatsPanel />
-                    </div>
-                    <div className="[&>div]:mb-0 w-full">
-                        <TeamAchievementsPanel />
-                    </div>
-                </div>
-
-                {/* NAVEGAÇÃO DE ABAS */}
-                <div className="bg-[#151520] border border-white/10 rounded-2xl p-2 sticky top-[80px] z-30 shadow-2xl flex gap-1 overflow-x-auto custom-scrollbar">
-                    <button onClick={() => setStudentTab('mission')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${studentTab === 'mission' ? 'bg-white text-black shadow-lg' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}><Rocket size={16}/> Minha Missão</button>
-                    <button onClick={() => setStudentTab('strategy')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${studentTab === 'strategy' ? 'bg-purple-500 text-white shadow-lg shadow-purple-900/20' : 'text-gray-400 hover:text-purple-400 hover:bg-purple-500/10'}`}><Lightbulb size={16}/> Estratégia</button>
-                    <button onClick={() => setStudentTab('rubrics')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${studentTab === 'rubrics' ? 'bg-gray-400 text-black shadow-lg shadow-gray-900/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}><Scale size={16}/> Rubricas</button>
-                    <button onClick={() => setStudentTab('rounds')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${studentTab === 'rounds' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-gray-400 hover:text-blue-400 hover:bg-blue-500/10'}`}><ListTodo size={16}/> Robô</button>
-                    <button onClick={() => setStudentTab('kanban')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all relative ${studentTab === 'kanban' ? 'bg-orange-500 text-white shadow-lg shadow-orange-900/20' : 'text-gray-400 hover:text-orange-400 hover:bg-orange-500/10'}`}>
-                        <ClipboardList size={16}/> Tarefas
-                        {urgentTasksCount > 0 && <span className="absolute top-2 right-2 flex h-2.5 w-2.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span></span>}
-                    </button>
-                    <button onClick={() => setStudentTab('logbook')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all ${studentTab === 'logbook' ? 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20' : 'text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10'}`}><Book size={16}/> Diário</button>
-                    <button onClick={() => setStudentTab('agenda')} className={`flex items-center justify-center flex-1 min-w-[120px] gap-2 px-3 py-2.5 rounded-xl font-bold text-xs transition-all relative ${studentTab === 'agenda' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20' : 'text-gray-400 hover:text-indigo-400 hover:bg-indigo-500/10'}`}>
-                        <CalendarDays size={16}/> Agenda
-                        {urgentEventsCount > 0 && <span className="absolute top-2 right-2 flex h-2.5 w-2.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span></span>}
-                    </button>
-                </div>
+                <WorkspaceTabs eyebrow="Mapa do Aluno" tabs={studentWorkspaceTabs} activeId={studentTab} onChange={setStudentTab} />
 
                 {/* CONTEÚDO DA ABA SELECIONADA */}
-                <div className="bg-[#151520]/50 rounded-2xl border border-white/5 p-4 md:p-6 min-h-[500px]">
+                <div className="bg-gradient-to-b from-[#161621] to-[#101018] rounded-[30px] border border-white/10 p-4 md:p-7 min-h-[500px] shadow-[0_20px_60px_rgba(0,0,0,0.28)]">
+                  <WorkspaceScene sceneId={`student-${studentTab}`}>
                     {studentTab === 'mission' && (
                         <>
-                        {/* ESTAÇÃO ATUAL */}
-                        <p className="text-xl text-white mb-6">Estação Atual: <strong className={`uppercase ${viewAsStudent.station==='Engenharia'?'text-blue-500':viewAsStudent.station==='Inovação'?'text-pink-500':viewAsStudent.station==='Gestão'?'text-purple-500':'text-gray-400'}`}>{viewAsStudent.station || "Aguardando..."}</strong></p>
-                        
-                        {viewAsStudent.station && (
-                            <div className="mt-6 p-8 bg-black/40 rounded-2xl border border-white/10 max-w-lg mx-auto relative overflow-hidden text-left">
-                                {/* FAIXAS DE STATUS */}
-                                {viewAsStudent.submission?.status === 'pending' && <div className="bg-yellow-500/90 text-black font-bold p-2 text-sm absolute top-0 left-0 w-full flex items-center justify-center gap-2"><AlertCircle size={16}/> Atividade em análise pelo técnico.</div>}
-                                {viewAsStudent.submission?.status === 'approved' && <div className="bg-green-500/90 text-black font-bold p-2 text-sm absolute top-0 left-0 w-full flex items-center justify-center gap-2"><CheckCircle size={16}/> Atividade Aprovada!</div>}
-                                {viewAsStudent.submission?.status === 'rejected' && <div className="bg-red-500/90 text-white font-bold p-2 text-sm absolute top-0 left-0 w-full flex items-center justify-center gap-2"><AlertTriangle size={16}/> Atividade Recusada. Refaça.</div>}
+                          {viewAsStudent.station ? (
+                            <div className="space-y-6">
+                              <section className="rounded-[24px] border border-white/10 bg-[#11111a] p-4 shadow-[0_14px_40px_rgba(0,0,0,0.22)]">
+                                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                                  <div>
+                                    <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Visual da Missao</p>
+                                    <p className="text-sm text-gray-300 mt-2">
+                                      Alterne entre uma leitura rapida do foco da semana e a versao completa com orientacoes extras.
+                                    </p>
+                                  </div>
 
-                                <p className="text-xs text-gray-400 uppercase font-bold mb-2 text-center mt-6">Missão Prioritária</p>
-                                <p className="italic text-gray-300 mb-8 text-lg text-center border-b border-white/10 pb-6">"{missions[viewAsStudent.station]?.text || "Aguarde orientação..."}"</p>
+                                  <div className="inline-flex rounded-2xl border border-white/10 bg-black/20 p-1">
+                                    <button
+                                      onClick={() => setStudentMissionMode('compact')}
+                                      className={`rounded-2xl px-4 py-2 text-xs font-bold transition-all ${!isStudentMissionDetailed ? 'bg-white text-black shadow-lg' : 'text-gray-300 hover:text-white hover:bg-white/5'}`}
+                                    >
+                                      Modo compacto
+                                    </button>
+                                    <button
+                                      onClick={() => setStudentMissionMode('detailed')}
+                                      className={`rounded-2xl px-4 py-2 text-xs font-bold transition-all ${isStudentMissionDetailed ? 'bg-white text-black shadow-lg' : 'text-gray-300 hover:text-white hover:bg-white/5'}`}
+                                    >
+                                      Modo detalhado
+                                    </button>
+                                  </div>
+                                </div>
+                              </section>
 
-                                {(!viewAsStudent.submission || viewAsStudent.submission.status === 'rejected') && (
-                                    <form onSubmit={handleSubmitActivity}>
-                                        <p className="text-sm text-gray-400 mb-4 text-center">Clique abaixo para avisar o técnico que você enviou a atividade por e-mail.</p>
-                                        <button disabled={isSubmitting} className="w-full bg-blue-600 hover:bg-blue-500 transition-colors text-white font-bold py-3 rounded-lg uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                                            {isSubmitting ? <Loader2 className="animate-spin" size={20}/> : <><Upload size={20} /> Entregar Atividade</>}
-                                        </button>
-                                    </form>
-                                )}
-                                {viewAsStudent.submission && viewAsStudent.submission.status !== 'rejected' && (
-                                    <div className="text-center p-4 bg-white/5 rounded-lg border border-white/10">
-                                        <p className="text-gray-400 text-sm mb-2">Último envio: {viewAsStudent.submission.date}</p>
-                                        <p className="text-white font-bold">"{viewAsStudent.submission.text}"</p>
-                                        {viewAsStudent.submission.fileName !== "Sem arquivo" && <p className="text-blue-400 text-xs mt-2 flex items-center justify-center gap-1"><FileText size={10}/> {viewAsStudent.submission.fileName}</p>}
+                              <section className={`relative overflow-hidden rounded-[30px] border ${studentMissionTone.border} bg-gradient-to-br ${studentMissionTone.bg} p-6 md:p-8 shadow-[0_20px_60px_rgba(0,0,0,0.25)]`}>
+                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.08),transparent_30%)] pointer-events-none"></div>
+                                <div className="relative z-10 grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
+                                  <div>
+                                    <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] ${studentMissionTone.button}`}>
+                                      <Rocket size={12} /> Briefing da Semana
+                                    </span>
+                                    <h3 className="text-3xl font-black text-white mt-4 leading-tight">
+                                      Missao principal em <span className={studentMissionTone.text}>{viewAsStudent.station}</span>
+                                    </h3>
+                                    <p className="text-sm text-gray-300 mt-4 max-w-2xl leading-relaxed">
+                                      Esta e a frente onde voce mais pode ajudar a equipe nesta semana. Foque nesta entrega para aumentar a qualidade tecnica, a clareza da apresentacao e a prontidao competitiva.
+                                    </p>
+
+                                    <div className="rounded-[24px] border border-white/10 bg-black/25 p-5 mt-6">
+                                      <p className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Missao Prioritaria</p>
+                                      <p className="text-xl text-white font-bold italic leading-relaxed mt-3">
+                                        "{studentMissionData?.text || 'Aguarde orientacao da equipe tecnica.'}"
+                                      </p>
                                     </div>
+
+                                    <div className="flex flex-wrap gap-3 mt-6">
+                                      {studentMissionActions.map((action) => (
+                                        <button
+                                          key={action.label}
+                                          onClick={action.onClick}
+                                          className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-xs font-bold transition-all ${action.style}`}
+                                        >
+                                          {action.icon}
+                                          {action.label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {studentMissionCards.map((card) => (
+                                      <div key={card.label} className={`rounded-2xl border p-4 ${card.tone}`}>
+                                        <div className="flex items-center justify-between gap-3">
+                                          <span className="text-[10px] uppercase tracking-[0.18em] font-bold opacity-80">{card.label}</span>
+                                          <span>{card.icon}</span>
+                                        </div>
+                                        <p className="text-xl font-black text-white mt-4 leading-tight">{card.value}</p>
+                                        <p className="text-xs mt-2 opacity-90 leading-relaxed">{card.helper}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </section>
+
+                              <div className={`grid gap-6 ${isStudentMissionDetailed ? 'xl:grid-cols-[1.2fr,0.8fr]' : ''}`}>
+                                <div className="rounded-[28px] border border-white/10 bg-[#12121b] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+                                  <div className={`px-5 py-4 font-bold text-sm flex items-center justify-between gap-3 ${studentSubmissionTone.bar}`}>
+                                    <span className="flex items-center gap-2">{studentSubmissionTone.icon} {studentSubmissionTone.label}</span>
+                                    <span className="text-[10px] uppercase tracking-[0.18em] font-black">Status da entrega</span>
+                                  </div>
+
+                                  <div className="p-5">
+                                    <p className="text-sm text-gray-300 leading-relaxed">{studentSubmissionTone.detail}</p>
+
+                                    {(!viewAsStudent.submission || viewAsStudent.submission.status === 'rejected') && (
+                                      <form onSubmit={handleSubmitActivity} className="mt-5">
+                                        <p className="text-sm text-gray-400 mb-4">
+                                          Quando voce concluir a atividade e enviar pelo canal combinado da equipe, registre aqui para o tecnico validar.
+                                        </p>
+                                        <button disabled={isSubmitting} className="w-full bg-blue-600 hover:bg-blue-500 transition-colors text-white font-bold py-3.5 rounded-2xl uppercase tracking-[0.18em] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-[0_12px_30px_rgba(37,99,235,0.2)]">
+                                          {isSubmitting ? <Loader2 className="animate-spin" size={20}/> : <><Upload size={20} /> Registrar entrega da missao</>}
+                                        </button>
+                                      </form>
+                                    )}
+
+                                    {viewAsStudent.submission && viewAsStudent.submission.status !== 'rejected' && (
+                                      <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
+                                        <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Ultimo envio</p>
+                                        <p className="text-white font-bold mt-3 leading-relaxed">"{viewAsStudent.submission.text}"</p>
+                                        <div className="flex flex-wrap items-center gap-3 mt-4 text-xs text-gray-400">
+                                          <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/20 px-3 py-1">
+                                            <CalendarDays size={12} /> {viewAsStudent.submission.date}
+                                          </span>
+                                          {viewAsStudent.submission.fileName !== "Sem arquivo" && (
+                                            <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-blue-300">
+                                              <FileText size={12}/> {viewAsStudent.submission.fileName}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {isStudentMissionDetailed ? (
+                                  <div className="space-y-6">
+                                    <div className="rounded-[28px] border border-white/10 bg-[#12121b] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+                                      <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+                                        <h4 className="text-white font-bold flex items-center gap-2">
+                                          <Target size={16} className={studentMissionTone.text} /> Direcao da Semana
+                                        </h4>
+                                        <span className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.18em] font-bold ${studentMissionTone.button}`}>
+                                          Foco total
+                                        </span>
+                                      </div>
+                                      <div className="space-y-3 mt-4">
+                                        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                                          <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Prazo oficial</p>
+                                          <p className="text-lg font-black text-white mt-2">{studentMissionDeadlineLabel}</p>
+                                        </div>
+                                        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                                          <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Melhor proximo passo</p>
+                                          <p className="text-sm text-gray-200 mt-2 leading-relaxed">{studentMissionNextStep}</p>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="rounded-[28px] border border-white/10 bg-[#12121b] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+                                      <h4 className="text-white font-bold flex items-center gap-2 border-b border-white/10 pb-3">
+                                        <Sparkles size={16} className="text-yellow-400" /> Mentalidade de Equipe Campea
+                                      </h4>
+                                      <div className="space-y-3 mt-4 text-sm text-gray-300">
+                                        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">Mostre o processo, nao so o resultado final.</div>
+                                        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">Conecte sua entrega com a rubrica e com a estrategia da semana.</div>
+                                        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">Se testar, registre. Se ajustar, explique. Se melhorar, compartilhe.</div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="grid gap-4 sm:grid-cols-2">
+                                    <div className="rounded-[24px] border border-white/10 bg-[#12121b] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+                                      <div className="flex items-center justify-between gap-3">
+                                        <h4 className="text-white font-bold flex items-center gap-2">
+                                          <Target size={16} className={studentMissionTone.text} /> Prazo oficial
+                                        </h4>
+                                        <span className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.18em] font-bold ${studentMissionTone.button}`}>
+                                          Resumo rapido
+                                        </span>
+                                      </div>
+                                      <p className="text-2xl font-black text-white mt-5">{studentMissionDeadlineLabel}</p>
+                                      <p className="text-sm text-gray-400 mt-3 leading-relaxed">
+                                        Use este prazo como meta de entrega da semana para nao perder ritmo no torneio.
+                                      </p>
+                                    </div>
+
+                                    <div className="rounded-[24px] border border-white/10 bg-[#12121b] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+                                      <div className="flex items-center justify-between gap-3">
+                                        <h4 className="text-white font-bold flex items-center gap-2">
+                                          <Sparkles size={16} className="text-yellow-400" /> Melhor proximo passo
+                                        </h4>
+                                        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.18em] font-bold text-gray-300">
+                                          Acao
+                                        </span>
+                                      </div>
+                                      <p className="text-sm text-gray-200 mt-5 leading-relaxed">{studentMissionNextStep}</p>
+                                    </div>
+                                  </div>
                                 )}
+                              </div>
                             </div>
-                        )}
+                          ) : (
+                            <div className="max-w-3xl mx-auto text-center rounded-[32px] border border-white/10 bg-gradient-to-br from-white/10 via-[#171720] to-[#0f1017] p-10 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+                              <div className="w-20 h-20 mx-auto rounded-[24px] border border-white/10 bg-white/5 flex items-center justify-center mb-6">
+                                <Rocket size={34} className="text-white" />
+                              </div>
+                              <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Minha Missao</p>
+                              <h3 className="text-3xl font-black text-white mt-4">Sua frente ainda esta sendo organizada.</h3>
+                              <p className="text-sm text-gray-400 mt-4 leading-relaxed">
+                                Assim que a equipe tecnica definir a estacao da semana, este painel vai mostrar sua missao prioritaria, prazo, status e as acoes para entrega.
+                              </p>
+                              <button onClick={() => setStudentTab('agenda')} className="mt-6 inline-flex items-center gap-2 rounded-2xl border border-indigo-500/20 bg-indigo-500/10 px-4 py-3 text-xs font-bold text-indigo-200 hover:bg-indigo-500 hover:text-white transition-all">
+                                <CalendarDays size={14} /> Ver agenda da equipe
+                              </button>
+                            </div>
+                          )}
                         </>
                     )}
 
@@ -6268,6 +6958,7 @@ const handleFileSelect = (e) => {
                     {studentTab === 'kanban' && <div className="text-left"><KanbanView /></div>}
                     {studentTab === 'logbook' && <div className="text-left"><LogbookView /></div>}
                     {studentTab === 'agenda' && <div className="text-left"><AgendaView /></div>}
+                  </WorkspaceScene>
                 </div>
             </div>
           </div>
