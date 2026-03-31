@@ -1076,6 +1076,23 @@ function App() {
   const deleteStudent = (id) => { setStudents(prev => prev.filter(s => s.id !== id)); }
 
   // --- FUNÇÕES DO KANBAN (TAREFAS) ---
+  const createKanbanTask = async ({ text, dueDate = '', tag = 'geral', priority = 'normal', author, ...extraData }) => {
+      if (!text) return;
+
+      const resolvedAuthor = author || (isAdmin ? "Técnico" : (viewAsStudent?.name || "Equipe"));
+
+      await addDoc(collection(db, "tasks"), {
+          text,
+          status: 'todo',
+          createdAt: new Date().toISOString(),
+          author: resolvedAuthor,
+          dueDate,
+          tag,
+          priority,
+          ...extraData
+      });
+  };
+
   const handleAddTask = async (e) => {
       e.preventDefault();
       const text = e.target.taskText.value;
@@ -1083,24 +1100,66 @@ function App() {
       const tag = e.target.taskTag ? e.target.taskTag.value : 'geral';
       const priority = e.target.taskPriority ? e.target.taskPriority.value : 'normal';
       if(!text) return;
-      
-      const author = isAdmin ? "Técnico" : (viewAsStudent?.name || "Equipe");
 
       try {
-          await addDoc(collection(db, "tasks"), {
+          await createKanbanTask({
               text,
-              status: 'todo', // todo, doing, done
-              createdAt: new Date().toISOString(),
-              author: author,
               dueDate: date,
-              tag: tag,
-              priority: priority
+              tag,
+              priority
           });
           e.target.reset();
       } catch (error) {
           console.error("Erro ao criar tarefa:", error);
       }
   }
+
+  const handleCreateRubricWeeklyTasks = async (suggestions) => {
+      if (!Array.isArray(suggestions) || suggestions.length === 0) {
+          showNotification("Nao ha acoes semanais prontas para enviar ao Kanban.", "error");
+          return;
+      }
+
+      const activePlanKeys = new Set(
+          tasks
+              .filter((task) => task.status !== 'done' && task.rubricPlanKey)
+              .map((task) => task.rubricPlanKey)
+      );
+
+      const suggestionsToCreate = suggestions.filter((suggestion) => !activePlanKeys.has(suggestion.rubricPlanKey));
+
+      if (suggestionsToCreate.length === 0) {
+          showNotification("Essas acoes da rubrica ja estao no Kanban desta semana.", "error");
+          return;
+      }
+
+      try {
+          await Promise.all(
+              suggestionsToCreate.map((suggestion) => createKanbanTask({
+                  text: suggestion.text,
+                  dueDate: suggestion.dueDate || currentWeekData?.endDate || today,
+                  tag: suggestion.tag || 'geral',
+                  priority: suggestion.priority || 'alta',
+                  rubricPlanKey: suggestion.rubricPlanKey,
+                  rubricArea: suggestion.rubricArea,
+                  rubricCriterion: suggestion.rubricCriterion,
+                  rubricTargetScore: suggestion.targetScore,
+                  source: 'rubric_weekly_plan',
+                  weekName: currentWeekData?.weekName || 'Semana atual'
+              }))
+          );
+
+          showNotification(
+              suggestionsToCreate.length === 1
+                  ? "Acao semanal enviada para o Kanban!"
+                  : `${suggestionsToCreate.length} acoes semanais enviadas para o Kanban!`,
+              "success"
+          );
+      } catch (error) {
+          console.error("Erro ao criar tarefas da rubrica:", error);
+          showNotification("Erro ao enviar plano semanal para o Kanban.", "error");
+      }
+  };
 
   // --- FUNÇÕES DA GARRA / ANEXO ---
   const handleAttachmentSubmit = async (e) => { 
@@ -4022,6 +4081,10 @@ const handleFileSelect = (e) => {
   // --- COMPONENTE KANBAN (REUTILIZÁVEL) ---
   const KanbanView = () => {
       const [searchTerm, setSearchTerm] = useState("");
+      const [kanbanLayout, setKanbanLayout] = useState('swimlanes');
+      const [activeTagFilter, setActiveTagFilter] = useState('all');
+      const [activeOwnerFilter, setActiveOwnerFilter] = useState('all');
+      const [focusFilter, setFocusFilter] = useState('all');
       const [showAllTodo, setShowAllTodo] = useState(false);
       const [showAllDoing, setShowAllDoing] = useState(false);
       const [showAllReview, setShowAllReview] = useState(false);
@@ -4076,6 +4139,22 @@ const handleFileSelect = (e) => {
           { id: 'geral', label: 'Geral', color: 'bg-gray-500/10 text-gray-400 border-gray-500/20' }
       ];
 
+      const focusOptions = isAdmin
+          ? [
+              { id: 'all', label: 'Tudo', icon: <BarChart3 size={12} /> },
+              { id: 'priority', label: 'Prioritarias', icon: <Zap size={12} /> },
+              { id: 'overdue', label: 'Atrasadas', icon: <AlertTriangle size={12} /> },
+              { id: 'unassigned', label: 'Sem dono', icon: <Users size={12} /> }
+          ]
+          : [
+              { id: 'all', label: 'Tudo', icon: <BarChart3 size={12} /> },
+              { id: 'mine', label: 'Minhas', icon: <Target size={12} /> },
+              { id: 'priority', label: 'Prioritarias', icon: <Zap size={12} /> },
+              { id: 'overdue', label: 'Atrasadas', icon: <AlertTriangle size={12} /> }
+          ];
+
+      const priorityRank = { urgente: 4, alta: 3, normal: 2, baixa: 1 };
+
       const getDeadlineStatus = (date) => {
           if (!date) return null;
           const today = new Date();
@@ -4111,13 +4190,66 @@ const handleFileSelect = (e) => {
           return `${diffDays}d ${diffHours % 24}h`;
       };
 
-      const TaskCard = ({ t, showMoveRight, showMoveLeft, showDelete }) => {
+      const getTaskAgeLabel = (createdAt) => {
+          if (!createdAt) return 'agora';
+
+          const createdTime = new Date(createdAt).getTime();
+          const diffMs = Date.now() - createdTime;
+          const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+
+          if (diffMinutes < 60) return `${diffMinutes} min`;
+
+          const diffHours = Math.floor(diffMinutes / 60);
+          if (diffHours < 24) return `${diffHours}h`;
+
+          const diffDays = Math.floor(diffHours / 24);
+          return `${diffDays}d`;
+      };
+
+      const isTaskOverdue = (task) => task.status !== 'done' && task.dueDate && task.dueDate < localTodayStr;
+      const isTaskPriority = (task) => task.status !== 'done' && ['urgente', 'alta'].includes(task.priority);
+
+      const getStageProgress = (status) => {
+          if (status === 'todo') return 22;
+          if (status === 'doing') return 56;
+          if (status === 'review') return 82;
+          if (status === 'done') return 100;
+          return 0;
+      };
+
+      const sortOpenTasks = (a, b) => {
+          const overdueDiff = Number(isTaskOverdue(b)) - Number(isTaskOverdue(a));
+          if (overdueDiff !== 0) return overdueDiff;
+
+          const priorityDiff = (priorityRank[b.priority] || 0) - (priorityRank[a.priority] || 0);
+          if (priorityDiff !== 0) return priorityDiff;
+
+          const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+          const bDue = b.dueDate ? new Date(b.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+          if (aDue !== bDue) return aDue - bDue;
+
+          return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+      };
+
+      const ownerOptions = [
+          { value: 'all', label: 'Todos os responsaveis' },
+          { value: 'unassigned', label: 'Equipe (livre)' },
+          { value: 'Técnico', label: 'Tecnico' },
+          ...[...students]
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((student) => ({ value: student.name, label: student.name }))
+      ].filter((option, index, arr) => arr.findIndex((item) => item.value === option.value) === index);
+
+      const TaskCard = ({ t, showMoveRight, showMoveLeft, showDelete, cardIndex = 0, laneIndex = 0, columnIndex = 0 }) => {
           const status = getDeadlineStatus(t.dueDate);
           const tagObj = KANBAN_TAGS.find(tag => tag.id === (t.tag || 'geral')) || KANBAN_TAGS[3];
 
           // Só pisca se estiver atrasado e ainda não foi concluída
           const isPulsing = status?.isOverdue && t.status !== 'done';
           const duration = t.status === 'done' ? getTaskDuration(t.createdAt, t.completedAt) : null;
+          const ageLabel = getTaskAgeLabel(t.createdAt);
+          const stageProgress = getStageProgress(t.status);
+          const cardEntranceClass = isPulsing ? '' : 'animate-in fade-in slide-in-from-bottom-2';
 
           // Lógica de exibição de autores
           const authors = t.author ? t.author.split(',').map(a => a.trim()) : [];
@@ -4149,12 +4281,15 @@ const handleFileSelect = (e) => {
               );
           };
 
+          const entranceDelay = Math.min((columnIndex * 110) + (laneIndex * 70) + (cardIndex * 45), 420);
+
           return (
               <div 
                   draggable
                   onDragStart={(e) => handleDragStart(e, t.id)}
                   onDragEnd={handleDragEnd}
-                  className={`bg-black/40 p-3 rounded-xl border flex flex-col gap-2 group transition-all duration-500 cursor-grab active:cursor-grabbing ${status && t.status !== 'done' ? status.border : 'border-white/5'} ${isPulsing ? 'animate-pulse hover:animate-none shadow-[0_0_15px_rgba(239,68,68,0.15)]' : 'hover:border-white/20'}`}
+                  className={`bg-black/40 p-3 rounded-xl border flex flex-col gap-2 group cursor-grab active:cursor-grabbing ${cardEntranceClass} transition-[transform,box-shadow,border-color,background-color,opacity] duration-500 ease-out will-change-transform motion-reduce:animate-none motion-reduce:transition-none hover:-translate-y-1 hover:shadow-[0_16px_32px_rgba(15,23,42,0.28)] ${status && t.status !== 'done' ? status.border : 'border-white/5'} ${isPulsing ? 'animate-pulse hover:animate-none shadow-[0_0_15px_rgba(239,68,68,0.15)]' : 'hover:border-white/20'}`}
+                  style={cardEntranceClass ? { animationDelay: `${entranceDelay}ms`, animationFillMode: 'both' } : undefined}
               >
                   <div className="flex justify-between items-start gap-2">
                       <div className="flex flex-wrap gap-1.5">
@@ -4168,7 +4303,7 @@ const handleFileSelect = (e) => {
                                       title={t.author || "Atribuir tarefa"}
                                   >
                                       <option value="" className="bg-zinc-900 text-gray-400">Equipe (Livre)</option>
-                                      {students.sort((a,b) => a.name.localeCompare(b.name)).map(s => (
+                                      {[...students].sort((a,b) => a.name.localeCompare(b.name)).map(s => (
                                           <option key={s.id} value={s.name} className="bg-zinc-900 text-white">{s.name}</option>
                                       ))}
                                   </select>
@@ -4205,7 +4340,30 @@ const handleFileSelect = (e) => {
                           </div>
                       </div>
                   ) : (
-                      <p className="text-sm text-gray-200">{t.text}</p>
+                      <>
+                          <p className="text-sm text-gray-200 leading-relaxed">{t.text}</p>
+                          <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/5">
+                                  <Clock size={10}/> criada ha {ageLabel}
+                              </span>
+                              {!t.dueDate && t.status !== 'done' && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/5">
+                                      <Calendar size={10}/> sem prazo
+                                  </span>
+                              )}
+                              {authors.length > 1 && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/5">
+                                      <Users size={10}/> {authors.length} pessoas
+                                  </span>
+                              )}
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-white/5 overflow-hidden">
+                              <div
+                                  className={`h-full rounded-full transition-all duration-500 ${t.status === 'done' ? 'bg-green-500' : t.status === 'review' ? 'bg-purple-500' : t.status === 'doing' ? 'bg-blue-500' : 'bg-gray-500'}`}
+                                  style={{ width: `${stageProgress}%` }}
+                              ></div>
+                          </div>
+                      </>
                   )}
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-between pt-2 border-t border-white/5 mt-1">
                       <div className="flex gap-1 flex-wrap">
@@ -4241,160 +4399,572 @@ const handleFileSelect = (e) => {
       };
 
       // Lógica de Filtro e Ordenação
-      const filteredTasks = tasks.filter(t => 
-          t.text.toLowerCase().includes(searchTerm.toLowerCase()) || 
-          (t.author && t.author.toLowerCase().includes(searchTerm.toLowerCase())) ||
-          (t.tag && t.tag.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
+      const filteredTasks = tasks.filter((task) => {
+          const matchesSearch = !searchTerm ||
+              task.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              (task.author && task.author.toLowerCase().includes(searchTerm.toLowerCase())) ||
+              (task.tag && task.tag.toLowerCase().includes(searchTerm.toLowerCase()));
+
+          const matchesTag = activeTagFilter === 'all' || (task.tag || 'geral') === activeTagFilter;
+
+          const authors = task.author ? task.author.split(',').map((author) => author.trim()) : [];
+          const matchesOwner = activeOwnerFilter === 'all'
+              || (activeOwnerFilter === 'unassigned' && authors.length === 0)
+              || authors.includes(activeOwnerFilter);
+
+          const matchesFocus = focusFilter === 'all'
+              || (focusFilter === 'mine' && viewAsStudent?.name && authors.includes(viewAsStudent.name))
+              || (focusFilter === 'priority' && isTaskPriority(task))
+              || (focusFilter === 'overdue' && isTaskOverdue(task))
+              || (focusFilter === 'unassigned' && authors.length === 0);
+
+          return matchesSearch && matchesTag && matchesOwner && matchesFocus;
+      });
 
       const todoTasks = filteredTasks.filter(t => t.status === 'todo')
-          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+          .sort(sortOpenTasks);
       const doingTasks = filteredTasks.filter(t => t.status === 'doing')
-          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+          .sort(sortOpenTasks);
       const reviewTasks = filteredTasks.filter(t => t.status === 'review')
-          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+          .sort(sortOpenTasks);
       
       // Ordena Feitos: Mais recentes primeiro
       const doneTasks = filteredTasks.filter(t => t.status === 'done')
           .sort((a, b) => new Date(b.completedAt || b.createdAt) - new Date(a.completedAt || a.createdAt));
 
-      const displayedTodoTasks = (showAllTodo || searchTerm !== "") ? todoTasks : todoTasks.slice(0, 10);
-      const displayedDoingTasks = (showAllDoing || searchTerm !== "") ? doingTasks : doingTasks.slice(0, 10);
-      const displayedReviewTasks = (showAllReview || searchTerm !== "") ? reviewTasks : reviewTasks.slice(0, 10);
+      const hasActiveFilters = Boolean(searchTerm) || activeTagFilter !== 'all' || activeOwnerFilter !== 'all' || focusFilter !== 'all';
 
-      const displayedDoneTasks = (showAllDone || searchTerm !== "") ? doneTasks : doneTasks.slice(0, 10);
+      const displayedTodoTasks = (showAllTodo || hasActiveFilters) ? todoTasks : todoTasks.slice(0, 10);
+      const displayedDoingTasks = (showAllDoing || hasActiveFilters) ? doingTasks : doingTasks.slice(0, 10);
+      const displayedReviewTasks = (showAllReview || hasActiveFilters) ? reviewTasks : reviewTasks.slice(0, 10);
+      const displayedDoneTasks = (showAllDone || hasActiveFilters) ? doneTasks : doneTasks.slice(0, 10);
+
+      const activeTasksCount = filteredTasks.filter((task) => task.status !== 'done').length;
+      const overdueFilteredCount = filteredTasks.filter((task) => isTaskOverdue(task)).length;
+      const priorityFilteredCount = filteredTasks.filter((task) => isTaskPriority(task)).length;
+      const doneLast7Days = tasks.filter((task) => {
+          if (task.status !== 'done' || !task.completedAt) return false;
+          const completedTime = new Date(task.completedAt).getTime();
+          return Date.now() - completedTime <= (7 * 24 * 60 * 60 * 1000);
+      }).length;
+
+      const boardMessage = overdueFilteredCount > 0
+          ? 'Hoje o foco deve ser limpar atrasos antes de puxar novas frentes.'
+          : reviewTasks.length > 0
+              ? 'Ha entregas aguardando validacao tecnica em Em Revisao.'
+              : activeTasksCount === 0
+                  ? 'Quadro limpo. Hora de criar a proxima meta da equipe.'
+                  : 'Fluxo saudavel: mantenham as tarefas pequenas, claras e com dono definido.';
+
+      const boardStats = [
+          { label: 'Abertas', value: activeTasksCount, helper: 'tarefas ativas na visao atual', icon: <ListTodo size={16} />, tone: 'text-white border-white/10 bg-white/5' },
+          { label: 'Atrasadas', value: overdueFilteredCount, helper: 'pedem acao imediata', icon: <AlertTriangle size={16} />, tone: 'text-red-400 border-red-500/20 bg-red-500/10' },
+          { label: 'Em Revisao', value: reviewTasks.length, helper: 'esperando aprovacao', icon: <Target size={16} />, tone: 'text-purple-400 border-purple-500/20 bg-purple-500/10' },
+          { label: 'Entregues 7d', value: doneLast7Days, helper: 'ritmo recente da equipe', icon: <CheckCircle size={16} />, tone: 'text-green-400 border-green-500/20 bg-green-500/10' }
+      ];
+
+      const defaultWeekStart = new Date(localTodayObj);
+      defaultWeekStart.setDate(defaultWeekStart.getDate() - 6);
+      const currentWeekStart = currentWeekData?.startDate || getLocalYYYYMMDD(defaultWeekStart);
+      const currentWeekEnd = currentWeekData?.endDate || localTodayStr;
+      const tasksThisWeek = tasks.filter((task) => {
+          const referenceDate = task.dueDate || getLocalYYYYMMDD(new Date(task.createdAt || Date.now()));
+          return referenceDate >= currentWeekStart && referenceDate <= currentWeekEnd;
+      });
+      const completedThisWeek = tasksThisWeek.filter((task) => task.status === 'done').length;
+      const weeklyGoalProgress = tasksThisWeek.length > 0 ? Math.round((completedThisWeek / tasksThisWeek.length) * 100) : 0;
+      const avgThroughput = tasksThisWeek.length > 0 ? (completedThisWeek / Math.max(1, 7)).toFixed(1) : '0.0';
+      const weeklyUnassignedCount = tasksThisWeek.filter((task) => !task.author).length;
+      const weeklyReviewCount = tasksThisWeek.filter((task) => task.status === 'review').length;
+      const weeklyBacklogCount = tasksThisWeek.filter((task) => task.status !== 'done').length;
+
+      const tacticalAlerts = [
+          overdueFilteredCount > 0 && {
+              title: `${overdueFilteredCount} tarefas atrasadas`,
+              detail: 'Priorize o que ja passou do prazo antes de abrir novas frentes.',
+              tone: 'border-red-500/20 bg-red-500/10 text-red-400',
+              icon: <AlertTriangle size={16} />
+          },
+          reviewTasks.length > 0 && {
+              title: `${reviewTasks.length} tarefas em revisao`,
+              detail: 'Ha entregas esperando aprovacao tecnica para virar resultado.',
+              tone: 'border-purple-500/20 bg-purple-500/10 text-purple-300',
+              icon: <Search size={16} />
+          },
+          filteredTasks.filter((task) => !task.author && task.status !== 'done').length > 0 && {
+              title: `${filteredTasks.filter((task) => !task.author && task.status !== 'done').length} tarefas sem dono`,
+              detail: 'Distribuam responsabilidades para evitar tarefa esquecida.',
+              tone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-300',
+              icon: <Users size={16} />
+          },
+          doingTasks.length >= 6 && {
+              title: 'Execucao muito espalhada',
+              detail: 'Reduzam o WIP para acelerar entrega e aprovacao.',
+              tone: 'border-orange-500/20 bg-orange-500/10 text-orange-300',
+              icon: <Zap size={16} />
+          }
+      ].filter(Boolean).slice(0, 3);
+
+      const studentTasksThisWeek = !isAdmin && viewAsStudent?.name
+          ? tasksThisWeek
+              .filter((task) => task.author && task.author.includes(viewAsStudent.name))
+              .sort((a, b) => {
+                  if (a.status === 'done' && b.status !== 'done') return 1;
+                  if (a.status !== 'done' && b.status === 'done') return -1;
+                  return sortOpenTasks(a, b);
+              })
+          : [];
+
+      const studentTaskSummary = {
+          total: studentTasksThisWeek.length,
+          done: studentTasksThisWeek.filter((task) => task.status === 'done').length,
+          review: studentTasksThisWeek.filter((task) => task.status === 'review').length,
+          overdue: studentTasksThisWeek.filter((task) => isTaskOverdue(task)).length
+      };
+
+      const getColumnSignal = (columnId, total) => {
+          if (columnId === 'todo' && total >= 10) return { label: 'Backlog alto', tone: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20' };
+          if (columnId === 'doing' && total >= 6) return { label: 'WIP alto', tone: 'text-orange-400 bg-orange-500/10 border-orange-500/20' };
+          if (columnId === 'review' && total >= 3) return { label: 'Aprovar', tone: 'text-purple-300 bg-purple-500/10 border-purple-500/20' };
+          if (columnId === 'done' && total >= 6) return { label: 'Bom ritmo', tone: 'text-green-400 bg-green-500/10 border-green-500/20' };
+          return null;
+      };
+
+      const buildLaneGroups = (taskList) => {
+          if (activeTagFilter !== 'all') {
+              const selectedTag = KANBAN_TAGS.find((tag) => tag.id === activeTagFilter) || KANBAN_TAGS[3];
+              return [{ ...selectedTag, tasks: taskList, compact: false }];
+          }
+
+          if (kanbanLayout === 'compact') {
+              return [{ id: 'all', label: 'Quadro compacto', color: 'bg-white/5 text-gray-300 border-white/10', tasks: taskList, compact: true }];
+          }
+
+          return KANBAN_TAGS.map((tag) => ({
+              ...tag,
+              tasks: taskList.filter((task) => (task.tag || 'geral') === tag.id),
+              compact: false
+          })).filter((lane) => lane.tasks.length > 0);
+      };
+
+      const columnConfigs = [
+          {
+              id: 'todo',
+              title: 'A Fazer',
+              subtitle: 'planejamento e prioridade',
+              icon: <ListTodo size={16} />,
+              total: todoTasks.length,
+              tasks: displayedTodoTasks,
+              showAll: showAllTodo,
+              setShowAll: setShowAllTodo,
+              moveLeft: null,
+              moveRight: 'doing',
+              accent: draggedOverCol === 'todo'
+                  ? 'bg-[#1a1a2a] border-white/40 shadow-lg'
+                  : 'bg-[#151520] border-white/10',
+              heading: 'text-gray-300 border-white/5',
+              moreTone: 'bg-white/5 hover:bg-white/10 text-gray-300 border-white/10',
+              emptyText: 'Crie ou priorize a proxima entrega da equipe.'
+          },
+          {
+              id: 'doing',
+              title: 'Fazendo',
+              subtitle: 'execucao em andamento',
+              icon: <Loader2 size={16} className="animate-spin" />,
+              total: doingTasks.length,
+              tasks: displayedDoingTasks,
+              showAll: showAllDoing,
+              setShowAll: setShowAllDoing,
+              moveLeft: null,
+              moveRight: 'review',
+              accent: draggedOverCol === 'doing'
+                  ? 'bg-blue-500/10 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.2)]'
+                  : 'bg-blue-500/5 border-blue-500/20',
+              heading: 'text-blue-400 border-blue-500/10',
+              moreTone: 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/20',
+              emptyText: 'Nenhuma tarefa em execucao agora.'
+          },
+          {
+              id: 'review',
+              title: 'Em Revisao',
+              subtitle: 'validacao antes de concluir',
+              icon: <Search size={16} />,
+              total: reviewTasks.length,
+              tasks: displayedReviewTasks,
+              showAll: showAllReview,
+              setShowAll: setShowAllReview,
+              moveLeft: isAdmin ? 'doing' : null,
+              moveRight: isAdmin ? 'done' : null,
+              accent: draggedOverCol === 'review'
+                  ? 'bg-purple-500/10 border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.2)]'
+                  : 'bg-purple-500/5 border-purple-500/20',
+              heading: 'text-purple-400 border-purple-500/10',
+              moreTone: 'bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border-purple-500/20',
+              emptyText: 'Quando uma entrega estiver pronta, ela aparece aqui.'
+          },
+          {
+              id: 'done',
+              title: 'Feito',
+              subtitle: 'entregas aprovadas e registradas',
+              icon: <CheckCircle size={16} />,
+              total: doneTasks.length,
+              tasks: displayedDoneTasks,
+              showAll: showAllDone,
+              setShowAll: setShowAllDone,
+              moveLeft: null,
+              moveRight: null,
+              accent: draggedOverCol === 'done'
+                  ? 'bg-green-500/10 border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.2)]'
+                  : 'bg-green-500/5 border-green-500/20',
+              heading: 'text-green-500 border-green-500/10',
+              moreTone: 'bg-green-500/10 hover:bg-green-500/20 text-green-500 border-green-500/20',
+              emptyText: 'As entregas concluidas aparecerao aqui.'
+          }
+      ];
 
       return (
       <div className="animate-in fade-in duration-500 flex flex-col h-full">
-          {/* BARRA DE BUSCA KANBAN */}
-          <div className="mb-6 relative">
-              <Search size={18} className="absolute left-4 top-3.5 text-gray-500" />
-              <input 
-                  type="text"
-                  placeholder="Buscar tarefas por nome, tag ou responsável..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-[#151520] border border-white/10 rounded-xl p-3 pl-12 text-white focus:border-orange-500 outline-none transition-all"
-              />
+          <div className="grid xl:grid-cols-[1.35fr,0.65fr] gap-6 mb-6">
+              <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[#151520] shadow-2xl">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(249,115,22,0.16),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.16),transparent_35%)]"></div>
+                  <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)', backgroundSize: '28px 28px' }}></div>
+                  <div className="relative p-6 md:p-8">
+                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-orange-500/20 bg-orange-500/10 text-orange-400 text-[10px] font-bold uppercase tracking-[0.24em]">
+                          <Flag size={12} /> Kanban da Temporada
+                      </div>
+                      <h2 className="text-3xl md:text-4xl font-black text-white mt-4 leading-tight">Fluxo tatico para transformar ideia em entrega de campeonato.</h2>
+                      <p className="text-sm text-gray-300 mt-3 max-w-3xl">{boardMessage}</p>
+
+                      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-6">
+                          {boardStats.map((stat) => (
+                              <div key={stat.label} className={`rounded-2xl border p-4 ${stat.tone}`}>
+                                  <div className="flex items-center justify-between">
+                                      <span className="text-[10px] uppercase tracking-[0.18em] font-bold text-gray-300">{stat.label}</span>
+                                      <span>{stat.icon}</span>
+                                  </div>
+                                  <div className="text-2xl font-black text-white mt-3">{stat.value}</div>
+                                  <p className="text-xs text-gray-300 mt-1">{stat.helper}</p>
+                              </div>
+                          ))}
+                      </div>
+
+                      <div className="mt-6 relative">
+                          <Search size={18} className="absolute left-4 top-3.5 text-gray-500" />
+                          <input
+                              type="text"
+                              placeholder="Buscar tarefas por nome, tag ou responsavel..."
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              className="w-full bg-black/30 border border-white/10 rounded-xl p-3 pl-12 text-white focus:border-orange-500 outline-none transition-all"
+                          />
+                      </div>
+                  </div>
+              </div>
+
+              <div className="rounded-[28px] border border-white/10 bg-[#151520] p-6 shadow-2xl">
+                  <div className="flex items-start justify-between gap-3">
+                      <div>
+                          <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Filtros Taticos</p>
+                          <h3 className="text-white font-black text-2xl mt-2">Visao atual do quadro</h3>
+                      </div>
+                      {hasActiveFilters && (
+                          <button
+                              onClick={() => {
+                                  setSearchTerm('');
+                                  setActiveTagFilter('all');
+                                  setActiveOwnerFilter('all');
+                                  setFocusFilter('all');
+                              }}
+                              className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-bold text-white transition-colors"
+                          >
+                              <X size={12} /> Limpar
+                          </button>
+                      )}
+                  </div>
+
+                  <div className="mt-5">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold mb-2">Foco rapido</p>
+                      <div className="flex flex-wrap gap-2">
+                          {focusOptions.map((option) => (
+                              <button
+                                  key={option.id}
+                                  onClick={() => setFocusFilter(option.id)}
+                                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${focusFilter === option.id ? 'bg-orange-500 text-black border-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.2)]' : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'}`}
+                              >
+                                  {option.icon} {option.label}
+                              </button>
+                          ))}
+                      </div>
+                  </div>
+
+                  <div className="mt-5">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold mb-2">Modo do quadro</p>
+                      <div className="grid grid-cols-2 gap-2">
+                          <button
+                              onClick={() => setKanbanLayout('swimlanes')}
+                              className={`px-3 py-3 rounded-xl border text-xs font-bold transition-all ${kanbanLayout === 'swimlanes' ? 'bg-orange-500 text-black border-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.2)]' : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'}`}
+                          >
+                              Swimlanes
+                          </button>
+                          <button
+                              onClick={() => setKanbanLayout('compact')}
+                              className={`px-3 py-3 rounded-xl border text-xs font-bold transition-all ${kanbanLayout === 'compact' ? 'bg-white text-black border-white shadow-lg' : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'}`}
+                          >
+                              Compacto
+                          </button>
+                      </div>
+                  </div>
+
+                  <div className="mt-5">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold mb-2">Area</p>
+                      <div className="flex flex-wrap gap-2">
+                          <button
+                              onClick={() => setActiveTagFilter('all')}
+                              className={`px-3 py-2 rounded-xl border text-xs font-bold transition-all ${activeTagFilter === 'all' ? 'bg-white text-black border-white shadow-lg' : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'}`}
+                          >
+                              Todas
+                          </button>
+                          {KANBAN_TAGS.map((tag) => (
+                              <button
+                                  key={tag.id}
+                                  onClick={() => setActiveTagFilter(tag.id)}
+                                  className={`px-3 py-2 rounded-xl border text-xs font-bold transition-all ${activeTagFilter === tag.id ? tag.color : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'}`}
+                              >
+                                  {tag.label}
+                              </button>
+                          ))}
+                      </div>
+                  </div>
+
+                  <div className="mt-5">
+                      <label className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold mb-2 block">Responsavel</label>
+                      <select
+                          value={activeOwnerFilter}
+                          onChange={(e) => setActiveOwnerFilter(e.target.value)}
+                          className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-orange-500 outline-none"
+                      >
+                          {ownerOptions.map((option) => (
+                              <option key={option.value} value={option.value} className="bg-zinc-900 text-white">
+                                  {option.label}
+                              </option>
+                          ))}
+                      </select>
+                  </div>
+
+                  <div className="mt-5 rounded-2xl border border-white/10 bg-black/30 p-4">
+                      <div className="flex items-center gap-2 text-sm font-bold text-white">
+                          <Target size={14} className="text-orange-400" /> Leitura rapida
+                      </div>
+                      <p className="text-xs text-gray-400 mt-2">Prioritarias: {priorityFilteredCount} · Atrasadas: {overdueFilteredCount} · Em execucao/revisao: {doingTasks.length + reviewTasks.length}</p>
+                  </div>
+
+                  <div className="mt-5 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                          <div>
+                              <p className="text-[10px] uppercase tracking-[0.18em] text-cyan-300 font-bold">Dashboard Semanal</p>
+                              <p className="text-sm font-bold text-white mt-1">{currentWeekData?.weekName || 'Semana atual'}</p>
+                          </div>
+                          <div className="text-right">
+                              <p className="text-2xl font-black text-white">{weeklyGoalProgress}%</p>
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500">meta concluida</p>
+                          </div>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-black/40 overflow-hidden mt-4">
+                          <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-blue-500 to-emerald-400" style={{ width: `${weeklyGoalProgress}%` }}></div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3 mt-4 text-center">
+                          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                              <p className="text-lg font-black text-white">{tasksThisWeek.length}</p>
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 mt-1">metas</p>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                              <p className="text-lg font-black text-white">{avgThroughput}</p>
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 mt-1">throughput/dia</p>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                              <p className="text-lg font-black text-white">{completedThisWeek}</p>
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 mt-1">entregues</p>
+                          </div>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-3">Backlog da semana: {weeklyBacklogCount} · Em revisao: {weeklyReviewCount} · Sem dono: {weeklyUnassignedCount}</p>
+                  </div>
+              </div>
           </div>
 
-          <div className="flex overflow-x-auto snap-x md:grid md:grid-cols-4 gap-6 flex-1 min-h-[600px] pb-4 custom-scrollbar">
-              
-              {/* COLUNA 1: A FAZER */}
-              <div 
-                  className={`shrink-0 w-[85vw] md:w-auto snap-center rounded-2xl p-4 flex flex-col transition-all duration-300 border ${draggedOverCol === 'todo' ? 'bg-[#1a1a2a] border-white/40 shadow-lg' : 'bg-[#151520] border-white/10'}`}
-                  onDragOver={(e) => handleDragOver(e, 'todo')}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, 'todo')}
-              >
-                  <h3 className="text-gray-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-white/5 pb-2"><ListTodo size={16}/> A Fazer ({todoTasks.length})</h3>
-                  <form onSubmit={handleAddTask} className="mb-4 space-y-2">
-                      <input name="taskText" placeholder="+ Nova Tarefa..." className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-orange-500 outline-none transition-all" />
-                      <div className="flex gap-2">
-                          <select name="taskTag" className="bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-400 focus:border-orange-500 outline-none w-1/4">
-                              <option value="engenharia">Engenharia</option>
-                              <option value="inovacao">Inovação</option>
-                              <option value="gestao">Gestão</option>
-                              <option value="geral">Geral</option>
-                          </select>
-                          <select name="taskPriority" className="bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-400 focus:border-orange-500 outline-none w-1/4" title="Prioridade">
-                              <option value="normal">Normal</option>
-                              <option value="baixa">Baixa</option>
-                              <option value="alta">Alta</option>
-                              <option value="urgente">Urgente 🔥</option>
-                          </select>
-                          <input type="date" name="taskDate" className="bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-400 focus:border-orange-500 outline-none w-1/4" title="Prazo"/>
-                          <button className="flex-1 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-bold uppercase">Add</button>
+          {tacticalAlerts.length > 0 && (
+              <div className="grid lg:grid-cols-3 gap-4 mb-6">
+                  {tacticalAlerts.map((alert) => (
+                      <div key={alert.title} className={`rounded-2xl border p-4 ${alert.tone}`}>
+                          <div className="flex items-center gap-2 text-sm font-bold">
+                              {alert.icon} {alert.title}
+                          </div>
+                          <p className="text-xs text-gray-200 mt-2 leading-relaxed">{alert.detail}</p>
                       </div>
-                  </form>
-                  <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                      {displayedTodoTasks.map(t => <TaskCard key={t.id} t={t} showMoveRight="doing" showDelete={true} />)}
-                      {todoTasks.length === 0 && searchTerm && <p className="text-xs text-gray-500 text-center mt-4">Nenhuma tarefa encontrada.</p>}
-                      
-                      {!showAllTodo && !searchTerm && todoTasks.length > 10 && (
-                          <button onClick={() => setShowAllTodo(true)} className="w-full py-2 mt-2 bg-white/5 hover:bg-white/10 text-gray-400 border border-white/10 rounded-xl text-xs font-bold transition-colors">
-                              Ver mais {todoTasks.length - 10} tarefas...
-                          </button>
-                      )}
-                      {showAllTodo && !searchTerm && todoTasks.length > 10 && (
-                          <button onClick={() => setShowAllTodo(false)} className="w-full py-2 mt-2 bg-black/40 hover:bg-white/5 text-gray-500 border border-white/5 rounded-xl text-xs font-bold transition-colors">
-                              Ocultar tarefas
-                          </button>
-                      )}
-                  </div>
+                  ))}
               </div>
+          )}
 
-              {/* COLUNA 2: FAZENDO */}
-              <div 
-                  className={`shrink-0 w-[85vw] md:w-auto snap-center rounded-2xl p-4 flex flex-col transition-all duration-300 border ${draggedOverCol === 'doing' ? 'bg-blue-500/10 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'bg-blue-500/5 border-blue-500/20'}`}
-                  onDragOver={(e) => handleDragOver(e, 'doing')}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, 'doing')}
-              >
-                  <h3 className="text-blue-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-blue-500/10 pb-2"><Loader2 size={16} className="animate-spin"/> Fazendo ({doingTasks.length})</h3>
-                  <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                      {displayedDoingTasks.map(t => <TaskCard key={t.id} t={t} showMoveRight="review" showDelete={true} />)}
-                      
-                      {!showAllDoing && !searchTerm && doingTasks.length > 10 && (
-                          <button onClick={() => setShowAllDoing(true)} className="w-full py-2 mt-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-xl text-xs font-bold transition-colors">
-                              Ver mais {doingTasks.length - 10} tarefas...
-                          </button>
-                      )}
-                      {showAllDoing && !searchTerm && doingTasks.length > 10 && (
-                          <button onClick={() => setShowAllDoing(false)} className="w-full py-2 mt-2 bg-black/40 hover:bg-white/5 text-gray-500 border border-white/5 rounded-xl text-xs font-bold transition-colors">
-                              Ocultar tarefas
-                          </button>
-                      )}
+          {!isAdmin && viewAsStudent && (
+              <div className="mb-6 rounded-[28px] border border-white/10 bg-[#151520] p-6 shadow-2xl">
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                      <div>
+                          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-blue-500/20 bg-blue-500/10 text-blue-400 text-[10px] font-bold uppercase tracking-[0.24em]">
+                              <Target size={12} /> Minhas Entregas da Semana
+                          </div>
+                          <h3 className="text-2xl font-black text-white mt-3">Foco pessoal de {viewAsStudent.name}</h3>
+                          <p className="text-sm text-gray-400 mt-1">Acompanhe suas tarefas da semana atual e saiba o que precisa andar primeiro.</p>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-center">
+                              <p className="text-2xl font-black text-white">{studentTaskSummary.total}</p>
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 mt-1">tarefas</p>
+                          </div>
+                          <div className="rounded-2xl border border-green-500/20 bg-green-500/10 p-4 text-center">
+                              <p className="text-2xl font-black text-white">{studentTaskSummary.done}</p>
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 mt-1">concluidas</p>
+                          </div>
+                          <div className="rounded-2xl border border-purple-500/20 bg-purple-500/10 p-4 text-center">
+                              <p className="text-2xl font-black text-white">{studentTaskSummary.review}</p>
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 mt-1">em revisao</p>
+                          </div>
+                          <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-center">
+                              <p className="text-2xl font-black text-white">{studentTaskSummary.overdue}</p>
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 mt-1">atrasadas</p>
+                          </div>
+                      </div>
                   </div>
-              </div>
 
-              {/* COLUNA 3: EM REVISÃO */}
-              <div 
-                  className={`shrink-0 w-[85vw] md:w-auto snap-center rounded-2xl p-4 flex flex-col transition-all duration-300 border ${draggedOverCol === 'review' ? 'bg-purple-500/10 border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'bg-purple-500/5 border-purple-500/20'}`}
-                  onDragOver={(e) => handleDragOver(e, 'review')}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, 'review')}
-              >
-                  <h3 className="text-purple-400 font-bold uppercase mb-4 flex items-center gap-2 border-b border-purple-500/10 pb-2"><Search size={16}/> Em Revisão ({reviewTasks.length})</h3>
-                  <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                      {displayedReviewTasks.map(t => <TaskCard key={t.id} t={t} showMoveLeft={isAdmin ? "doing" : null} showMoveRight={isAdmin ? "done" : null} showDelete={true} />)}
-                      
-                      {!showAllReview && !searchTerm && reviewTasks.length > 10 && (
-                          <button onClick={() => setShowAllReview(true)} className="w-full py-2 mt-2 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 rounded-xl text-xs font-bold transition-colors">
-                              Ver mais {reviewTasks.length - 10} tarefas...
-                          </button>
-                      )}
-                      {showAllReview && !searchTerm && reviewTasks.length > 10 && (
-                          <button onClick={() => setShowAllReview(false)} className="w-full py-2 mt-2 bg-black/40 hover:bg-white/5 text-gray-500 border border-white/5 rounded-xl text-xs font-bold transition-colors">
-                              Ocultar tarefas
-                          </button>
+                  <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3 mt-6">
+                      {studentTasksThisWeek.slice(0, 4).map((task) => {
+                          const taskStatus = getDeadlineStatus(task.dueDate);
+                          return (
+                              <div key={task.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                                  <div className="flex items-center justify-between gap-2">
+                                      <span className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">{task.tag || 'geral'}</span>
+                                      <span className={`text-[10px] font-bold ${taskStatus?.color || 'text-gray-500'}`}>{taskStatus?.text || 'Sem prazo'}</span>
+                                  </div>
+                                  <p className="text-sm text-white font-bold mt-3 leading-relaxed">{task.text}</p>
+                                  <div className="mt-3 text-[11px] text-gray-400">
+                                      {task.status === 'done' ? 'Concluida' : task.status === 'review' ? 'Aguardando validacao' : task.status === 'doing' ? 'Em execucao' : 'A iniciar'}
+                                  </div>
+                              </div>
+                          );
+                      })}
+                      {studentTasksThisWeek.length === 0 && (
+                          <div className="md:col-span-2 xl:col-span-4 rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-center">
+                              <p className="text-sm font-bold text-white">Voce ainda nao tem entregas ligadas a esta semana.</p>
+                              <p className="text-xs text-gray-500 mt-2">Use o Kanban para assumir uma tarefa e deixar seu plano visivel.</p>
+                          </div>
                       )}
                   </div>
               </div>
+          )}
 
-              {/* COLUNA 4: FEITO */}
-              <div 
-                  className={`shrink-0 w-[85vw] md:w-auto snap-center rounded-2xl p-4 flex flex-col transition-all duration-300 border ${draggedOverCol === 'done' ? 'bg-green-500/10 border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.2)]' : 'bg-green-500/5 border-green-500/20'}`}
-                  onDragOver={(e) => handleDragOver(e, 'done')}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, 'done')}
-              >
-                  <h3 className="text-green-500 font-bold uppercase mb-4 flex items-center gap-2 border-b border-green-500/10 pb-2"><CheckCircle size={16}/> Feito ({doneTasks.length})</h3>
-                  <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                      {displayedDoneTasks.map(t => <TaskCard key={t.id} t={t} showMoveRight={null} showDelete={true} />)}
-                      
-                      {!showAllDone && !searchTerm && doneTasks.length > 10 && (
-                          <button onClick={() => setShowAllDone(true)} className="w-full py-2 mt-2 bg-green-500/10 hover:bg-green-500/20 text-green-500 border border-green-500/20 rounded-xl text-xs font-bold transition-colors">
-                              Ver mais {doneTasks.length - 10} antigas...
-                          </button>
-                      )}
-                      {showAllDone && !searchTerm && doneTasks.length > 10 && (
-                          <button onClick={() => setShowAllDone(false)} className="w-full py-2 mt-2 bg-black/40 hover:bg-white/5 text-gray-500 border border-white/5 rounded-xl text-xs font-bold transition-colors">
-                              Ocultar antigas
-                          </button>
-                      )}
-                  </div>
-              </div>
+          <div className="flex overflow-x-auto snap-x md:grid md:grid-cols-4 gap-6 flex-1 min-h-[600px] pb-4 custom-scrollbar">
+              {columnConfigs.map((column, columnIndex) => {
+                  const columnSignal = getColumnSignal(column.id, column.total);
+                  const laneGroups = buildLaneGroups(column.tasks);
+
+                  return (
+                      <div
+                          key={column.id}
+                          className={`shrink-0 w-[85vw] md:w-auto snap-center rounded-2xl p-4 flex flex-col border animate-in fade-in slide-in-from-bottom-4 transition-all duration-500 ease-out motion-reduce:animate-none motion-reduce:transition-none ${column.accent}`}
+                          onDragOver={(e) => handleDragOver(e, column.id)}
+                          onDragLeave={handleDragLeave}
+                          onDrop={(e) => handleDrop(e, column.id)}
+                          style={{ animationDelay: `${columnIndex * 90}ms`, animationFillMode: 'both' }}
+                      >
+                          <div className={`border-b pb-3 mb-4 ${column.heading}`}>
+                              <div className="flex items-center justify-between gap-2">
+                                  <h3 className="font-bold uppercase flex items-center gap-2">
+                                      {column.icon} {column.title} ({column.total})
+                                  </h3>
+                                  {columnSignal && (
+                                      <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded-full border ${columnSignal.tone}`}>
+                                          {columnSignal.label}
+                                      </span>
+                                  )}
+                              </div>
+                              <p className="text-[11px] text-gray-500 mt-2">{column.subtitle}</p>
+                          </div>
+
+                          {column.id === 'todo' && (
+                              <form onSubmit={handleAddTask} className="mb-4 space-y-2">
+                                  <input name="taskText" placeholder="+ Nova Tarefa..." className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-orange-500 outline-none transition-all" />
+                                  <div className="flex gap-2">
+                                      <select name="taskTag" className="bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-300 focus:border-orange-500 outline-none w-1/4">
+                                          <option value="engenharia">Engenharia</option>
+                                          <option value="inovacao">Inovacao</option>
+                                          <option value="gestao">Gestao</option>
+                                          <option value="geral">Geral</option>
+                                      </select>
+                                      <select name="taskPriority" className="bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-300 focus:border-orange-500 outline-none w-1/4" title="Prioridade">
+                                          <option value="normal">Normal</option>
+                                          <option value="baixa">Baixa</option>
+                                          <option value="alta">Alta</option>
+                                          <option value="urgente">Urgente</option>
+                                      </select>
+                                      <input type="date" name="taskDate" className="bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-300 focus:border-orange-500 outline-none w-1/4" title="Prazo"/>
+                                      <button className="flex-1 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-bold uppercase">Add</button>
+                                  </div>
+                              </form>
+                          )}
+
+                          <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
+                              {column.tasks.length === 0 && (
+                                  <div className="border border-dashed border-white/10 rounded-2xl p-6 text-center bg-black/20">
+                                      <p className="text-sm font-bold text-white">{hasActiveFilters ? 'Nada encontrado nessa coluna' : 'Coluna organizada'}</p>
+                                      <p className="text-xs text-gray-500 mt-2">{hasActiveFilters ? 'Ajuste os filtros para ampliar a visao do quadro.' : column.emptyText}</p>
+                                  </div>
+                              )}
+
+                              {column.tasks.length > 0 && laneGroups.map((lane, laneIndex) => (
+                                  <div
+                                      key={`${column.id}-${lane.id}`}
+                                      className={`${lane.compact ? '' : 'rounded-2xl border border-white/5 bg-black/20 p-3'} animate-in fade-in slide-in-from-bottom-2 transition-all duration-500 ease-out motion-reduce:animate-none motion-reduce:transition-none`}
+                                      style={{ animationDelay: `${Math.min((columnIndex * 90) + (laneIndex * 70), 360)}ms`, animationFillMode: 'both' }}
+                                  >
+                                      {!lane.compact && (
+                                          <div className="flex items-center justify-between gap-2 mb-3">
+                                              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-bold uppercase ${lane.color}`}>
+                                                  <Tag size={8}/> {lane.label}
+                                              </span>
+                                              <span className="text-[10px] text-gray-500 font-bold">{lane.tasks.length} tarefa(s)</span>
+                                          </div>
+                                      )}
+
+                                      <div className="space-y-2">
+                                          {lane.tasks.map((task, taskIndex) => (
+                                              <TaskCard
+                                                  key={task.id}
+                                                  t={task}
+                                                  showMoveLeft={column.moveLeft}
+                                                  showMoveRight={column.moveRight}
+                                                  showDelete={true}
+                                                  cardIndex={taskIndex}
+                                                  laneIndex={laneIndex}
+                                                  columnIndex={columnIndex}
+                                              />
+                                          ))}
+                                      </div>
+                                  </div>
+                              ))}
+
+                              {!column.showAll && !hasActiveFilters && column.total > 10 && (
+                                  <button onClick={() => column.setShowAll(true)} className={`w-full py-2 mt-2 border rounded-xl text-xs font-bold transition-colors ${column.moreTone}`}>
+                                      Ver mais {column.total - 10} {column.id === 'done' ? 'antigas...' : 'tarefas...'}
+                                  </button>
+                              )}
+
+                              {column.showAll && !hasActiveFilters && column.total > 10 && (
+                                  <button onClick={() => column.setShowAll(false)} className="w-full py-2 mt-2 bg-black/40 hover:bg-white/5 text-gray-500 border border-white/5 rounded-xl text-xs font-bold transition-colors">
+                                      Ocultar {column.id === 'done' ? 'antigas' : 'tarefas'}
+                                  </button>
+                              )}
+                          </div>
+                      </div>
+                  );
+              })}
           </div>
       </div>
       );
@@ -5458,7 +6028,16 @@ const handleFileSelect = (e) => {
 
                     {adminTab === 'strategy' && <StrategyView />}
                     {adminTab === 'rounds' && <RoundsView />} {/* StrategyBoard agora mora dentro de RoundsView */}
-                    {adminTab === 'rubrics' && <RubricViewPanel innovationRubric={innovationRubric} robotDesignRubric={robotDesignRubric} handleRubricUpdate={handleRubricUpdate} />}
+                    {adminTab === 'rubrics' && (
+                      <RubricViewPanel
+                        innovationRubric={innovationRubric}
+                        robotDesignRubric={robotDesignRubric}
+                        handleRubricUpdate={handleRubricUpdate}
+                        tasks={tasks}
+                        currentWeekData={currentWeekData}
+                        onCreateWeeklyRubricTasks={handleCreateRubricWeeklyTasks}
+                      />
+                    )}
                     
                     {/* --- VISUALIZAÇÃO KANBAN --- */}
                     {adminTab === 'kanban' && <KanbanView />}
@@ -5674,7 +6253,18 @@ const handleFileSelect = (e) => {
 
                     {studentTab === 'strategy' && <div className="text-left"><StrategyView /></div>}
                     {studentTab === 'rounds' && <div className="text-left"><RoundsView /></div>}
-                    {studentTab === 'rubrics' && <div className="text-left"><RubricViewPanel innovationRubric={innovationRubric} robotDesignRubric={robotDesignRubric} handleRubricUpdate={handleRubricUpdate} /></div>}
+                    {studentTab === 'rubrics' && (
+                      <div className="text-left">
+                        <RubricViewPanel
+                          innovationRubric={innovationRubric}
+                          robotDesignRubric={robotDesignRubric}
+                          handleRubricUpdate={handleRubricUpdate}
+                          tasks={tasks}
+                          currentWeekData={currentWeekData}
+                          onCreateWeeklyRubricTasks={handleCreateRubricWeeklyTasks}
+                        />
+                      </div>
+                    )}
                     {studentTab === 'kanban' && <div className="text-left"><KanbanView /></div>}
                     {studentTab === 'logbook' && <div className="text-left"><LogbookView /></div>}
                     {studentTab === 'agenda' && <div className="text-left"><AgendaView /></div>}
