@@ -13,6 +13,7 @@ import ChampionCommandCenter from './components/ChampionCommandCenter';
 import CompetitionPrepPanel from './components/CompetitionPrepPanel';
 import JudgeStoryPanel from './components/JudgeStoryPanel';
 import InnovationStrategyPanel from './components/InnovationStrategyPanel';
+import RobotDesignStrategyPanel from './components/RobotDesignStrategyPanel';
 import { WorkspaceHero, WorkspaceTabs, WorkspaceScene, WorkspaceCollapsible } from './components/WorkspaceChrome';
 import Confetti from 'react-confetti';
 import { 
@@ -3984,6 +3985,32 @@ const handleFileSelect = (e) => {
               />
           )}
 
+          {strategySubTab === 'robot_design' && (
+              <RobotDesignStrategyPanel
+                  robotVersions={robotVersions}
+                  attachments={attachments}
+                  codeSnippets={codeSnippets}
+                  rounds={rounds}
+                  activeCommandCode={activeCommandCode}
+                  iterationRecords={iterationRecords}
+                  isAdmin={isAdmin}
+                  viewAsStudent={viewAsStudent}
+                  onOpenRobot={() => openRobotModal()}
+                  onOpenRobotEdit={openRobotModal}
+                  onOpenRobotView={openRobotView}
+                  onDeleteRobotVersion={handleDeleteRobotVersion}
+                  onOpenAttachment={() => openAttachmentModal()}
+                  onOpenAttachmentEdit={openAttachmentModal}
+                  onOpenAttachmentView={openAttachmentView}
+                  onDeleteAttachment={handleDeleteAttachment}
+                  onOpenCode={() => openCodeModal()}
+                  onOpenCodeEdit={openCodeModal}
+                  onOpenCodeView={openCodeView}
+                  onApplyCode={handleApplyCodeSnippet}
+                  onDeleteCode={handleDeleteCode}
+              />
+          )}
+
           {strategySubTab === 'innovation_legacy' && (
               <div className="space-y-6 animate-in fade-in duration-300">
                   {/* MATRIZ DE DECISÃO (NOVO) */}
@@ -4061,7 +4088,7 @@ const handleFileSelect = (e) => {
               </div>
           )}
 
-          {strategySubTab === 'robot_design' && (
+          {strategySubTab === 'robot_design_legacy' && (
               <div className="grid lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
                   <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
                       <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><GitCommit className="text-blue-500"/> Diário do Robô</h3><button onClick={() => openRobotModal()} className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-3 py-1.5 rounded-lg hover:bg-blue-500 hover:text-white font-bold">+ Versão</button></div>
