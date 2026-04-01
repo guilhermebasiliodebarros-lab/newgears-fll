@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy, limit } from "firebase/firestore";
 import { db } from './firebase'; // Importa a instância já inicializada
-import StrategyBoard from './components/StrategyBoard';
 import Countdown from './components/Countdown';
 import PitStopModal from './components/PitStopModal';
 import RankingPanel from './components/RankingPanel';
@@ -14,6 +13,7 @@ import CompetitionPrepPanel from './components/CompetitionPrepPanel';
 import JudgeStoryPanel from './components/JudgeStoryPanel';
 import InnovationStrategyPanel from './components/InnovationStrategyPanel';
 import RobotDesignStrategyPanel from './components/RobotDesignStrategyPanel';
+import RobotRoundsPanel from './components/RobotRoundsPanel';
 import { WorkspaceHero, WorkspaceTabs, WorkspaceScene, WorkspaceCollapsible } from './components/WorkspaceChrome';
 import Confetti from 'react-confetti';
 import { 
@@ -80,7 +80,6 @@ import {
   BarChart3,   // <--- O Culpado de agora
   PieChart,    // <--- Provavelmente vai pedir em seguida (Gráfico de Pizza)
   TrendingUp,  // <--- Provavelmente vai pedir em seguida (Tendência de alta)
-  Map,         // <--- Provavelmente vai pedir em seguida (Mapa da mesa)
   Flag,
   Tag,
   MessageSquare, // <--- O Culpado de agora (Comentários)
@@ -4523,205 +4522,30 @@ const handleFileSelect = (e) => {
 
   // --- COMPONENTE DE ROUNDS ---
 
-  const RoundsView = ({ readonly = false }) => {
-
-      const totalPoints = rounds.reduce((acc, r) => acc + r.totalPoints, 0);
-
-      const totalTime = rounds.reduce((acc, r) => acc + r.estimatedTime, 0);
-
-      const isOverTime = totalTime > 150; 
-
-      const timePercent = Math.min(100, (totalTime / 150) * 100);
-
-
-
-      return (
-
-      <div className="animate-in fade-in duration-300 space-y-6">
-
-          {/* --- NAVEGAÇÃO DA ÁREA DO ROBÔ --- */}
-          <div className="flex justify-center bg-black/20 p-1 rounded-xl w-fit mx-auto border border-white/10 mb-4">
-              <button 
-                  onClick={() => setRobotSubTab('overview')}
-                  className={`px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${robotSubTab === 'overview' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
-              >
-                  <LayoutDashboard size={16}/> Painel de Rounds
-              </button>
-              <button 
-                  onClick={() => setRobotSubTab('map')}
-                  className={`px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${robotSubTab === 'map' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
-              >
-                  <Map size={16}/> Mesa de Estratégia
-              </button>
-          </div>
-
-          {/* --- WIDGET FLUTUANTE DO CRONÔMETRO --- */}
-          {activeTimer && (
-            <div className="fixed bottom-6 right-6 z-[100] bg-red-600 text-white px-6 py-4 rounded-full shadow-[0_0_40px_rgba(220,38,38,0.8)] flex items-center gap-6 animate-in slide-in-from-bottom-20 border-4 border-[#151520] hover:scale-105 transition-transform cursor-pointer" onClick={() => toggleTimer({ id: activeTimer.roundId })}>
-                <div className="flex flex-col">
-                    <span className="text-[10px] font-bold opacity-80 uppercase tracking-wider">Rodando</span>
-                    <span className="text-sm font-black">{activeTimer.name}</span>
-                </div>
-                <div className="text-4xl font-black font-mono w-24 text-center tabular-nums">
-                    {timerDisplay}s
-                </div>
-                <div className="bg-white text-red-600 p-2 rounded-full animate-pulse">
-                    <Square size={24} fill="currentColor" />
-                </div>
-            </div>
-          )}
-
-          {robotSubTab === 'overview' && (
-            <>
-          {/* 1. BARRA DE STATUS E BOTÕES */}
-          <div className="bg-[#151520] border border-white/10 rounded-2xl p-4 flex flex-col xl:flex-row justify-between items-center gap-6 shadow-xl">
-              
-              {/* Barra de Progresso do Tempo */}
-              <div className="flex-1 w-full xl:border-r border-white/10 xl:pr-6">
-                  <div className="flex justify-between items-end mb-2">
-                    <h3 className="text-sm text-gray-400 font-bold uppercase flex items-center gap-2">
-                        <Timer size={16} className="text-blue-500"/> Tempo Total (2:30)
-                    </h3>
-                  </div>
-                  <div className="flex justify-between text-xs mb-1"><span className={isOverTime ? 'text-red-500 font-bold' : 'text-white'}>{totalTime}s usados</span><span className="text-gray-500">{150 - totalTime}s restantes</span></div>
-
-                  <div className="w-full bg-gray-800 rounded-full h-4 overflow-hidden border border-white/5"><div className={`h-full transition-all duration-1000 ${isOverTime ? 'bg-red-500' : 'bg-blue-500'}`} style={{width: `${timePercent}%`}}></div></div>
-
-                  {isOverTime && <p className="text-red-500 text-xs mt-2 flex items-center gap-1 font-bold animate-pulse"><AlertTriangle size={12}/> Atenção! O tempo estourou o limite da regra.</p>}
-
-              </div>
-              
-              {/* Placar Rápido */}
-              <div className="flex items-center gap-6 px-4">
-                  <div className="text-right"><p className="text-[10px] text-gray-400 font-bold uppercase">Total</p><p className="text-3xl font-black text-white">{totalPoints} <span className="text-xs text-gray-600">pts</span></p></div>
-                  <div className="h-12 w-px bg-white/10"></div>
-                  <div className="text-right"><p className="text-[10px] text-gray-400 font-bold uppercase">Saídas</p><p className="text-3xl font-black text-blue-500">{rounds.length}</p></div>
-              </div>
-
-              {/* Barra de Ferramentas (Botões) */}
-              <div className="flex flex-wrap justify-center gap-2 xl:pl-6 w-full xl:w-auto">
-                {!readonly && (
-                    <>
-                    <button onClick={openNewRoundModal} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-blue-900/20 transition-all"><Plus size={16}/> Criar Saída</button>
-                    <button onClick={() => openMissionForm()} className="bg-white/5 border border-white/10 hover:bg-white/10 text-white px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 transition-all"><Settings size={16}/> Missões</button>
-                    <button onClick={openPitStopModal} className="bg-red-500/10 border border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 transition-all"><Timer size={16}/> Pit Stop</button>
-                    {/* Botão de Registrar Treino (Salva no Gráfico) */}
-                    <button onClick={() => handleSavePracticeScore(totalPoints, totalTime)} className="bg-green-600/10 border border-green-500/20 text-green-500 hover:bg-green-600 hover:text-white px-4 py-3 rounded-xl text-xs font-bold flex items-center gap-2 transition-all" title="Salvar pontuação atual no histórico"><Trophy size={16}/> Salvar Treino</button>
-                    </>
-                )}
-              </div>
-          </div>
-
-         {/* 2. CONTEÚDO PRINCIPAL (GRID) */}
-         <div className="grid lg:grid-cols-3 gap-6">
-            
-            {/* COLUNA DA ESQUERDA: LISTA DE ROUNDS (Ocupa 2/3) */}
-            <div className="lg:col-span-2 space-y-4">
-                <h4 className="text-gray-400 font-bold uppercase text-xs flex items-center gap-2 mb-2"><ListTodo size={14}/> Estratégia de Saídas</h4>
-                <div className="grid md:grid-cols-2 gap-4">
-  {rounds.map(round => (
-    <div key={round.id} className="bg-[#151520] border border-white/10 rounded-xl p-4 relative group hover:border-cyan-500/30 transition-colors">
-      
-      {/* --- AQUI ESTÁ A MUDANÇA: BOTÃO DE APAGAR REAL --- */}
-      {!readonly && (
-        <button 
-          onClick={() => handleDeleteRound(round.id)} 
-          className="absolute top-2 right-2 text-gray-600 hover:text-red-500 p-1 transition-colors z-10"
-          title="Apagar permanentemente"
-        >
-          <Trash2 size={16}/>
-        </button>
-      )}
-
-      {/* Título e Ícone */}
-      <h3 className="text-white font-bold mb-2 flex items-center gap-2">
-        <ListTodo size={16} className="text-blue-500"/> 
-        <span className="flex-1 truncate">{round.name}</span>
-        {/* Exibe a Base (Etiqueta Visual) */}
-        {round.startBase && (
-            <span className={`text-[9px] uppercase font-black px-1.5 py-0.5 rounded border ${round.startBase === 'Direita' ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400'}`}>{round.startBase}</span>
-        )}
-      </h3>
-
-      {/* Pontos e Tempo (Display) */}
-      <div className="flex items-center justify-between text-xs text-gray-400 mb-2 bg-black/40 p-2 rounded border border-white/5">
-        <span className="flex items-center gap-1 font-bold text-green-400" title="Pontos deste round">
-          <Calculator size={12} className="text-blue-500"/> {round.totalPoints} pts
-        </span>
-        <span className="flex items-center gap-1 font-bold text-white" title="Tempo estimado atual">
-          <Timer size={12} className="text-blue-500"/> {round.estimatedTime}s
-        </span>
-      </div>
-
-      {/* Lista de Missões */}
-      <div className="space-y-1">
-        {round.missions.map(mid => { 
-          const mission = missionsList.find(m => m.id === mid); 
-          return (
-            <div key={mid} className="text-[10px] text-gray-300 bg-white/5 px-2 py-1 rounded border border-white/5 flex items-center gap-2">
-              {mission?.image && <img src={mission.image} className="w-4 h-4 rounded object-cover" alt="img" />}
-              <span className="truncate flex-1">{mission?.code} - {mission?.name}</span>
-              <span className="font-bold text-blue-500 whitespace-nowrap">+{mission?.points}</span>
-            </div>
-          ) 
-        })}
-      </div>
-
-      {/* --- ÁREA DE REGISTRO RÁPIDO (NOVO) --- */}
-      {!readonly && (
-        <form onSubmit={(e) => handleSaveRoundRun(e, round)} className="mt-4 pt-3 border-t border-white/5 flex gap-2 items-center">
-            <div className="relative flex-1">
-                {/* Input Controlado pelo Cronômetro */}
-                <input 
-                    name="time" 
-                    type="number" 
-                    placeholder={round.estimatedTime} 
-                    value={roundFormValues[round.id] !== undefined ? roundFormValues[round.id] : ''}
-                    onChange={(e) => setRoundFormValues(prev => ({ ...prev, [round.id]: e.target.value }))}
-                    className={`w-full bg-black/30 border rounded-lg py-1.5 px-2 text-xs text-white focus:border-blue-500 outline-none text-center transition-colors ${activeTimer?.roundId === round.id ? 'border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'border-white/10'}`} 
-                />
-                <span className="absolute right-2 top-1.5 text-[10px] text-gray-500">seg</span>
-            </div>
-            
-            {/* Botão de Cronômetro */}
-            <button type="button" onClick={() => toggleTimer(round)} className={`p-1.5 rounded-lg transition-all ${activeTimer?.roundId === round.id ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-700 text-gray-400 hover:text-white'}`} title="Cronômetro">
-                {activeTimer?.roundId === round.id ? <Square size={14} fill="currentColor"/> : <Play size={14} fill="currentColor"/>}
-            </button>
-
-            {/* Botão de Salvar */}
-            <button className="bg-blue-600 hover:bg-blue-500 text-white p-1.5 rounded-lg text-xs font-bold transition-colors shadow-lg shadow-blue-900/20" title="Salvar Tempo"><Check size={14}/></button>
-        </form>
-      )}
-    </div>
-  ))}
-  {rounds.length === 0 && (
-      <div className="col-span-2 py-12 text-center border-2 border-dashed border-white/5 rounded-xl text-gray-500">
-          <p>Nenhuma saída planejada ainda.</p>
-          <p className="text-xs mt-1">Clique em "Criar Saída" para começar.</p>
-      </div>
-  )}
-</div>
-            </div>
-
-            {/* COLUNA DA DIREITA: GRÁFICO (Ocupa 1/3) */}
-            <div className="lg:col-span-1">
-                <h4 className="text-gray-400 font-bold uppercase text-xs flex items-center gap-2 mb-4"><TrendingUp size={14}/> Performance da Equipe</h4>
-                <ScoreEvolutionChart />
-            </div>
-         </div>
-         </>
-          )}
-
-      {robotSubTab === 'map' && (
-        <div className="bg-[#151520] p-1 rounded-2xl border border-white/10">
-            <StrategyBoard />
-        </div>
-      )}
-
-      </div>
-
+  const RoundsView = ({ readonly = false }) => (
+      <RobotRoundsPanel
+          rounds={rounds}
+          missionsList={missionsList}
+          attachments={attachments}
+          activeCommandCode={activeCommandCode}
+          scoreHistory={scoreHistory}
+          robotSubTab={robotSubTab}
+          onChangeRobotSubTab={setRobotSubTab}
+          activeTimer={activeTimer}
+          timerDisplay={timerDisplay}
+          roundFormValues={roundFormValues}
+          onRoundFormValueChange={(roundId, value) => setRoundFormValues(prev => ({ ...prev, [roundId]: value }))}
+          onToggleTimer={toggleTimer}
+          onOpenNewRound={openNewRoundModal}
+          onOpenMissionForm={() => openMissionForm()}
+          onOpenPitStop={openPitStopModal}
+          onSavePracticeScore={handleSavePracticeScore}
+          onDeleteRound={handleDeleteRound}
+          onSaveRoundRun={handleSaveRoundRun}
+          scoreChart={<ScoreEvolutionChart />}
+          readonly={readonly}
+      />
   );
-  };
 
   // --- COMPONENTE KANBAN (REUTILIZÁVEL) ---
   const KanbanView = () => {
