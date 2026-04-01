@@ -14,6 +14,7 @@ import JudgeStoryPanel from './components/JudgeStoryPanel';
 import InnovationStrategyPanel from './components/InnovationStrategyPanel';
 import RobotDesignStrategyPanel from './components/RobotDesignStrategyPanel';
 import RobotRoundsPanel from './components/RobotRoundsPanel';
+import RotationOperationsPanel from './components/RotationOperationsPanel';
 import { WorkspaceHero, WorkspaceTabs, WorkspaceScene, WorkspaceCollapsible } from './components/WorkspaceChrome';
 import Confetti from 'react-confetti';
 import { 
@@ -1071,8 +1072,6 @@ function App() {
       setTimeout(() => setNotification(null), 3000); 
   }
 
-  const getStationStats = (stationName) => { const activeStudents = students.filter(s => s.station === stationName); const pendingReviews = activeStudents.filter(s => s.submission?.status === 'pending').length; return { totalActive: activeStudents.length, pendingReviews, isCompleted: activeStudents.length === 0 }; }
-
   const getStudentName = (id) => { const s = students.find(stud => stud.id === id); return s ? s.name : "Vaga"; }
 
   const convertBase64 = (file) => new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result); reader.onerror = error => reject(error); });
@@ -1166,53 +1165,6 @@ function App() {
           console.error("Erro ao criar tarefa:", error);
       }
   }
-
-  const handleCreateRubricWeeklyTasks = async (suggestions) => {
-      if (!Array.isArray(suggestions) || suggestions.length === 0) {
-          showNotification("Nao ha acoes semanais prontas para enviar ao Kanban.", "error");
-          return;
-      }
-
-      const activePlanKeys = new Set(
-          tasks
-              .filter((task) => task.status !== 'done' && task.rubricPlanKey)
-              .map((task) => task.rubricPlanKey)
-      );
-
-      const suggestionsToCreate = suggestions.filter((suggestion) => !activePlanKeys.has(suggestion.rubricPlanKey));
-
-      if (suggestionsToCreate.length === 0) {
-          showNotification("Essas acoes da rubrica ja estao no Kanban desta semana.", "error");
-          return;
-      }
-
-      try {
-          await Promise.all(
-              suggestionsToCreate.map((suggestion) => createKanbanTask({
-                  text: suggestion.text,
-                  dueDate: suggestion.dueDate || currentWeekData?.endDate || today,
-                  tag: suggestion.tag || 'geral',
-                  priority: suggestion.priority || 'alta',
-                  rubricPlanKey: suggestion.rubricPlanKey,
-                  rubricArea: suggestion.rubricArea,
-                  rubricCriterion: suggestion.rubricCriterion,
-                  rubricTargetScore: suggestion.targetScore,
-                  source: 'rubric_weekly_plan',
-                  weekName: currentWeekData?.weekName || 'Semana atual'
-              }))
-          );
-
-          showNotification(
-              suggestionsToCreate.length === 1
-                  ? "Acao semanal enviada para o Kanban!"
-                  : `${suggestionsToCreate.length} acoes semanais enviadas para o Kanban!`,
-              "success"
-          );
-      } catch (error) {
-          console.error("Erro ao criar tarefas da rubrica:", error);
-          showNotification("Erro ao enviar plano semanal para o Kanban.", "error");
-      }
-  };
 
   // --- FUNÇÕES DA GARRA / ANEXO ---
   const handleAttachmentSubmit = async (e) => { 
@@ -2932,6 +2884,11 @@ const handleDeleteRound = async (id) => {
     } catch (error) {
       console.error("Erro ao salvar a meta da semana:", error);
     }
+  };
+
+  const handleSaveStationMission = async (station) => {
+    await saveMissionToFirebase(station);
+    showNotification(`Meta de ${station} salva com sucesso!`, 'success');
   };
 
   const closeModal = () => { setModal({ type: null, data: null }); setSelectedFile(null); }
@@ -6246,229 +6203,31 @@ const handleFileSelect = (e) => {
                 <div className="bg-gradient-to-b from-[#161621] to-[#101018] rounded-[30px] border border-white/10 p-4 md:p-7 min-h-[500px] shadow-[0_20px_60px_rgba(0,0,0,0.28)]">
                   <WorkspaceScene sceneId={`admin-${adminTab}`}>
                     {adminTab === 'rotation' && (
-                      <div className="grid lg:grid-cols-4 gap-6">
-                  
-                  {/* COLUNA 1: EQUIPE (SEM ESTAÇÃO) */}
-                  <div className="bg-[#0a0a0f] border border-white/5 rounded-2xl p-4 flex flex-col h-full min-h-[500px]">
-                      <h3 className="text-gray-500 font-bold mb-4 flex items-center gap-2 text-sm uppercase border-b border-white/5 pb-2">
-                          <Users size={16} /> Equipe {students.length === 0 && <span className="text-[10px] text-red-500 ml-2">(Vazio)</span>}
-                      </h3>
-                      <div className="space-y-3 flex-1 overflow-y-auto pr-1 custom-scrollbar">
-                          {students.filter(s => s.station === null).map(s => {
-                              const level = getCurrentLevel(s.xp);
-                              
-                              let cardStyle = 'bg-[#151520] border-white/10';
-                              if (s.submission?.status === 'approved') {
-                                  cardStyle = 'bg-green-500/10 border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.15)]';
-                              } else if (s.submission?.status === 'rejected') {
-                                  cardStyle = 'bg-red-500/10 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.15)]';
-                              }
-
-                              return (
-                                  <div key={s.id} className={`border p-3 rounded-xl flex flex-col gap-3 group hover:border-white/30 transition-all ${cardStyle}`}>
-                                      <div className="flex items-center gap-3">
-                                          {s.avatarImage ? (
-     <img src={s.avatarImage} alt="Avatar" className="w-10 h-10 rounded-full object-cover" />
- ) : (
-     <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
-         <UserCircle size={24} className="text-gray-500" />
-     </div>
- )}
-                                          <div className="flex-1 overflow-hidden">
-                                              <span className="text-white font-bold text-sm block truncate">{s.name}</span>
-                                              <div className="flex items-center mt-1 gap-2">
-                                                  <span className={`text-[9px] font-bold uppercase px-1.5 rounded bg-white/5 ${level.color}`}>{level.name}</span>
-                                                  <button 
-                                                    onClick={() => openXPModal(s)} 
-                                                    disabled={currentUser?.type !== 'admin'}
-                                                    className={`text-yellow-500 text-[10px] font-bold flex items-center gap-1 ${currentUser?.type === 'admin' ? 'hover:underline' : 'cursor-not-allowed opacity-50'}`}
-                                                  ><Trophy size={10}/> {s.xp}</button>
-                                              </div>
-                                              <button 
-                                                onClick={() => openGradesModal(s)} 
-                                                disabled={currentUser?.type !== 'admin'}
-                                                className={`text-gray-500 text-[10px] mt-1 flex items-center gap-1 ${currentUser?.type === 'admin' ? 'hover:text-yellow-400' : 'cursor-not-allowed opacity-50'}`}
-                                              ><GraduationCap size={10}/> Lançar Notas</button>
-                                          </div>
-                                          <div className="flex flex-col gap-2">
-                                              <button onClick={() => openProfileModal(s)} className="text-gray-500 hover:text-green-400" title="Ver Perfil Completo"><UserCircle size={16}/></button>
-                                              <button onClick={() => openNewStudentModal(s)} className="text-gray-500 hover:text-blue-400"><Pencil size={16}/></button>
-                                              {/* BOTÃO DE TROFÉU 🏆 */}
-                          <button 
-                            onClick={() => setBadgeStudent(s)} 
-                            className="text-gray-600 hover:text-yellow-500 mr-3 transition-colors"
-                            title="Entregar Conquista"
-                          >
-                            <Trophy size={16}/>
-                          </button>
-                        {/* --- BOTÃO DE LIBERAR INGLÊS --- */}
-                                              <button 
-                                                  onClick={() => toggleEnglishChallenge(s)} 
-                                                  className={`transition-colors ${s.englishChallengeUnlocked ? 'text-green-500 animate-pulse drop-shadow-[0_0_5px_rgba(34,197,94,0.8)]' : 'text-gray-600 hover:text-blue-400'}`}
-                                                  title={s.englishChallengeUnlocked ? "Desativar Inglês" : "Ativar Inglês"}
-                                              >
-                                                  <span className="font-bold font-mono text-[10px] border border-current rounded px-1">EN</span>
-                                              </button>
-
-                                              {/* Lixeira original */}
-                                              <button onClick={() => handleDeleteStudent(s.id)} className="text-gray-600 hover:text-red-500"><Trash2 size={16}/></button>
-                                          </div>
-                                      </div>
-                                      <div className="flex gap-2 border-t border-white/5 pt-2">
-                                          <button onClick={() => moveStudent(s.id, 'Engenharia')} className="flex-1 py-1.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-500 border border-blue-500/20 hover:bg-blue-500 hover:text-white transition-all">ENG</button>
-                                          <button onClick={() => moveStudent(s.id, 'Inovação')} className="flex-1 py-1.5 rounded text-[10px] font-bold bg-pink-500/10 text-pink-500 border border-pink-500/20 hover:bg-pink-500 hover:text-white transition-all">INO</button>
-                                          <button onClick={() => moveStudent(s.id, 'Gestão')} className="flex-1 py-1.5 rounded text-[10px] font-bold bg-purple-500/10 text-purple-500 border border-purple-500/20 hover:bg-purple-500 hover:text-white transition-all">GES</button>
-                                      </div>
-                                      
-                                      {/* --- STATUS DA ATIVIDADE NA EQUIPE --- */}
-                                      <div className="flex items-center justify-between border-t border-white/5 pt-2">
-                                          <div className="flex items-center gap-1 bg-black/40 p-1 rounded-md border border-white/10">
-                                              <button onClick={() => toggleActivityStatus(s, 'approved')} className={`p-1 rounded ${s.submission?.status === 'approved' ? 'bg-green-500 text-black shadow-[0_0_10px_rgba(34,197,94,0.4)]' : 'text-gray-500 hover:text-green-500'}`} title="Aprovar Atividade (Email/Externo)"><CheckCircle size={12}/></button>
-                                              <button onClick={() => toggleActivityStatus(s, 'rejected')} className={`p-1 rounded ${s.submission?.status === 'rejected' ? 'bg-red-500 text-white shadow-[0_0_10px_rgba(239,68,68,0.4)]' : 'text-gray-500 hover:text-red-500'}`} title="Recusar Atividade"><XCircle size={12}/></button>
-                                              {s.submission && <button onClick={() => toggleActivityStatus(s, null)} className="p-1 rounded text-gray-500 hover:text-gray-300" title="Limpar"><Trash2 size={10}/></button>}
-                                          </div>
-                                          <div className="flex justify-end">
-                                              {s.submission?.status === 'pending' && <span className="text-[9px] bg-yellow-500/20 text-yellow-500 px-1.5 py-0.5 rounded border border-yellow-500/50 uppercase font-black flex items-center gap-1 animate-pulse"><AlertCircle size={10}/> Avaliar</span>}
-                                              {s.submission?.status === 'approved' && <span className="text-[9px] bg-green-500/20 text-green-500 px-1.5 py-0.5 rounded border border-green-500/50 uppercase font-black flex items-center gap-1"><CheckCircle size={10}/> Aprovado</span>}
-                                              {s.submission?.status === 'rejected' && <span className="text-[9px] bg-red-500/20 text-red-500 px-1.5 py-0.5 rounded border border-red-500/50 uppercase font-black flex items-center gap-1"><AlertTriangle size={10}/> Recusado</span>}
-                                              {!s.submission && <span className="text-[9px] text-gray-600 uppercase font-bold px-1.5 py-0.5">Sem Entrega</span>}
-                                          </div>
-                                      </div>
-                                  </div>
-                              )
-                          })}
-                      </div>
-                  </div>
-
-{/* COLUNAS 2, 3 e 4: ESTAÇÕES */}
-  {['Engenharia', 'Inovação', 'Gestão'].map(st => {
-      const stats = getStationStats(st);
-      return (
-          <div key={st} className={`border rounded-2xl p-4 flex flex-col h-full relative overflow-hidden ${st==='Engenharia'?'bg-blue-500/5 border-blue-500/20':st==='Inovação'?'bg-pink-500/5 border-pink-500/20':'bg-purple-500/5 border-purple-500/20'}`}>
-              <div className="flex justify-between items-start mb-2 border-b border-white/10 pb-2">
-                  <h3 className={`font-black flex items-center gap-2 text-sm uppercase tracking-wider ${st==='Engenharia'?'text-blue-500':st==='Inovação'?'text-pink-500':'text-purple-500'}`}>
-                      {st==='Engenharia'?<Rocket size={16}/>:st==='Inovação'?<Microscope size={16}/>:<BookOpen size={16}/>} {st}
-                  </h3>
-                  <button onClick={() => handleCloseStationWeek(st)} className="text-[10px] bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded font-bold flex items-center gap-1 transition-all"><Gavel size={10}/> Fechar Semana</button>
-              </div>
-              
-              <div className="bg-black/40 rounded-xl p-3 mb-4 border border-white/5">
-                  <label className="text-[10px] text-gray-500 font-bold uppercase block mb-2">Meta da Semana:</label>
-                  
-                  {/* Campo de Texto da Meta */}
-                  <textarea 
-                    value={missions[st]?.text || ""} 
-                    onChange={(e) => updateMission(st, 'text', e.target.value)} 
-                    className="w-full bg-transparent border-b border-white/10 text-xs text-gray-300 focus:border-white/50 outline-none mb-4 min-h-[60px] resize-y" 
-                  />
-                  
-                  {/* Campo de Data */}
-                  <div className="flex items-center gap-2 bg-white/5 p-2 rounded-lg border border-white/10 mb-3">
-                      <Calendar size={14} className="text-blue-500"/>
-                      <input 
-                        type="date" 
-                        value={missions[st]?.deadline || ""} 
-                        onChange={(e) => updateMission(st, 'deadline', e.target.value)} 
-                        className="bg-transparent text-xs text-white font-bold outline-none w-full cursor-pointer" 
+                      <RotationOperationsPanel
+                        students={students}
+                        tasks={tasks}
+                        missions={missions}
+                        currentWeekData={currentWeekData}
+                        getCurrentLevel={getCurrentLevel}
+                        canManage={currentUser?.type === 'admin'}
+                        onMoveStudent={moveStudent}
+                        onOpenXPModal={openXPModal}
+                        onOpenGradesModal={openGradesModal}
+                        onOpenProfileModal={openProfileModal}
+                        onOpenNewStudentModal={openNewStudentModal}
+                        onSetBadgeStudent={setBadgeStudent}
+                        onToggleEnglishChallenge={toggleEnglishChallenge}
+                        onDeleteStudent={handleDeleteStudent}
+                        onToggleActivityStatus={toggleActivityStatus}
+                        onOpenReviewModal={openReviewModal}
+                        onHandleCloseStationWeek={handleCloseStationWeek}
+                        onUpdateMission={updateMission}
+                        onSaveMission={handleSaveStationMission}
+                        onApplyRotation={handleApplyRotation}
+                        onOpenAttendance={openAttendanceModal}
+                        onResetAllActivities={handleResetAllActivities}
+                        onOpenSchedule={() => setShowFullSchedule(true)}
                       />
-                  </div>
-
-                  {/* 👇 O BOTÃO DE SALVAR NOVO ESTÁ AQUI 👇 */}
-                  <button 
-                      onClick={() => {
-                          saveMissionToFirebase(st);
-                          showNotification(`Meta de ${st} salva com sucesso!`, 'success');
-                      }}
-                      className="w-full bg-green-600/20 hover:bg-green-600 text-green-500 hover:text-white border border-green-500/30 text-[10px] uppercase tracking-wider font-bold py-2 rounded-lg transition-all flex justify-center items-center gap-2"
-                  >
-                      <Check size={14} /> Salvar Meta
-                  </button>
-                  {/* ☝️ FIM DO BOTÃO ☝️ */}
-                  
-              </div>
-
-                              <div className="space-y-3 flex-1">
-                                  {stats.isCompleted && <div className="h-full flex flex-col items-center justify-center text-center opacity-50 mt-10"><CheckSquare size={48} className="text-green-500 mb-2"/><p className="text-sm font-bold text-green-500">Semana Concluída!</p></div>}
-                                  {students.filter(s => s.station === st).map(s => {
-                                      // Busca a tarefa principal do aluno no Kanban
-                                      const studentTasks = tasks.filter(t => t.author === s.name && t.status !== 'done');
-
-                                      const isLeader = st === 'Gestão' && s.name !== 'Sofia' && s.name !== 'Heloise';
-
-                                      let cardStyle = 'bg-[#151520] border-white/10';
-                                      if (s.submission?.status === 'approved') {
-                                          cardStyle = 'bg-green-500/10 border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.15)]';
-                                      } else if (s.submission?.status === 'rejected') {
-                                          cardStyle = 'bg-red-500/10 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.15)]';
-                                      } else if (isLeader) {
-                                          cardStyle = 'bg-gradient-to-r from-yellow-500/10 to-transparent border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.15)]';
-                                      }
-
-                                      return (
-                                      <div key={s.id} className={`p-3 rounded-xl relative group animate-in slide-in-from-bottom-2 flex flex-col border transition-all ${cardStyle}`}>
-                                          <div className="flex justify-between items-start mb-2">
-                                              <div>
-                                                  <span className={`font-bold text-sm flex items-center gap-1.5 ${isLeader && s.submission?.status !== 'approved' && s.submission?.status !== 'rejected' ? 'text-yellow-400' : 'text-white'}`}>
-                                                      {isLeader && <Crown size={14} className={s.submission?.status === 'approved' ? 'text-green-500' : 'text-yellow-500'} />} {s.name}
-                                                  </span>
-                                                  <span className="text-gray-500 text-[10px] font-mono bg-white/5 px-1.5 rounded inline-block mt-0.5">{s.turma} {isLeader && <span className="ml-1 text-yellow-500 font-bold uppercase tracking-widest bg-yellow-500/10 px-1 rounded border border-yellow-500/20">Líder</span>}</span>
-                                              </div>
-                                              <button onClick={() => moveStudent(s.id, null)} className="text-gray-500 hover:text-red-500 bg-black/20 hover:bg-red-500/10 p-1 rounded transition-colors" title="Remover da Estação"><X size={12}/></button>
-                                          </div>
-                                          {s.submission?.status === 'pending' && <span className="absolute top-2 right-8 bg-yellow-500/20 text-yellow-500 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border border-yellow-500/50 flex items-center gap-1 shadow-[0_0_10px_rgba(234,179,8,0.2)] animate-pulse"><AlertCircle size={10}/> Avaliar</span>}
-                                          {s.submission?.status === 'approved' && <span className="absolute top-2 right-8 bg-green-500/20 text-green-500 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border border-green-500/50 flex items-center gap-1 shadow-[0_0_10px_rgba(34,197,94,0.2)]"><CheckCircle size={10}/> Aprovado</span>}
-                                          {s.submission?.status === 'rejected' && <span className="absolute top-2 right-8 bg-red-500/20 text-red-500 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border border-red-500/50 flex items-center gap-1 shadow-[0_0_10px_rgba(239,68,68,0.2)]"><AlertTriangle size={10}/> Recusado</span>}
-                                          
-                                          {/* --- INTEGRAÇÃO COM KANBAN (FOCO ATUAL) --- */}
-                                          <div className="my-2 bg-black/40 rounded-lg p-2 border border-white/5 flex-1">
-                                              <span className="text-[9px] text-gray-500 font-bold uppercase flex items-center gap-1 mb-1">
-                                                  <ClipboardList size={10}/> Kanban ({studentTasks.length})
-                                              </span>
-                                              {studentTasks.length > 0 ? (
-                                                  <div className="space-y-1.5 max-h-24 overflow-y-auto custom-scrollbar pr-1">
-                                                      {studentTasks.map(t => (
-                                                          <div key={t.id} className="flex items-start gap-1.5">
-                                                              {t.status === 'doing' ? <Loader2 size={12} className="text-blue-500 animate-spin shrink-0 mt-0.5"/> : t.status === 'review' ? <Search size={12} className="text-purple-400 shrink-0 mt-0.5"/> : <Square size={12} className="text-orange-500 shrink-0 mt-0.5"/>}
-                                                              <p className={`text-[11px] leading-tight line-clamp-2 ${t.status === 'doing' ? 'text-blue-200' : t.status === 'review' ? 'text-purple-300' : 'text-gray-400'}`} title={t.text}>{t.text}</p>
-                                                          </div>
-                                                      ))}
-                                                  </div>
-                                              ) : (
-                                                  <p className="text-[10px] text-gray-600 italic">Livre (Sem tarefas pendentes)</p>
-                                              )}
-                                          </div>
-
-                                          <div className="flex items-center justify-between mt-1">
-                                              <button 
-                                                onClick={() => openXPModal(s)} 
-                                                disabled={currentUser?.type !== 'admin'}
-                                                className={`text-yellow-500 text-xs font-bold bg-yellow-500/10 px-2 py-1 rounded flex items-center gap-1 transition-colors ${currentUser?.type === 'admin' ? 'hover:text-yellow-400' : 'cursor-not-allowed opacity-50'}`}
-                                              ><Trophy size={12}/> {s.xp} XP</button>
-                                              <div className="flex items-center gap-2">
-                                                  {/* --- NOVOS BOTÕES AQUI --- */}
-                                                  <div className="flex items-center gap-1 bg-black/40 p-1 rounded-md border border-white/10 mr-1">
-                                                      <button onClick={() => toggleActivityStatus(s, 'approved')} className={`p-1 rounded ${s.submission?.status === 'approved' ? 'bg-green-500 text-black shadow-[0_0_10px_rgba(34,197,94,0.4)]' : 'text-gray-500 hover:text-green-500'}`} title="Aprovar Atividade"><CheckCircle size={12}/></button>
-                                                      <button onClick={() => toggleActivityStatus(s, 'rejected')} className={`p-1 rounded ${s.submission?.status === 'rejected' ? 'bg-red-500 text-white shadow-[0_0_10px_rgba(239,68,68,0.4)]' : 'text-gray-500 hover:text-red-500'}`} title="Recusar Atividade"><XCircle size={12}/></button>
-                                                      {s.submission && <button onClick={() => toggleActivityStatus(s, null)} className="p-1 rounded text-gray-500 hover:text-gray-300" title="Limpar"><Trash2 size={10}/></button>}
-                                                  </div>
-
-                                                  <button 
-                                                    onClick={() => openGradesModal(s)} 
-                                                    disabled={currentUser?.type !== 'admin'}
-                                                    className={`transition-colors ${currentUser?.type === 'admin' ? 'text-gray-500 hover:text-yellow-400' : 'text-gray-700 cursor-not-allowed'}`} 
-                                                    title="Lançar Notas"><GraduationCap size={14}/></button>
-                                                  <button onClick={() => setBadgeStudent(s)} className="text-gray-500 hover:text-yellow-500 transition-colors" title="Entregar Conquista"><Trophy size={14}/></button>
-                                                  <button onClick={() => toggleEnglishChallenge(s)} className={`transition-colors ${s.englishChallengeUnlocked ? 'text-green-500 animate-pulse drop-shadow-[0_0_5px_rgba(34,197,94,0.8)]' : 'text-gray-500 hover:text-blue-400'}`} title={s.englishChallengeUnlocked ? "Desativar Inglês" : "Ativar Inglês"}><span className="font-bold font-mono text-[10px] border border-current rounded px-1">EN</span></button>
-                                              </div>
-                                          </div>
-                                          {s.submission?.status === 'pending' && <button onClick={() => openReviewModal(s)} className="w-full mt-2 bg-yellow-500 text-black text-xs font-bold py-1.5 rounded hover:bg-yellow-400 flex items-center justify-center gap-2 shadow-lg shadow-yellow-900/20"><Eye size={12}/> Revisar Entrega</button>}
-                                      </div>
-                                  )})}
-                              </div>
-                          </div>
-                      )
-                  })}
-                      </div>
                     )}
 
                     {adminTab === 'strategy' && <StrategyView />}
@@ -6478,9 +6237,6 @@ const handleFileSelect = (e) => {
                         innovationRubric={innovationRubric}
                         robotDesignRubric={robotDesignRubric}
                         handleRubricUpdate={handleRubricUpdate}
-                        tasks={tasks}
-                        currentWeekData={currentWeekData}
-                        onCreateWeeklyRubricTasks={handleCreateRubricWeeklyTasks}
                       />
                     )}
                     
@@ -6800,9 +6556,6 @@ const handleFileSelect = (e) => {
                           innovationRubric={innovationRubric}
                           robotDesignRubric={robotDesignRubric}
                           handleRubricUpdate={handleRubricUpdate}
-                          tasks={tasks}
-                          currentWeekData={currentWeekData}
-                          onCreateWeeklyRubricTasks={handleCreateRubricWeeklyTasks}
                         />
                       </div>
                     )}

@@ -109,53 +109,6 @@ const getRubricDiagnostics = (items, values) => {
   };
 };
 
-const buildWeeklyActionSuggestions = ({ items, values, rubricTitle, rubricArea, tag, weekId, dueDate }) => {
-  const entries = items.map((item) => {
-    const currentScore = values[item.key] || 1;
-    const targetScore = currentScore >= 4 ? 4 : currentScore >= 3 ? 4 : 3;
-    const guidance = currentScore >= 3 ? item.levels[4] : item.levels[3];
-
-    return {
-      item,
-      currentScore,
-      targetScore,
-      guidance,
-      rubricArea,
-      rubricTitle,
-      tag,
-      dueDate,
-      rubricPlanKey: `${weekId || 'semana-atual'}-${rubricArea}-${item.key}-para-${targetScore}`
-    };
-  });
-
-  const candidates = entries.some((entry) => entry.currentScore < 3)
-    ? entries.filter((entry) => entry.currentScore < 3)
-    : entries.filter((entry) => entry.currentScore === 3);
-
-  return candidates
-    .sort((a, b) => a.currentScore - b.currentScore || a.item.name.localeCompare(b.item.name))
-    .slice(0, 3)
-    .map((entry) => ({
-      id: entry.rubricPlanKey,
-      rubricPlanKey: entry.rubricPlanKey,
-      rubricArea: entry.rubricArea,
-      rubricTitle: entry.rubricTitle,
-      rubricCriterion: entry.item.name,
-      currentScore: entry.currentScore,
-      targetScore: entry.targetScore,
-      tag: entry.tag,
-      dueDate: entry.dueDate,
-      priority: entry.currentScore === 1 ? 'urgente' : entry.currentScore === 2 ? 'alta' : 'normal',
-      text: entry.currentScore >= 3
-        ? `${entry.rubricTitle}: fortalecer ${entry.item.name} para buscar Excedente`
-        : `${entry.rubricTitle}: elevar ${entry.item.name} para Finalizado`,
-      focus: entry.item.focus,
-      icon: entry.item.icon,
-      color: entry.item.color,
-      guidance: entry.guidance
-    }));
-};
-
 const INNOVATION_RUBRIC_ITEMS = [
   {
     key: 'identificacao',
@@ -615,115 +568,6 @@ const RubricDiagnosticPanel = ({ items, values, accentColor }) => {
   );
 };
 
-const WeeklyActionPlan = ({ suggestions, activePlanKeys, currentWeekData, onCreateWeeklyRubricTasks }) => {
-  const pendingSuggestions = suggestions.filter((suggestion) => !activePlanKeys.has(suggestion.rubricPlanKey));
-  const weekLabel = currentWeekData?.weekName || 'Semana atual';
-  const hasPendingSuggestions = pendingSuggestions.length > 0;
-
-  return (
-    <div className="rounded-2xl border border-white/10 bg-[#151520] p-6">
-      <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.2em] text-orange-300 font-bold">Plano de Acao Semanal</p>
-          <h3 className="text-xl font-bold text-white mt-2">Rubrica conectada ao Kanban</h3>
-          <p className="text-sm text-gray-300 mt-2 max-w-3xl">
-            O site gera prioridades automaticas a partir das notas da rubrica para a equipe agir nesta semana sem depender de consulta manual ao PDF.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-orange-500/20 bg-orange-500/10 px-4 py-3 min-w-[230px]">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-orange-200 font-bold">Semana alvo</p>
-          <p className="text-lg font-black text-white mt-2">{weekLabel}</p>
-          <p className="text-xs text-orange-100/80 mt-1">
-            {hasPendingSuggestions ? `${pendingSuggestions.length} acao(oes) prontas para enviar` : 'Plano ja sincronizado com o Kanban'}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-        <div className="flex items-center gap-3 text-xs text-gray-400">
-          <span className="inline-flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-red-200">
-            <AlertTriangle size={12} /> Nota 1 vira prioridade urgente
-          </span>
-          <span className="inline-flex items-center gap-2 rounded-full border border-orange-500/20 bg-orange-500/10 px-3 py-1 text-orange-100">
-            <Target size={12} /> Nota 2 sobe para Finalizado
-          </span>
-        </div>
-
-        <button
-          onClick={() => onCreateWeeklyRubricTasks?.(pendingSuggestions)}
-          disabled={!hasPendingSuggestions}
-          className={`px-4 py-3 rounded-xl text-sm font-bold transition-all ${hasPendingSuggestions ? 'bg-orange-500 hover:bg-orange-400 text-black shadow-lg shadow-orange-900/20' : 'bg-white/5 text-gray-500 border border-white/10 cursor-not-allowed'}`}
-        >
-          Enviar plano semanal ao Kanban
-        </button>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        {suggestions.map((suggestion) => {
-          const isAlreadyPlanned = activePlanKeys.has(suggestion.rubricPlanKey);
-          const currentMeta = getScoreMeta(suggestion.currentScore);
-          const targetMeta = getScoreMeta(suggestion.targetScore);
-
-          return (
-            <div key={suggestion.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className={`font-bold text-sm flex items-center gap-2 ${suggestion.color}`}>
-                    {suggestion.icon} {suggestion.rubricTitle} - {suggestion.rubricCriterion}
-                  </div>
-                  <p className="text-xs text-gray-400 mt-2">{suggestion.text}</p>
-                </div>
-
-                <div className="text-right shrink-0">
-                  <span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-bold ${currentMeta.tone}`}>
-                    {suggestion.currentScore}
-                  </span>
-                  <div className="flex items-center justify-end gap-1 text-gray-500 mt-1">
-                    <ArrowUpRight size={12} />
-                    <span className={`text-[10px] font-bold ${targetMeta.label === 'Excedente' ? 'text-yellow-300' : 'text-green-300'}`}>
-                      {suggestion.targetScore}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 mt-4">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Foco da semana</p>
-                <p className="text-sm text-white mt-2">{suggestion.focus}</p>
-              </div>
-
-              <div className="space-y-2 mt-4">
-                {suggestion.guidance.slice(0, 2).map((line, index) => (
-                  <div key={index} className="flex items-start gap-2">
-                    <CheckCircle2 size={14} className="mt-0.5 text-green-400 shrink-0" />
-                    <p className="text-xs text-gray-200 leading-relaxed">{line}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex items-center justify-between gap-3 mt-4">
-                <div className="flex items-center gap-2 flex-wrap text-[10px] uppercase font-bold">
-                  <span className={`rounded-full border px-2 py-1 ${currentMeta.tone}`}>{currentMeta.label}</span>
-                  <span className={`rounded-full border px-2 py-1 ${targetMeta.tone}`}>Meta: {targetMeta.label}</span>
-                </div>
-
-                <button
-                  onClick={() => onCreateWeeklyRubricTasks?.([suggestion])}
-                  disabled={isAlreadyPlanned}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${isAlreadyPlanned ? 'bg-white/5 text-gray-500 border border-white/10 cursor-not-allowed' : 'bg-blue-500/15 text-blue-100 border border-blue-500/30 hover:bg-blue-500/25'}`}
-                >
-                  {isAlreadyPlanned ? 'Ja no Kanban' : 'Enviar esta acao'}
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
 const RubricCriterionCard = ({ item, value, rubricType, handleRubricUpdate }) => {
   const currentScore = value || 1;
   const currentMeta = getScoreMeta(currentScore);
@@ -903,47 +747,10 @@ const RubricSection = ({
 const RubricView = ({
   innovationRubric,
   robotDesignRubric,
-  handleRubricUpdate,
-  tasks = [],
-  currentWeekData = null,
-  onCreateWeeklyRubricTasks
+  handleRubricUpdate
 }) => {
-  const activePlanKeys = new Set(
-    tasks
-      .filter((task) => task.status !== 'done' && task.rubricPlanKey)
-      .map((task) => task.rubricPlanKey)
-  );
-
-  const weeklySuggestions = [
-    ...buildWeeklyActionSuggestions({
-      items: INNOVATION_RUBRIC_ITEMS,
-      values: innovationRubric,
-      rubricTitle: 'Projeto de Inovacao',
-      rubricArea: 'innovation',
-      tag: 'inovacao',
-      weekId: currentWeekData?.id || currentWeekData?.weekName || 'semana-atual',
-      dueDate: currentWeekData?.endDate || ''
-    }),
-    ...buildWeeklyActionSuggestions({
-      items: ROBOT_DESIGN_RUBRIC_ITEMS,
-      values: robotDesignRubric,
-      rubricTitle: 'Design do Robo',
-      rubricArea: 'robot_design',
-      tag: 'engenharia',
-      weekId: currentWeekData?.id || currentWeekData?.weekName || 'semana-atual',
-      dueDate: currentWeekData?.endDate || ''
-    })
-  ].sort((a, b) => a.currentScore - b.currentScore || a.rubricTitle.localeCompare(b.rubricTitle));
-
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <WeeklyActionPlan
-        suggestions={weeklySuggestions}
-        activePlanKeys={activePlanKeys}
-        currentWeekData={currentWeekData}
-        onCreateWeeklyRubricTasks={onCreateWeeklyRubricTasks}
-      />
-
       <RubricSection
         title="Rubrica: Projeto de Inovacao"
         titleIcon={<Lightbulb className="text-yellow-500" />}
