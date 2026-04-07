@@ -3479,7 +3479,7 @@ const handleFileSelect = (e) => {
       )
   };
 
-  const Notification = () => { if (!notification) return null; const isError = notification.type === 'error'; const isDownload = notification.type === 'download'; return (<div className={`fixed top-6 right-6 z-[100] px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-right duration-300 border ${isError ? 'bg-red-500/10 border-red-500 text-red-500' : isDownload ? 'bg-blue-500/10 border-blue-500 text-blue-500' : 'bg-green-500/10 border-green-500 text-green-500'}`}>{isError ? <AlertCircle size={24}/> : isDownload ? <Download size={24}/> : <CheckCircle size={24}/>}<span className="font-bold text-sm">{notification.msg}</span></div>) }
+  const Notification = () => { if (!notification) return null; const isError = notification.type === 'error'; const isDownload = notification.type === 'download'; return (<div className={`newgears-toast fixed top-6 right-6 z-[100] px-6 py-4 rounded-[22px] flex items-center gap-3 animate-in slide-in-from-right duration-300 border ${isError ? 'bg-red-500/12 border-red-400/40 text-red-200' : isDownload ? 'bg-cyan-500/12 border-cyan-400/40 text-cyan-100' : 'bg-emerald-500/12 border-emerald-400/40 text-emerald-100'}`}>{isError ? <AlertCircle size={24}/> : isDownload ? <Download size={24}/> : <CheckCircle size={24}/>}<span className="font-black text-sm">{notification.msg}</span></div>) }
 
 
 
@@ -3614,11 +3614,11 @@ const handleFileSelect = (e) => {
 
     return (
 
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 animate-in fade-in">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/92 p-4 animate-in fade-in backdrop-blur-sm">
 
-        <div className={`bg-zinc-800 border border-white/10 rounded-2xl p-6 w-full relative animate-in zoom-in-95 z-60 shadow-[0_0_50px_rgba(0,0,0,0.8)] overflow-y-auto custom-scrollbar ${modal.type === 'imageView' ? 'max-w-4xl h-auto' : 'max-w-md max-h-[90vh]'}`}>
+        <div className={`newgears-modal-frame p-6 w-full relative animate-in zoom-in-95 z-60 overflow-y-auto custom-scrollbar ${modal.type === 'imageView' ? 'max-w-4xl h-auto' : 'max-w-md max-h-[90vh]'}`}>
 
-          <button onClick={closeModal} className="absolute top-4 right-4 text-gray-500 hover:text-white p-2 z-50"><X size={20}/></button>
+          <button onClick={closeModal} className="absolute top-4 right-4 text-slate-400 hover:text-white p-2 z-50 rounded-full border border-white/10 bg-white/5"><X size={20}/></button>
 
 
 
@@ -6794,45 +6794,46 @@ const handleFileSelect = (e) => {
 // --- TELA DE LOGIN (Se não tiver usuário logado) ---
   if (!currentUser) {
       return (
-          <div className="min-h-screen bg-zinc-900 text-white font-sans flex items-center justify-center p-4 relative overflow-hidden">
+          <div className="newgears-login-shell min-h-screen text-white flex items-center justify-center p-4 relative overflow-hidden">
               {/* Fundo decorativo */}
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-fuchsia-500"></div>
-              <div className="absolute -top-20 -left-20 w-64 h-64 bg-purple-500/20 rounded-full blur-[100px]"></div>
-              <div className="absolute bottom-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-[120px]"></div>
+              <div className="newgears-orb newgears-orb--cyan"></div>
+              <div className="newgears-orb newgears-orb--pink"></div>
+              <div className="newgears-orb newgears-orb--yellow"></div>
 
-              <div className="bg-[#151520] border border-white/10 p-8 rounded-2xl w-full max-w-md shadow-2xl relative z-10 animate-in zoom-in-95 duration-500">
+              <div className="newgears-login-card p-8 w-full max-w-md shadow-2xl relative z-10 animate-in zoom-in-95 duration-500">
                   <div className="text-center mb-8 mt-2">
- <div className="w-24 h-24 mx-auto mb-6 flex items-center justify-center">
+ <div className="w-24 h-24 mx-auto mb-6 flex items-center justify-center rounded-[28px] border border-white/12 bg-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.2)]">
     <LogoNewGears />
 </div>
-                      <h1 className="text-2xl font-black italic tracking-tighter">GESTÃO NEW GEARS</h1>
-                      <p className="text-gray-500 text-xs uppercase tracking-[0.2em] mt-2 font-bold">Acesso Restrito 2026</p>
+                      <span className="inline-flex items-center gap-2 rounded-full border border-yellow-300/20 bg-yellow-300/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-yellow-100">Equipe FLL em missao</span>
+                      <h1 className="text-3xl font-black tracking-tight mt-4">Base da Equipe New Gears</h1>
+                      <p className="text-slate-300/75 text-sm mt-3 leading-relaxed">Entre para acompanhar desafios, evoluir no XP e viver a temporada com cara de jogo, robo e torneio.</p>
                   </div>
 
                   <form onSubmit={handleLogin} className="space-y-5">
                       <div>
-                          <label className="text-[10px] text-gray-500 uppercase font-bold mb-1.5 block tracking-wider">Usuário de Acesso</label>
+                          <label className="text-[10px] text-slate-300/60 uppercase font-black mb-1.5 block tracking-wider">Seu usuario</label>
                           <div className="relative">
-                              <UserCircle className="absolute left-3 top-3.5 text-gray-500" size={18}/>
+                              <UserCircle className="absolute left-3 top-3.5 text-slate-400" size={18}/>
                               <input 
                                   type="text" 
                                   value={loginUser} 
                                   onChange={(e) => setLoginUser(e.target.value)} 
-                                  className="w-full bg-black/40 border border-white/10 rounded-xl p-3 pl-10 text-white focus:border-purple-500 focus:bg-black/60 outline-none transition-all placeholder:text-gray-700 font-medium" 
+                                  className="newgears-login-input w-full p-3 pl-10 text-white outline-none transition-all placeholder:text-slate-500 font-medium" 
                                   placeholder="Ex: tecnico ou ana.fll" 
                                   autoFocus 
                               />
                           </div>
                       </div>
                       <div>
-                          <label className="text-[10px] text-gray-500 uppercase font-bold mb-1.5 block tracking-wider">Senha</label>
+                          <label className="text-[10px] text-slate-300/60 uppercase font-black mb-1.5 block tracking-wider">Senha secreta</label>
                           <div className="relative">
-                              <Lock className="absolute left-3 top-3.5 text-gray-500" size={18}/>
+                              <Lock className="absolute left-3 top-3.5 text-slate-400" size={18}/>
                               <input 
                                   type="password" 
                                   value={loginPass} 
                                   onChange={(e) => setLoginPass(e.target.value)} 
-                                  className="w-full bg-black/40 border border-white/10 rounded-xl p-3 pl-10 text-white focus:border-purple-500 focus:bg-black/60 outline-none transition-all placeholder:text-gray-700 font-medium" 
+                                  className="newgears-login-input w-full p-3 pl-10 text-white outline-none transition-all placeholder:text-slate-500 font-medium" 
                                   placeholder="••••••" 
                               />
                           </div>
@@ -6845,13 +6846,13 @@ const handleFileSelect = (e) => {
                           </div>
                       )}
 
-                      <button className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-fuchsia-600 text-white font-black py-4 rounded-xl hover:opacity-90 transition-all shadow-[0_0_20px_rgba(150,150,255,0.2)] hover:shadow-[0_0_30px_rgba(150,150,255,0.3)] mt-2 text-sm uppercase tracking-widest flex items-center justify-center gap-2">
-                          <LogOut size={18} className="rotate-180"/> Entrar no Sistema
+                      <button className="newgears-login-button w-full text-white font-black py-4 mt-2 text-sm uppercase tracking-widest flex items-center justify-center gap-2">
+                          <LogOut size={18} className="rotate-180"/> Entrar na Base
                       </button>
                   </form>
                   
                   <div className="mt-8 pt-6 border-t border-white/5 text-center">
-                      <p className="text-[10px] text-gray-600">Sistema desenvolvido para a equipe de FLL SESI Vinhedo</p>
+                      <p className="text-[11px] text-slate-400/70">Plataforma da equipe para aprender, jogar junto e crescer na temporada.</p>
                   </div>
               </div>
           </div>
@@ -6862,38 +6863,31 @@ const handleFileSelect = (e) => {
   // Só aparece DEPOIS que logou, enquanto baixa os dados
   if (currentUser && !currentWeekData) {
       return (
-          <div className="min-h-screen bg-zinc-900 flex flex-col items-center justify-center text-white gap-4">
-              <Loader2 className="animate-spin text-blue-500" size={48} />
-              <p className="animate-pulse text-sm font-bold uppercase tracking-widest text-gray-500">Sincronizando Banco de Dados...</p>
+          <div className="newgears-loading-shell min-h-screen flex flex-col items-center justify-center text-white gap-4 px-6 text-center">
+              <div className="rounded-[28px] border border-white/12 bg-white/10 p-6 shadow-[0_24px_60px_rgba(0,0,0,0.24)]">
+                <Loader2 className="animate-spin text-cyan-300" size={48} />
+              </div>
+              <p className="animate-pulse text-sm font-black uppercase tracking-[0.22em] text-slate-300/70">Aquecendo a base da equipe...</p>
+              <p className="text-sm text-slate-300/70 max-w-md">Estamos puxando cronograma, tarefas, ranking e tudo que a equipe precisa para entrar em modo missao.</p>
           </div>
       )
   }
 
   // --- RENDER PRINCIPAL (SÓ CHEGA AQUI SE ESTIVER LOGADO) ---
   return (
-    <div className="min-h-screen bg-[#111118] text-white font-sans selection:bg-purple-500 selection:text-white pb-20 relative">
+    <div className="newgears-shell min-h-screen text-white selection:bg-yellow-300 selection:text-slate-950 pb-20 relative overflow-hidden">
       {/* Estilo da Animação de Fundo */}
-      <style>{`
-        @keyframes pulse-glow {
-          0%, 100% { opacity: 0.03; transform: scale(0.98); filter: brightness(1); }
-          50% { opacity: 0.08; transform: scale(1.02); filter: brightness(1.5) drop-shadow(0 0 15px rgba(59, 130, 246, 0.2)); }
-        }
-      `}</style>
+      <div className="newgears-floating-layer">
+        <div className="newgears-orb newgears-orb--cyan"></div>
+        <div className="newgears-orb newgears-orb--yellow"></div>
+        <div className="newgears-orb newgears-orb--pink"></div>
+        <div className="newgears-orb newgears-orb--lime"></div>
+      </div>
 
       {/* Fundo com o Logo */}
-      <div 
-        className="fixed inset-0 z-0 pointer-events-none"
-        style={{
-          backgroundImage: 'url(/vite.svg)',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-          backgroundSize: 'contain',
-          animation: 'pulse-glow 6s infinite ease-in-out'
-        }}
-      ></div>
 
       {/* Conteúdo fica por cima */}
-      <div className="relative z-10">
+      <div className="newgears-content">
         
         {/* EFEITO DE CONFETES (Fica no topo de tudo, z-index gigante) */}
         {showConfetti && (
@@ -7178,12 +7172,18 @@ const handleFileSelect = (e) => {
       />
 
  {/* HEADER DO SISTEMA (COMPLETO) */}
-      <header className="sticky top-0 z-40 bg-zinc-900/90 backdrop-blur-md border-b border-white/10 px-6 py-4 flex justify-between items-center shadow-lg">
-          <div className="w-28 h-auto">
-              <LogoNewGears />
+      <header className="newgears-topbar sticky top-0 z-40 px-4 md:px-6 py-4 flex justify-between items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+              <div className="newgears-logo-hub w-24 md:w-28 h-auto px-3 py-2">
+                  <LogoNewGears />
+              </div>
+              <div className="hidden xl:block">
+                  <p className="text-[10px] uppercase tracking-[0.22em] text-slate-300/55 font-black">Base da equipe</p>
+                  <p className="text-sm font-black text-white mt-1">{currentWeekData?.weekName || 'Semana da temporada'}</p>
+              </div>
           </div>
 
-          <div className="flex items-center gap-3 md:gap-4">
+          <div className="flex items-center gap-2 md:gap-3 flex-wrap justify-end">
               
               {/* --- CONTADOR COMPACTO --- */}
               <Countdown 
@@ -7306,7 +7306,7 @@ const handleFileSelect = (e) => {
 
       {/* --- ÁREA DO TÉCNICO (ADMIN) --- */}
       {isAdmin && (
-        <main className="p-4 md:p-8 max-w-[1600px] mx-auto animate-in fade-in duration-500">
+        <main className="newgears-stage p-4 md:p-8 max-w-[1600px] mx-auto animate-in fade-in duration-500">
           <UrgentEventsBanner />
 
           <div className="mb-6">
@@ -7438,7 +7438,7 @@ const handleFileSelect = (e) => {
 
       {/* --- ÁREA DO ALUNO --- */}
       {!isAdmin && viewAsStudent && (
-        <main className="p-4 md:p-8 w-full max-w-[1800px] mx-auto animate-in slide-in-from-bottom-8">
+        <main className="newgears-stage p-4 md:p-8 w-full max-w-[1800px] mx-auto animate-in slide-in-from-bottom-8">
           <UrgentEventsBanner />
 
           <div className="mb-6">

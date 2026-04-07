@@ -38,9 +38,9 @@ const Countdown = ({ targetDate, title, compact = false }) => {
       // Modo Compacto (para o Header)
       const labels = { dias: 'd', horas: 'h', minutos: 'm', segundos: 's' };
       timerComponents.push(
-        <span key={interval} className="flex items-baseline">
-          <span className="font-mono font-bold text-white text-sm">{timeLeft[interval]}</span>
-          <span className="text-[10px] text-gray-500 mr-1">{labels[interval] || interval.charAt(0)}</span>
+        <span key={interval} className="flex items-center gap-1 rounded-[14px] border border-white/10 bg-black/20 px-2 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+          <span className="font-mono font-black text-white text-sm">{timeLeft[interval]}</span>
+          <span className="text-[10px] uppercase text-cyan-200/80">{labels[interval] || interval.charAt(0)}</span>
         </span>
       );
     } else {
@@ -56,10 +56,12 @@ const Countdown = ({ targetDate, title, compact = false }) => {
 
   if (compact) {
     return (
-      <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 hidden xl:flex">
-        <span className="text-[10px] font-bold uppercase text-yellow-500 tracking-wider mr-1">{title}:</span>
-        <div className="flex items-center">
-          {timerComponents.length ? timerComponents : <span className="text-xs font-bold text-green-500">Hoje!</span>}
+      <div className="hidden xl:flex items-center gap-2 rounded-[20px] border border-white/12 bg-[linear-gradient(145deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] px-3 py-2 shadow-[0_14px_30px_rgba(0,0,0,0.18)]">
+        <span className="rounded-full border border-yellow-300/20 bg-yellow-300/10 px-2.5 py-1 text-[10px] font-black uppercase text-yellow-100 tracking-[0.18em]">
+          {title}
+        </span>
+        <div className="flex items-center gap-1.5">
+          {timerComponents.length ? timerComponents : <span className="rounded-full border border-green-400/20 bg-green-400/10 px-3 py-1 text-xs font-black text-green-200">Chegou!</span>}
         </div>
       </div>
     );

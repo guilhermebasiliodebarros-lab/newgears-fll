@@ -2,33 +2,328 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Se o VS Code marcar isso de vermelho, ignore. É normal! */
+:root {
+  color-scheme: dark;
+  font-family: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+  --ng-bg-1: #07111f;
+  --ng-bg-2: #15163a;
+  --ng-bg-3: #201031;
+  --ng-panel: rgba(17, 20, 40, 0.84);
+  --ng-panel-strong: rgba(13, 16, 33, 0.94);
+  --ng-line: rgba(255, 255, 255, 0.12);
+  --ng-text: #eff6ff;
+  --ng-muted: #a6b3d1;
+  --ng-cyan: #4dd6ff;
+  --ng-yellow: #ffd84d;
+  --ng-pink: #ff7ac8;
+  --ng-lime: #b9ff66;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
 body {
-  background-color: #18181b; /* Garante fundo escuro */
-  color: white;
+  margin: 0;
+  color: var(--ng-text);
+  font-family: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(77, 214, 255, 0.16), transparent 26%),
+    radial-gradient(circle at top right, rgba(255, 122, 200, 0.14), transparent 24%),
+    radial-gradient(circle at bottom left, rgba(185, 255, 102, 0.10), transparent 28%),
+    linear-gradient(135deg, var(--ng-bg-1) 0%, #11172c 38%, var(--ng-bg-2) 68%, var(--ng-bg-3) 100%);
 }
 
-.app-background {
-  background-image: url('/mesaUnearthed.png');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
-  position: relative;
-}
-
-.app-background::before {
+body::before,
+body::after {
   content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(21, 21, 32, 0.8);
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+body::before {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    radial-gradient(circle at 15% 20%, rgba(255, 216, 77, 0.16), transparent 12%),
+    radial-gradient(circle at 85% 18%, rgba(77, 214, 255, 0.12), transparent 12%),
+    radial-gradient(circle at 25% 82%, rgba(255, 122, 200, 0.10), transparent 14%);
+  background-size: 34px 34px, 34px 34px, auto, auto, auto;
+  opacity: 0.28;
+  mix-blend-mode: screen;
+}
+
+body::after {
+  background:
+    radial-gradient(circle at 50% 12%, rgba(255, 255, 255, 0.10), transparent 28%),
+    radial-gradient(circle at 10% 70%, rgba(255, 255, 255, 0.06), transparent 22%),
+    radial-gradient(circle at 88% 74%, rgba(255, 255, 255, 0.06), transparent 22%);
+  opacity: 0.5;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  transform: translateY(0);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(77, 214, 255, 0.45) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(77, 214, 255, 0.65), rgba(255, 122, 200, 0.55));
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.newgears-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.newgears-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12% 14%, rgba(255, 216, 77, 0.18), transparent 14%),
+    radial-gradient(circle at 82% 10%, rgba(77, 214, 255, 0.16), transparent 16%),
+    radial-gradient(circle at 78% 78%, rgba(255, 122, 200, 0.12), transparent 18%);
+  z-index: 0;
+}
+
+.newgears-content {
+  position: relative;
   z-index: 1;
 }
 
-.app-content {
+.newgears-floating-layer {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.newgears-orb {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(18px);
+  opacity: 0.55;
+  animation: newgears-float 9s ease-in-out infinite;
+}
+
+.newgears-orb--cyan {
+  top: 8%;
+  left: -4%;
+  width: 220px;
+  height: 220px;
+  background: radial-gradient(circle, rgba(77, 214, 255, 0.34), transparent 70%);
+}
+
+.newgears-orb--yellow {
+  top: 14%;
+  right: 10%;
+  width: 170px;
+  height: 170px;
+  background: radial-gradient(circle, rgba(255, 216, 77, 0.28), transparent 72%);
+  animation-delay: 1.2s;
+}
+
+.newgears-orb--pink {
+  bottom: 6%;
+  right: -2%;
+  width: 260px;
+  height: 260px;
+  background: radial-gradient(circle, rgba(255, 122, 200, 0.22), transparent 72%);
+  animation-delay: 2.1s;
+}
+
+.newgears-orb--lime {
+  bottom: 14%;
+  left: 12%;
+  width: 150px;
+  height: 150px;
+  background: radial-gradient(circle, rgba(185, 255, 102, 0.18), transparent 72%);
+  animation-delay: 0.6s;
+}
+
+.newgears-topbar {
+  margin: 0.85rem 0.85rem 0;
+  border-radius: 1.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(135deg, rgba(15, 18, 34, 0.92), rgba(24, 28, 58, 0.88)),
+    radial-gradient(circle at top left, rgba(77, 214, 255, 0.12), transparent 26%);
+  box-shadow:
+    0 22px 65px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.newgears-topbar button {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 8px 20px rgba(0, 0, 0, 0.18);
+}
+
+.newgears-logo-hub {
+  border-radius: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03)),
+    radial-gradient(circle at top left, rgba(255, 216, 77, 0.18), transparent 36%);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
+}
+
+.newgears-stage {
   position: relative;
-  z-index: 2;
+}
+
+.newgears-login-shell {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(77, 214, 255, 0.18), transparent 24%),
+    radial-gradient(circle at top right, rgba(255, 122, 200, 0.18), transparent 22%),
+    radial-gradient(circle at bottom left, rgba(255, 216, 77, 0.12), transparent 24%),
+    linear-gradient(135deg, #09111f 0%, #13183a 48%, #1f1235 100%);
+}
+
+.newgears-login-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    linear-gradient(160deg, rgba(20, 24, 49, 0.96), rgba(14, 18, 34, 0.92)),
+    radial-gradient(circle at top right, rgba(77, 214, 255, 0.10), transparent 26%);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.newgears-login-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 22px 22px;
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.newgears-login-input {
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(8, 10, 24, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.newgears-login-input:focus {
+  border-color: rgba(77, 214, 255, 0.55);
+  box-shadow:
+    0 0 0 3px rgba(77, 214, 255, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.newgears-login-button {
+  border-radius: 1.2rem;
+  background: linear-gradient(135deg, #35c5ff 0%, #6f6cff 45%, #ff7ac8 100%);
+  box-shadow:
+    0 16px 32px rgba(77, 214, 255, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.newgears-login-button:hover {
+  box-shadow:
+    0 20px 40px rgba(255, 122, 200, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.newgears-loading-shell {
+  background:
+    radial-gradient(circle at top left, rgba(77, 214, 255, 0.18), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(255, 216, 77, 0.12), transparent 28%),
+    linear-gradient(135deg, #09101f 0%, #13183b 48%, #1b1230 100%);
+}
+
+.newgears-modal-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(165deg, rgba(19, 22, 46, 0.96), rgba(14, 17, 34, 0.94)),
+    radial-gradient(circle at top right, rgba(77, 214, 255, 0.10), transparent 24%);
+  box-shadow:
+    0 35px 90px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.newgears-modal-frame::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 24px 24px;
+  opacity: 0.35;
+}
+
+.newgears-toast {
+  border-radius: 1.25rem;
+  backdrop-filter: blur(16px);
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+@keyframes newgears-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, -14px, 0) scale(1.05);
+  }
 }
