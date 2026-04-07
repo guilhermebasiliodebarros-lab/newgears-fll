@@ -4,6 +4,8 @@ import { db } from './firebase'; // Importa a instância já inicializada
 import Countdown from './components/Countdown';
 import PitStopModal from './components/PitStopModal';
 import RankingPanel from './components/RankingPanel';
+import TeamCheckInModal from './components/TeamCheckInModal';
+import FullScheduleModal from './components/FullScheduleModal';
 import LogoNewGears from './components/LogoNewGears';
 import TvModePanel from './components/TvModePanel';
 import RubricViewPanel from './components/RubricView';
@@ -15,7 +17,7 @@ import InnovationStrategyPanel from './components/InnovationStrategyPanel';
 import RobotDesignStrategyPanel from './components/RobotDesignStrategyPanel';
 import RobotRoundsPanel from './components/RobotRoundsPanel';
 import RotationOperationsPanel from './components/RotationOperationsPanel';
-import { WorkspaceHero, WorkspaceTabs, WorkspaceScene, WorkspaceCollapsible } from './components/WorkspaceChrome';
+import { WorkspaceHero, WorkspaceTabs, WorkspaceScene, WorkspaceCollapsible, WorkspacePanelToolbar } from './components/WorkspaceChrome';
 import Confetti from 'react-confetti';
 import { 
   User, 
@@ -166,12 +168,44 @@ const normalizeRubricValues = (data, defaults) => ({
 });
 
 const ADMIN_PANEL_DEFAULTS = {
-  dashboard: false
+  dashboard: true,
+  prep: true,
+  judge: true,
+  stats: true,
+  achievements: true
 };
 
 const STUDENT_PANEL_DEFAULTS = {
-  dashboard: false
+  dashboard: true,
+  prep: true,
+  judge: true,
+  stats: true,
+  achievements: true
 };
+
+const EVENT_TYPE_OPTIONS = [
+  { value: 'Visita', label: 'Visita Tecnica' },
+  { value: 'Especialista', label: 'Mentoria / Especialista' },
+  { value: 'Reunião', label: 'Reuniao Extra' },
+  { value: 'Treino', label: 'Treino' },
+  { value: 'Prazo', label: 'Prazo / Entrega' },
+  { value: 'Competição', label: 'Competicao' },
+  { value: 'Outro', label: 'Outro' }
+];
+
+const EVENT_PRIORITY_OPTIONS = [
+  { value: 'normal', label: 'Rotina' },
+  { value: 'alta', label: 'Alta prioridade' },
+  { value: 'critica', label: 'Critica' }
+];
+
+const EVENT_STATUS_OPTIONS = [
+  { value: 'planejado', label: 'Planejado' },
+  { value: 'confirmado', label: 'Confirmado' },
+  { value: 'concluido', label: 'Concluido' }
+];
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 const readStoredPrefs = (storageKey, defaults) => {
   if (typeof window === 'undefined') return defaults;
@@ -287,6 +321,16 @@ function App() {
   const [submissionText, setSubmissionText] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [showFullSchedule, setShowFullSchedule] = useState(false); 
+  const [agendaSearchQuery, setAgendaSearchQuery] = useState('');
+  const [agendaTypeFilter, setAgendaTypeFilter] = useState('all');
+  const [agendaScopeFilter, setAgendaScopeFilter] = useState('all');
+  const [adminLogbookStudentId, setAdminLogbookStudentId] = useState(null);
+  const [adminLogbookSearchQuery, setAdminLogbookSearchQuery] = useState('');
+  const [adminLogbookStudentQuery, setAdminLogbookStudentQuery] = useState('');
+  const [adminLogbookWeekFilter, setAdminLogbookWeekFilter] = useState('all');
+  const [studentLogbookSearchQuery, setStudentLogbookSearchQuery] = useState('');
+  const [studentLogbookWeekFilter, setStudentLogbookWeekFilter] = useState('all');
+  const [studentLogbookDraft, setStudentLogbookDraft] = useState('');
   const today = new Date().toISOString().split('T')[0];
   const [missions, setMissions] = useState({
     Engenharia: { text: "Definir estratégia do robô.", deadline: today },
@@ -305,6 +349,31 @@ function App() {
   useEffect(() => {
       localStorage.setItem('newgears_student_mission_mode', studentMissionMode);
   }, [studentMissionMode]);
+
+  useEffect(() => {
+      if (typeof window === 'undefined') return;
+
+      if (!viewAsStudent?.id) {
+          setStudentLogbookDraft('');
+          return;
+      }
+
+      const draftKey = `newgears_logbook_draft_${viewAsStudent.id}`;
+      setStudentLogbookDraft(localStorage.getItem(draftKey) || '');
+  }, [viewAsStudent?.id]);
+
+  useEffect(() => {
+      if (typeof window === 'undefined' || !viewAsStudent?.id) return;
+
+      const draftKey = `newgears_logbook_draft_${viewAsStudent.id}`;
+
+      if (studentLogbookDraft.trim()) {
+          localStorage.setItem(draftKey, studentLogbookDraft);
+          return;
+      }
+
+      localStorage.removeItem(draftKey);
+  }, [studentLogbookDraft, viewAsStudent?.id]);
 
   const openImmersiveMode = async (setter) => {
       setter(true);
@@ -494,10 +563,19 @@ function App() {
       }
   }, [viewAsStudent?.xp, viewAsStudent?.id]);
 
+  const CHECK_IN_REWARD_XP = 2;
+  const getTodayMoodDate = () => {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+  };
+
   // Função para carregar a bateria de hoje do banco
   useEffect(() => {
       if (!db) return;
-      const today = new Date().toISOString().split('T')[0];
+      const today = getTodayMoodDate();
       
       // Cria uma "escuta" no banco para ver os humores de hoje em tempo real
       const q = query(collection(db, "dailyMoods"), where("date", "==", today));
@@ -737,6 +815,227 @@ function App() {
   const localTomorrowStr = getLocalYYYYMMDD(localTomorrowObj);
   const officialStudentDeadlineObj = getNextOrSameWeekday(localTodayObj, 3);
   const officialStudentDeadlineStr = getLocalYYYYMMDD(officialStudentDeadlineObj);
+  const localTodayStart = new Date(localTodayObj.getFullYear(), localTodayObj.getMonth(), localTodayObj.getDate());
+
+  const parseAgendaDate = (dateString) => {
+      if (!dateString) return null;
+      const [year, month, day] = dateString.split('-').map(Number);
+      if (!year || !month || !day) return null;
+      return new Date(year, month - 1, day);
+  };
+
+  const getEventDateTime = (event) => {
+      const eventDate = parseAgendaDate(event?.date);
+      if (!eventDate) return new Date(0);
+
+      const safeTime = event?.time || '23:59';
+      const [hours, minutes] = safeTime.split(':').map(Number);
+      eventDate.setHours(Number.isFinite(hours) ? hours : 23, Number.isFinite(minutes) ? minutes : 59, 0, 0);
+      return eventDate;
+  };
+
+  const compareEventsByDate = (left, right) => getEventDateTime(left) - getEventDateTime(right);
+
+  const formatAgendaDate = (dateString, options = {}) => {
+      const parsed = parseAgendaDate(dateString);
+      if (!parsed) return 'Data nao definida';
+      return parsed.toLocaleDateString('pt-BR', options);
+  };
+
+  const getAgendaDayOffset = (dateString) => {
+      const parsed = parseAgendaDate(dateString);
+      if (!parsed) return Number.POSITIVE_INFINITY;
+      return Math.round((parsed - localTodayStart) / DAY_IN_MS);
+  };
+
+  const getAgendaRelativeLabel = (dateString) => {
+      const dayOffset = getAgendaDayOffset(dateString);
+
+      if (dayOffset === 0) return 'Hoje';
+      if (dayOffset === 1) return 'Amanha';
+      if (dayOffset === -1) return 'Ontem';
+      if (dayOffset > 1) return `Em ${dayOffset} dias`;
+      return `${Math.abs(dayOffset)} dias atras`;
+  };
+
+  const getEventPriorityValue = (event) => event?.priority || 'normal';
+  const getEventStatusValue = (event) => event?.status || (event?.date && event.date < localTodayStr ? 'concluido' : 'confirmado');
+
+  const getEventTypeMeta = (type) => {
+      if (type === 'Especialista') {
+          return {
+              label: 'Especialista',
+              tone: 'border-purple-500/20 bg-purple-500/10 text-purple-200',
+              accent: 'from-purple-500/25 via-fuchsia-500/10 to-transparent'
+          };
+      }
+
+      if (type === 'Visita') {
+          return {
+              label: 'Visita Tecnica',
+              tone: 'border-blue-500/20 bg-blue-500/10 text-blue-200',
+              accent: 'from-blue-500/25 via-cyan-500/10 to-transparent'
+          };
+      }
+
+      if (type === 'Reunião') {
+          return {
+              label: 'Reuniao',
+              tone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-100',
+              accent: 'from-yellow-500/25 via-amber-500/10 to-transparent'
+          };
+      }
+
+      if (type === 'Treino') {
+          return {
+              label: 'Treino',
+              tone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200',
+              accent: 'from-emerald-500/25 via-green-500/10 to-transparent'
+          };
+      }
+
+      if (type === 'Prazo') {
+          return {
+              label: 'Prazo',
+              tone: 'border-orange-500/20 bg-orange-500/10 text-orange-100',
+              accent: 'from-orange-500/25 via-red-500/10 to-transparent'
+          };
+      }
+
+      if (type === 'Competição') {
+          return {
+              label: 'Competicao',
+              tone: 'border-red-500/20 bg-red-500/10 text-red-100',
+              accent: 'from-red-500/25 via-pink-500/10 to-transparent'
+          };
+      }
+
+      return {
+          label: type || 'Outro',
+          tone: 'border-white/10 bg-white/5 text-gray-200',
+          accent: 'from-white/15 via-white/5 to-transparent'
+      };
+  };
+
+  const getEventPriorityMeta = (priority) => {
+      if (priority === 'critica') {
+          return { label: 'Critica', tone: 'border-red-500/20 bg-red-500/10 text-red-100' };
+      }
+
+      if (priority === 'alta') {
+          return { label: 'Alta prioridade', tone: 'border-orange-500/20 bg-orange-500/10 text-orange-100' };
+      }
+
+      return { label: 'Rotina', tone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200' };
+  };
+
+  const getEventStatusMeta = (status) => {
+      if (status === 'planejado') {
+          return { label: 'Planejado', tone: 'border-white/10 bg-white/5 text-gray-200' };
+      }
+
+      if (status === 'concluido') {
+          return { label: 'Concluido', tone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200' };
+      }
+
+      return { label: 'Confirmado', tone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200' };
+  };
+
+  const matchesAgendaScope = (event, scope) => {
+      const dayOffset = getAgendaDayOffset(event.date);
+
+      if (scope === 'urgent') return dayOffset >= 0 && dayOffset <= 1;
+      if (scope === 'week') return dayOffset >= 0 && dayOffset <= 7;
+      if (scope === 'upcoming') return dayOffset >= 0;
+      if (scope === 'past') return dayOffset < 0;
+      return true;
+  };
+
+  const getLogbookEntryDate = (entry) => {
+      const parsed = new Date(entry?.date || 0);
+      return Number.isNaN(parsed.getTime()) ? new Date(0) : parsed;
+  };
+
+  const sortLogbookEntries = (entries) => [...entries].sort((left, right) => getLogbookEntryDate(right) - getLogbookEntryDate(left));
+
+  const getLogbookEntryWordCount = (entry) => {
+      if (entry?.wordCount) return entry.wordCount;
+      return (entry?.text || '').trim().split(/\s+/).filter(Boolean).length;
+  };
+
+  const getLogbookEntryPreview = (entry, maxLength = 200) => {
+      const text = entry?.text?.trim() || '';
+      if (text.length <= maxLength) return text;
+      return `${text.slice(0, maxLength).trim()}...`;
+  };
+
+  const getLogbookEntryTags = (entry) => {
+      if (Array.isArray(entry?.tags) && entry.tags.length > 0) return entry.tags;
+      return Array.from(new Set(((entry?.text || '').match(/#[^\s#]+/g) || []).map((tag) => tag.toLowerCase())));
+  };
+
+  const getLogbookStudentId = (entry) => {
+      if (!entry?.refPath) return null;
+      const pathParts = entry.refPath.split('/');
+      return pathParts.length > 1 ? pathParts[1] : null;
+  };
+
+  const buildLogbookWeekOptions = (entries) => {
+      const options = sortLogbookEntries(entries).reduce((acc, entry) => {
+          const value = String(entry.weekId ?? 'general');
+          if (acc.some((option) => option.value === value)) return acc;
+
+          acc.push({
+              value,
+              label: entry.weekName || `Semana ${entry.weekId || 'Geral'}`
+          });
+          return acc;
+      }, []);
+
+      if (currentWeekData && !options.some((option) => option.value === String(currentWeekData.id))) {
+          options.unshift({ value: String(currentWeekData.id), label: currentWeekData.weekName || 'Semana atual' });
+      }
+
+      return [{ value: 'all', label: 'Todas as semanas' }, ...options];
+  };
+
+  const groupLogbookEntriesByWeek = (entries) => {
+      const grouped = sortLogbookEntries(entries).reduce((acc, entry) => {
+          const key = String(entry.weekId ?? 'general');
+
+          if (!acc[key]) {
+              acc[key] = {
+                  key,
+                  weekId: entry.weekId ?? 0,
+                  weekName: entry.weekName || `Semana ${entry.weekId || 'Geral'}`,
+                  entries: []
+              };
+          }
+
+          acc[key].entries.push(entry);
+          return acc;
+      }, {});
+
+      return Object.values(grouped).sort((left, right) => {
+          if ((right.weekId || 0) !== (left.weekId || 0)) return (right.weekId || 0) - (left.weekId || 0);
+          return getLogbookEntryDate(right.entries[0]) - getLogbookEntryDate(left.entries[0]);
+      });
+  };
+
+  useEffect(() => {
+      if (!isAdmin) return;
+
+      const selectedExists = students.some((student) => student.id === adminLogbookStudentId);
+      if (adminLogbookStudentId && selectedExists) return;
+
+      const nextStudentId = sortLogbookEntries(logbookEntries)
+          .map((entry) => getLogbookStudentId(entry))
+          .find(Boolean) || students[0]?.id || null;
+
+      if (nextStudentId !== adminLogbookStudentId) {
+          setAdminLogbookStudentId(nextStudentId);
+      }
+  }, [isAdmin, students, logbookEntries, adminLogbookStudentId]);
 
   const eventsToday = events.filter(e => e.date === localTodayStr);
   const eventsTomorrow = events.filter(e => e.date === localTomorrowStr);
@@ -800,9 +1099,37 @@ function App() {
 
 // --- FUNÇÃO DE CRONOGRAMA OFICIAL (12 ALUNOS) ---
   // Usamos useMemo para reconectar os dados assim que os alunos carregarem do Firebase
+  const buildLocalDate = (year, monthIndex, day, hour = 12, minute = 0, second = 0, millisecond = 0) =>
+      new Date(year, monthIndex, day, hour, minute, second, millisecond);
+
+  const parseLocalDateValue = (dateString, endOfDay = false) => {
+      if (!dateString) return null;
+
+      const [year, month, day] = dateString.split('-').map(Number);
+      if (!year || !month || !day) return null;
+
+      return buildLocalDate(
+        year,
+        month - 1,
+        day,
+        endOfDay ? 23 : 0,
+        endOfDay ? 59 : 0,
+        endOfDay ? 59 : 0,
+        endOfDay ? 999 : 0
+      );
+  };
+
+  const formatLocalDateValue = (dateObj) => {
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+  };
+
   const rotationSchedule = useMemo(() => { 
       const schedule = []; 
-      let currentDate = new Date("2026-03-22"); // Data de Início (Domingo)
+      const totalScheduleWeeks = 36;
+      let currentDate = buildLocalDate(2026, 2, 22);
 
       // 1. CAPITÃS (Sempre Fixas em Gestão - Tarde)
       const capitasNames = ["Heloise", "Sofia"];
@@ -830,7 +1157,7 @@ function App() {
           });
       };
 
-      for (let i = 1; i <= 35; i++) { 
+      for (let i = 1; i <= totalScheduleWeeks; i++) { 
           const endDate = new Date(currentDate); 
           endDate.setDate(currentDate.getDate() + 6); // Agora a semana vai de Domingo a Sábado
           
@@ -878,8 +1205,8 @@ function App() {
           schedule.push({ 
               id: i, 
               weekName: `Semana ${i}`, 
-              startDate: currentDate.toISOString().split('T')[0], 
-              endDate: endDate.toISOString().split('T')[0], 
+              startDate: formatLocalDateValue(currentDate), 
+              endDate: formatLocalDateValue(endDate), 
               assignments: { 
                   Engenharia: getStudentObjects(engTeam), 
                   Inovação:   getStudentObjects(inovTeam),
@@ -901,9 +1228,9 @@ function App() {
         
         // Procura qual semana engloba o dia de hoje
         const found = rotationSchedule.find(w => {
-            const start = new Date(w.startDate);
-            const end = new Date(w.endDate);
-            end.setHours(23, 59, 59); // Ajuste para pegar o final do dia
+            const start = parseLocalDateValue(w.startDate);
+            const end = parseLocalDateValue(w.endDate, true);
+            if (!start || !end) return false;
             return now >= start && now <= end;
         });
 
@@ -911,8 +1238,11 @@ function App() {
             // Atualiza apenas se mudou de semana para não causar re-renders atoa
             setCurrentWeekData(prev => prev?.id !== found.id ? found : prev);
         } else {
-            // Fallback: Se hoje não estiver no cronograma, pega a primeira semana
-            setCurrentWeekData(prev => prev?.id !== rotationSchedule[0].id ? rotationSchedule[0] : prev);
+            const firstWeek = rotationSchedule[0];
+            const lastWeek = rotationSchedule[rotationSchedule.length - 1];
+            const firstWeekStart = parseLocalDateValue(firstWeek?.startDate);
+            const fallbackWeek = firstWeekStart && now < firstWeekStart ? firstWeek : lastWeek;
+            setCurrentWeekData(prev => prev?.id !== fallbackWeek?.id ? fallbackWeek : prev);
         }
     };
 
@@ -1072,6 +1402,51 @@ function App() {
       setTimeout(() => setNotification(null), 3000); 
   }
 
+  const handleTeamCheckInSubmit = async (level) => {
+      if (!viewAsStudent) return;
+
+      const dayOfWeek = new Date().getDay();
+      if (dayOfWeek !== 1 && dayOfWeek !== 3) {
+          showNotification("Check-in liberado apenas nas segundas e quartas.", "error");
+          return;
+      }
+
+      const hasVotedToday = teamMoods.some(mood => mood.studentId === viewAsStudent.id);
+      if (hasVotedToday) {
+          showNotification("Voce ja respondeu hoje. Bora focar no treino.", "error");
+          return;
+      }
+
+      const today = getTodayMoodDate();
+      const updatedXp = (viewAsStudent.xp || 0) + CHECK_IN_REWARD_XP;
+
+      try {
+          await addDoc(collection(db, "dailyMoods"), {
+              studentId: viewAsStudent.id,
+              studentName: viewAsStudent.name,
+              level,
+              date: today,
+              timestamp: new Date()
+          });
+
+          await updateDoc(doc(db, "students", viewAsStudent.id), {
+              xp: updatedXp
+          });
+
+          setStudents(prevStudents =>
+            prevStudents.map(student =>
+              student.id === viewAsStudent.id ? { ...student, xp: updatedXp } : student
+            )
+          );
+          setViewAsStudent(prev => (prev ? { ...prev, xp: updatedXp } : prev));
+          setShowBatteryModal(false);
+          showNotification(`Check-in registrado! +${CHECK_IN_REWARD_XP} XP na conta.`, "success");
+      } catch (error) {
+          console.error("Erro ao salvar bateria:", error);
+          showNotification("Nao foi possivel salvar o check-in.", "error");
+      }
+  }
+
   const getStudentName = (id) => { const s = students.find(stud => stud.id === id); return s ? s.name : "Vaga"; }
 
   const convertBase64 = (file) => new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result); reader.onerror = error => reject(error); });
@@ -1160,7 +1535,7 @@ function App() {
               tag,
               priority
           });
-          e.target.reset();
+          setStudentLogbookDraft('');
       } catch (error) {
           console.error("Erro ao criar tarefa:", error);
       }
@@ -1384,7 +1759,7 @@ function App() {
   // --- FUNÇÃO PARA SALVAR DIÁRIO DE BORDO ---
   const handleLogbookSubmit = async (e) => {
       e.preventDefault();
-      const text = e.target.entry.value;
+      const text = studentLogbookDraft.trim();
       // Se não tiver semana definida, pega a atual ou a 1
       const weekId = currentWeekData?.id || 1;
       const weekName = currentWeekData?.weekName || "Semana Inicial";
@@ -1399,6 +1774,9 @@ function App() {
           // Ou addDoc para permitir vários registros na semana?
           // Vamos usar addDoc para permitir vários insights na mesma semana.
           
+          const tags = Array.from(new Set((text.match(/#[^\s#]+/g) || []).map((tag) => tag.toLowerCase())));
+          const wordCount = text.split(/\s+/).filter(Boolean).length;
+
           const newEntry = {
               // Ainda salvamos o nome para a visualização consolidada do técnico
               studentName: viewAsStudent.name, 
@@ -1406,12 +1784,13 @@ function App() {
               weekId: weekId,       // Para ordenar
               weekName: weekName,   // Para exibir bonitinho
               date: new Date().toISOString(),
-              tags: [] // Futuro: #Mecanica, #Prog
+              tags,
+              wordCount
           };
 
           await addDoc(logbookRef, newEntry);
 
-          e.target.reset();
+          setStudentLogbookDraft('');
           showNotification("Diário de Bordo atualizado! 📖");
       } catch (error) {
           console.error("Erro ao salvar diário:", error);
@@ -1928,6 +2307,8 @@ const handleDeleteRound = async (id) => {
           date: fd.get('date'),
           time: fd.get('time'),
           type: fd.get('type'),
+          priority: fd.get('priority') || 'normal',
+          status: fd.get('status') || 'confirmado',
           location: fd.get('location'),
           description: fd.get('description'),
           author: modal.data?.author || viewAsStudent?.name || "Técnico"
@@ -1955,6 +2336,25 @@ const handleDeleteRound = async (id) => {
           } catch(error) {
               console.error("Erro ao excluir evento:", error);
           }
+      }
+  }
+
+  const handleCycleEventStatus = async (event) => {
+      if (!event?.id) return;
+
+      const currentStatus = getEventStatusValue(event);
+      const nextStatus = currentStatus === 'planejado'
+          ? 'confirmado'
+          : currentStatus === 'confirmado'
+              ? 'concluido'
+              : 'planejado';
+
+      try {
+          await updateDoc(doc(db, "events", event.id), { status: nextStatus });
+          showNotification(`Evento atualizado para ${getEventStatusMeta(nextStatus).label.toLowerCase()}.`, nextStatus === 'concluido' ? 'success' : undefined);
+      } catch (error) {
+          console.error("Erro ao atualizar status do evento:", error);
+          showNotification("Erro ao atualizar evento.", "error");
       }
   }
 
@@ -2330,6 +2730,44 @@ const handleDeleteRound = async (id) => {
   ];
 
   const isDashboardPanelVisible = isAdmin ? adminPanelState.dashboard : studentPanelState.dashboard;
+
+  const adminDashboardPanels = [
+      { id: 'prep', label: 'Prontidao', icon: <Crown size={14} />, activeClass: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200 hover:bg-yellow-500/15' },
+      { id: 'judge', label: 'Juizes', icon: <Gavel size={14} />, activeClass: 'border-amber-500/20 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15' },
+      { id: 'stats', label: 'Metricas', icon: <BarChart3 size={14} />, activeClass: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/15' },
+      { id: 'achievements', label: 'Conquistas', icon: <Medal size={14} />, activeClass: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/15' }
+  ];
+
+  const studentDashboardPanels = [
+      { id: 'prep', label: 'Mapa FLL', icon: <Rocket size={14} />, activeClass: 'border-blue-500/20 bg-blue-500/10 text-blue-200 hover:bg-blue-500/15' },
+      { id: 'judge', label: 'Narrativa', icon: <MessageSquare size={14} />, activeClass: 'border-purple-500/20 bg-purple-500/10 text-purple-200 hover:bg-purple-500/15' },
+      { id: 'stats', label: 'Metricas', icon: <BarChart3 size={14} />, activeClass: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/15' },
+      { id: 'achievements', label: 'Conquistas', icon: <Medal size={14} />, activeClass: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/15' }
+  ];
+
+  const currentDashboardPanels = isAdmin ? adminDashboardPanels : studentDashboardPanels;
+  const currentDashboardState = isAdmin ? adminPanelState : studentPanelState;
+  const visibleWorkspacePanelCount = currentDashboardPanels.filter((panel) => currentDashboardState[panel.id]).length;
+
+  const toggleWorkspacePanel = (panelId) => {
+      if (isAdmin) {
+          setAdminPanelState((prev) => ({ ...prev, [panelId]: !prev[panelId] }));
+          return;
+      }
+
+      setStudentPanelState((prev) => ({ ...prev, [panelId]: !prev[panelId] }));
+  };
+
+  const setWorkspacePanels = (value) => {
+      const patch = Object.fromEntries(currentDashboardPanels.map((panel) => [panel.id, value]));
+
+      if (isAdmin) {
+          setAdminPanelState((prev) => ({ ...prev, ...patch }));
+          return;
+      }
+
+      setStudentPanelState((prev) => ({ ...prev, ...patch }));
+  };
 
   const toggleDashboardPanel = () => {
       if (isAdmin) {
@@ -3854,11 +4292,11 @@ const handleFileSelect = (e) => {
                 <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
                         <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data</label>
-                        <input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" />
+                        <input name="date" type="date" defaultValue={modal.data?.date || localTodayStr} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" />
                     </div>
                     <div>
                         <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Horário</label>
-                        <input name="time" type="time" defaultValue={modal.data?.time} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" />
+                        <input name="time" type="time" defaultValue={modal.data?.time || '18:00'} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" />
                     </div>
                 </div>
 
@@ -3870,11 +4308,33 @@ const handleFileSelect = (e) => {
                             <option value="Especialista">Mentoria / Especialista</option>
                             <option value="Reunião">Reunião Extra</option>
                             <option value="Outro">Outro</option>
+                            <option value="Treino">Treino</option>
+                            <option value="Prazo">Prazo / Entrega</option>
+                            <option value="Competição">Competicao</option>
                         </select>
                     </div>
                     <div>
                         <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Local / Link</label>
                         <input name="location" defaultValue={modal.data?.location} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Zoom ou Unicamp" />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Prioridade</label>
+                        <select name="priority" defaultValue={modal.data?.priority || 'normal'} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none">
+                            {EVENT_PRIORITY_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Status</label>
+                        <select name="status" defaultValue={modal.data?.status || 'confirmado'} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none">
+                            {EVENT_STATUS_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                        </select>
                     </div>
                 </div>
 
@@ -5397,72 +5857,418 @@ const handleFileSelect = (e) => {
   };
 
   // --- COMPONENTE DIÁRIO DE BORDO ---
+  const DiaryWorkspaceView = () => {
+      const currentWeekValue = String(currentWeekData?.id || 'current');
+      const prompts = ['Hoje eu testei...', 'O principal aprendizado foi...', 'O que deu errado foi...', 'Na proxima semana quero melhorar...'];
+      const formatDiaryDate = (entry, includeTime = false) => getLogbookEntryDate(entry).toLocaleDateString(
+          'pt-BR',
+          includeTime ? { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' } : { day: '2-digit', month: 'long', year: 'numeric' }
+      );
+      const renderTags = (tags) => tags.length ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+              {tags.map((tag) => <span key={tag} className="rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-yellow-100">{tag}</span>)}
+          </div>
+      ) : null;
+      const renderEntries = (entries, emptyTitle, emptyDetail, options = {}) => {
+          const groups = groupLogbookEntriesByWeek(entries);
+          if (!groups.length) {
+              return (
+                  <div className="rounded-[30px] border border-dashed border-white/10 bg-[#151520] p-10 text-center">
+                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[20px] border border-white/10 bg-white/5"><BookOpen size={28} className="text-yellow-300" /></div>
+                      <h3 className="mt-5 text-2xl font-black text-white">{emptyTitle}</h3>
+                      <p className="mt-3 text-sm leading-relaxed text-gray-400">{emptyDetail}</p>
+                  </div>
+              );
+          }
+
+          return (
+              <div className="space-y-8">
+                  {groups.map((group) => (
+                      <section key={group.key} className="space-y-4">
+                          <div className="flex items-end justify-between gap-4">
+                              <div>
+                                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Bloco semanal</p>
+                                  <h3 className="mt-2 text-xl font-black text-white">{group.weekName}</h3>
+                              </div>
+                              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">{group.entries.length} registro(s)</span>
+                          </div>
+                          <div className="grid gap-4 xl:grid-cols-2">
+                              {group.entries.map((entry) => {
+                                  const tags = getLogbookEntryTags(entry);
+                                  const wordCount = getLogbookEntryWordCount(entry);
+                                  const readMinutes = Math.max(1, Math.ceil(wordCount / 120));
+                                  const timeLabel = formatDiaryDate(entry, true).split(',').slice(-1)[0]?.trim() || 'Horario';
+                                  return (
+                                      <article key={entry.id} className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[#151520] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+                                          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,0.08),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.08),transparent_26%)]"></div>
+                                          <div className="relative z-10">
+                                              <div className="flex items-start justify-between gap-4">
+                                                  <div className="min-w-0">
+                                                      <div className="flex flex-wrap items-center gap-2">
+                                                          <span className="rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-yellow-100">{entry.weekName || `Semana ${entry.weekId || 'Geral'}`}</span>
+                                                          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">{wordCount} palavras</span>
+                                                          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400">{readMinutes} min leitura</span>
+                                                      </div>
+                                                      <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-gray-400">
+                                                          {options.showStudentName && <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-gray-200"><UserCircle size={12} /> {entry.studentName}</span>}
+                                                          <span className="inline-flex items-center gap-2"><Calendar size={12} className="text-yellow-400" /> {formatDiaryDate(entry)}</span>
+                                                          <span className="inline-flex items-center gap-2"><Clock size={12} className="text-cyan-400" /> {timeLabel}</span>
+                                                      </div>
+                                                  </div>
+                                                  <button onClick={() => handleDeleteLogbookEntry(entry)} className="rounded-2xl border border-white/10 bg-black/20 p-3 text-gray-400 transition-all hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300" title="Excluir Registro"><Trash2 size={15} /></button>
+                                              </div>
+                                              <p className="mt-5 whitespace-pre-wrap text-sm leading-relaxed text-gray-200">{entry.text}</p>
+                                              {renderTags(tags)}
+                                          </div>
+                                      </article>
+                                  );
+                              })}
+                          </div>
+                      </section>
+                  ))}
+              </div>
+          );
+      };
+
+      if (isAdmin) {
+          const normalizedStudentQuery = adminLogbookStudentQuery.trim().toLowerCase();
+          const normalizedEntryQuery = adminLogbookSearchQuery.trim().toLowerCase();
+          const teamEntries = sortLogbookEntries(logbookEntries);
+          const selectedStudent = students.find((student) => student.id === adminLogbookStudentId) || null;
+          const selectedEntries = adminLogbookStudentId ? teamEntries.filter((entry) => getLogbookStudentId(entry) === adminLogbookStudentId) : [];
+          const filteredEntries = selectedEntries.filter((entry) => (!normalizedEntryQuery || [entry.text, entry.weekName, ...getLogbookEntryTags(entry)].filter(Boolean).join(' ').toLowerCase().includes(normalizedEntryQuery)) && (adminLogbookWeekFilter === 'all' || String(entry.weekId ?? 'general') === adminLogbookWeekFilter));
+          const studentCards = students.map((student) => {
+              const entries = teamEntries.filter((entry) => getLogbookStudentId(entry) === student.id);
+              return { ...student, totalEntries: entries.length, currentWeekEntries: currentWeekData ? entries.filter((entry) => String(entry.weekId) === currentWeekValue).length : 0, lastEntry: entries[0] || null };
+          }).filter((student) => !normalizedStudentQuery || [student.name, student.role].filter(Boolean).join(' ').toLowerCase().includes(normalizedStudentQuery)).sort((left, right) => right.totalEntries - left.totalEntries || (left.name || '').localeCompare(right.name || '', 'pt-BR'));
+          const avgWords = selectedEntries.length ? Math.round(selectedEntries.reduce((total, entry) => total + getLogbookEntryWordCount(entry), 0) / selectedEntries.length) : 0;
+          const activeWriterCount = new Set(teamEntries.map((entry) => getLogbookStudentId(entry)).filter(Boolean)).size;
+          const hasAdminFilters = Boolean(normalizedEntryQuery) || adminLogbookWeekFilter !== 'all';
+
+          return (
+              <div className="animate-in fade-in duration-500 space-y-6 max-w-7xl mx-auto">
+                  <section className="rounded-[32px] border border-white/10 bg-gradient-to-br from-[#2c180f] via-[#151520] to-[#0f1726] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
+                      <div className="grid gap-4 lg:grid-cols-4">
+                          <div className="lg:col-span-2">
+                              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-yellow-200">Radar do diario</p>
+                              <h3 className="mt-3 text-3xl font-black text-white">Leitura rapida da memoria da equipe.</h3>
+                              <p className="mt-3 text-sm leading-relaxed text-gray-300">Veja quem esta registrando com frequencia e mergulhe no historico de cada aluno com busca e filtro por semana.</p>
+                          </div>
+                          <div className="rounded-[24px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Registros totais</p><p className="mt-4 text-3xl font-black text-white">{teamEntries.length}</p><p className="mt-2 text-xs text-gray-400">memoria consolidada</p></div>
+                          <div className="rounded-[24px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Alunos ativos</p><p className="mt-4 text-3xl font-black text-white">{activeWriterCount}</p><p className="mt-2 text-xs text-gray-400">{selectedEntries.length} no diario atual</p></div>
+                      </div>
+                  </section>
+                  <div className="grid gap-6 lg:grid-cols-4">
+                      <aside className="lg:col-span-1 rounded-[30px] border border-white/10 bg-[#151520] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.2)]">
+                          <div className="flex items-center justify-between border-b border-white/10 pb-4"><div><h3 className="text-base font-bold text-white">Diarios da equipe</h3><p className="mt-1 text-xs text-gray-400">Escolha um aluno para abrir o historico.</p></div><Users size={16} className="text-gray-300" /></div>
+                          <div className="relative mt-4"><Search size={16} className="absolute left-4 top-3.5 text-gray-500" /><input type="text" value={adminLogbookStudentQuery} onChange={(e) => setAdminLogbookStudentQuery(e.target.value)} placeholder="Buscar aluno..." className="w-full rounded-2xl border border-white/10 bg-black/20 p-3 pl-11 text-sm text-white outline-none focus:border-yellow-500" /></div>
+                          <div className="mt-4 max-h-[700px] space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+                              {studentCards.length === 0 && <div className="rounded-[24px] border border-dashed border-white/10 bg-black/20 p-5 text-sm text-gray-400">Nenhum aluno encontrado para esse filtro.</div>}
+                              {studentCards.map((student) => <button key={student.id} onClick={() => setAdminLogbookStudentId(student.id)} className={`w-full rounded-[24px] border p-4 text-left transition-all ${adminLogbookStudentId === student.id ? 'border-yellow-500/30 bg-yellow-500/10 shadow-[0_14px_36px_rgba(234,179,8,0.12)]' : 'border-white/5 bg-black/30 hover:border-white/15 hover:bg-white/5'}`}><div className="flex items-start gap-3"><div className={`flex h-11 w-11 items-center justify-center rounded-2xl border ${student.avatarType === 'mech2' ? 'border-fuchsia-500/50 bg-fuchsia-500/10' : 'border-orange-500/40 bg-orange-500/10'}`}>{student.avatarImage ? <img src={student.avatarImage} alt="Avatar" className="h-9 w-9 rounded-xl object-cover" /> : <UserCircle size={24} className="text-gray-400" />}</div><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2"><p className="truncate font-bold text-white">{student.name}</p><span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">{student.totalEntries}</span></div><p className="mt-2 text-[11px] leading-relaxed text-gray-400">{student.currentWeekEntries > 0 ? `${student.currentWeekEntries} registro(s) nesta semana` : 'Sem registro nesta semana'}</p><p className="mt-2 text-[10px] uppercase tracking-[0.16em] text-gray-500">{student.lastEntry ? `Ultimo em ${formatDiaryDate(student.lastEntry)}` : 'Ainda sem historico'}</p></div></div></button>)}
+                          </div>
+                      </aside>
+                      <div className="lg:col-span-3 space-y-6">
+                          {selectedStudent ? (
+                              <>
+                                  <section className="rounded-[30px] border border-white/10 bg-[#151520] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
+                                      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                                          <div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-yellow-200">Painel individual</p><h3 className="mt-3 text-3xl font-black text-white">{selectedStudent.name}</h3><p className="mt-3 text-sm leading-relaxed text-gray-300">{selectedEntries[0] ? getLogbookEntryPreview(selectedEntries[0], 180) : 'Ainda nao ha registros salvos para este aluno.'}</p></div>
+                                          <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-[22px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Registros</p><p className="mt-3 text-3xl font-black text-white">{selectedEntries.length}</p></div><div className="rounded-[22px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Semana atual</p><p className="mt-3 text-3xl font-black text-white">{currentWeekData ? selectedEntries.filter((entry) => String(entry.weekId) === currentWeekValue).length : 0}</p></div><div className="rounded-[22px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Media</p><p className="mt-3 text-3xl font-black text-white">{avgWords}</p></div></div>
+                                      </div>
+                                  </section>
+                                  <section className="rounded-[30px] border border-white/10 bg-[#151520] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.2)]">
+                                      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Filtros do diario</p><h3 className="mt-2 text-xl font-black text-white">Encontre registros por texto ou semana</h3></div>{hasAdminFilters && <button type="button" onClick={() => { setAdminLogbookSearchQuery(''); setAdminLogbookWeekFilter('all'); }} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-gray-200 transition-all hover:border-white/20 hover:bg-white/10">Limpar filtros</button>}</div>
+                                      <div className="mt-5 grid gap-4 xl:grid-cols-[1.6fr_0.9fr]"><div className="relative"><Search size={18} className="absolute left-4 top-3.5 text-gray-500" /><input type="text" placeholder={`Buscar em ${selectedStudent.name}...`} value={adminLogbookSearchQuery} onChange={(e) => setAdminLogbookSearchQuery(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black/20 p-3 pl-12 text-white outline-none focus:border-yellow-500" /></div><select value={adminLogbookWeekFilter} onChange={(e) => setAdminLogbookWeekFilter(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-yellow-500">{buildLogbookWeekOptions(selectedEntries).map((option) => <option key={option.value} value={option.value} className="bg-[#0f0f17]">{option.label}</option>)}</select></div>
+                                  </section>
+                                  {renderEntries(filteredEntries, 'Nenhum registro encontrado', hasAdminFilters ? 'Esse aluno nao possui entradas com os filtros atuais.' : 'Esse aluno ainda nao registrou aprendizados no diario.')}
+                              </>
+                          ) : (
+                              <div className="flex min-h-[420px] items-center justify-center rounded-[30px] border-2 border-dashed border-white/10 bg-[#151520] p-8 text-center"><div><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] border border-white/10 bg-white/5"><BookOpen size={30} className="text-yellow-300" /></div><h3 className="mt-5 text-2xl font-black text-white">Escolha um diario para analisar</h3><p className="mt-3 text-sm leading-relaxed text-gray-400">Selecione um aluno no painel lateral para abrir o historico e localizar registros especificos.</p></div></div>
+                          )}
+                      </div>
+                  </div>
+              </div>
+          );
+      }
+
+      const normalizedStudentQuery = studentLogbookSearchQuery.trim().toLowerCase();
+      const studentEntries = sortLogbookEntries(logbookEntries);
+      const filteredEntries = studentEntries.filter((entry) => (!normalizedStudentQuery || [entry.text, entry.weekName, ...getLogbookEntryTags(entry)].filter(Boolean).join(' ').toLowerCase().includes(normalizedStudentQuery)) && (studentLogbookWeekFilter === 'all' || String(entry.weekId ?? 'general') === studentLogbookWeekFilter));
+      const draftWordCount = studentLogbookDraft.trim().split(/\s+/).filter(Boolean).length;
+      const draftTags = Array.from(new Set((studentLogbookDraft.match(/#[^\s#]+/g) || []).map((tag) => tag.toLowerCase())));
+      const latestEntry = studentEntries[0] || null;
+      const entriesThisWeek = currentWeekData ? studentEntries.filter((entry) => String(entry.weekId) === currentWeekValue).length : 0;
+      const weeksCovered = new Set(studentEntries.map((entry) => String(entry.weekId ?? 'general'))).size;
+      const averageStudentWords = studentEntries.length ? Math.round(studentEntries.reduce((total, entry) => total + getLogbookEntryWordCount(entry), 0) / studentEntries.length) : 0;
+      const hasStudentFilters = Boolean(normalizedStudentQuery) || studentLogbookWeekFilter !== 'all';
+
+      return (
+          <div className="animate-in fade-in duration-500 space-y-6 max-w-6xl mx-auto">
+              <section className="rounded-[32px] border border-white/10 bg-gradient-to-br from-[#102036] via-[#151520] to-[#22140f] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
+                  <div className="grid gap-4 lg:grid-cols-4">
+                      <div className="lg:col-span-2">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">Diario de bordo</p>
+                          <h3 className="mt-3 text-3xl font-black text-white">Transforme cada semana em memoria util.</h3>
+                          <p className="mt-3 text-sm leading-relaxed text-gray-300">Seu diario agora salva rascunho, organiza por semana e deixa o historico muito mais facil de consultar.</p>
+                      </div>
+                      <div className="rounded-[24px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Registros</p><p className="mt-4 text-3xl font-black text-white">{studentEntries.length}</p><p className="mt-2 text-xs text-gray-400">historico pessoal</p></div>
+                      <div className="rounded-[24px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Semana atual</p><p className="mt-4 text-3xl font-black text-white">{entriesThisWeek}</p><p className="mt-2 text-xs text-gray-400">{currentWeekData?.weekName || 'semana ativa'}</p></div>
+                      <div className="rounded-[24px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Semanas cobertas</p><p className="mt-4 text-3xl font-black text-white">{weeksCovered}</p><p className="mt-2 text-xs text-gray-400">com registros salvos</p></div>
+                      <div className="rounded-[24px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Media</p><p className="mt-4 text-3xl font-black text-white">{averageStudentWords}</p><p className="mt-2 text-xs text-gray-400">palavras por registro</p></div>
+                  </div>
+              </section>
+              <div className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
+                  <section className="rounded-[30px] border border-white/10 bg-[#151520] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-yellow-200">Novo registro</p><h3 className="mt-2 text-2xl font-black text-white">Escreva o que vale lembrar</h3><p className="mt-3 text-sm leading-relaxed text-gray-400">Registre testes, falhas, aprendizados e proximos passos para a equipe retomar rapido depois.</p></div><div className="inline-flex items-center gap-2 self-start rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-200"><CheckCircle size={14} /> Rascunho salvo automaticamente</div></div>
+                      <form onSubmit={handleLogbookSubmit} className="mt-6 space-y-5">
+                          <div className="rounded-[28px] border border-white/10 bg-black/20 p-4">
+                              <div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-yellow-100">{currentWeekData?.weekName || 'Semana atual'}</span><span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">{draftWordCount} palavras</span><span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">{draftTags.length} hashtag(s)</span></div>
+                              <textarea name="entry" value={studentLogbookDraft} onChange={(e) => setStudentLogbookDraft(e.target.value)} className="mt-4 h-40 w-full resize-none rounded-[24px] border border-white/10 bg-[#0d0d14] p-4 text-white outline-none transition-all placeholder:text-gray-500 focus:border-yellow-500" placeholder="O que aprendemos nesta semana? O que deu errado, como resolvemos e o que precisa acontecer depois?" />
+                              {renderTags(draftTags)}
+                          </div>
+                          <div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Atalhos para destravar a escrita</p><div className="mt-3 flex flex-wrap gap-2">{prompts.map((prompt) => <button key={prompt} type="button" onClick={() => setStudentLogbookDraft((current) => current.trim() ? `${current}\n${prompt}` : prompt)} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-gray-200 transition-all hover:border-yellow-500/30 hover:bg-yellow-500/10 hover:text-yellow-100">{prompt}</button>)}</div></div>
+                          <div className="flex flex-col gap-4 rounded-[26px] border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="text-sm text-gray-400">Dica: use hashtags como <span className="font-semibold text-yellow-200">#teste</span>, <span className="font-semibold text-yellow-200">#erro</span> e <span className="font-semibold text-yellow-200">#ideia</span> para achar temas depois.</div><button type="submit" disabled={!studentLogbookDraft.trim()} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-yellow-500 px-5 py-3 text-sm font-black text-black transition-all hover:bg-yellow-400 disabled:cursor-not-allowed disabled:bg-yellow-500/40 disabled:text-black/60"><Plus size={18} /> Salvar registro</button></div>
+                      </form>
+                  </section>
+                  <aside className="space-y-6"><section className="rounded-[30px] border border-white/10 bg-[#151520] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.2)]"><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">Painel rapido</p><h3 className="mt-2 text-xl font-black text-white">Seu ultimo destaque</h3><p className="mt-3 text-sm leading-relaxed text-gray-400">{latestEntry ? getLogbookEntryPreview(latestEntry, 180) : 'Ainda nao existe nenhum registro salvo. O primeiro texto que voce gravar aparece aqui como destaque.'}</p><div className="mt-5 space-y-3"><div className="rounded-[22px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Ultima atualizacao</p><p className="mt-3 text-lg font-black text-white">{latestEntry ? formatDiaryDate(latestEntry) : 'Sem registros'}</p><p className="mt-2 text-xs text-gray-400">{latestEntry?.weekName || 'Esperando primeiro diario'}</p></div><div className="rounded-[22px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Escreva melhor</p><p className="mt-3 text-sm leading-relaxed text-gray-400">Contexto, decisao e proximo passo costumam gerar registros mais fortes e uteis para revisao.</p></div></div></section></aside>
+              </div>
+              <section className="rounded-[30px] border border-white/10 bg-[#151520] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.2)]">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Historico filtrado</p><h3 className="mt-2 text-xl font-black text-white">Busque e releia seus registros</h3></div>{hasStudentFilters && <button type="button" onClick={() => { setStudentLogbookSearchQuery(''); setStudentLogbookWeekFilter('all'); }} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-gray-200 transition-all hover:border-white/20 hover:bg-white/10">Limpar filtros</button>}</div>
+                  <div className="mt-5 grid gap-4 xl:grid-cols-[1.6fr_0.9fr]"><div className="relative"><Search size={18} className="absolute left-4 top-3.5 text-gray-500" /><input type="text" placeholder="Buscar por texto, semana ou hashtag..." value={studentLogbookSearchQuery} onChange={(e) => setStudentLogbookSearchQuery(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black/20 p-3 pl-12 text-white outline-none focus:border-yellow-500" /></div><select value={studentLogbookWeekFilter} onChange={(e) => setStudentLogbookWeekFilter(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-yellow-500">{buildLogbookWeekOptions(studentEntries).map((option) => <option key={option.value} value={option.value} className="bg-[#0f0f17]">{option.label}</option>)}</select></div>
+              </section>
+              {renderEntries(filteredEntries, 'Nenhum registro encontrado', hasStudentFilters ? 'Nenhum item combinou com os filtros atuais. Ajuste a busca ou volte para todas as semanas.' : 'Nenhum registro ainda. Comece escrevendo o que aconteceu nesta semana.')}
+          </div>
+      );
+  };
+
   const LogbookView = () => {
-      // State para o admin selecionar um aluno e para a busca
-      const [selectedStudentId, setSelectedStudentId] = useState(null);
-      const [searchTerm, setSearchTerm] = useState("");
+      return <DiaryWorkspaceView />;
+/*
+
+      const currentWeekValue = String(currentWeekData?.id || 'current');
+      const promptSuggestions = [
+          'Hoje eu testei...',
+          'O principal aprendizado foi...',
+          'O que deu errado foi...',
+          'Na proxima semana quero melhorar...',
+          'Evidencia importante: ...'
+      ];
+
+      const formatDiaryDate = (entry, includeTime = false) => getLogbookEntryDate(entry).toLocaleDateString(
+          'pt-BR',
+          includeTime
+              ? { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }
+              : { day: '2-digit', month: 'long', year: 'numeric' }
+      );
+
+      const renderTagRow = (tags) => {
+          if (!tags.length) return null;
+
+          return (
+              <div className="mt-4 flex flex-wrap gap-2">
+                  {tags.map((tag) => (
+                      <span key={tag} className="rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-yellow-100">
+                          {tag}
+                      </span>
+                  ))}
+              </div>
+          );
+      };
+
+      const renderDiaryEntryCard = (entry, { showStudentName = false } = {}) => {
+          const tags = getLogbookEntryTags(entry);
+          const wordCount = getLogbookEntryWordCount(entry);
+          const readMinutes = Math.max(1, Math.ceil(wordCount / 120));
+          const timeLabel = formatDiaryDate(entry, true).split(',').slice(-1)[0]?.trim() || 'Horario';
+
+          return (
+              <article key={entry.id} className="group relative overflow-hidden rounded-[28px] border border-white/10 bg-[#151520] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.22)] transition-all hover:border-white/20 hover:bg-[#181825]">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,0.08),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.08),transparent_26%)] pointer-events-none"></div>
+                  <div className="relative z-10">
+                      <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                  <span className="rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-yellow-100">
+                                      {entry.weekName || `Semana ${entry.weekId || 'Geral'}`}
+                                  </span>
+                                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">
+                                      {wordCount} palavras
+                                  </span>
+                                  <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400">
+                                      {readMinutes} min leitura
+                                  </span>
+                              </div>
+
+                              <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-gray-400">
+                                  {showStudentName && (
+                                      <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-gray-200">
+                                          <UserCircle size={12} /> {entry.studentName}
+                                      </span>
+                                  )}
+                                  <span className="inline-flex items-center gap-2">
+                                      <Calendar size={12} className="text-yellow-400" /> {formatDiaryDate(entry)}
+                                  </span>
+                                  <span className="inline-flex items-center gap-2">
+                                      <Clock size={12} className="text-cyan-400" /> {timeLabel}
+                                  </span>
+                              </div>
+                          </div>
+
+                          <button onClick={() => handleDeleteLogbookEntry(entry)} className="rounded-2xl border border-white/10 bg-black/20 p-3 text-gray-400 transition-all hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300" title="Excluir Registro">
+                              <Trash2 size={15} />
+                          </button>
+                      </div>
+
+                      <p className="mt-5 whitespace-pre-wrap text-sm leading-relaxed text-gray-200">{entry.text}</p>
+                      {renderTagRow(tags)}
+                  </div>
+              </article>
+          );
+      };
+
+      const renderDiaryGroups = (groups, emptyTitle, emptyDetail, options = {}) => {
+          if (groups.length === 0) {
+              return (
+                  <div className="rounded-[30px] border border-dashed border-white/10 bg-[#151520] p-10 text-center">
+                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[20px] border border-white/10 bg-white/5">
+                          <BookOpen size={28} className="text-yellow-300" />
+                      </div>
+                      <h3 className="mt-5 text-2xl font-black text-white">{emptyTitle}</h3>
+                      <p className="mt-3 text-sm leading-relaxed text-gray-400">{emptyDetail}</p>
+                  </div>
+              );
+          }
+
+          return (
+              <div className="space-y-8">
+                  {groups.map((group) => (
+                      <section key={group.key} className="space-y-4">
+                          <div className="flex items-end justify-between gap-4">
+                              <div>
+                                  <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Bloco semanal</p>
+                                  <h3 className="mt-2 text-xl font-black text-white">{group.weekName}</h3>
+                              </div>
+                              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">
+                                  {group.entries.length} registro(s)
+                              </span>
+                          </div>
+
+                          <div className="grid gap-4 xl:grid-cols-2">
+                              {group.entries.map((entry) => renderDiaryEntryCard(entry, options))}
+                          </div>
+                      </section>
+                  ))}
+              </div>
+          );
+      };
 
       // --- VISÃO DO TÉCNICO ---
       if (isAdmin) {
-          const entriesForSelectedStudent = selectedStudentId
+          const entriesForSelectedStudent = adminLogbookStudentId
               ? logbookEntries.filter(entry => {
                   const pathParts = entry.refPath.split('/');
                   // O caminho é students/STUDENT_ID/logbook/ENTRY_ID
-                  return pathParts.length > 1 && pathParts[1] === selectedStudentId;
+                  return pathParts.length > 1 && pathParts[1] === adminLogbookStudentId;
               })
               : [];
           
-          const filteredEntries = searchTerm
+          const filteredEntries = adminLogbookSearchQuery
               ? entriesForSelectedStudent.filter(entry => 
-                  entry.text.toLowerCase().includes(searchTerm.toLowerCase())
+                  [entry.text, entry.weekName].filter(Boolean).join(' ').toLowerCase().includes(adminLogbookSearchQuery.toLowerCase())
                 )
               : entriesForSelectedStudent;
           
-          const selectedStudent = students.find(s => s.id === selectedStudentId);
+          const selectedStudent = students.find(s => s.id === adminLogbookStudentId);
+          const teamEntries = sortLogbookEntries(logbookEntries);
+          const teamCurrentWeekEntries = currentWeekData ? teamEntries.filter((entry) => String(entry.weekId) === currentWeekValue).length : 0;
+          const studentCards = students.map((student) => {
+              const totalEntries = teamEntries.filter((entry) => getLogbookStudentId(entry) === student.id).length;
+              const lastEntry = teamEntries.find((entry) => getLogbookStudentId(entry) === student.id) || null;
+              return { ...student, totalEntries, lastEntry };
+          });
+          const weekFilteredEntries = adminLogbookWeekFilter === 'all'
+              ? filteredEntries
+              : filteredEntries.filter((entry) => String(entry.weekId) === adminLogbookWeekFilter);
+          const groupedEntries = groupLogbookEntriesByWeek(weekFilteredEntries);
+          const adminWeekOptions = buildLogbookWeekOptions(entriesForSelectedStudent);
 
           return (
-              <div className="animate-in fade-in duration-500 grid grid-cols-1 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
-                  {/* Lista de Alunos */}
-                  <div className="lg:col-span-1 bg-[#151520] border border-white/10 rounded-2xl p-4 h-fit">
+              <div className="animate-in fade-in duration-500 space-y-6 max-w-7xl mx-auto">
+                  <div className="relative overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br from-[#2b1d13] via-[#151520] to-[#101018] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,0.16),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.12),transparent_24%)] pointer-events-none"></div>
+                      <div className="relative z-10 grid gap-4 md:grid-cols-4">
+                          <div className="md:col-span-2">
+                              <p className="text-[10px] uppercase tracking-[0.2em] text-yellow-200 font-bold">Leitura do tecnico</p>
+                              <h3 className="mt-3 text-2xl font-black text-white">Diario da equipe com foco em volume, frequencia e historico.</h3>
+                              <p className="mt-3 text-sm text-gray-300">Selecione um aluno para ver a memoria dele e acompanhe quem esta registrando a temporada com consistencia.</p>
+                          </div>
+                          <div className="rounded-[22px] border border-white/10 bg-black/20 p-4">
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Registros totais</p>
+                              <p className="mt-4 text-3xl font-black text-white">{teamEntries.length}</p>
+                              <p className="mt-2 text-xs text-gray-400">memoria consolidada</p>
+                          </div>
+                          <div className="rounded-[22px] border border-white/10 bg-black/20 p-4">
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Semana atual</p>
+                              <p className="mt-4 text-3xl font-black text-white">{teamCurrentWeekEntries}</p>
+                              <p className="mt-2 text-xs text-gray-400">{currentWeekData?.weekName || 'semana ativa'}</p>
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                  <div className="lg:col-span-1 bg-[#151520] border border-white/10 rounded-[28px] p-4 h-fit shadow-[0_18px_50px_rgba(0,0,0,0.2)]">
                       <h3 className="text-base font-bold text-white flex items-center gap-2 mb-4 border-b border-white/10 pb-3">
                           <Users size={16}/> Diários da Equipe
                       </h3>
-                      <div className="space-y-2">
-                          {students.map(student => (
+                      <div className="relative mb-4">
+                          <Search size={16} className="absolute left-4 top-3.5 text-gray-500" />
+                          <input
+                              type="text"
+                              value={adminLogbookStudentQuery}
+                              onChange={(e) => setAdminLogbookStudentQuery(e.target.value)}
+                              placeholder="Buscar aluno..."
+                              className="w-full bg-black/20 border border-white/10 rounded-2xl p-3 pl-11 text-sm text-white focus:border-yellow-500 outline-none"
+                          />
+                      </div>
+                      <div className="space-y-2 max-h-[680px] overflow-y-auto custom-scrollbar pr-1">
+                          {studentCards.map(student => (
                               <button 
                                   key={student.id} 
-                                  onClick={() => setSelectedStudentId(student.id)}
-                                  className={`w-full text-left p-3 rounded-lg transition-colors text-sm flex items-center gap-3 ${selectedStudentId === student.id ? 'bg-yellow-500 text-black font-bold' : 'bg-black/40 hover:bg-white/10 text-white'}`}
+                                  onClick={() => setAdminLogbookStudentId(student.id)}
+                                  className={`w-full text-left p-3 rounded-2xl transition-colors text-sm ${adminLogbookStudentId === student.id ? 'bg-yellow-500/15 border border-yellow-500/30 text-white shadow-[0_10px_30px_rgba(234,179,8,0.12)]' : 'bg-black/30 border border-white/5 hover:bg-white/10 text-white'}`}
                               >
-                                  <div className={`p-1 rounded-full border ${student.avatarType === 'mech2' ? 'border-fuchsia-500' : 'border-orange-500'}`}>
-                                      {student.avatarImage ? (
-                                         <img src={student.avatarImage} alt="Avatar" className="w-6 h-6 rounded-full object-cover" />
-                                     ) : (
-                                         <UserCircle size={20} className="text-gray-500" />
-                                     )}
+                                  <div className="flex items-center gap-3">
+                                      <div className={`p-1 rounded-full border ${student.avatarType === 'mech2' ? 'border-fuchsia-500' : 'border-orange-500'}`}>
+                                          {student.avatarImage ? (
+                                             <img src={student.avatarImage} alt="Avatar" className="w-6 h-6 rounded-full object-cover" />
+                                         ) : (
+                                             <UserCircle size={20} className="text-gray-500" />
+                                         )}
+                                      </div>
+                                      <div className="min-w-0">
+                                          <p className="font-bold truncate">{student.name}</p>
+                                          <p className="text-[10px] text-gray-400 mt-1">{student.totalEntries} registro(s){student.lastEntry ? ` • ${formatDiaryDate(student.lastEntry)}` : ''}</p>
+                                      </div>
                                   </div>
-                                  {student.name}
                               </button>
                           ))}
                       </div>
                   </div>
 
-                  {/* Linha do Tempo do Aluno Selecionado */}
                   <div className="lg:col-span-3">
-                      {/* Barra de Busca (só aparece se um aluno for selecionado) */}
-                      {selectedStudentId && (
+                      {adminLogbookStudentId && (
                           <div className="relative mb-6">
                               <Search size={18} className="absolute left-4 top-3.5 text-gray-500" />
                               <input 
                                   type="text"
                                   placeholder={`Buscar no diário de ${selectedStudent?.name}...`}
-                                  value={searchTerm}
-                                  onChange={(e) => setSearchTerm(e.target.value)}
+                                  value={adminLogbookSearchQuery}
+                                  onChange={(e) => setAdminLogbookSearchQuery(e.target.value)}
                                   className="w-full bg-[#151520] border border-white/10 rounded-xl p-3 pl-12 text-white focus:border-yellow-500 outline-none"
                               />
                           </div>
                       )}
-                      {!selectedStudentId ? (
+                      {!adminLogbookStudentId ? (
                           <div className="h-full min-h-[400px] flex items-center justify-center bg-[#151520] border-2 border-dashed border-white/10 rounded-2xl p-6 text-center">
                               <div>
                                   <BookOpen size={48} className="text-gray-600 mx-auto mb-4"/>
@@ -5520,7 +6326,6 @@ const handleFileSelect = (e) => {
                       <button className="bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-3 px-6 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-yellow-900/20"><Plus size={18}/> Salvar Registro da Semana</button>
                   </form>
               </div>
-              {/* Barra de Busca do Aluno */}
               <div className="relative mb-6">
                   <Search size={18} className="absolute left-4 top-3.5 text-gray-500" />
                   <input 
@@ -5554,10 +6359,351 @@ const handleFileSelect = (e) => {
               </div>
           </div>
       );
+*/
   }
 
   // --- COMPONENTE DE AGENDA ---
+  const AgendaWorkspaceView = () => {
+      const normalizedQuery = agendaSearchQuery.trim().toLowerCase();
+      const matchesTextAndType = (event) => {
+          const matchesType = agendaTypeFilter === 'all' || (event.type || 'Outro') === agendaTypeFilter;
+          const haystack = [event.title, event.description, event.location, event.author]
+              .filter(Boolean)
+              .join(' ')
+              .toLowerCase();
+
+          return matchesType && (!normalizedQuery || haystack.includes(normalizedQuery));
+      };
+
+      const baseAgendaEvents = [...events]
+          .filter(matchesTextAndType)
+          .sort(compareEventsByDate);
+
+      const filteredAgendaEvents = baseAgendaEvents.filter((event) => matchesAgendaScope(event, agendaScopeFilter));
+      const filteredUpcomingEvents = filteredAgendaEvents.filter((event) => getAgendaDayOffset(event.date) >= 0);
+      const filteredPastEvents = filteredAgendaEvents
+          .filter((event) => getAgendaDayOffset(event.date) < 0)
+          .sort((left, right) => compareEventsByDate(right, left));
+
+      const immediateEvents = filteredUpcomingEvents.filter((event) => getAgendaDayOffset(event.date) <= 1);
+      const weekEvents = filteredUpcomingEvents.filter((event) => {
+          const dayOffset = getAgendaDayOffset(event.date);
+          return dayOffset >= 2 && dayOffset <= 7;
+      });
+      const laterEvents = filteredUpcomingEvents.filter((event) => getAgendaDayOffset(event.date) > 7);
+
+      const upcomingMatches = baseAgendaEvents.filter((event) => getAgendaDayOffset(event.date) >= 0);
+      const pastMatches = baseAgendaEvents
+          .filter((event) => getAgendaDayOffset(event.date) < 0)
+          .sort((left, right) => compareEventsByDate(right, left));
+
+      const agendaScopeOptions = [
+          { id: 'all', label: 'Visao completa', count: baseAgendaEvents.length },
+          { id: 'urgent', label: 'Hoje e amanha', count: upcomingMatches.filter((event) => getAgendaDayOffset(event.date) <= 1).length },
+          { id: 'week', label: '7 dias', count: upcomingMatches.filter((event) => getAgendaDayOffset(event.date) <= 7).length },
+          { id: 'upcoming', label: 'Proximos marcos', count: upcomingMatches.length },
+          { id: 'past', label: 'Historico', count: pastMatches.length }
+      ];
+
+      const nextAgendaEvent = filteredUpcomingEvents[0] || upcomingMatches[0] || null;
+      const spotlightHistoryEvent = filteredPastEvents[0] || pastMatches[0] || null;
+      const spotlightEvent = nextAgendaEvent || spotlightHistoryEvent;
+      const spotlightLabel = nextAgendaEvent ? 'Proximo compromisso' : spotlightHistoryEvent ? 'Ultimo registro' : 'Sem compromissos ativos';
+      const highlightedPriorityCount = upcomingMatches.filter((event) => ['alta', 'critica'].includes(getEventPriorityValue(event))).length;
+      const confirmedCount = upcomingMatches.filter((event) => getEventStatusValue(event) === 'confirmado').length;
+      const hasActiveFilters = Boolean(normalizedQuery) || agendaTypeFilter !== 'all' || agendaScopeFilter !== 'all';
+
+      const clearAgendaFilters = () => {
+          setAgendaSearchQuery('');
+          setAgendaTypeFilter('all');
+          setAgendaScopeFilter('all');
+      };
+
+      const renderAgendaCard = (event, { spotlight = false, muted = false } = {}) => {
+          const typeMeta = getEventTypeMeta(event.type);
+          const priorityMeta = getEventPriorityMeta(getEventPriorityValue(event));
+          const statusValue = getEventStatusValue(event);
+          const statusMeta = getEventStatusMeta(statusValue);
+          const canManageEvent = isAdmin || event.author === viewAsStudent?.name;
+          const nextStatusLabel = statusValue === 'planejado'
+              ? 'Confirmar'
+              : statusValue === 'confirmado'
+                  ? 'Concluir'
+                  : 'Reabrir';
+
+          return (
+              <article
+                  key={event.id}
+                  className={`group relative overflow-hidden rounded-[30px] border bg-[#13131d] p-5 md:p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)] transition-all ${spotlight ? 'border-indigo-400/35 shadow-[0_25px_70px_rgba(79,70,229,0.18)]' : 'border-white/10 hover:border-white/20'} ${muted ? 'opacity-80' : ''}`}
+              >
+                  <div className={`absolute inset-0 bg-gradient-to-br ${typeMeta.accent} pointer-events-none opacity-80`}></div>
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_32%)] pointer-events-none"></div>
+
+                  {spotlight && (
+                      <div className="absolute -top-3 left-5 rounded-full border border-yellow-400/30 bg-yellow-400 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-black shadow-lg">
+                          Radar imediato
+                      </div>
+                  )}
+
+                  <div className="relative z-10 flex h-full flex-col gap-5">
+                      <div className="flex items-start justify-between gap-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                              <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${typeMeta.tone}`}>
+                                  {typeMeta.label}
+                              </span>
+                              <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${priorityMeta.tone}`}>
+                                  {priorityMeta.label}
+                              </span>
+                              <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${statusMeta.tone}`}>
+                                  {statusMeta.label}
+                              </span>
+                          </div>
+
+                          {canManageEvent && (
+                              <div className="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                                  <button type="button" onClick={() => setModal({type: 'eventForm', data: event})} className="rounded-xl border border-white/10 bg-black/35 p-2 text-gray-300 hover:bg-white/10 hover:text-white">
+                                      <Pencil size={14}/>
+                                  </button>
+                                  <button type="button" onClick={() => handleDeleteEvent(event.id)} className="rounded-xl border border-white/10 bg-black/35 p-2 text-gray-300 hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300">
+                                      <Trash2 size={14}/>
+                                  </button>
+                              </div>
+                          )}
+                      </div>
+
+                      <div>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">{getAgendaRelativeLabel(event.date)}</p>
+                          <h3 className="mt-3 text-xl font-black leading-tight text-white">{event.title}</h3>
+                          {event.description && (
+                              <p className="mt-3 text-sm leading-relaxed text-gray-300">{event.description}</p>
+                          )}
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Data</p>
+                              <div className="mt-2 flex items-center gap-2 text-sm text-white">
+                                  <CalendarDays size={14} className="text-blue-400" />
+                                  {formatAgendaDate(event.date, { weekday: 'short', day: '2-digit', month: 'long' })}
+                              </div>
+                          </div>
+                          <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Horario</p>
+                              <div className="mt-2 flex items-center gap-2 text-sm text-white">
+                                  <Clock size={14} className="text-yellow-400" />
+                                  {event.time || 'A definir'}
+                              </div>
+                          </div>
+                          {event.location && (
+                              <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                                  <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Local / Link</p>
+                                  <div className="mt-2 flex items-center gap-2 text-sm text-white">
+                                      <MapPin size={14} className="text-emerald-400" />
+                                      {event.location}
+                                  </div>
+                              </div>
+                          )}
+                          {event.author && (
+                              <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                                  <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Responsavel pelo registro</p>
+                                  <div className="mt-2 flex items-center gap-2 text-sm text-white">
+                                      <UserCircle size={14} className="text-gray-400" />
+                                      {event.author}
+                                  </div>
+                              </div>
+                          )}
+                      </div>
+
+                      {canManageEvent && (
+                          <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
+                              <button
+                                  type="button"
+                                  onClick={() => handleCycleEventStatus(event)}
+                                  className="inline-flex items-center gap-2 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-xs font-bold text-cyan-100 transition-all hover:bg-cyan-500 hover:text-white"
+                              >
+                                  <CheckCircle size={14} />
+                                  {nextStatusLabel}
+                              </button>
+                          </div>
+                      )}
+                  </div>
+              </article>
+          );
+      };
+
+      const renderAgendaSection = (title, helper, items, options = {}) => {
+          if (items.length === 0) return null;
+
+          return (
+              <section className="space-y-4">
+                  <div className="flex items-end justify-between gap-4">
+                      <div>
+                          <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">{title}</p>
+                          <h3 className="mt-2 text-xl font-black text-white">{helper}</h3>
+                      </div>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">
+                          {items.length} evento(s)
+                      </span>
+                  </div>
+
+                  <div className="grid gap-4 xl:grid-cols-2">
+                      {items.map((event, index) => renderAgendaCard(event, { spotlight: options.highlightFirst && index === 0, muted: options.muted }))}
+                  </div>
+              </section>
+          );
+      };
+
+      return (
+          <div className="animate-in fade-in duration-500 space-y-8">
+              <section className="relative overflow-hidden rounded-[32px] border border-white/10 bg-gradient-to-br from-[#161b33] via-[#151520] to-[#101018] p-6 md:p-8 shadow-[0_25px_80px_rgba(0,0,0,0.28)]">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.20),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(34,197,94,0.12),transparent_28%)] pointer-events-none"></div>
+                  <div className="relative z-10 grid gap-6 xl:grid-cols-[1.15fr,0.85fr]">
+                      <div>
+                          <span className="inline-flex items-center gap-2 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-200">
+                              <CalendarDays size={12} /> Radar da agenda
+                          </span>
+                          <h2 className="mt-4 text-3xl font-black leading-tight text-white">Agenda da equipe com foco em prioridade, confirmacao e proximo passo.</h2>
+                          <p className="mt-4 max-w-3xl text-sm leading-relaxed text-gray-300">
+                              Use esta visao para enxergar o que vence agora, o que precisa de preparacao nos proximos dias e quais compromissos ja ficaram registrados no historico.
+                          </p>
+
+                          <div className="mt-6 flex flex-wrap gap-3">
+                              <button onClick={() => setModal({type: 'eventForm'})} className="inline-flex items-center gap-2 rounded-2xl border border-indigo-500/20 bg-indigo-500/10 px-4 py-3 text-xs font-bold text-indigo-100 transition-all hover:bg-indigo-500 hover:text-white">
+                                  <Plus size={16}/> Novo compromisso
+                              </button>
+                              <button onClick={() => setAgendaScopeFilter('urgent')} className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-bold text-gray-200 transition-all hover:bg-white/10 hover:text-white">
+                                  <AlertTriangle size={16}/> Ver urgentes
+                              </button>
+                          </div>
+
+                          <div className="mt-6 rounded-[24px] border border-white/10 bg-black/20 p-4">
+                              <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">{spotlightLabel}</p>
+                              {spotlightEvent ? (
+                                  <div className="mt-3">
+                                      <p className="text-lg font-black text-white">{spotlightEvent.title}</p>
+                                      <p className="mt-2 text-sm text-gray-300">
+                                          {getAgendaRelativeLabel(spotlightEvent.date)} • {formatAgendaDate(spotlightEvent.date, { day: '2-digit', month: 'long' })} • {spotlightEvent.time || 'Horario a definir'}
+                                      </p>
+                                  </div>
+                              ) : (
+                                  <p className="mt-3 text-sm text-gray-400">Cadastre o proximo marco para transformar a agenda em um radar real da equipe.</p>
+                              )}
+                          </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                          {[
+                              { label: 'Radar imediato', value: immediateEvents.length, helper: 'hoje e amanha', tone: 'border-red-500/20 bg-red-500/10 text-red-100', icon: <AlertTriangle size={14} /> },
+                              { label: 'Janela de 7 dias', value: upcomingMatches.filter((event) => getAgendaDayOffset(event.date) <= 7).length, helper: 'curto prazo', tone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-100', icon: <CalendarDays size={14} /> },
+                              { label: 'Alta prioridade', value: highlightedPriorityCount, helper: 'merecem preparacao', tone: 'border-orange-500/20 bg-orange-500/10 text-orange-100', icon: <Flag size={14} /> },
+                              { label: 'Confirmados', value: confirmedCount, helper: 'status pronto', tone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100', icon: <CheckCircle size={14} /> }
+                          ].map((metric) => (
+                              <div key={metric.label} className="rounded-[24px] border border-white/10 bg-black/25 p-4">
+                                  <div className="flex items-center justify-between gap-3">
+                                      <span className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">{metric.label}</span>
+                                      <span className={`rounded-xl border px-2 py-1 ${metric.tone}`}>{metric.icon}</span>
+                                  </div>
+                                  <p className="mt-4 text-3xl font-black text-white">{metric.value}</p>
+                                  <p className="mt-2 text-xs text-gray-400">{metric.helper}</p>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              </section>
+
+              <section className="rounded-[30px] border border-white/10 bg-[#151520] p-5 md:p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+                  <div className="grid gap-4 xl:grid-cols-[1fr,260px]">
+                      <div className="relative">
+                          <Search size={18} className="absolute left-4 top-3.5 text-gray-500" />
+                          <input
+                              type="text"
+                              value={agendaSearchQuery}
+                              onChange={(e) => setAgendaSearchQuery(e.target.value)}
+                              placeholder="Buscar por titulo, local, descricao ou autor..."
+                              className="w-full rounded-2xl border border-white/10 bg-black/20 p-3 pl-12 text-sm text-white outline-none transition-all focus:border-indigo-400"
+                          />
+                      </div>
+
+                      <select
+                          value={agendaTypeFilter}
+                          onChange={(e) => setAgendaTypeFilter(e.target.value)}
+                          className="w-full rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-white outline-none transition-all focus:border-indigo-400"
+                      >
+                          <option value="all">Todos os tipos</option>
+                          {EVENT_TYPE_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                      </select>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                      {agendaScopeOptions.map((option) => (
+                          <button
+                              key={option.id}
+                              type="button"
+                              onClick={() => setAgendaScopeFilter(option.id)}
+                              className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-xs font-bold transition-all ${agendaScopeFilter === option.id ? 'border-indigo-500/30 bg-indigo-500 text-white shadow-lg shadow-indigo-900/20' : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white'}`}
+                          >
+                              {option.label}
+                              <span className="inline-flex min-w-[22px] items-center justify-center rounded-full bg-black/20 px-2 py-0.5 text-[10px] font-black">
+                                  {option.count}
+                              </span>
+                          </button>
+                      ))}
+
+                      {hasActiveFilters && (
+                          <button
+                              type="button"
+                              onClick={clearAgendaFilters}
+                              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-bold text-gray-300 transition-all hover:bg-white/10 hover:text-white"
+                          >
+                              <XCircle size={14} /> Limpar filtros
+                          </button>
+                      )}
+                  </div>
+              </section>
+
+              {filteredUpcomingEvents.length === 0 && filteredPastEvents.length === 0 ? (
+                  <div className="rounded-[30px] border border-dashed border-white/10 bg-[#151520] p-10 text-center shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[20px] border border-white/10 bg-white/5">
+                          <CalendarDays size={26} className="text-indigo-300" />
+                      </div>
+                      <h3 className="mt-5 text-2xl font-black text-white">Nenhum compromisso encontrado.</h3>
+                      <p className="mt-3 text-sm leading-relaxed text-gray-400">
+                          {hasActiveFilters ? 'Os filtros atuais nao encontraram eventos. Limpe a busca ou troque o recorte.' : 'Cadastre o primeiro evento para transformar a agenda em um centro de operacao da equipe.'}
+                      </p>
+                  </div>
+              ) : (
+                  <div className="space-y-8">
+                      {renderAgendaSection('Radar imediato', 'Compromissos que pedem reacao rapida', immediateEvents, { highlightFirst: true })}
+                      {renderAgendaSection('Proximos 7 dias', 'Preparacao tatica da janela curta', weekEvents)}
+                      {renderAgendaSection('Mais adiante', 'Marcos futuros para organizar com antecedencia', laterEvents)}
+
+                      {(agendaScopeFilter === 'all' || agendaScopeFilter === 'past') && filteredPastEvents.length > 0 && (
+                          <section className="space-y-4 border-t border-white/10 pt-8">
+                              <div className="flex items-end justify-between gap-4">
+                                  <div>
+                                      <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Historico recente</p>
+                                      <h3 className="mt-2 text-xl font-black text-white">Compromissos que ja passaram pela equipe</h3>
+                                  </div>
+                                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">
+                                      {filteredPastEvents.length} registro(s)
+                                  </span>
+                              </div>
+
+                              <div className="grid gap-4 xl:grid-cols-2">
+                                  {filteredPastEvents.map((event) => renderAgendaCard(event, { muted: true }))}
+                              </div>
+                          </section>
+                      )}
+                  </div>
+              )}
+          </div>
+      );
+  };
+
   const AgendaView = () => {
+      return <AgendaWorkspaceView />;
       const todayDate = new Date().toISOString().split('T')[0];
       
       // Separa entre próximos eventos e eventos que já passaram
@@ -5809,7 +6955,13 @@ const handleFileSelect = (e) => {
             outreachEvents={outreachEvents} 
             ScoreEvolutionChart={ScoreEvolutionChart} 
         />
-        <ScheduleModal />
+        <FullScheduleModal
+            isOpen={showFullSchedule}
+            onClose={() => setShowFullSchedule(false)}
+            rotationSchedule={rotationSchedule}
+            currentWeekData={currentWeekData}
+            students={students}
+        />
 
 {/* --- MODAL DO TÉCNICO: ENTREGAR BADGES --- */}
       {isAdmin && badgeStudent && (
@@ -5875,7 +7027,7 @@ const handleFileSelect = (e) => {
         </div>
       )}
       {/* --- MODAL DE BATERIA DA EQUIPE --- */}
-      {showBatteryModal && (
+      {false && showBatteryModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 animate-in fade-in backdrop-blur-sm">
             <div className="bg-[#151520] border border-white/10 rounded-2xl w-full max-w-md p-6 relative shadow-2xl">
                 
@@ -6013,6 +7165,18 @@ const handleFileSelect = (e) => {
         </div>
       )}
 
+      <TeamCheckInModal
+        isOpen={showBatteryModal}
+        onClose={() => setShowBatteryModal(false)}
+        teamMoods={teamMoods}
+        students={students}
+        teamAverage={teamAverage}
+        viewAsStudent={viewAsStudent}
+        onSubmit={handleTeamCheckInSubmit}
+        localTodayStr={localTodayStr}
+        rewardXp={CHECK_IN_REWARD_XP}
+      />
+
  {/* HEADER DO SISTEMA (COMPLETO) */}
       <header className="sticky top-0 z-40 bg-zinc-900/90 backdrop-blur-md border-b border-white/10 px-6 py-4 flex justify-between items-center shadow-lg">
           <div className="w-28 h-auto">
@@ -6068,10 +7232,10 @@ const handleFileSelect = (e) => {
               <button
                 onClick={toggleDashboardPanel}
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all border ${isDashboardPanelVisible ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.15)]' : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:text-white'}`}
-                title={isDashboardPanelVisible ? 'Ocultar dashboard' : 'Mostrar dashboard'}
+                title={isDashboardPanelVisible ? `Ocultar painel tatico (${visibleWorkspacePanelCount} blocos ativos)` : 'Mostrar painel tatico'}
               >
                   <LayoutDashboard size={18} />
-                  <span className="font-bold text-xs">{isDashboardPanelVisible ? 'Ocultar Dashboard' : 'Dashboard'}</span>
+                  <span className="font-bold text-xs">{isDashboardPanelVisible ? `Painel (${visibleWorkspacePanelCount})` : 'Abrir Painel'}</span>
               </button>
               <button
                 onClick={openCommandCenterMode}
@@ -6158,23 +7322,55 @@ const handleFileSelect = (e) => {
           </div>
 
           <WorkspaceCollapsible isOpen={adminPanelState.dashboard}>
-            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6 mb-6">
-              <CompetitionPrepPanel
-                title="Preparacao de campeonato com visao executiva."
-                summary="Este painel cruza rubricas, operacao, energia da equipe, codigo oficial e agenda para mostrar o que ainda separa o time de uma postura realmente campea."
-                readinessScore={commandCenterReadinessScore}
-                readinessLabel={commandCenterReadinessTone.label}
-                weekLabel={currentWeekData?.weekName || 'Semana em andamento'}
-                checklistItems={championshipChecklistItems}
-                focusItems={championshipFocusCards}
-                actionButtons={championshipActionButtons}
+            <div className="flex flex-col gap-6 mb-6">
+              <WorkspacePanelToolbar
+                eyebrow="Painel Tatico"
+                panels={adminDashboardPanels}
+                panelState={adminPanelState}
+                onToggle={toggleWorkspacePanel}
+                onExpandAll={() => setWorkspacePanels(true)}
+                onCollapseAll={() => setWorkspacePanels(false)}
               />
-              <JudgeStoryPanel
-                title="Roteiro de fala para a equipe chegar afiada com os juizes."
-                summary="Use estes blocos para ensaiar explicacoes curtas, fortes e conectadas a evidencias reais do site."
-                cards={judgeStoryCards}
-                spotlightQuestion={judgeSpotlightQuestion}
-              />
+
+              {(adminPanelState.prep || adminPanelState.judge) && (
+                <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
+                  {adminPanelState.prep && (
+                    <CompetitionPrepPanel
+                      title="Preparacao de campeonato com visao executiva."
+                      summary="Este painel cruza rubricas, operacao, energia da equipe, codigo oficial e agenda para mostrar o que ainda separa o time de uma postura realmente campea."
+                      readinessScore={commandCenterReadinessScore}
+                      readinessLabel={commandCenterReadinessTone.label}
+                      weekLabel={currentWeekData?.weekName || 'Semana em andamento'}
+                      checklistItems={championshipChecklistItems}
+                      focusItems={championshipFocusCards}
+                      actionButtons={championshipActionButtons}
+                    />
+                  )}
+                  {adminPanelState.judge && (
+                    <JudgeStoryPanel
+                      title="Roteiro de fala para a equipe chegar afiada com os juizes."
+                      summary="Use estes blocos para ensaiar explicacoes curtas, fortes e conectadas a evidencias reais do site."
+                      cards={judgeStoryCards}
+                      spotlightQuestion={judgeSpotlightQuestion}
+                    />
+                  )}
+                </div>
+              )}
+
+              {(adminPanelState.stats || adminPanelState.achievements) && (
+                <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
+                  {adminPanelState.stats && (
+                    <div className="[&>div]:mb-0 h-full">
+                      <TeamStatsPanel />
+                    </div>
+                  )}
+                  {adminPanelState.achievements && (
+                    <div className="[&>div]:mb-0 h-full">
+                      <TeamAchievementsPanel />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </WorkspaceCollapsible>
 
@@ -6186,17 +7382,6 @@ const handleFileSelect = (e) => {
             
             <div className="flex flex-col gap-6">
                 
-                <WorkspaceCollapsible isOpen={adminPanelState.dashboard}>
-                  <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
-                      <div className="[&>div]:mb-0 h-full">
-                          <TeamStatsPanel />
-                      </div>
-                      <div className="[&>div]:mb-0 h-full">
-                          <TeamAchievementsPanel />
-                      </div>
-                  </div>
-                </WorkspaceCollapsible>
-
                 <WorkspaceTabs eyebrow="Centro de Navegacao" tabs={adminWorkspaceTabs} activeId={adminTab} onChange={setAdminTab} />
 
                 {/* CONTEÚDO DA ABA SELECIONADA */}
@@ -6269,25 +7454,57 @@ const handleFileSelect = (e) => {
           </div>
 
           <WorkspaceCollapsible isOpen={studentPanelState.dashboard}>
-            <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6 mb-6">
-              <CompetitionPrepPanel
-                eyebrow="Mapa para o Torneio"
-                title="Visao de equipe campea para estudar e agir durante a semana."
-                summary="Esses blocos ajudam voce a entender onde a equipe esta forte, onde precisa subir e como falar com mais seguranca no torneio."
-                readinessScore={commandCenterReadinessScore}
-                readinessLabel={commandCenterReadinessTone.label}
-                weekLabel={currentWeekData?.weekName || 'Semana em andamento'}
-                checklistItems={championshipChecklistItems}
-                focusItems={championshipFocusCards}
-                actionButtons={championshipActionButtons}
+            <div className="flex flex-col gap-6 mb-6">
+              <WorkspacePanelToolbar
+                eyebrow="Painel do Piloto"
+                panels={studentDashboardPanels}
+                panelState={studentPanelState}
+                onToggle={toggleWorkspacePanel}
+                onExpandAll={() => setWorkspacePanels(true)}
+                onCollapseAll={() => setWorkspacePanels(false)}
               />
-              <JudgeStoryPanel
-                eyebrow="Treino de Apresentacao"
-                title="Roteiro rapido para voce falar como equipe preparada."
-                summary="Estude estes blocos para conectar projeto, robo e impacto com mais clareza nas conversas com a equipe e com os juizes."
-                cards={judgeStoryCards}
-                spotlightQuestion={judgeSpotlightQuestion}
-              />
+
+              {(studentPanelState.prep || studentPanelState.judge) && (
+                <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
+                  {studentPanelState.prep && (
+                    <CompetitionPrepPanel
+                      eyebrow="Mapa para o Torneio"
+                      title="Visao de equipe campea para estudar e agir durante a semana."
+                      summary="Esses blocos ajudam voce a entender onde a equipe esta forte, onde precisa subir e como falar com mais seguranca no torneio."
+                      readinessScore={commandCenterReadinessScore}
+                      readinessLabel={commandCenterReadinessTone.label}
+                      weekLabel={currentWeekData?.weekName || 'Semana em andamento'}
+                      checklistItems={championshipChecklistItems}
+                      focusItems={championshipFocusCards}
+                      actionButtons={championshipActionButtons}
+                    />
+                  )}
+                  {studentPanelState.judge && (
+                    <JudgeStoryPanel
+                      eyebrow="Treino de Apresentacao"
+                      title="Roteiro rapido para voce falar como equipe preparada."
+                      summary="Estude estes blocos para conectar projeto, robo e impacto com mais clareza nas conversas com a equipe e com os juizes."
+                      cards={judgeStoryCards}
+                      spotlightQuestion={judgeSpotlightQuestion}
+                    />
+                  )}
+                </div>
+              )}
+
+              {(studentPanelState.stats || studentPanelState.achievements) && (
+                <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
+                  {studentPanelState.stats && (
+                    <div className="[&>div]:mb-0 w-full">
+                      <TeamStatsPanel />
+                    </div>
+                  )}
+                  {studentPanelState.achievements && (
+                    <div className="[&>div]:mb-0 w-full">
+                      <TeamAchievementsPanel />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </WorkspaceCollapsible>
 
@@ -6328,17 +7545,6 @@ const handleFileSelect = (e) => {
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-6">
                 
-                <WorkspaceCollapsible isOpen={studentPanelState.dashboard}>
-                  <div className="flex flex-col gap-6">
-                      <div className="[&>div]:mb-0 w-full">
-                          <TeamStatsPanel />
-                      </div>
-                      <div className="[&>div]:mb-0 w-full">
-                          <TeamAchievementsPanel />
-                      </div>
-                  </div>
-                </WorkspaceCollapsible>
-
                 <WorkspaceTabs eyebrow="Mapa do Aluno" tabs={studentWorkspaceTabs} activeId={studentTab} onChange={setStudentTab} />
 
                 {/* CONTEÚDO DA ABA SELECIONADA */}
