@@ -7371,7 +7371,7 @@ const handleFileSelect = (e) => {
               subtitle={`Semana ativa: ${currentWeekData?.weekName || 'Em sincronizacao'}. Aqui ficam rodizio, estrategia, robo e apresentacao com leitura mais direta e menos poluida.`}
               metrics={adminHeroMetrics}
               actions={adminHeroActions}
-              accent="from-[#22153b] via-[#151520] to-[#0a1730]"
+              accent="from-[#18376b] via-[#2b1559] to-[#140b2f]"
               footerContent={adminHeroFooter}
             />
           </div>
@@ -7503,7 +7503,7 @@ const handleFileSelect = (e) => {
               subtitle={`Estacao atual: ${viewAsStudent.station || 'Equipe'}. Aqui voce acompanha sua rotina da semana, entende as rubricas, treina sua fala e enxerga o time com uma energia mais viva e menos engessada.`}
               metrics={studentHeroMetrics}
               actions={studentHeroActions}
-              accent="from-[#13274a] via-[#151520] to-[#101018]"
+              accent="from-[#101f4a] via-[#2a1458] to-[#1a0d32]"
               footerContent={studentHeroFooter}
             />
           </div>
