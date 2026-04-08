@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   ListTodo,
   Map,
+  Pencil,
   Play,
   Plus,
   Rocket,
@@ -70,6 +71,11 @@ const formatAverageSeconds = (value) => {
   return `${Number(value).toFixed(1)}s`;
 };
 
+const getRoundSortValue = (name) => {
+  const match = `${name || ''}`.match(/\d+/);
+  return match ? Number.parseInt(match[0], 10) : Number.MAX_SAFE_INTEGER;
+};
+
 const MetricCard = ({ label, value, helper, tone = 'border-white/10 bg-black/25 text-white', icon }) => (
   <div className={`rounded-2xl border p-4 ${tone}`}>
     <div className="flex items-center justify-between gap-3">
@@ -116,13 +122,20 @@ const RobotRoundsPanel = ({
   activeTimer,
   timerDisplay,
   roundFormValues,
+  fullRoundTimeValue,
+  fullRoundScoreValue,
+  fullRoundTimerActive,
   onRoundFormValueChange,
+  onFullRoundFieldChange,
   onToggleTimer,
+  onToggleFullRoundTimer,
   onOpenNewRound,
+  onOpenRoundEdit,
   onOpenMissionForm,
   onOpenPitStop,
   onSavePracticeScore,
   onDeleteRound,
+  onSaveFullRoundRun,
   onSaveRoundRun,
   scoreChart,
   readonly = false,
@@ -152,6 +165,14 @@ const RobotRoundsPanel = ({
     .sort((left, right) => new Date(right.date || 0) - new Date(left.date || 0));
 
   const latestGeneralRun = generalPracticeRuns[0] || null;
+  const fullRoundRuns = generalPracticeRuns.filter((entry) => entry.practiceType === 'full_round');
+  const latestFullRoundRun = fullRoundRuns[0] || null;
+  const recentFullRoundRuns = fullRoundRuns.slice(0, 10);
+  const fullRoundSuccessCount = recentFullRoundRuns.filter((entry) => Number(entry.time) <= 150).length;
+  const fullRoundConsistencyLabel = recentFullRoundRuns.length > 0
+    ? `${fullRoundSuccessCount}/${recentFullRoundRuns.length} em 2:30`
+    : '--';
+  const fullRoundTargetReached = recentFullRoundRuns.length >= 10 && fullRoundSuccessCount >= 7;
   const bestScoreRun = generalPracticeRuns.reduce((best, current) => {
     if (!best) return current;
     return (current.score || 0) > (best.score || 0) ? current : best;
@@ -181,6 +202,15 @@ const RobotRoundsPanel = ({
   const mostEfficientRound = [...rounds]
     .filter((round) => round.estimatedTime > 0)
     .sort((left, right) => ((right.totalPoints || 0) / right.estimatedTime) - ((left.totalPoints || 0) / left.estimatedTime))[0] || null;
+  const sortedRounds = [...rounds].sort((left, right) => {
+    const byNumber = getRoundSortValue(left.name) - getRoundSortValue(right.name);
+    if (byNumber !== 0) return byNumber;
+
+    return `${left.name || ''}`.localeCompare(`${right.name || ''}`, 'pt-BR', {
+      numeric: true,
+      sensitivity: 'base',
+    });
+  });
 
   const readinessItems = [
     {
@@ -217,6 +247,8 @@ const RobotRoundsPanel = ({
 
   const readinessScore = Math.round((readinessItems.filter((item) => item.ready).length / readinessItems.length) * 100);
   const readinessTone = getReadinessTone(readinessScore);
+  const [showRoundsGuide, setShowRoundsGuide] = React.useState(false);
+  const [showMapGuide, setShowMapGuide] = React.useState(false);
 
   const actionPriorities = [
     isOverTime && {
@@ -249,7 +281,7 @@ const RobotRoundsPanel = ({
   const robotTabs = [
     {
       id: 'overview',
-      label: 'Painel de Rounds',
+      label: 'Rounds',
       description: 'Planejamento, treino, anexos e leitura competitiva da mesa.',
       icon: <LayoutDashboard size={16} />,
       tone: 'border-blue-500/20 bg-blue-500/10 text-blue-200',
@@ -258,7 +290,7 @@ const RobotRoundsPanel = ({
     },
     {
       id: 'map',
-      label: 'Mesa de Estrategia',
+      label: 'Mesa Tatica',
       description: 'Desenho tatico, trajetos e combinacoes de saida.',
       icon: <Map size={16} />,
       tone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200',
@@ -267,9 +299,51 @@ const RobotRoundsPanel = ({
     },
   ];
 
+  const roundsFocusCards = [
+    {
+      label: 'Saidas planejadas',
+      value: rounds.length,
+      helper: topRound ? `Round destaque: ${topRound.name}` : 'Cadastre a primeira saida.',
+      tone: 'border-blue-500/20 bg-blue-500/10 text-blue-200',
+    },
+    {
+      label: 'Codigo oficial',
+      value: activeCommandCode ? 'Definido' : 'Pendente',
+      helper: activeCommandCode ? activeCommandCode.title : 'Escolham a base tecnica.',
+      tone: 'border-green-500/20 bg-green-500/10 text-green-200',
+    },
+    {
+      label: 'Treino geral',
+      value: latestGeneralRun ? `${latestGeneralRun.score || 0} pts` : '--',
+      helper: latestGeneralRun ? formatDateOnly(latestGeneralRun.date) : 'Sem treino consolidado.',
+      tone: 'border-purple-500/20 bg-purple-500/10 text-purple-200',
+    },
+  ];
+
+  const mapFocusCards = [
+    {
+      label: 'Rounds no mapa',
+      value: rounds.length,
+      helper: rounds.length > 0 ? 'Saidas prontas para desenhar' : 'Cadastre rounds para usar a mesa.',
+      tone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200',
+    },
+    {
+      label: 'Anexos ligados',
+      value: linkedRoundIds.size,
+      helper: linkedRoundIds.size > 0 ? 'Mecanismos conectados a saidas' : 'Conecte garras as saidas.',
+      tone: 'border-blue-500/20 bg-blue-500/10 text-blue-200',
+    },
+    {
+      label: 'Codigo base',
+      value: activeCommandCode ? 'Definido' : 'Pendente',
+      helper: activeCommandCode ? activeCommandCode.title : 'Defina a programacao oficial.',
+      tone: 'border-green-500/20 bg-green-500/10 text-green-200',
+    },
+  ];
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      <div className="rounded-[28px] border border-white/10 bg-[#151520] p-2 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
+      <div className="mt-4 rounded-[28px] border border-white/10 bg-[#151520] p-2.5 shadow-[0_20px_60px_rgba(0,0,0,0.22)] md:mt-5">
         <div className="grid gap-2 md:grid-cols-2">
           {robotTabs.map((tab) => (
             <button
@@ -311,16 +385,16 @@ const RobotRoundsPanel = ({
 
       {robotSubTab === 'overview' ? (
         <>
-          <section className="relative overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br from-[#0f1b35] via-[#11192a] to-[#0d111a] p-6 md:p-8 shadow-[0_25px_80px_rgba(0,0,0,0.32)]">
+          <section className="newgears-major-panel relative overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br from-[#0f1b35] via-[#11192a] to-[#0d111a] px-6 pb-6 pt-8 md:px-8 md:pb-8 md:pt-10 shadow-[0_25px_80px_rgba(0,0,0,0.32)]">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.18),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.18),transparent_35%)] pointer-events-none"></div>
-            <div className="relative z-10 grid gap-6 xl:grid-cols-[1.08fr,0.92fr]">
+            <div className="relative z-10 grid gap-6 pt-1 xl:grid-cols-[0.94fr,1.06fr]">
               <div>
                 <span className="inline-flex items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
-                  <Rocket size={12} /> Robot Game Command Deck
+                  <Rocket size={12} /> Robo
                 </span>
-                <h3 className="mt-4 text-3xl font-black leading-tight text-white">Painel de rounds com leitura de torneio</h3>
+                <h3 className="mt-4 text-3xl font-black leading-[1.12] text-white">Rounds do robo da equipe</h3>
                 <p className="mt-4 max-w-3xl text-sm leading-relaxed text-gray-300">
-                  Organizem aqui a sequencia das saidas, o tempo real de treino, o uso de anexos e a referencia oficial de codigo. A ideia e transformar a aba do robo em um painel de decisao, nao so em uma lista de registros.
+                  A tela principal agora deixa em foco o que a equipe usa mais: saidas planejadas, treino salvo e codigo oficial. O guia mais explicativo ficou separado para nao empurrar o principal para baixo.
                 </p>
                 <div className="mt-6 flex flex-wrap gap-3">
                   {!readonly ? (
@@ -334,45 +408,45 @@ const RobotRoundsPanel = ({
                       <button onClick={onOpenPitStop} className="inline-flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs font-bold text-red-200 transition-all hover:bg-red-500 hover:text-white">
                         <Timer size={14} /> Pit Stop
                       </button>
-                      <button onClick={() => onSavePracticeScore(totalPoints, totalTime)} className="inline-flex items-center gap-2 rounded-2xl border border-green-500/20 bg-green-500/10 px-4 py-3 text-xs font-bold text-green-200 transition-all hover:bg-green-500 hover:text-black">
-                        <Trophy size={14} /> Salvar treino
-                      </button>
                     </>
                   ) : null}
+                  <button onClick={() => setShowRoundsGuide((current) => !current)} className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-bold text-white transition-all hover:bg-white hover:text-black">
+                    <Sparkles size={14} /> {showRoundsGuide ? 'Ocultar guia' : 'Ver guia dos rounds'}
+                  </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <MetricCard
-                  label="Potencial de pontos"
-                  value={totalPoints}
-                  helper={topRound ? `Round destaque: ${topRound.name}` : 'Monte as primeiras saidas'}
-                  icon={<Calculator size={14} className="text-green-300" />}
-                />
-                <MetricCard
-                  label="Tempo planejado"
-                  value={`${totalTime}s`}
-                  helper={rounds.length > 0 ? `${Math.max(150 - totalTime, 0)}s livres no teto de 150s` : 'Sem consolidacao ainda'}
-                  tone={isOverTime ? 'border-red-500/20 bg-red-500/10 text-red-200' : 'border-white/10 bg-black/25 text-white'}
-                  icon={<Timer size={14} className={isOverTime ? 'text-red-300' : 'text-blue-300'} />}
-                />
-                <MetricCard
-                  label="Saidas ativas"
-                  value={rounds.length}
-                  helper={fastestRound ? `Mais rapida: ${fastestRound.name}` : 'Cadastre a primeira saida'}
-                  icon={<Flag size={14} className="text-cyan-300" />}
-                />
-                <MetricCard
-                  label="Cobertura da mesa"
-                  value={`${missionCoveragePercent}%`}
-                  helper={missionsList.length > 0 ? `${missionCoverageIds.size}/${missionsList.length} missoes ligadas a rounds` : 'Cadastre as missoes primeiro'}
-                  icon={<Target size={14} className="text-yellow-300" />}
-                />
+              <div className="rounded-[28px] border border-white/10 bg-black/25 p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Principal</p>
+                    <h4 className="mt-2 text-xl font-black text-white">O que precisa ficar visivel</h4>
+                  </div>
+                  <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${readinessTone}`}>
+                    {readinessScore}% pronto
+                  </span>
+                </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  {roundsFocusCards.map((card) => (
+                    <div key={card.label} className={`rounded-[22px] border p-4 ${card.tone}`}>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-80">{card.label}</p>
+                      <p className="mt-3 text-2xl font-black text-white">{card.value}</p>
+                      <p className="mt-2 text-xs leading-relaxed opacity-90">{card.helper}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 rounded-[22px] border border-white/10 bg-white/5 p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Guia separado</p>
+                  <p className="mt-3 text-xs leading-relaxed text-gray-300">
+                    Radar competitivo e leitura mais explicativa agora ficam em um painel opcional. Assim a equipe enxerga as saidas e o historico antes de qualquer coisa.
+                  </p>
+                </div>
               </div>
             </div>
           </section>
 
-          <div className="grid gap-6 xl:grid-cols-[1.06fr,0.94fr]">
+          {showRoundsGuide ? (
+            <div className="grid gap-6 xl:grid-cols-[1.06fr,0.94fr]">
             <div className="rounded-[28px] border border-white/10 bg-[#151520] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
@@ -461,7 +535,8 @@ const RobotRoundsPanel = ({
                 </div>
               </div>
             </div>
-          </div>
+            </div>
+          ) : null}
           <div className="grid gap-6 xl:grid-cols-[1.15fr,0.85fr]">
             <div className="rounded-[28px] border border-white/10 bg-[#151520] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
               <div className="flex flex-wrap items-start justify-between gap-4">
@@ -497,7 +572,7 @@ const RobotRoundsPanel = ({
               </div>
 
               <div className="mt-6 grid gap-4 md:grid-cols-2">
-                {rounds.map((round, index) => {
+                {sortedRounds.map((round, index) => {
                   const roundMissions = (round.missions || []).map((missionId) => missionMap[missionId]).filter(Boolean);
                   const roundAttachments = attachmentsByRoundId[round.id] || [];
                   const roundHistory = roundRunsById[round.id] || [];
@@ -519,16 +594,29 @@ const RobotRoundsPanel = ({
                       className={`relative rounded-[24px] border p-5 transition-colors ${hasStructure ? 'border-cyan-500/20 bg-gradient-to-br from-[#131c2d] via-[#111722] to-[#0f131b]' : 'border-white/10 bg-black/25'}`}
                     >
                       {!readonly ? (
-                        <button
-                          onClick={() => onDeleteRound(round.id)}
-                          className="absolute right-4 top-4 rounded-xl border border-white/10 bg-black/30 p-2 text-gray-400 transition-colors hover:text-red-400"
-                          title="Apagar round"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        <div className="absolute right-4 top-4 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onOpenRoundEdit(round)}
+                            className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-[11px] font-bold text-cyan-200 transition-colors hover:border-cyan-400/40 hover:text-cyan-100"
+                            title="Editar saida"
+                          >
+                            <span className="inline-flex items-center gap-1.5">
+                              <Pencil size={13} /> Editar
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteRound(round.id)}
+                            className="rounded-xl border border-white/10 bg-black/30 p-2 text-gray-400 transition-colors hover:text-red-400"
+                            title="Apagar round"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       ) : null}
 
-                      <div className="pr-10">
+                      <div className={readonly ? '' : 'pr-28 md:pr-32'}>
                         <div className="flex items-start gap-3">
                           <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-sm font-black text-white">
                             {index + 1}
@@ -656,6 +744,97 @@ const RobotRoundsPanel = ({
             </div>
 
             <div className="space-y-6">
+              <div className="rounded-[28px] border border-white/10 bg-[#151520] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Treino completo</p>
+                    <h3 className="mt-2 flex items-center gap-2 text-lg font-black text-white">
+                      <Trophy className="text-yellow-300" /> Round inteiro da mesa
+                    </h3>
+                    <p className="mt-2 text-xs leading-relaxed text-gray-400">
+                      Registre a tentativa completa para acompanhar pontos reais, tempo total e consistencia de torneio em 2:30.
+                    </p>
+                  </div>
+                  <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${fullRoundTargetReached ? 'border-green-500/20 bg-green-500/10 text-green-200' : 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200'}`}>
+                    Meta: 7 de 10
+                  </span>
+                </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  <MetricCard
+                    label="Ultima tentativa"
+                    value={latestFullRoundRun ? `${latestFullRoundRun.score || 0} pts` : '--'}
+                    helper={latestFullRoundRun ? `${formatSeconds(latestFullRoundRun.time)} em ${formatDateOnly(latestFullRoundRun.date)}` : 'Sem treino completo salvo.'}
+                    tone="border-yellow-500/20 bg-yellow-500/10 text-yellow-200"
+                    icon={<Trophy size={14} className="text-yellow-300" />}
+                  />
+                  <MetricCard
+                    label="Consistencia"
+                    value={fullRoundConsistencyLabel}
+                    helper={recentFullRoundRuns.length > 0 ? 'tentativas dentro do limite de 2:30' : 'Salve as primeiras tentativas.'}
+                    tone={fullRoundTargetReached ? 'border-green-500/20 bg-green-500/10 text-green-200' : 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200'}
+                    icon={<TrendingUp size={14} className={fullRoundTargetReached ? 'text-green-300' : 'text-cyan-300'} />}
+                  />
+                  <MetricCard
+                    label="Janela ativa"
+                    value={recentFullRoundRuns.length || 0}
+                    helper={recentFullRoundRuns.length >= 10 ? 'ultimas 10 tentativas valendo' : 'o painel completa 10 tentativas aos poucos'}
+                    tone="border-blue-500/20 bg-blue-500/10 text-blue-200"
+                    icon={<Activity size={14} className="text-blue-300" />}
+                  />
+                </div>
+
+                {!readonly ? (
+                  <form onSubmit={onSaveFullRoundRun} className="mt-5 rounded-[24px] border border-white/10 bg-black/20 p-4">
+                    <div className="grid gap-3 md:grid-cols-[0.9fr,0.9fr,auto,auto]">
+                      <label className="space-y-2">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Pontos do round</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={fullRoundScoreValue}
+                          onChange={(event) => onFullRoundFieldChange('__full_round_score__', event.target.value)}
+                          className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-center text-sm text-white outline-none transition-colors focus:border-yellow-400"
+                          placeholder="Ex: 410"
+                        />
+                      </label>
+                      <label className="space-y-2">
+                        <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Tempo total</span>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0"
+                            value={fullRoundTimeValue}
+                            onChange={(event) => onFullRoundFieldChange('__full_round_time__', event.target.value)}
+                            className={`w-full rounded-xl border bg-black/30 px-3 py-3 pr-10 text-center text-sm text-white outline-none transition-colors ${fullRoundTimerActive ? 'border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'border-white/10 focus:border-blue-500'}`}
+                            placeholder="150"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">seg</span>
+                        </div>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={onToggleFullRoundTimer}
+                        className={`inline-flex min-h-[48px] items-center justify-center gap-2 self-end rounded-xl px-4 py-3 text-xs font-bold transition-all ${fullRoundTimerActive ? 'bg-red-500 text-white animate-pulse' : 'border border-white/10 bg-white/5 text-gray-200 hover:bg-white hover:text-black'}`}
+                      >
+                        {fullRoundTimerActive ? <Square size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+                        {fullRoundTimerActive ? 'Parar round' : 'Cronometrar round'}
+                      </button>
+                      <button className="inline-flex min-h-[48px] items-center justify-center gap-2 self-end rounded-xl bg-yellow-500 px-4 py-3 text-xs font-black text-black transition-all hover:bg-yellow-400">
+                        <Check size={14} /> Salvar tentativa
+                      </button>
+                    </div>
+                    <p className="mt-3 text-xs leading-relaxed text-gray-400">
+                      Meta competitiva: acertar tudo em ate 2:30 pelo menos 7 vezes a cada 10 tentativas.
+                    </p>
+                  </form>
+                ) : (
+                  <div className="mt-5 rounded-[24px] border border-white/10 bg-black/20 p-4 text-xs leading-relaxed text-gray-400">
+                    O tecnico pode usar este bloco para registrar o round inteiro e alimentar o grafico com a consistencia real da equipe.
+                  </div>
+                )}
+              </div>
+
               <div className="rounded-[28px] border border-white/10 bg-[#151520] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
                 <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -726,52 +905,55 @@ const RobotRoundsPanel = ({
         </>
       ) : (
         <>
-          <section className="relative overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br from-[#13212c] via-[#111820] to-[#0f1218] p-6 md:p-8 shadow-[0_25px_80px_rgba(0,0,0,0.32)]">
+          <section className="newgears-major-panel relative overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br from-[#13212c] via-[#111820] to-[#0f1218] px-6 pb-6 pt-8 md:px-8 md:pb-8 md:pt-10 shadow-[0_25px_80px_rgba(0,0,0,0.32)]">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(6,182,212,0.15),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(34,197,94,0.12),transparent_35%)] pointer-events-none"></div>
-            <div className="relative z-10 grid gap-6 xl:grid-cols-[1.05fr,0.95fr]">
+            <div className="relative z-10 grid gap-6 pt-1 xl:grid-cols-[0.94fr,1.06fr]">
               <div>
                 <span className="inline-flex items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
-                  <Map size={12} /> Strategy Table Studio
+                  <Map size={12} /> Mesa tatica
                 </span>
-                <h3 className="mt-4 text-3xl font-black leading-tight text-white">Mesa de estrategia com contexto de treino</h3>
+                <h3 className="mt-4 text-3xl font-black leading-[1.12] text-white">Mesa tatica com rotas e testes</h3>
                 <p className="mt-4 max-w-3xl text-sm leading-relaxed text-gray-300">
-                  A mesa nao precisa ser so um quadro de desenho. Use esta area para testar trajetos, registrar retornos para a base e alinhar visualmente onde cada round entra na partida.
+                  A tela principal da mesa agora deixa o tapete e o desenho tatico mais visiveis. O guia com leitura explicativa ficou separado para nao esconder o que a equipe precisa consultar na hora.
                 </p>
+                <div className="mt-6">
+                  <button onClick={() => setShowMapGuide((current) => !current)} className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-bold text-white transition-all hover:bg-white hover:text-black">
+                    <Sparkles size={14} /> {showMapGuide ? 'Ocultar guia da mesa' : 'Ver guia da mesa'}
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <MetricCard
-                  label="Rounds no mapa"
-                  value={rounds.length}
-                  helper={rounds.length > 0 ? 'saidas prontas para desenhar' : 'cadastre rounds para usar a mesa'}
-                  icon={<Flag size={14} className="text-cyan-300" />}
-                />
-                <MetricCard
-                  label="Anexos ligados"
-                  value={linkedRoundIds.size}
-                  helper={linkedRoundIds.size > 0 ? 'round(s) com mecanismo associado' : 'conecte garras a saidas'}
-                  tone="border-cyan-500/20 bg-cyan-500/10 text-cyan-200"
-                  icon={<Wrench size={14} className="text-cyan-300" />}
-                />
-                <MetricCard
-                  label="Ultimo treino"
-                  value={latestGeneralRun ? `${latestGeneralRun.score || 0} pts` : '--'}
-                  helper={latestGeneralRun ? formatDateTime(latestGeneralRun.date) : 'sem historico consolidado'}
-                  tone="border-green-500/20 bg-green-500/10 text-green-200"
-                  icon={<Trophy size={14} className="text-green-300" />}
-                />
-                <MetricCard
-                  label="Codigo base"
-                  value={activeCommandCode ? 'Definido' : 'Pendente'}
-                  helper={activeCommandCode ? activeCommandCode.title : 'defina a programacao oficial'}
-                  tone="border-blue-500/20 bg-blue-500/10 text-blue-200"
-                  icon={<Laptop size={14} className="text-blue-300" />}
-                />
+              <div className="rounded-[28px] border border-white/10 bg-black/25 p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Principal</p>
+                    <h4 className="mt-2 text-xl font-black text-white">O que precisa ficar visivel</h4>
+                  </div>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-gray-200">
+                    Mapa vivo
+                  </span>
+                </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  {mapFocusCards.map((card) => (
+                    <div key={card.label} className={`rounded-[22px] border p-4 ${card.tone}`}>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-80">{card.label}</p>
+                      <p className="mt-3 text-2xl font-black text-white">{card.value}</p>
+                      <p className="mt-2 text-xs leading-relaxed opacity-90">{card.helper}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 rounded-[22px] border border-white/10 bg-white/5 p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Guia separado</p>
+                  <p className="mt-3 text-xs leading-relaxed text-gray-300">
+                    O fluxo recomendado e as conexoes de defesa agora ficam num painel opcional. Assim o mapa da mesa aparece primeiro, que e o que a equipe mais consulta aqui.
+                  </p>
+                </div>
               </div>
             </div>
           </section>
-          <div className="grid gap-6 xl:grid-cols-[0.92fr,1.08fr]">
-            <div className="space-y-6">
+          {showMapGuide ? (
+            <div className="grid gap-6 xl:grid-cols-[0.92fr,1.08fr]">
+              <div className="space-y-6">
               <div className="rounded-[28px] border border-white/10 bg-[#151520] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
@@ -823,12 +1005,17 @@ const RobotRoundsPanel = ({
                   </div>
                 </div>
               </div>
-            </div>
+              </div>
 
+              <div className="rounded-[28px] border border-white/10 bg-[#151520] p-2 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
+                <StrategyBoard />
+              </div>
+            </div>
+          ) : (
             <div className="rounded-[28px] border border-white/10 bg-[#151520] p-2 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
               <StrategyBoard />
             </div>
-          </div>
+          )}
         </>
       )}
     </div>
@@ -836,3 +1023,5 @@ const RobotRoundsPanel = ({
 };
 
 export default RobotRoundsPanel;
+
+

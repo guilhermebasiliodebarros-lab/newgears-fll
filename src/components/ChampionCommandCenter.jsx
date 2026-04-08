@@ -36,7 +36,7 @@ const ChampionCommandCenter = ({
                 <Crown size={12} /> Central de Comando
               </div>
               <h1 className="text-2xl md:text-3xl font-black mt-3">Central de Comando da Equipe</h1>
-              <p className="text-sm text-gray-400 mt-1">Painel executivo para acompanhar prontidao, prioridades e decisoes da temporada.</p>
+              <p className="text-sm text-gray-400 mt-1">Painel da equipe para acompanhar prontidao, prioridades e o ritmo da temporada sem cara de empresa.</p>
             </div>
 
             <button onClick={onClose} className="inline-flex items-center gap-2 px-4 py-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-sm font-bold transition-colors">
@@ -61,7 +61,7 @@ const ChampionCommandCenter = ({
           <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-[10px] font-bold uppercase tracking-[0.24em] ${readinessTone.bg} ${readinessTone.border} ${readinessTone.color}`}>
             <Crown size={12} /> Central de Comando da Equipe
           </div>
-          <h2 className="text-3xl md:text-4xl font-black text-white mt-4 leading-tight">Gestao de equipe com cara de pit wall, banca tecnica e temporada campea.</h2>
+          <h2 className="text-3xl md:text-4xl font-black text-white mt-4 leading-tight">Central da equipe com cara de pit wall, treino vivo e temporada campea.</h2>
           <p className="text-sm text-gray-300 mt-3 max-w-3xl">Este painel mostra onde a equipe ja parece pronta para competir e quais frentes ainda precisam de iteracao antes de uma apresentacao oficial da First Lego League.</p>
 
           <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-6">
@@ -148,3 +148,5 @@ const ChampionCommandCenter = ({
 };
 
 export default ChampionCommandCenter;
+
+

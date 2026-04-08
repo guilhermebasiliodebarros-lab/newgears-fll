@@ -10,12 +10,23 @@ import {
   MessageSquare,
   Pencil,
   Star,
+  Target,
   Trash2,
   UserCircle,
-  Users,
 } from 'lucide-react';
 
 const scoreDecisionIdea = (item) => (item.impact * 3) + (item.cost * 2) + item.feasibility + (item.innovation * 2);
+
+const formatDate = (value) => {
+  if (!value) return 'Sem data';
+  return `${value}`.includes('-') ? `${value}`.split('-').reverse().join('/') : value;
+};
+
+const getImpactTone = (impact) => {
+  if (impact === 'Alto') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100';
+  if (impact === 'MÃ©dio' || impact === 'Medio') return 'border-yellow-400/20 bg-yellow-400/10 text-yellow-100';
+  return 'border-white/10 bg-white/5 text-gray-200';
+};
 
 const InnovationStrategyPanel = ({
   projectSummary,
@@ -36,6 +47,7 @@ const InnovationStrategyPanel = ({
   onOpenImpact,
   onDeleteOutreach,
 }) => {
+  const [showProjectGuide, setShowProjectGuide] = React.useState(false);
   const sortedDecisionIdeas = [...decisionMatrix].sort((left, right) => scoreDecisionIdea(right) - scoreDecisionIdea(left));
   const sortedExperts = [...experts].sort((left, right) => new Date(right.date || 0) - new Date(left.date || 0));
   const sortedImpactEvents = [...outreachEvents].sort((left, right) => new Date(right.date || 0) - new Date(left.date || 0));
@@ -81,176 +93,312 @@ const InnovationStrategyPanel = ({
     },
   ];
   const projectReadinessScore = Math.round((projectReadinessChecklist.filter((item) => item.ready).length / projectReadinessChecklist.length) * 100);
+  const missingReadinessCount = projectReadinessChecklist.filter((item) => !item.ready).length;
+
+  const strategySignals = [
+    {
+      label: 'Projeto pronto',
+      value: `${projectReadinessScore}%`,
+      helper: `${projectReadinessChecklist.filter((item) => item.ready).length}/${projectReadinessChecklist.length} blocos prontos`,
+      tone: projectReadinessScore >= 80 ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100' : 'border-yellow-400/20 bg-yellow-400/10 text-yellow-100',
+    },
+    {
+      label: 'Matriz de ideias',
+      value: sortedDecisionIdeas.length,
+      helper: topDecisionIdea ? `Lider atual: ${topDecisionIdea.name}` : 'Cadastrem mais alternativas',
+      tone: 'border-purple-400/20 bg-purple-400/10 text-purple-100',
+    },
+    {
+      label: 'Especialistas',
+      value: sortedExperts.length,
+      helper: `${expertConversionRate}% das conversas ja viraram acao`,
+      tone: 'border-pink-400/20 bg-pink-400/10 text-pink-100',
+    },
+    {
+      label: 'Impacto real',
+      value: totalImpactPeople,
+      helper: topImpactType ? `${topImpactType[0]} puxando o alcance` : 'Documentem o primeiro contato',
+      tone: 'border-orange-400/20 bg-orange-400/10 text-orange-100',
+    },
+  ];
+
+  const projectQuestCards = [
+    {
+      label: 'Problema real',
+      value: projectSummary?.problem || 'Descrevam quem sofre com o problema, onde isso acontece e por que a equipe decidiu agir.',
+      tone: 'border-rose-400/20 bg-rose-400/10 text-rose-50',
+    },
+    {
+      label: 'Solucao da equipe',
+      value: projectSummary?.solution || 'Explique como a proposta funciona, o que ela faz e por que e melhor que alternativas comuns.',
+      tone: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-50',
+    },
+    {
+      label: 'Impacto defendivel',
+      value: projectImpactNarrative || 'Mostrem quem se beneficia, qual ganho real aparece e como a equipe pretende ampliar esse efeito.',
+      tone: 'border-cyan-400/20 bg-cyan-400/10 text-cyan-50',
+    },
+  ];
+
+  const guideCards = [
+    {
+      title: 'Matriz de decisao',
+      detail: 'Comparem pelo menos 3 ideias reais usando os mesmos criterios. A banca precisa enxergar por que uma rota ficou melhor que a outra.',
+      tone: 'border-purple-400/20 bg-purple-400/10 text-purple-100',
+      icon: <BarChart3 size={14} className="text-purple-200" />,
+    },
+    {
+      title: 'Consulta a especialistas',
+      detail: 'Registrem nome, cargo, insight principal, se a sugestao foi aplicada e o que mudou depois da conversa.',
+      tone: 'border-pink-400/20 bg-pink-400/10 text-pink-100',
+      icon: <MessageSquare size={14} className="text-pink-200" />,
+    },
+    {
+      title: 'Impacto comprovado',
+      detail: 'Cada registro precisa mostrar acao feita, publico, quantidade de pessoas e algum retorno para virar evidencia forte.',
+      tone: 'border-orange-400/20 bg-orange-400/10 text-orange-100',
+      icon: <Megaphone size={14} className="text-orange-200" />,
+    },
+  ];
+
+  const focusCards = [
+    {
+      label: 'Matriz de decisao',
+      value: sortedDecisionIdeas.length,
+      helper: topDecisionIdea ? `Melhor ideia: ${topDecisionIdea.name}` : 'Cadastrem alternativas para comparar.',
+      tone: 'border-purple-400/20 bg-purple-400/10 text-purple-100',
+    },
+    {
+      label: 'Especialistas',
+      value: sortedExperts.length,
+      helper: sortedExperts.length > 0 ? `${expertConversionRate}% das conversas viraram acao` : 'Registrem a primeira conversa relevante.',
+      tone: 'border-pink-400/20 bg-pink-400/10 text-pink-100',
+    },
+    {
+      label: 'Impacto',
+      value: totalImpactPeople,
+      helper: latestImpactEvent ? `Ultimo registro: ${latestImpactEvent.name}` : 'Documentem o primeiro alcance real.',
+      tone: 'border-orange-400/20 bg-orange-400/10 text-orange-100',
+    },
+  ];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      <section className="relative overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br from-[#22151f] via-[#151520] to-[#10131d] p-6 md:p-8 shadow-[0_25px_80px_rgba(0,0,0,0.32)]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,0.12),transparent_35%),radial-gradient(circle_at_bottom_left,rgba(168,85,247,0.16),transparent_32%)] pointer-events-none"></div>
-        <div className="relative z-10 grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
-          <div>
-            <span className="inline-flex items-center gap-2 rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-yellow-200">
-              <Lightbulb size={12} /> Innovation Strategy Deck
-            </span>
-            <h3 className="text-3xl font-black text-white mt-4 leading-tight">
-              {projectSummary?.title && projectSummary.title !== 'Nome do Projeto' ? projectSummary.title : 'Projeto de inovacao em construcao'}
-            </h3>
-            <p className="text-sm text-gray-300 mt-4 leading-relaxed max-w-3xl">
-              Reunam aqui a logica completa que os juizes esperam ver: problema real, solucao clara, comparacao de ideias, consulta a especialistas e impacto comprovado.
-            </p>
+      <section className="newgears-major-panel relative overflow-hidden rounded-[34px] border border-white/10 bg-[linear-gradient(135deg,rgba(24,16,28,0.98),rgba(13,16,24,0.98))] p-6 md:p-8 shadow-[0_26px_90px_rgba(0,0,0,0.34)]">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,0.16),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(168,85,247,0.18),transparent_32%),radial-gradient(circle_at_center,rgba(34,211,238,0.06),transparent_40%)]" />
 
-            <div className="flex flex-wrap gap-3 mt-6">
-              <button onClick={onOpenProject} className="inline-flex items-center gap-2 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 px-4 py-3 text-xs font-bold text-yellow-200 hover:bg-yellow-500 hover:text-black transition-all">
-                <Lightbulb size={14} /> Editar projeto oficial
+        <div className="relative z-10 grid gap-6 xl:grid-cols-[0.94fr,1.06fr]">
+          <div>
+            <span className="inline-flex items-center gap-2 rounded-full border border-yellow-400/20 bg-yellow-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-yellow-100">
+              <Lightbulb size={12} />
+              Estrategia
+            </span>
+            <h3 className="mt-4 text-3xl font-black leading-tight text-white">Estrategia da equipe</h3>
+            <p className="mt-4 max-w-3xl text-sm leading-relaxed text-gray-300">
+              A tela principal agora fica focada no que mais ajuda na rotina: matriz de decisao, especialistas e impacto. O resumo completo do projeto ficou separado para nao tomar o espaco principal.
+            </p>
+            {projectSummary?.title && projectSummary.title !== 'Nome do Projeto' ? (
+              <p className="mt-4 text-xs font-bold uppercase tracking-[0.16em] text-yellow-100/80">
+                Projeto atual: <span className="text-white">{projectSummary.title}</span>
+              </p>
+            ) : null}
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button onClick={onOpenProject} className="inline-flex items-center gap-2 rounded-[18px] border border-yellow-400/20 bg-yellow-400/10 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-yellow-100 transition-all hover:-translate-y-0.5 hover:bg-yellow-400 hover:text-slate-950">
+                <Lightbulb size={14} /> Projeto
               </button>
-              <button onClick={onOpenMatrix} className="inline-flex items-center gap-2 rounded-2xl border border-purple-500/20 bg-purple-500/10 px-4 py-3 text-xs font-bold text-purple-200 hover:bg-purple-500 hover:text-white transition-all">
-                <BarChart3 size={14} /> Nova ideia na matriz
+              <button onClick={() => setShowProjectGuide((current) => !current)} className="inline-flex items-center gap-2 rounded-[18px] border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-cyan-100 transition-all hover:-translate-y-0.5 hover:bg-cyan-400 hover:text-slate-950">
+                <Target size={14} /> {showProjectGuide ? 'Ocultar guia' : 'Ver guia do projeto'}
               </button>
-              <button onClick={onOpenExpert} className="inline-flex items-center gap-2 rounded-2xl border border-pink-500/20 bg-pink-500/10 px-4 py-3 text-xs font-bold text-pink-200 hover:bg-pink-500 hover:text-white transition-all">
-                <MessageSquare size={14} /> Novo especialista
+              <button onClick={onOpenMatrix} className="inline-flex items-center gap-2 rounded-[18px] border border-purple-400/20 bg-purple-400/10 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-purple-100 transition-all hover:-translate-y-0.5 hover:bg-purple-400 hover:text-white">
+                <BarChart3 size={14} /> Matriz
               </button>
-              <button onClick={onOpenImpact} className="inline-flex items-center gap-2 rounded-2xl border border-orange-500/20 bg-orange-500/10 px-4 py-3 text-xs font-bold text-orange-200 hover:bg-orange-500 hover:text-white transition-all">
-                <Megaphone size={14} /> Registrar impacto
+              <button onClick={onOpenExpert} className="inline-flex items-center gap-2 rounded-[18px] border border-pink-400/20 bg-pink-400/10 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-pink-100 transition-all hover:-translate-y-0.5 hover:bg-pink-400 hover:text-white">
+                <MessageSquare size={14} /> Especialista
+              </button>
+              <button onClick={onOpenImpact} className="inline-flex items-center gap-2 rounded-[18px] border border-orange-400/20 bg-orange-400/10 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-orange-100 transition-all hover:-translate-y-0.5 hover:bg-orange-400 hover:text-white">
+                <Megaphone size={14} /> Impacto
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Projeto oficial</p>
-              <p className="text-2xl font-black text-white mt-3">{projectReadinessScore}%</p>
-              <p className="text-xs text-gray-400 mt-2">{projectReadinessChecklist.filter((item) => item.ready).length}/{projectReadinessChecklist.length} blocos prontos para apresentar.</p>
+          <div className="rounded-[30px] border border-white/10 bg-black/25 p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">Foco principal</p>
+                <h4 className="mt-2 text-xl font-black text-white">O que precisa ficar visivel</h4>
+              </div>
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-gray-200">
+                3 frentes
+              </span>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Matriz de decisao</p>
-              <p className="text-2xl font-black text-white mt-3">{sortedDecisionIdeas.length}</p>
-              <p className="text-xs text-gray-400 mt-2">{topDecisionIdea ? `Lider atual: ${topDecisionIdea.name}` : 'Cadastrem mais de uma alternativa real.'}</p>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              {focusCards.map((card) => (
+                <div key={card.label} className={`rounded-[22px] border p-4 ${card.tone}`}>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-80">{card.label}</p>
+                  <p className="mt-3 text-2xl font-black text-white">{card.value}</p>
+                  <p className="mt-2 text-xs leading-relaxed opacity-90">{card.helper}</p>
+                </div>
+              ))}
             </div>
-            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Especialistas</p>
-              <p className="text-2xl font-black text-white mt-3">{sortedExperts.length}</p>
-              <p className="text-xs text-gray-400 mt-2">{appliedExperts.length} sugestoes ja viraram acao.</p>
-            </div>
-            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Impacto real</p>
-              <p className="text-2xl font-black text-white mt-3">{totalImpactPeople}</p>
-              <p className="text-xs text-gray-400 mt-2">pessoas impactadas na temporada.</p>
+
+            <div className="mt-4 rounded-[22px] border border-white/10 bg-white/5 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Projeto separado</p>
+              <p className="mt-3 text-xs leading-relaxed text-gray-300">
+                O resumo completo do projeto saiu da tela principal. Use <span className="font-bold text-white">Projeto</span> para editar e <span className="font-bold text-white">Ver guia do projeto</span> quando quiser revisar narrativa e defesa.
+              </p>
             </div>
           </div>
         </div>
       </section>
 
-      <div className="grid xl:grid-cols-[1.1fr,0.9fr] gap-6">
-        <div className="bg-[#151520] border border-white/10 rounded-[28px] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Projeto Oficial</p>
-              <h3 className="text-xl font-black text-white mt-2">Narrativa central para os juizes</h3>
-            </div>
-            <span className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-[0.18em] font-bold ${projectReadinessScore >= 80 ? 'border-green-500/20 bg-green-500/10 text-green-200' : 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200'}`}>
-              {projectReadinessScore}% pronto
-            </span>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-4 mt-6">
-            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-red-300 font-bold">Problema</p>
-              <p className="text-sm text-white mt-3 leading-relaxed">{projectSummary?.problem || 'Descrevam quem sofre com o problema, onde isso acontece e por que a equipe decidiu agir.'}</p>
-            </div>
-            <div className="rounded-2xl border border-green-500/20 bg-green-500/10 p-4">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-green-300 font-bold">Solucao</p>
-              <p className="text-sm text-white mt-3 leading-relaxed">{projectSummary?.solution || 'Explique como a proposta funciona, o que ela faz e por que e melhor que alternativas comuns.'}</p>
-            </div>
-            <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-blue-300 font-bold">Impacto</p>
-              <p className="text-sm text-white mt-3 leading-relaxed">{projectImpactNarrative || 'Mostrem quem se beneficia, qual ganho real aparece e como a equipe pretende ampliar esse efeito.'}</p>
-            </div>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-4 mt-6">
-            {projectReadinessChecklist.map((item) => (
-              <div key={item.label} className={`rounded-2xl border p-4 ${item.ready ? 'border-green-500/20 bg-green-500/10' : 'border-white/10 bg-white/5'}`}>
-                <div className="flex items-center gap-2 text-sm font-bold text-white">
-                  {item.ready ? <CheckCircle size={14} className="text-green-400" /> : <AlertTriangle size={14} className="text-yellow-400" />}
-                  {item.label}
-                </div>
-                <p className="text-xs text-gray-300 mt-2 leading-relaxed">{item.helper}</p>
+      {showProjectGuide ? (
+        <div className="grid gap-6 xl:grid-cols-[1.08fr,0.92fr]">
+          <div className="rounded-[30px] border border-white/10 bg-[#151520] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Resumo do projeto</p>
+                <h3 className="mt-2 text-xl font-black text-white">Narrativa central</h3>
               </div>
-            ))}
+              <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${projectReadinessScore >= 80 ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100' : 'border-yellow-400/20 bg-yellow-400/10 text-yellow-100'}`}>
+                {projectReadinessScore}% pronto
+              </span>
+            </div>
+
+            <div className="mt-5 rounded-[26px] border border-white/10 bg-black/25 p-4">
+              <div className="flex items-end justify-between gap-3 flex-wrap">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Prontidao do projeto</p>
+                  <p className="mt-2 text-4xl font-black text-white">{projectReadinessScore}%</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-black/25 px-3 py-2 text-xs font-bold text-gray-200">
+                  {projectReadinessChecklist.filter((item) => item.ready).length} etapa(s) liberada(s)
+                </div>
+              </div>
+              <div className="mt-4 h-3 overflow-hidden rounded-full bg-black/40">
+                <div className="h-full rounded-full bg-gradient-to-r from-yellow-300 via-fuchsia-300 to-cyan-300" style={{ width: `${Math.max(8, projectReadinessScore)}%` }} />
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-gray-400">
+                Aqui fica o resumo completo para revisar a defesa do projeto quando voces quiserem.
+              </p>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {strategySignals.map((signal) => (
+                <div key={signal.label} className={`rounded-[22px] border p-4 ${signal.tone}`}>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-80">{signal.label}</p>
+                  <p className="mt-3 text-2xl font-black text-white">{signal.value}</p>
+                  <p className="mt-2 text-xs leading-relaxed opacity-90">{signal.helper}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              {projectQuestCards.map((card) => (
+                <div key={card.label} className={`rounded-[24px] border p-4 ${card.tone}`}>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-80">{card.label}</p>
+                  <p className="mt-3 text-sm leading-relaxed text-white">{card.value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 grid gap-3 md:grid-cols-2">
+              {projectReadinessChecklist.map((item) => (
+                <div key={item.label} className={`rounded-[22px] border p-4 ${item.ready ? 'border-emerald-400/20 bg-emerald-400/10' : 'border-white/10 bg-white/5'}`}>
+                  <div className="flex items-center gap-2 text-sm font-black text-white">
+                    {item.ready ? <CheckCircle size={14} className="text-emerald-300" /> : <AlertTriangle size={14} className="text-yellow-300" />}
+                    {item.label}
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-gray-300">{item.helper}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-[30px] border border-white/10 bg-[#151520] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Guia de apresentacao</p>
+                <h3 className="mt-2 text-xl font-black text-white">Leitura para a defesa</h3>
+              </div>
+              <button onClick={() => setShowProjectGuide(false)} className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-2 text-xs font-black uppercase tracking-[0.14em] text-gray-200 transition-all hover:bg-white/10 hover:text-white">
+                Ocultar guia
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              {guideCards.map((card) => (
+                <div key={card.title} className={`rounded-[24px] border p-4 ${card.tone}`}>
+                  <p className="flex items-center gap-2 text-sm font-black text-white">
+                    {card.icon}
+                    {card.title}
+                  </p>
+                  <p className="mt-3 text-xs leading-relaxed text-white/90">{card.detail}</p>
+                </div>
+              ))}
+
+              <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-gray-200">
+                <p className="flex items-center gap-2 text-sm font-black text-white">
+                  <Target size={14} className="text-cyan-300" />
+                  Regra de defesa
+                </p>
+                <p className="mt-3 text-xs leading-relaxed">
+                  Sempre que a equipe afirmar algo, tentem ligar essa fala a uma evidencia real: teste, conversa, foto, impacto, prototipo ou comparacao de ideias.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
+      ) : null}
 
-        <div className="bg-[#151520] border border-white/10 rounded-[28px] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Guia de Preenchimento</p>
-              <h3 className="text-xl font-black text-white mt-2">O que uma equipe forte registra aqui</h3>
-            </div>
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.18em] font-bold text-gray-200">
-              Preenchimento campeao
-            </span>
-          </div>
-
-          <div className="space-y-4 mt-6">
-            <div className="rounded-2xl border border-purple-500/20 bg-purple-500/10 p-4">
-              <p className="text-sm font-bold text-white flex items-center gap-2"><BarChart3 size={14} className="text-purple-300" /> Matriz de decisao</p>
-              <p className="text-xs text-gray-200 mt-3 leading-relaxed">Cadastrem pelo menos 3 ideias reais e comparem usando os mesmos criterios. A nota precisa mostrar por que uma ideia e mais forte, mais viavel e mais inovadora que outra.</p>
-            </div>
-            <div className="rounded-2xl border border-pink-500/20 bg-pink-500/10 p-4">
-              <p className="text-sm font-bold text-white flex items-center gap-2"><MessageSquare size={14} className="text-pink-300" /> Especialistas</p>
-              <p className="text-xs text-gray-200 mt-3 leading-relaxed">Registrem nome, cargo, insight principal, se houve evidencia da conversa e se a sugestao mudou o projeto. Juizes gostam de ver orientacao externa que virou decisao concreta.</p>
-            </div>
-            <div className="rounded-2xl border border-orange-500/20 bg-orange-500/10 p-4">
-              <p className="text-sm font-bold text-white flex items-center gap-2"><Megaphone size={14} className="text-orange-300" /> Impacto</p>
-              <p className="text-xs text-gray-200 mt-3 leading-relaxed">Cada registro deve mostrar acao feita, publico atingido, data, numero de pessoas e algum retorno recebido. Isso transforma compartilhamento em impacto real documentado.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-[#151520] border border-white/10 rounded-[28px] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
-        <div className="flex items-start justify-between gap-4 flex-wrap mb-6">
+      <div className="rounded-[30px] border border-white/10 bg-[#151520] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Comparacao de Ideias</p>
-            <h3 className="text-xl font-black text-white mt-2 flex items-center gap-2">
-              <BarChart3 className="text-purple-500" /> Matriz de Decisao (Pugh Matrix)
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Oficina de ideias</p>
+            <h3 className="mt-2 flex items-center gap-2 text-xl font-black text-white">
+              <BarChart3 className="text-purple-400" />
+              Matriz de decisao
             </h3>
           </div>
-          <button onClick={onOpenMatrix} className="text-xs bg-purple-500/10 text-purple-400 border border-purple-500/20 px-4 py-2 rounded-2xl hover:bg-purple-500 hover:text-white font-bold transition-all">
-            + Nova Ideia
+          <button onClick={onOpenMatrix} className="rounded-[18px] border border-purple-400/20 bg-purple-400/10 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-purple-100 transition-all hover:-translate-y-0.5 hover:bg-purple-400 hover:text-white">
+            + Nova ideia
           </button>
         </div>
 
-        <div className="grid xl:grid-cols-[0.7fr,1.3fr] gap-6">
+        <div className="mt-6 grid gap-6 xl:grid-cols-[0.72fr,1.28fr]">
           <div className="space-y-4">
-            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Como preencher bem</p>
-              <div className="space-y-3 mt-4 text-sm text-gray-300">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">Impacto: mede o quanto a ideia realmente ajuda o problema.</div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">Custo: avalia se a equipe consegue desenvolver e sustentar a solucao.</div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">Facilidade: considera tempo, recursos e chance de execucao.</div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">Inovacao: compara o quao diferente e criativa a proposta parece.</div>
+            <div className="rounded-[24px] border border-white/10 bg-black/25 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Manual da matriz</p>
+              <div className="mt-4 space-y-3 text-sm text-gray-300">
+                <div className="rounded-[20px] border border-white/10 bg-white/5 p-3">Impacto: o quanto a ideia realmente ajuda o problema.</div>
+                <div className="rounded-[20px] border border-white/10 bg-white/5 p-3">Custo: se a equipe consegue sustentar essa rota.</div>
+                <div className="rounded-[20px] border border-white/10 bg-white/5 p-3">Facilidade: tempo, recurso e chance de execucao.</div>
+                <div className="rounded-[20px] border border-white/10 bg-white/5 p-3">Inovacao: o quanto a proposta se destaca.</div>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-purple-500/20 bg-purple-500/10 p-4">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-purple-300 font-bold">Leitura rapida</p>
-              <p className="text-2xl font-black text-white mt-3">{matrixAverageScore}</p>
-              <p className="text-xs text-gray-200 mt-2">media geral das ideias registradas.</p>
-              <p className="text-sm text-white font-bold mt-4">{topDecisionIdea ? topDecisionIdea.name : 'Sem lider atual'}</p>
-              <p className="text-xs text-gray-300 mt-2">{topDecisionIdea ? `Melhor pontuacao atual: ${scoreDecisionIdea(topDecisionIdea)}` : 'Adicionem ideias para comparar caminhos com criterio.'}</p>
+            <div className="rounded-[24px] border border-purple-400/20 bg-purple-400/10 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-purple-100/80">Leitura rapida</p>
+              <p className="mt-3 text-3xl font-black text-white">{matrixAverageScore}</p>
+              <p className="mt-2 text-xs text-purple-50/80">media geral das ideias registradas.</p>
+              <p className="mt-4 text-sm font-black text-white">{topDecisionIdea ? topDecisionIdea.name : 'Sem lider atual'}</p>
+              <p className="mt-2 text-xs leading-relaxed text-purple-50/80">
+                {topDecisionIdea ? `Pontuacao atual: ${scoreDecisionIdea(topDecisionIdea)}` : 'Adicionem ideias para comparar caminhos com criterio.'}
+              </p>
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-2xl border border-white/10 bg-black/20">
-            <table className="w-full text-left border-collapse">
-              <thead className="text-xs text-gray-500 uppercase border-b border-white/10 bg-white/5">
+          <div className="overflow-x-auto rounded-[26px] border border-white/10 bg-black/20">
+            <table className="w-full border-collapse text-left">
+              <thead className="border-b border-white/10 bg-white/5 text-xs uppercase text-gray-500">
                 <tr>
-                  <th className="p-3">Ranking</th>
+                  <th className="p-3">Rank</th>
                   <th className="p-3">Ideia</th>
-                  <th className="p-3 text-center">Impacto (x3)</th>
-                  <th className="p-3 text-center">Custo (x2)</th>
-                  <th className="p-3 text-center">Facilidade (x1)</th>
-                  <th className="p-3 text-center">Inovacao (x2)</th>
+                  <th className="p-3 text-center">Impacto x3</th>
+                  <th className="p-3 text-center">Custo x2</th>
+                  <th className="p-3 text-center">Facilidade</th>
+                  <th className="p-3 text-center">Inovacao x2</th>
                   <th className="p-3 text-right text-white">Total</th>
                   <th className="p-3"></th>
                 </tr>
@@ -260,31 +408,40 @@ const InnovationStrategyPanel = ({
                   const total = scoreDecisionIdea(item);
 
                   return (
-                    <tr key={item.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                    <tr key={item.id} className="border-b border-white/5 transition-colors hover:bg-white/5">
                       <td className="p-3">
-                        <span className={`inline-flex items-center justify-center min-w-[28px] h-[28px] rounded-full text-xs font-black ${index === 0 ? 'bg-yellow-500 text-black' : 'bg-white/10 text-gray-200'}`}>
+                        <span className={`inline-flex h-8 min-w-[32px] items-center justify-center rounded-full text-xs font-black ${index === 0 ? 'bg-yellow-300 text-slate-950' : 'bg-white/10 text-gray-100'}`}>
                           {index + 1}
                         </span>
                       </td>
-                      <td className="p-3 font-bold text-white">
+                      <td className="p-3 font-black text-white">
                         {item.name}
-                        {item.author && <span className="block text-[10px] text-gray-500 font-normal mt-0.5 flex items-center gap-1"><UserCircle size={10} /> {item.author}</span>}
+                        {item.author && (
+                          <span className="mt-1 flex items-center gap-1 text-[10px] font-normal text-gray-500">
+                            <UserCircle size={10} /> {item.author}
+                          </span>
+                        )}
                       </td>
                       <td className="p-3 text-center text-gray-400">{item.impact}</td>
                       <td className="p-3 text-center text-gray-400">{item.cost}</td>
                       <td className="p-3 text-center text-gray-400">{item.feasibility}</td>
                       <td className="p-3 text-center text-gray-400">{item.innovation}</td>
-                      <td className="p-3 text-right font-black text-purple-400 text-lg">{total}</td>
+                      <td className="p-3 text-right text-lg font-black text-purple-300">{total}</td>
                       <td className="p-3 text-right">
-                        {(isAdmin || item.author === viewAsStudent?.name) && <button onClick={() => onDeleteMatrix(item.id)} className="text-gray-600 hover:text-red-500 p-1 transition-colors"><Trash2 size={16} /></button>}
+                        {(isAdmin || item.author === viewAsStudent?.name) && (
+                          <button onClick={() => onDeleteMatrix(item.id)} className="rounded-xl p-1 text-gray-500 transition-colors hover:bg-red-500/10 hover:text-red-300">
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+
             {sortedDecisionIdeas.length === 0 && (
-              <div className="text-center text-gray-500 text-sm italic py-8">
+              <div className="py-8 text-center text-sm italic text-gray-500">
                 Nenhuma ideia cadastrada ainda. Adicionem opcoes diferentes para comparar com criterio.
               </div>
             )}
@@ -292,126 +449,198 @@ const InnovationStrategyPanel = ({
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <div className="bg-[#151520] border border-white/10 rounded-[28px] p-6 h-fit shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
-          <div className="flex justify-between items-center mb-6">
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="rounded-[30px] border border-white/10 bg-[#151520] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
+          <div className="flex items-center justify-between gap-4 mb-6">
             <div>
-              <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Consulta Externa</p>
-              <h3 className="text-lg font-black text-white flex items-center gap-2 mt-2"><MessageSquare className="text-pink-500" /> Especialistas</h3>
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Mentorias e especialistas</p>
+              <h3 className="mt-2 flex items-center gap-2 text-lg font-black text-white">
+                <MessageSquare className="text-pink-400" />
+                Especialistas
+              </h3>
             </div>
-            <button onClick={onOpenExpert} className="text-xs bg-pink-500/10 text-pink-500 border border-pink-500/20 px-3 py-1.5 rounded-lg hover:bg-pink-500 hover:text-white font-bold">+ Novo</button>
+            <button onClick={onOpenExpert} className="rounded-[16px] border border-pink-400/20 bg-pink-400/10 px-4 py-2 text-xs font-black uppercase tracking-[0.14em] text-pink-100 transition-all hover:bg-pink-400 hover:text-white">
+              + Novo
+            </button>
           </div>
 
-          <div className="grid sm:grid-cols-3 gap-3 mb-5">
-            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Consultas</p>
-              <p className="text-2xl font-black text-white mt-3">{sortedExperts.length}</p>
+          <div className="grid gap-3 sm:grid-cols-3 mb-5">
+            <div className="rounded-[22px] border border-white/10 bg-black/25 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Consultas</p>
+              <p className="mt-3 text-2xl font-black text-white">{sortedExperts.length}</p>
             </div>
-            <div className="rounded-2xl border border-green-500/20 bg-green-500/10 p-4">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-green-300 font-bold">Aplicadas</p>
-              <p className="text-2xl font-black text-white mt-3">{appliedExperts.length}</p>
+            <div className="rounded-[22px] border border-emerald-400/20 bg-emerald-400/10 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-100/80">Aplicadas</p>
+              <p className="mt-3 text-2xl font-black text-white">{appliedExperts.length}</p>
             </div>
-            <div className="rounded-2xl border border-pink-500/20 bg-pink-500/10 p-4">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-pink-300 font-bold">Com evidencia</p>
-              <p className="text-2xl font-black text-white mt-3">{expertsWithEvidence.length}</p>
+            <div className="rounded-[22px] border border-pink-400/20 bg-pink-400/10 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-pink-100/80">Com evidencia</p>
+              <p className="mt-3 text-2xl font-black text-white">{expertsWithEvidence.length}</p>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-4 mb-5">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">O que registrar em um bom especialista</p>
-            <p className="text-xs text-gray-300 mt-3 leading-relaxed">Nome e cargo, insight principal, como isso afeta o projeto, se a sugestao foi aplicada e alguma evidencia da conversa. Quanto mais concreto o registro, mais forte a narrativa para a banca.</p>
-            <p className="text-xs text-gray-400 mt-3">Taxa de aplicacao atual: {expertConversionRate}%.</p>
+          <div className="mb-5 rounded-[22px] border border-white/10 bg-black/20 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">O que vale ouro em um bom especialista</p>
+            <p className="mt-3 text-xs leading-relaxed text-gray-300">
+              Nome e cargo, insight principal, como isso afeta o projeto, se a sugestao foi aplicada e alguma evidencia da conversa.
+            </p>
+            <p className="mt-3 text-xs text-gray-400">Taxa de aplicacao atual: {expertConversionRate}%.</p>
           </div>
 
           <div className="space-y-4">
             {sortedExperts.map((expert) => (
-              <div key={expert.id} onClick={() => onOpenExpertView(expert)} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col gap-3 relative group cursor-pointer hover:bg-white/5 transition-colors">
-                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                  <button onClick={(event) => { event.stopPropagation(); onOpenExpertEdit(expert); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14} /></button>
-                  {(isAdmin || expert.author === viewAsStudent?.name) && <button onClick={(event) => onDeleteExpert(event, expert.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14} /></button>}
+              <div
+                key={expert.id}
+                onClick={() => onOpenExpertView(expert)}
+                className="group relative cursor-pointer rounded-[24px] border border-white/10 bg-black/25 p-4 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/5"
+              >
+                <div className="absolute right-3 top-3 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <button onClick={(event) => { event.stopPropagation(); onOpenExpertEdit(expert); }} className="rounded-xl bg-black/60 p-2 text-gray-400 backdrop-blur-sm transition-colors hover:text-white">
+                    <Pencil size={14} />
+                  </button>
+                  {(isAdmin || expert.author === viewAsStudent?.name) && (
+                    <button onClick={(event) => onDeleteExpert(event, expert.id)} className="rounded-xl bg-black/60 p-2 text-gray-400 backdrop-blur-sm transition-colors hover:text-red-300">
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
-                <div className="flex justify-between items-start pr-6 gap-4">
-                  <div>
-                    <span className="text-white font-bold block text-sm">{expert.name}</span>
-                    <span className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">{expert.role} {expert.author && <><span className="mx-1">•</span> <UserCircle size={10} /> {expert.author}</>}</span>
+
+                <div className="pr-14">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <span className="block text-sm font-black text-white">{expert.name}</span>
+                      <span className="mt-1 flex flex-wrap items-center gap-1 text-xs text-gray-400">
+                        {expert.role}
+                        {expert.author && (
+                          <>
+                            <span className="mx-1 text-gray-600">•</span>
+                            <UserCircle size={10} />
+                            {expert.author}
+                          </>
+                        )}
+                      </span>
+                    </div>
+                    <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${expert.applied ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100' : 'border-white/10 bg-white/5 text-gray-200'}`}>
+                      {expert.applied ? 'Ja aplicado' : 'Consulta'}
+                    </span>
                   </div>
-                  {expert.applied ? <span className="bg-green-500/20 text-green-500 text-[9px] px-2 py-1 rounded">APLICADO</span> : <span className="bg-gray-500/20 text-gray-500 text-[9px] px-2 py-1 rounded">CONSULTA</span>}
-                </div>
-                <p className="text-xs text-gray-300 italic line-clamp-3">"{expert.notes}"</p>
-                <div className="flex flex-wrap gap-2">
-                  {expert.image && <span className="text-[10px] text-pink-400 flex items-center gap-1 rounded-full border border-pink-500/20 bg-pink-500/10 px-2 py-1"><ImageIcon size={10} /> Evidencia</span>}
-                  <span className={`text-[10px] flex items-center gap-1 rounded-full border px-2 py-1 ${expert.impact === 'Alto' ? 'border-green-500/20 bg-green-500/10 text-green-300' : expert.impact === 'Médio' ? 'border-yellow-500/20 bg-yellow-500/10 text-yellow-300' : 'border-white/10 bg-white/5 text-gray-300'}`}>
-                    <Star size={10} /> Impacto {expert.impact}
-                  </span>
-                </div>
-                <div className="h-1 rounded-full bg-gray-700 mt-1">
-                  <div className={`h-1 rounded-full ${expert.impact === 'Alto' ? 'bg-green-500 w-full' : expert.impact === 'Médio' ? 'bg-yellow-500 w-1/2' : 'bg-gray-500 w-1/4'}`}></div>
+
+                  <p className="mt-4 line-clamp-3 rounded-[20px] border border-white/10 bg-white/5 p-3 text-xs italic leading-relaxed text-gray-200">
+                    "{expert.notes}"
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {expert.image && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-pink-400/20 bg-pink-400/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-pink-100">
+                        <ImageIcon size={10} /> Evidencia
+                      </span>
+                    )}
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${getImpactTone(expert.impact)}`}>
+                      <Star size={10} /> Impacto {expert.impact}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/40">
+                    <div className={`${expert.impact === 'Alto' ? 'w-full bg-gradient-to-r from-emerald-300 to-green-400' : expert.impact === 'MÃ©dio' || expert.impact === 'Medio' ? 'w-2/3 bg-gradient-to-r from-yellow-300 to-orange-300' : 'w-1/3 bg-gradient-to-r from-slate-300 to-slate-400'} h-full rounded-full`} />
+                  </div>
                 </div>
               </div>
             ))}
+
             {sortedExperts.length === 0 && (
-              <div className="text-center text-gray-500 text-sm italic py-6">
+              <div className="py-6 text-center text-sm italic text-gray-500">
                 Nenhum especialista registrado ainda. Conversem com pessoas reais e documentem o que mudou.
               </div>
             )}
           </div>
         </div>
 
-        <div className="bg-[#151520] border border-white/10 rounded-[28px] p-6 h-fit shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
-          <div className="flex justify-between items-center mb-6">
+        <div className="rounded-[30px] border border-white/10 bg-[#151520] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
+          <div className="flex items-center justify-between gap-4 mb-6">
             <div>
-              <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Compartilhamento e Resultado</p>
-              <h3 className="text-lg font-black text-white flex items-center gap-2 mt-2">
-                <Megaphone className="text-orange-500" /> Impacto
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Compartilhar e provar</p>
+              <h3 className="mt-2 flex items-center gap-2 text-lg font-black text-white">
+                <Megaphone className="text-orange-400" />
+                Impacto
               </h3>
             </div>
-            <button onClick={onOpenImpact} className="text-xs bg-orange-500/10 text-orange-500 border border-orange-500/20 px-3 py-1.5 rounded-lg hover:bg-orange-500 hover:text-white font-bold">+ Registro</button>
+            <button onClick={onOpenImpact} className="rounded-[16px] border border-orange-400/20 bg-orange-400/10 px-4 py-2 text-xs font-black uppercase tracking-[0.14em] text-orange-100 transition-all hover:bg-orange-400 hover:text-white">
+              + Registro
+            </button>
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-3 mb-5">
-            <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl">
-              <p className="text-[10px] text-orange-400 uppercase font-bold">Pessoas alcancadas</p>
-              <h4 className="text-3xl font-black text-white mt-3">{totalImpactPeople}</h4>
+          <div className="grid gap-3 sm:grid-cols-2 mb-5">
+            <div className="rounded-[22px] border border-orange-400/20 bg-orange-400/10 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-orange-100/80">Pessoas alcancadas</p>
+              <h4 className="mt-3 text-3xl font-black text-white">{totalImpactPeople}</h4>
             </div>
-            <div className="bg-black/30 border border-white/10 p-4 rounded-xl">
-              <p className="text-[10px] text-gray-500 uppercase font-bold">Tipo com maior alcance</p>
-              <h4 className="text-lg font-black text-white mt-3">{topImpactType ? topImpactType[0] : 'Sem dados ainda'}</h4>
-              <p className="text-xs text-gray-400 mt-2">{topImpactType ? `${topImpactType[1]} pessoas` : 'Registrem os primeiros compartilhamentos.'}</p>
+            <div className="rounded-[22px] border border-white/10 bg-black/25 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Tipo com maior alcance</p>
+              <h4 className="mt-3 text-lg font-black text-white">{topImpactType ? topImpactType[0] : 'Sem dados ainda'}</h4>
+              <p className="mt-2 text-xs text-gray-400">{topImpactType ? `${topImpactType[1]} pessoas` : 'Registrem os primeiros compartilhamentos.'}</p>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-black/20 p-4 mb-5">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">O que precisa aparecer em um bom registro</p>
-            <p className="text-xs text-gray-300 mt-3 leading-relaxed">Nome da acao, publico atingido, data, quantidade de pessoas e algum retorno. Isso mostra que a equipe nao so apresentou a ideia, mas realmente gerou alcance e aprendeu com a resposta do publico.</p>
-            <p className="text-xs text-gray-400 mt-3">{latestImpactEvent ? `Ultimo registro: ${latestImpactEvent.name} em ${latestImpactEvent.date.split('-').reverse().join('/')}.` : 'Sem ultimo registro ainda.'}</p>
+          <div className="mb-5 rounded-[22px] border border-white/10 bg-black/20 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">O que precisa aparecer em um bom registro</p>
+            <p className="mt-3 text-xs leading-relaxed text-gray-300">
+              Nome da acao, publico atingido, data, quantidade de pessoas e algum retorno. Isso mostra que a equipe nao so apresentou a ideia, mas realmente gerou alcance.
+            </p>
+            <p className="mt-3 text-xs text-gray-400">
+              {latestImpactEvent ? `Ultimo registro: ${latestImpactEvent.name} em ${formatDate(latestImpactEvent.date)}.` : 'Sem ultimo registro ainda.'}
+            </p>
           </div>
 
-          <div className="space-y-3 max-h-[420px] overflow-y-auto custom-scrollbar pr-2">
+          <div className="space-y-3 max-h-[460px] overflow-y-auto pr-2 custom-scrollbar">
             {sortedImpactEvents.map((event) => (
-              <div key={event.id} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col relative group hover:bg-white/5 transition-colors">
-                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                  {(isAdmin || event.author === viewAsStudent?.name) && <button onClick={() => onDeleteOutreach(event.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14} /></button>}
+              <div key={event.id} className="group relative rounded-[24px] border border-white/10 bg-black/25 p-4 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/5">
+                <div className="absolute right-3 top-3 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  {(isAdmin || event.author === viewAsStudent?.name) && (
+                    <button onClick={() => onDeleteOutreach(event.id)} className="rounded-xl bg-black/60 p-2 text-gray-400 backdrop-blur-sm transition-colors hover:text-red-300">
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
-                <div className="flex justify-between items-start mb-2 pr-6 gap-4">
-                  <div>
-                    <span className="text-white font-bold text-sm block">{event.name}</span>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-white/10 text-gray-300">{event.type}</span>
-                      <span className="text-[10px] text-gray-500 flex items-center gap-1"><Calendar size={10} /> {event.date.split('-').reverse().join('/')}</span>
-                      {event.author && <span className="text-[10px] text-gray-500 flex items-center gap-1 ml-1 border-l border-white/10 pl-2"><UserCircle size={10} /> {event.author}</span>}
+
+                <div className="pr-12">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <span className="block text-sm font-black text-white">{event.name}</span>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-200">
+                          {event.type}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px] text-gray-500">
+                          <Calendar size={10} /> {formatDate(event.date)}
+                        </span>
+                        {event.author && (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-gray-500">
+                            <UserCircle size={10} /> {event.author}
+                          </span>
+                        )}
+                      </div>
                     </div>
+
+                    <span className="rounded-full border border-orange-400/20 bg-orange-400/10 px-3 py-1 text-xs font-black text-orange-100">
+                      +{event.people}
+                    </span>
                   </div>
-                  <span className="text-sm text-orange-400 font-bold">+{event.people}</span>
+
+                  {event.feedback ? (
+                    <p className="mt-4 rounded-[20px] border border-white/10 bg-white/5 p-3 text-xs italic leading-relaxed text-gray-200">
+                      "{event.feedback}"
+                    </p>
+                  ) : (
+                    <p className="mt-4 rounded-[20px] border border-white/10 bg-white/5 p-3 text-xs italic leading-relaxed text-gray-500">
+                      Adicionem feedback para mostrar retorno do publico.
+                    </p>
+                  )}
                 </div>
-                {event.feedback ? (
-                  <p className="text-xs text-gray-300 italic mt-2 pt-2 border-t border-white/5">"{event.feedback}"</p>
-                ) : (
-                  <p className="text-xs text-gray-500 italic mt-2 pt-2 border-t border-white/5">Adicionem feedback para mostrar retorno do publico.</p>
-                )}
               </div>
             ))}
+
             {sortedImpactEvents.length === 0 && (
-              <div className="text-center text-gray-500 text-sm italic py-6">
+              <div className="py-6 text-center text-sm italic text-gray-500">
                 Nenhum registro de impacto ainda. Documentem cada apresentacao, conversa ou postagem relevante.
               </div>
             )}
@@ -423,3 +652,5 @@ const InnovationStrategyPanel = ({
 };
 
 export default InnovationStrategyPanel;
+
+

@@ -168,7 +168,7 @@ const normalizeRubricValues = (data, defaults) => ({
 });
 
 const ADMIN_PANEL_DEFAULTS = {
-  dashboard: true,
+  dashboard: false,
   prep: true,
   judge: true,
   stats: true,
@@ -176,7 +176,7 @@ const ADMIN_PANEL_DEFAULTS = {
 };
 
 const STUDENT_PANEL_DEFAULTS = {
-  dashboard: true,
+  dashboard: false,
   prep: true,
   judge: true,
   stats: true,
@@ -273,8 +273,8 @@ function App() {
   const [teamMoods, setTeamMoods] = useState([]);
   const [isStudentLink, setIsStudentLink] = useState(false);
   const [currentWeekData, setCurrentWeekData] = useState(null);
-  const [adminPanelState, setAdminPanelState] = useState(() => readStoredPrefs('newgears_admin_panel_prefs', ADMIN_PANEL_DEFAULTS));
-  const [studentPanelState, setStudentPanelState] = useState(() => readStoredPrefs('newgears_student_panel_prefs', STUDENT_PANEL_DEFAULTS));
+  const [adminPanelState, setAdminPanelState] = useState(() => readStoredPrefs('newgears_admin_panel_prefs_v2', ADMIN_PANEL_DEFAULTS));
+  const [studentPanelState, setStudentPanelState] = useState(() => readStoredPrefs('newgears_student_panel_prefs_v2', STUDENT_PANEL_DEFAULTS));
   const [studentMissionMode, setStudentMissionMode] = useState(() => {
     if (typeof window === 'undefined') return 'compact';
     return localStorage.getItem('newgears_student_mission_mode') || 'compact';
@@ -308,6 +308,9 @@ function App() {
   const [activeTimer, setActiveTimer] = useState(null);
   const [timerDisplay, setTimerDisplay] = useState(0); 
   const [roundFormValues, setRoundFormValues] = useState({});
+  const FULL_ROUND_TIMER_ID = '__full_round__';
+  const FULL_ROUND_TIME_KEY = '__full_round_time__';
+  const FULL_ROUND_SCORE_KEY = '__full_round_score__';
   const [pitStopRecords, setPitStopRecords] = useState([]);
   const [compliments, setCompliments] = useState([]);
   const [innovationRubric, setInnovationRubric] = useState(DEFAULT_INNOVATION_RUBRIC);
@@ -339,12 +342,20 @@ function App() {
   });
 
   useEffect(() => {
-      localStorage.setItem('newgears_admin_panel_prefs', JSON.stringify(adminPanelState));
+      localStorage.setItem('newgears_admin_panel_prefs_v2', JSON.stringify(adminPanelState));
   }, [adminPanelState]);
 
   useEffect(() => {
-      localStorage.setItem('newgears_student_panel_prefs', JSON.stringify(studentPanelState));
+      localStorage.setItem('newgears_student_panel_prefs_v2', JSON.stringify(studentPanelState));
   }, [studentPanelState]);
+
+  useEffect(() => {
+      setAdminPanelState((prev) => (prev.dashboard ? { ...prev, dashboard: false } : prev));
+  }, [adminTab]);
+
+  useEffect(() => {
+      setStudentPanelState((prev) => (prev.dashboard ? { ...prev, dashboard: false } : prev));
+  }, [studentTab]);
 
   useEffect(() => {
       localStorage.setItem('newgears_student_mission_mode', studentMissionMode);
@@ -1380,10 +1391,13 @@ function App() {
   }, [activeTimer]);
 
   const toggleTimer = (round) => {
+    const isFullRoundTimer = round.id === FULL_ROUND_TIMER_ID;
+    const targetField = isFullRoundTimer ? FULL_ROUND_TIME_KEY : round.id;
+
     if (activeTimer?.roundId === round.id) {
         // PARAR
         const preciseTime = Math.floor((Date.now() - activeTimer.start) / 1000);
-        setRoundFormValues(prev => ({ ...prev, [round.id]: preciseTime })); // Preenche o input
+        setRoundFormValues(prev => ({ ...prev, [targetField]: preciseTime }));
         setActiveTimer(null);
         setTimerDisplay(0);
     } else {
@@ -1583,6 +1597,7 @@ function App() {
   const handleCodeSubmit = async (e) => { 
       e.preventDefault(); 
       const fd = new FormData(e.target); 
+      const shouldSetAsOfficial = isAdmin && fd.get('setAsOfficial') === 'on';
       
       let img = modal.data?.image || null; 
       if (selectedFile) img = await convertBase64(selectedFile); 
@@ -1592,19 +1607,37 @@ function App() {
           description: fd.get('description'), 
           date: modal.data?.date || new Date().toISOString().split('T')[0], 
           image: img,
-          author: modal.data?.author || viewAsStudent?.name || "Técnico"
+          author: modal.data?.author || viewAsStudent?.name || "Tecnico"
       };
 
       try {
           if (modal.data?.id) {
               await updateDoc(doc(db, "codeSnippets", modal.data.id), codeData);
+
+              if (shouldSetAsOfficial) {
+                  const updates = codeSnippets.map((item) =>
+                      updateDoc(doc(db, "codeSnippets", item.id), { applied: item.id === modal.data.id })
+                  );
+                  await Promise.all(updates);
+              }
           } else {
-              await addDoc(collection(db, "codeSnippets"), codeData);
+              const newSnippetRef = await addDoc(collection(db, "codeSnippets"), {
+                  ...codeData,
+                  applied: false
+              });
+
+              if (shouldSetAsOfficial) {
+                  const updates = [
+                      ...codeSnippets.map((item) => updateDoc(doc(db, "codeSnippets", item.id), { applied: false })),
+                      updateDoc(doc(db, "codeSnippets", newSnippetRef.id), { applied: true })
+                  ];
+                  await Promise.all(updates);
+              }
           }
           closeModal(); 
-          showNotification("Código salvo no cofre!");
+          showNotification(shouldSetAsOfficial ? "Codigo salvo e definido como oficial!" : "Codigo salvo no cofre!");
       } catch (error) {
-          console.error("Erro ao salvar código:", error);
+          console.error("Erro ao salvar codigo:", error);
           showNotification("Erro ao salvar.", "error");
       }
   }
@@ -2143,6 +2176,7 @@ const handleDeleteRound = async (id) => {
       e.preventDefault();
       const fd = new FormData(e.target);
       const selectedMissions = Array.from(fd.getAll('missions'));
+      const estimatedTime = Number.parseInt(fd.get('time'), 10) || 0;
       
       // Calcula pontos somando as missões selecionadas
       const totalPoints = selectedMissions.reduce((acc, mid) => 
@@ -2151,14 +2185,19 @@ const handleDeleteRound = async (id) => {
       const roundData = {
           name: fd.get('name'),
           startBase: fd.get('startBase'), // <--- SALVA A BASE ESCOLHIDA
-          estimatedTime: parseInt(fd.get('time')),
+          estimatedTime,
           missions: selectedMissions,
           totalPoints
       };
 
       try {
-          await addDoc(collection(db, "rounds"), roundData);
-          showNotification("Round salvo!");
+          if (modal.data?.id) {
+              await updateDoc(doc(db, "rounds", modal.data.id), roundData);
+              showNotification("Saida atualizada!");
+          } else {
+              await addDoc(collection(db, "rounds"), roundData);
+              showNotification("Saida salva!");
+          }
           closeModal();
       } catch (error) {
           console.error("Erro ao salvar round:", error);
@@ -2468,6 +2507,7 @@ const handleDeleteRound = async (id) => {
   const openRubricModal = () => setModal({ type: 'rubric' });
 
   const openNewRoundModal = () => setModal({ type: 'newRound' });
+  const openEditRoundModal = (data) => setModal({ type: 'newRound', data });
 
   const openComplimentModal = () => setModal({ type: 'compliment' });
 
@@ -2683,9 +2723,9 @@ const handleDeleteRound = async (id) => {
 
   const adminHeroMetrics = [
       { label: 'Prontidao FLL', value: `${commandCenterReadinessScore}%`, helper: commandCenterReadinessTone.label, icon: <Crown size={16} />, tone: `${commandCenterReadinessTone.border} ${commandCenterReadinessTone.bg} ${commandCenterReadinessTone.color}` },
-      { label: 'Rubricas', value: `${overallRubricAverage}/4`, helper: 'media oficial da equipe', icon: <Scale size={16} />, tone: 'border-purple-500/20 bg-purple-500/10 text-purple-300' },
-      { label: 'Alertas', value: urgentTasksCount, helper: urgentTasksCount > 0 ? 'tarefas exigem atencao' : 'kanban controlado', icon: <AlertTriangle size={16} />, tone: 'border-orange-500/20 bg-orange-500/10 text-orange-300' },
-      { label: 'Proximo Evento', value: nextUpcomingEvent ? nextUpcomingEvent.date.split('-').reverse().join('/') : 'Sem agenda', helper: nextUpcomingEvent ? nextUpcomingEvent.title : 'registre o proximo marco', icon: <CalendarDays size={16} />, tone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-300' }
+      { label: 'Rubricas', value: `${overallRubricAverage}/4`, helper: 'placar atual da equipe', icon: <Scale size={16} />, tone: 'border-purple-500/20 bg-purple-500/10 text-purple-300' },
+      { label: 'Alertas', value: urgentTasksCount, helper: urgentTasksCount > 0 ? 'tarefas pedindo resposta' : 'fluxo do time em paz', icon: <AlertTriangle size={16} />, tone: 'border-orange-500/20 bg-orange-500/10 text-orange-300' },
+      { label: 'Proximo Evento', value: nextUpcomingEvent ? nextUpcomingEvent.date.split('-').reverse().join('/') : 'Sem agenda', helper: nextUpcomingEvent ? nextUpcomingEvent.title : 'cadastre o proximo marco', icon: <CalendarDays size={16} />, tone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-300' }
   ];
 
   const adminHeroActions = [
@@ -2696,10 +2736,10 @@ const handleDeleteRound = async (id) => {
   ];
 
   const studentHeroMetrics = [
-      { label: 'Nivel', value: studentCurrentLevel?.name || 'Equipe', helper: 'patamar atual no XP', icon: <Trophy size={16} />, tone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-300' },
+      { label: 'Nivel', value: studentCurrentLevel?.name || 'Equipe', helper: 'faixa de XP da temporada', icon: <Trophy size={16} />, tone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-300' },
       { label: 'Tarefas Abertas', value: studentOpenTasksCount, helper: studentOpenTasksCount > 0 ? 'frente pessoal da semana' : 'sem pendencias abertas', icon: <ClipboardList size={16} />, tone: 'border-orange-500/20 bg-orange-500/10 text-orange-300' },
-      { label: 'Atrasos', value: studentOverdueTasksCount, helper: studentOverdueTasksCount > 0 ? 'precisam de resolucao' : 'sem atrasos ativos', icon: <AlertTriangle size={16} />, tone: 'border-red-500/20 bg-red-500/10 text-red-300' },
-      { label: 'Rubrica da Equipe', value: `${overallRubricAverage}/4`, helper: 'media da temporada', icon: <Scale size={16} />, tone: 'border-purple-500/20 bg-purple-500/10 text-purple-300' }
+      { label: 'Atrasos', value: studentOverdueTasksCount, helper: studentOverdueTasksCount > 0 ? 'vale recuperar o ritmo' : 'timeline limpa', icon: <AlertTriangle size={16} />, tone: 'border-red-500/20 bg-red-500/10 text-red-300' },
+      { label: 'Rubrica da Equipe', value: `${overallRubricAverage}/4`, helper: 'placar da temporada', icon: <Scale size={16} />, tone: 'border-purple-500/20 bg-purple-500/10 text-purple-300' }
   ];
 
   const studentHeroActions = [
@@ -2710,22 +2750,22 @@ const handleDeleteRound = async (id) => {
   ];
 
   const adminWorkspaceTabs = [
-      { id: 'rotation', label: 'Rodizio', icon: <LayoutDashboard size={16} />, description: 'Escalas da semana, atribuicoes e distribuicao da equipe.', pill: currentWeekData?.weekName || 'Semana', pillTone: 'border-white/10 bg-white/5 text-gray-200', activeClass: 'bg-white text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
-      { id: 'strategy', label: 'Estrategia', icon: <Lightbulb size={16} />, description: 'Projeto, impacto, decisao e narrativa para os juizes.', pillTone: 'border-purple-500/20 bg-purple-500/10 text-purple-200', activeClass: 'bg-purple-500 text-white shadow-lg shadow-purple-900/20', inactiveClass: 'text-gray-400 hover:text-purple-300 hover:bg-purple-500/10' },
-      { id: 'rounds', label: 'Robo', icon: <ListTodo size={16} />, description: 'Saidas, anexos, codigo e evolucao tecnica do robo.', pillTone: 'border-blue-500/20 bg-blue-500/10 text-blue-200', activeClass: 'bg-blue-600 text-white shadow-lg shadow-blue-900/20', inactiveClass: 'text-gray-400 hover:text-blue-300 hover:bg-blue-500/10' },
-      { id: 'rubrics', label: 'Rubricas', icon: <Scale size={16} />, description: 'Leitura oficial da equipe com diagnostico e plano semanal.', pill: `${overallRubricAverage}/4`, pillTone: 'border-gray-400/20 bg-gray-400/10 text-gray-100', activeClass: 'bg-gray-300 text-black shadow-lg shadow-gray-900/20', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
-      { id: 'kanban', label: 'Kanban', icon: <ClipboardList size={16} />, description: 'Execucao da semana, prioridades, fluxo e entregas.', badge: urgentTasksCount > 0 ? urgentTasksCount : null, pillTone: 'border-orange-500/20 bg-orange-500/10 text-orange-200', activeClass: 'bg-orange-500 text-white shadow-lg shadow-orange-900/20', inactiveClass: 'text-gray-400 hover:text-orange-300 hover:bg-orange-500/10' },
-      { id: 'logbook', label: 'Diario', icon: <Book size={16} />, description: 'Aprendizados da equipe e memoria viva da temporada.', pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
-      { id: 'agenda', label: 'Agenda', icon: <CalendarDays size={16} />, description: 'Compromissos, prazos e marcos oficiais da equipe.', badge: urgentEventsCount > 0 ? urgentEventsCount : null, pillTone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200', activeClass: 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20', inactiveClass: 'text-gray-400 hover:text-indigo-300 hover:bg-indigo-500/10' }
+      { id: 'rotation', label: 'Rodizio', icon: <LayoutDashboard size={16} />, description: 'Escala viva da semana, remanejamentos e energia do time.', pill: currentWeekData?.weekName || 'Semana', pillTone: 'border-white/10 bg-white/5 text-gray-200', activeClass: 'bg-white text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
+      { id: 'strategy', label: 'Estrategia', icon: <Lightbulb size={16} />, description: 'Projeto, impacto, ideias e narrativa que os juizes entendem rapido.', pillTone: 'border-purple-500/20 bg-purple-500/10 text-purple-200', activeClass: 'bg-purple-500 text-white shadow-lg shadow-purple-900/20', inactiveClass: 'text-gray-400 hover:text-purple-300 hover:bg-purple-500/10' },
+      { id: 'rounds', label: 'Robo', icon: <ListTodo size={16} />, description: 'Saidas, anexos, codigo e evolucao do robo em linguagem de equipe.', pillTone: 'border-blue-500/20 bg-blue-500/10 text-blue-200', activeClass: 'bg-blue-600 text-white shadow-lg shadow-blue-900/20', inactiveClass: 'text-gray-400 hover:text-blue-300 hover:bg-blue-500/10' },
+      { id: 'rubrics', label: 'Rubricas', icon: <Scale size={16} />, description: 'Placar oficial da equipe com leitura simples e proximo passo.', pill: `${overallRubricAverage}/4`, pillTone: 'border-gray-400/20 bg-gray-400/10 text-gray-100', activeClass: 'bg-gray-300 text-black shadow-lg shadow-gray-900/20', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
+      { id: 'kanban', label: 'Kanban', icon: <ClipboardList size={16} />, description: 'Fluxo da semana, prioridades e entregas sem cara de planilha.', badge: urgentTasksCount > 0 ? urgentTasksCount : null, pillTone: 'border-orange-500/20 bg-orange-500/10 text-orange-200', activeClass: 'bg-orange-500 text-white shadow-lg shadow-orange-900/20', inactiveClass: 'text-gray-400 hover:text-orange-300 hover:bg-orange-500/10' },
+      { id: 'logbook', label: 'Diario', icon: <Book size={16} />, description: 'Memoria viva do time com testes, aprendizados e mini vitorias.', pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
+      { id: 'agenda', label: 'Agenda', icon: <CalendarDays size={16} />, description: 'Prazos, encontros e checkpoints da equipe em modo missao.', badge: urgentEventsCount > 0 ? urgentEventsCount : null, pillTone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200', activeClass: 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20', inactiveClass: 'text-gray-400 hover:text-indigo-300 hover:bg-indigo-500/10' }
   ];
 
   const studentWorkspaceTabs = [
-      { id: 'mission', label: 'Minha Missao', icon: <Rocket size={16} />, description: 'Seu foco da semana, status de entrega e orientacao atual.', pill: viewAsStudent?.station || 'Equipe', pillTone: 'border-white/10 bg-white/5 text-gray-200', activeClass: 'bg-white text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
-      { id: 'strategy', label: 'Estrategia', icon: <Lightbulb size={16} />, description: 'Entenda o projeto, impacto e caminho competitivo da equipe.', pillTone: 'border-purple-500/20 bg-purple-500/10 text-purple-200', activeClass: 'bg-purple-500 text-white shadow-lg shadow-purple-900/20', inactiveClass: 'text-gray-400 hover:text-purple-300 hover:bg-purple-500/10' },
-      { id: 'rubrics', label: 'Rubricas', icon: <Scale size={16} />, description: 'Veja o nivel da equipe e o que falta para subir a nota.', pill: `${overallRubricAverage}/4`, pillTone: 'border-gray-400/20 bg-gray-400/10 text-gray-100', activeClass: 'bg-gray-300 text-black shadow-lg shadow-gray-900/20', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
+      { id: 'mission', label: 'Minha Missao', icon: <Rocket size={16} />, description: 'Seu foco da semana, status da entrega e proximo passo.', pill: viewAsStudent?.station || 'Equipe', pillTone: 'border-white/10 bg-white/5 text-gray-200', activeClass: 'bg-white text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
+      { id: 'strategy', label: 'Estrategia', icon: <Lightbulb size={16} />, description: 'Entenda o projeto, o impacto e o caminho competitivo do time.', pillTone: 'border-purple-500/20 bg-purple-500/10 text-purple-200', activeClass: 'bg-purple-500 text-white shadow-lg shadow-purple-900/20', inactiveClass: 'text-gray-400 hover:text-purple-300 hover:bg-purple-500/10' },
+      { id: 'rubrics', label: 'Rubricas', icon: <Scale size={16} />, description: 'Veja o placar da equipe e onde subir de nivel.', pill: `${overallRubricAverage}/4`, pillTone: 'border-gray-400/20 bg-gray-400/10 text-gray-100', activeClass: 'bg-gray-300 text-black shadow-lg shadow-gray-900/20', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
       { id: 'rounds', label: 'Robo', icon: <ListTodo size={16} />, description: 'Rounds, estrategia de mesa, codigo e anexos do robo.', pillTone: 'border-blue-500/20 bg-blue-500/10 text-blue-200', activeClass: 'bg-blue-600 text-white shadow-lg shadow-blue-900/20', inactiveClass: 'text-gray-400 hover:text-blue-300 hover:bg-blue-500/10' },
-      { id: 'kanban', label: 'Tarefas', icon: <ClipboardList size={16} />, description: 'Seu quadro de execucao para agir durante a semana.', badge: urgentTasksCount > 0 ? urgentTasksCount : null, pillTone: 'border-orange-500/20 bg-orange-500/10 text-orange-200', activeClass: 'bg-orange-500 text-white shadow-lg shadow-orange-900/20', inactiveClass: 'text-gray-400 hover:text-orange-300 hover:bg-orange-500/10' },
-      { id: 'logbook', label: 'Diario', icon: <Book size={16} />, description: 'Registre o que aprendeu, testou e ajustou na temporada.', pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
+      { id: 'kanban', label: 'Tarefas', icon: <ClipboardList size={16} />, description: 'Seu quadro da semana para agir sem se perder nas entregas.', badge: urgentTasksCount > 0 ? urgentTasksCount : null, pillTone: 'border-orange-500/20 bg-orange-500/10 text-orange-200', activeClass: 'bg-orange-500 text-white shadow-lg shadow-orange-900/20', inactiveClass: 'text-gray-400 hover:text-orange-300 hover:bg-orange-500/10' },
+      { id: 'logbook', label: 'Diario', icon: <Book size={16} />, description: 'Guarde o que aprendeu, testou e melhorou na temporada.', pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
       { id: 'agenda', label: 'Agenda', icon: <CalendarDays size={16} />, description: 'Prazos, encontros e marcos importantes da equipe.', badge: urgentEventsCount > 0 ? urgentEventsCount : null, pillTone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200', activeClass: 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20', inactiveClass: 'text-gray-400 hover:text-indigo-300 hover:bg-indigo-500/10' }
   ];
 
@@ -2840,7 +2880,7 @@ const handleDeleteRound = async (id) => {
 
           <div className="rounded-[24px] border border-white/10 bg-black/25 p-4 backdrop-blur-sm">
               <div className="flex items-center justify-between gap-3">
-                  <span className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Radar executivo</span>
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Radar da equipe</span>
                   <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-[10px] font-bold text-cyan-200">
                       <BarChart3 size={12} /> Operacao
                   </span>
@@ -3002,6 +3042,51 @@ const handleDeleteRound = async (id) => {
       { label: 'Ver Rubricas', onClick: () => setStudentTab('rubrics'), icon: <Scale size={14} />, style: 'bg-purple-500/10 text-purple-100 border-purple-500/20 hover:bg-purple-500 hover:text-white' },
       { label: 'Registrar Diario', onClick: () => setStudentTab('logbook'), icon: <Book size={14} />, style: 'bg-yellow-500/10 text-yellow-100 border-yellow-500/20 hover:bg-yellow-500 hover:text-black' }
   ];
+
+  const studentMissionFlow = [
+      {
+          label: 'Receber missao',
+          detail: studentMissionData?.text ? 'Missao principal definida pela equipe tecnica.' : 'Aguardando definicao oficial da estacao.',
+          icon: <Flag size={15} />,
+          tone: studentMissionData?.text ? `${studentMissionTone.button} shadow-[0_12px_30px_rgba(0,0,0,0.18)]` : 'border-white/10 bg-white/5 text-gray-200'
+      },
+      {
+          label: 'Executar',
+          detail: studentOpenTasksCount > 0 ? `${studentOpenTasksCount} tarefa(s) conectadas ao seu foco.` : 'Pegue uma tarefa para tirar a missao do papel.',
+          icon: <Zap size={15} />,
+          tone: studentOpenTasksCount > 0 ? 'border-orange-500/20 bg-orange-500/10 text-orange-100' : 'border-white/10 bg-white/5 text-gray-200'
+      },
+      {
+          label: 'Registrar entrega',
+          detail: studentSubmissionTone.label,
+          icon: studentSubmissionTone.icon,
+          tone: studentSubmissionTone.card
+      }
+  ];
+
+  const studentMissionCoachCards = viewAsStudent?.station === 'Engenharia'
+      ? [
+          'Mostre teste, ajuste e motivo tecnico por tras da sua escolha.',
+          'Se mexeu no robo, documente o que mudou e o que melhorou.',
+          'Conecte sua entrega com uma missao real da mesa.'
+        ]
+      : viewAsStudent?.station === 'InovaÃ§Ã£o'
+          ? [
+              'Explique o problema de um jeito que qualquer juiz entenda rapido.',
+              'Use exemplos concretos para defender a solucao.',
+              'Mostre como a ideia evoluiu depois de ouvir pessoas reais.'
+            ]
+          : viewAsStudent?.station === 'GestÃ£o'
+              ? [
+                  'Organize prazos, combinados e proximos passos da equipe.',
+                  'Mantenha a comunicacao clara para ninguem ficar perdido.',
+                  'Transforme reuniao em acao registrada e acompanhada.'
+                ]
+              : [
+                  'Pegue uma tarefa clara e leve ate o fim.',
+                  'Mostre processo, nao so resultado final.',
+                  'Se tiver duvida, chame a equipe antes de travar.'
+                ];
 
   const championshipChecklistItems = [
       ...commandCenterReadinessItems,
@@ -3999,20 +4084,29 @@ const handleFileSelect = (e) => {
 
           {modal.type === 'codeForm' && (
               <form onSubmit={handleCodeSubmit}>
-                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Code className="text-green-500"/> {modal.data ? 'Editar' : 'Novo'} Código</h3>
+                  <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Code className="text-green-500"/> {modal.data ? 'Editar' : 'Novo'} Codigo</h3>
                   <div className="mb-4">
-                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Título do Código</label>
+                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Titulo do Codigo</label>
                       <input name="title" defaultValue={modal.data?.title} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-green-500 outline-none" placeholder="Ex: Seguidor de Linha PID" />
                   </div>
                   <div className="mb-4">
-                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Como funciona? (Explicação)</label>
-                      <textarea name="description" defaultValue={modal.data?.description} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-green-500 outline-none h-32" placeholder="Explique a lógica dos blocos/código passo a passo..." />
+                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Como funciona? (Explicacao)</label>
+                      <textarea name="description" defaultValue={modal.data?.description} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-green-500 outline-none h-32" placeholder="Explique a logica dos blocos/codigo passo a passo..." />
                   </div>
                   <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10">
-                      <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Print do Código (Blocos ou Python)</label>
+                      <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Print do Codigo (Blocos ou Python)</label>
                       <input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-green-500/10 file:text-green-500 hover:file:bg-green-500/20 cursor-pointer" />
-                      {selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-green-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}
+                      {selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-green-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem ja salva</div>}
                   </div>
+                  {isAdmin && (
+                      <label className="mb-6 flex items-start gap-3 rounded-lg border border-green-500/20 bg-green-500/10 p-3 cursor-pointer">
+                          <input type="checkbox" name="setAsOfficial" defaultChecked={modal.data?.applied || (!activeCommandCode && !modal.data)} className="mt-1 h-4 w-4 accent-green-500" />
+                          <span className="text-sm text-green-100 leading-relaxed">
+                              <span className="block font-bold">Definir como programacao oficial</span>
+                              <span className="text-xs text-green-100/80">Use isso para marcar qual codigo a equipe deve usar como base principal nos treinos.</span>
+                          </span>
+                      </label>
+                  )}
                   <button className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-green-900/20">Salvar no Cofre</button>
               </form>
           )}
@@ -4020,23 +4114,23 @@ const handleFileSelect = (e) => {
           {modal.type === 'codeView' && (<div><h3 className="text-xl font-bold text-white mb-2">{modal.data.title}</h3><p className="text-xs text-gray-500 mb-6 flex items-center gap-2"><Calendar size={12}/> {modal.data.date?.split('-').reverse().join('/')} {modal.data.author && <><UserCircle size={12} className="ml-2"/> Por {modal.data.author}</>}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block flex items-center gap-1"><Lightbulb size={12}/> Lógica de Funcionamento</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.description}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block flex items-center gap-1"><ImageIcon size={12}/> Print do Código</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10 cursor-pointer hover:opacity-80 transition-opacity" alt="Código" onClick={() => openImageModal(modal.data.image)} title="Clique para ampliar" /></div>)}</div>)}
 
           {modal.type === 'newRound' && (<form onSubmit={handleRoundSubmit}>
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><ListTodo className="text-blue-500"/> Planejar Saída</h3>
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><ListTodo className="text-blue-500"/> {modal.data ? 'Editar Saída' : 'Planejar Saída'}</h3>
               
               <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome da Saída</label><input name="name" required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Saída 1" /></div>
-                  <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Tempo Estimado (s)</label><input name="time" type="number" required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="30" /></div>
+                  <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome da Saída</label><input name="name" defaultValue={modal.data?.name} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Saída 1" /></div>
+                  <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Tempo Estimado (s)</label><input name="time" type="number" defaultValue={modal.data?.estimatedTime} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="30" /></div>
               </div>
 
               {/* SELEÇÃO DE BASE */}
               <div className="mb-4">
                   <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Base de Saída</label>
                   <div className="flex gap-4">
-                      <label className="flex items-center gap-2 bg-black/50 p-3 rounded-lg border border-white/20 flex-1 cursor-pointer hover:border-blue-500 transition-colors"><input type="radio" name="startBase" value="Esquerda" defaultChecked className="accent-blue-500"/><span className="text-sm text-white">Esquerda (Vermelho)</span></label>
-                      <label className="flex items-center gap-2 bg-black/50 p-3 rounded-lg border border-white/20 flex-1 cursor-pointer hover:border-red-500 transition-colors"><input type="radio" name="startBase" value="Direita" className="accent-red-500"/><span className="text-sm text-white">Direita (Azul)</span></label>
+                      <label className="flex items-center gap-2 bg-black/50 p-3 rounded-lg border border-white/20 flex-1 cursor-pointer hover:border-blue-500 transition-colors"><input type="radio" name="startBase" value="Esquerda" defaultChecked={modal.data?.startBase ? modal.data.startBase === 'Esquerda' : true} className="accent-blue-500"/><span className="text-sm text-white">Esquerda (Vermelho)</span></label>
+                      <label className="flex items-center gap-2 bg-black/50 p-3 rounded-lg border border-white/20 flex-1 cursor-pointer hover:border-red-500 transition-colors"><input type="radio" name="startBase" value="Direita" defaultChecked={modal.data?.startBase === 'Direita'} className="accent-red-500"/><span className="text-sm text-white">Direita (Azul)</span></label>
                   </div>
               </div>
 
-              <div className="mb-6 max-h-40 overflow-y-auto custom-scrollbar border border-white/10 rounded-lg p-2"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block sticky top-0 bg-[#151520] pb-2">Missões (Selecione)</label>{missionsList.map(m => (<label key={m.id} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded cursor-pointer"><input type="checkbox" name="missions" value={m.id} className="accent-blue-500 w-4 h-4"/><div className="flex items-center gap-2 flex-1">{m.image && <img src={m.image} className="w-6 h-6 rounded object-cover" alt="M" />}<span className="text-sm text-gray-300">{m.code} - {m.name}</span></div><span className="text-xs font-bold text-blue-500">+{m.points}pts</span></label>))}</div><button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar Saída</button></form>)}
+              <div className="mb-6 max-h-40 overflow-y-auto custom-scrollbar border border-white/10 rounded-lg p-2"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block sticky top-0 bg-[#151520] pb-2">Missões (Selecione)</label>{missionsList.map(m => (<label key={m.id} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded cursor-pointer"><input type="checkbox" name="missions" value={m.id} defaultChecked={modal.data?.missions?.includes(m.id)} className="accent-blue-500 w-4 h-4"/><div className="flex items-center gap-2 flex-1">{m.image && <img src={m.image} className="w-6 h-6 rounded object-cover" alt="M" />}<span className="text-sm text-gray-300">{m.code} - {m.name}</span></div><span className="text-xs font-bold text-blue-500">+{m.points}pts</span></label>))}</div><button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">{modal.data ? 'Salvar alteracoes' : 'Salvar Saída'}</button></form>)}
 
     
 
@@ -4364,20 +4458,33 @@ const handleFileSelect = (e) => {
       <div className="animate-in fade-in duration-300 space-y-6">
           
           {/* --- NAVEGAÇÃO DA ÁREA DE ESTRATÉGIA --- */}
-          <div className="flex justify-center bg-black/20 p-1 rounded-xl w-fit mx-auto border border-white/10 mb-4">
-              <button 
-                  onClick={() => setStrategySubTab('innovation')}
-                  className={`px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${strategySubTab === 'innovation' ? 'bg-yellow-500 text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
-              >
-                  <Lightbulb size={16}/> Projeto de Inovação
-              </button>
-              <button 
-                  onClick={() => setStrategySubTab('robot_design')}
-                  className={`px-6 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${strategySubTab === 'robot_design' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
-              >
-                  <Wrench size={16}/> Design do Robô
-              </button>
-          </div>
+          <section className="newgears-major-panel relative overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(135deg,rgba(19,21,35,0.96),rgba(12,14,24,0.96))] p-4 md:p-5 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px),radial-gradient(circle_at_top_left,rgba(255,217,95,0.14),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(71,214,255,0.12),transparent_28%)] bg-[size:22px_22px,22px_22px,auto,auto]" />
+              <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="max-w-2xl">
+                      <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-black">Mapa da estrategia</p>
+                      <h3 className="newgears-display mt-2 text-2xl font-black text-white">Escolha a trilha que a equipe quer explorar agora.</h3>
+                      <p className="mt-2 text-sm leading-relaxed text-gray-300">
+                          Uma trilha cuida do projeto e do impacto. A outra mostra como o robo evoluiu. As duas precisam ter mais cara de equipe criativa e menos cara de relatorio.
+                      </p>
+                  </div>
+
+                  <div className="inline-flex w-full flex-col rounded-[24px] border border-white/10 bg-black/20 p-1.5 sm:w-auto sm:flex-row">
+                      <button 
+                          onClick={() => setStrategySubTab('innovation')}
+                          className={`px-5 py-3 rounded-[18px] text-sm font-black flex items-center justify-center gap-2 transition-all ${strategySubTab === 'innovation' ? 'bg-yellow-500 text-black shadow-[0_16px_30px_rgba(234,179,8,0.26)]' : 'text-gray-300 hover:text-white hover:bg-white/8'}`}
+                      >
+                          <Lightbulb size={16}/> Projeto de Inovacao
+                      </button>
+                      <button 
+                          onClick={() => setStrategySubTab('robot_design')}
+                          className={`px-5 py-3 rounded-[18px] text-sm font-black flex items-center justify-center gap-2 transition-all ${strategySubTab === 'robot_design' ? 'bg-blue-600 text-white shadow-[0_16px_30px_rgba(37,99,235,0.26)]' : 'text-gray-300 hover:text-white hover:bg-white/8'}`}
+                      >
+                          <Wrench size={16}/> Design do Robo
+                      </button>
+                  </div>
+              </div>
+          </section>
 
           {strategySubTab === 'innovation' && (
               <InnovationStrategyPanel
@@ -4556,9 +4663,9 @@ const handleFileSelect = (e) => {
                               <div key={code.id} onClick={() => openCodeView(code)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-green-500 border-2 border-[#151520]"></div><div className={`border p-4 rounded-xl relative transition-colors ${code.applied ? 'bg-green-500/10 border-green-500/30 hover:bg-green-500/15' : 'bg-black/40 border-white/5 hover:bg-white/5'}`}> 
                               <div className="absolute top-2 right-2 flex gap-1 opacity-100 z-10">
                                   <button onClick={(e) => { e.stopPropagation(); openCodeModal(code); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
-                                  {isAdmin && !code.applied && <button onClick={(e) => { e.stopPropagation(); handleApplyCodeSnippet(code); }} className="text-green-400 hover:text-white p-1.5 bg-green-500/20 rounded-lg backdrop-blur-sm" title="Aplicar nova programacao"><Laptop size={14}/></button>}
+                                  {isAdmin && !code.applied && <button onClick={(e) => { e.stopPropagation(); handleApplyCodeSnippet(code); }} className="text-green-400 hover:text-white p-1.5 bg-green-500/20 rounded-lg backdrop-blur-sm" title="Definir como oficial"><Laptop size={14}/></button>}
                                   {(isAdmin || code.author === viewAsStudent?.name) && <button onClick={(e) => handleDeleteCode(e, code.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}</div>
-                              <div className="flex justify-between mb-2"><span className="text-green-400 font-mono font-bold text-xs">{code.date?.split('-').reverse().slice(0,2).join('/')}</span><span className="text-[10px] text-gray-500 flex items-center gap-1">{code.author && <><UserCircle size={10}/> {code.author}</>}</span></div><h4 className="text-white font-bold mb-1 text-sm">{code.title}</h4><p className="text-xs text-gray-400 line-clamp-2">{code.description}</p>{code.applied && <div className="text-[10px] text-green-400 flex items-center gap-1 mt-2 font-bold"><CheckCircle size={10}/> Programacao ativa</div>}{code.image && <div className="text-[10px] text-green-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Ver print</div>}</div></div>
+                              <div className="flex justify-between mb-2"><span className="text-green-400 font-mono font-bold text-xs">{code.date?.split('-').reverse().slice(0,2).join('/')}</span><span className="text-[10px] text-gray-500 flex items-center gap-1">{code.author && <><UserCircle size={10}/> {code.author}</>}</span></div><h4 className="text-white font-bold mb-1 text-sm">{code.title}</h4><p className="text-xs text-gray-400 line-clamp-2">{code.description}</p>{code.applied && <div className="text-[10px] text-green-400 flex items-center gap-1 mt-2 font-bold"><CheckCircle size={10}/> Programacao ativa</div>}{code.image && <div className="text-[10px] text-green-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Ver print</div>}{isAdmin && !code.applied && <button onClick={(e) => { e.stopPropagation(); handleApplyCodeSnippet(code); }} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-green-300 hover:bg-green-500 hover:text-black transition-all"><Laptop size={12}/> Definir como oficial</button>}</div></div>
                           ))}
                           {codeSnippets.length === 0 && <p className="text-xs text-gray-500 italic mt-2">Nenhum código documentado.</p>}
                       </div>
@@ -4654,6 +4761,13 @@ const handleFileSelect = (e) => {
       // Cálculos de Média
       const avgScore = data.length > 0 ? (data.reduce((sum, d) => sum + (d.score || 0), 0) / data.length).toFixed(1) : 0;
       const avgTime = data.length > 0 ? (data.reduce((sum, d) => sum + (d.time || 0), 0) / data.length).toFixed(1) : 0;
+      const recentGeneralAttempts = isGeneral
+          ? [...data].filter((entry) => entry.practiceType === 'full_round').slice(-10)
+          : [];
+      const attemptsWithinLimit = isGeneral ? recentGeneralAttempts.filter((entry) => Number(entry.time) <= 150).length : 0;
+      const consistencyLabel = isGeneral && recentGeneralAttempts.length > 0
+          ? `${attemptsWithinLimit}/${recentGeneralAttempts.length} em 2:30`
+          : '--';
 
       // Coordenadas da Média para o Gradiente
       const currentAvg = isGeneral ? parseFloat(avgScore) : parseFloat(avgTime);
@@ -4819,6 +4933,12 @@ const handleFileSelect = (e) => {
                                   <span className="text-[10px] text-gray-500 uppercase font-bold block">Média Tempo</span>
                                   <span className="text-blue-500 font-bold">{avgTime} s</span>
                               </div>
+                              {isGeneral && (
+                                  <div className="text-right bg-white/5 px-3 py-1 rounded-lg">
+                                      <span className="text-[10px] text-gray-500 uppercase font-bold block">Consistencia 2:30</span>
+                                      <span className={`font-bold ${attemptsWithinLimit >= 7 && recentGeneralAttempts.length >= 10 ? 'text-green-400' : 'text-yellow-300'}`}>{consistencyLabel}</span>
+                                  </div>
+                              )}
                           </div>
                       </div>
                       
@@ -4878,6 +4998,59 @@ const handleFileSelect = (e) => {
       } catch (error) {
           console.error("Erro ao salvar histórico:", error);
           showNotification("Erro ao salvar.", "error");
+      }
+  };
+
+  const handleSaveFullRoundRun = async (e) => {
+      e.preventDefault();
+
+      const timeVal = parseInt(roundFormValues[FULL_ROUND_TIME_KEY], 10);
+      const scoreVal = parseInt(roundFormValues[FULL_ROUND_SCORE_KEY], 10);
+
+      if (!timeVal || Number.isNaN(timeVal)) {
+          showNotification("Cronometre ou preencha o tempo total do round.", "error");
+          return;
+      }
+
+      if (scoreVal < 0 || Number.isNaN(scoreVal)) {
+          showNotification("Preencha a pontuacao total da tentativa.", "error");
+          return;
+      }
+
+      const upcomingWindow = [
+          { time: timeVal, score: scoreVal },
+          ...scoreHistory
+              .filter((entry) => !entry.roundId)
+              .sort((left, right) => new Date(right.date || 0) - new Date(left.date || 0)),
+      ].slice(0, 10);
+      const withinLimitCount = upcomingWindow.filter((entry) => Number(entry.time) <= 150).length;
+
+      try {
+          await addDoc(collection(db, "score_history"), {
+              score: scoreVal,
+              time: timeVal,
+              date: new Date().toISOString(),
+              author: isAdmin ? 'Tecnico' : viewAsStudent?.name || 'Equipe',
+              practiceType: 'full_round',
+              withinLimit: timeVal <= 150,
+          });
+
+          setRoundFormValues((prev) => {
+              const next = { ...prev };
+              delete next[FULL_ROUND_TIME_KEY];
+              delete next[FULL_ROUND_SCORE_KEY];
+              return next;
+          });
+
+          if (activeTimer?.roundId === FULL_ROUND_TIMER_ID) {
+              setActiveTimer(null);
+              setTimerDisplay(0);
+          }
+
+          showNotification(`Round completo salvo! ${withinLimitCount}/${upcomingWindow.length} tentativas dentro de 2:30.`, "success");
+      } catch (error) {
+          console.error("Erro ao salvar round completo:", error);
+          showNotification("Erro ao salvar round completo.", "error");
       }
   };
 
@@ -4951,13 +5124,20 @@ const handleFileSelect = (e) => {
           activeTimer={activeTimer}
           timerDisplay={timerDisplay}
           roundFormValues={roundFormValues}
-          onRoundFormValueChange={(roundId, value) => setRoundFormValues(prev => ({ ...prev, [roundId]: value }))}
-          onToggleTimer={toggleTimer}
-          onOpenNewRound={openNewRoundModal}
-          onOpenMissionForm={() => openMissionForm()}
-          onOpenPitStop={openPitStopModal}
+          fullRoundTimeValue={roundFormValues[FULL_ROUND_TIME_KEY] ?? ''}
+          fullRoundScoreValue={roundFormValues[FULL_ROUND_SCORE_KEY] ?? ''}
+          fullRoundTimerActive={activeTimer?.roundId === FULL_ROUND_TIMER_ID}
+        onRoundFormValueChange={(roundId, value) => setRoundFormValues(prev => ({ ...prev, [roundId]: value }))}
+        onFullRoundFieldChange={(field, value) => setRoundFormValues(prev => ({ ...prev, [field]: value }))}
+        onToggleTimer={toggleTimer}
+        onToggleFullRoundTimer={() => toggleTimer({ id: FULL_ROUND_TIMER_ID, name: 'Round completo' })}
+        onOpenNewRound={openNewRoundModal}
+        onOpenRoundEdit={openEditRoundModal}
+        onOpenMissionForm={() => openMissionForm()}
+        onOpenPitStop={openPitStopModal}
           onSavePracticeScore={handleSavePracticeScore}
           onDeleteRound={handleDeleteRound}
+          onSaveFullRoundRun={handleSaveFullRoundRun}
           onSaveRoundRun={handleSaveRoundRun}
           scoreChart={<ScoreEvolutionChart />}
           readonly={readonly}
@@ -4967,10 +5147,10 @@ const handleFileSelect = (e) => {
   // --- COMPONENTE KANBAN (REUTILIZÁVEL) ---
   const KanbanView = () => {
       const [searchTerm, setSearchTerm] = useState("");
-      const [kanbanLayout, setKanbanLayout] = useState('swimlanes');
-      const [activeTagFilter, setActiveTagFilter] = useState('all');
-      const [activeOwnerFilter, setActiveOwnerFilter] = useState('all');
-      const [focusFilter, setFocusFilter] = useState('all');
+      const kanbanLayout = 'swimlanes';
+      const activeTagFilter = 'all';
+      const activeOwnerFilter = 'all';
+      const focusFilter = 'all';
       const [showAllTodo, setShowAllTodo] = useState(false);
       const [showAllDoing, setShowAllDoing] = useState(false);
       const [showAllReview, setShowAllReview] = useState(false);
@@ -5318,7 +5498,7 @@ const handleFileSelect = (e) => {
       const doneTasks = filteredTasks.filter(t => t.status === 'done')
           .sort((a, b) => new Date(b.completedAt || b.createdAt) - new Date(a.completedAt || a.createdAt));
 
-      const hasActiveFilters = Boolean(searchTerm) || activeTagFilter !== 'all' || activeOwnerFilter !== 'all' || focusFilter !== 'all';
+      const hasActiveFilters = Boolean(searchTerm);
 
       const displayedTodoTasks = (showAllTodo || hasActiveFilters) ? todoTasks : todoTasks.slice(0, 10);
       const displayedDoingTasks = (showAllDoing || hasActiveFilters) ? doingTasks : doingTasks.slice(0, 10);
@@ -5510,15 +5690,11 @@ const handleFileSelect = (e) => {
 
       return (
       <div className="animate-in fade-in duration-500 flex flex-col h-full">
-          <div className="grid xl:grid-cols-[1.35fr,0.65fr] gap-6 mb-6 items-start">
-              <div className="relative self-start overflow-hidden rounded-[28px] border border-white/10 bg-[#151520] shadow-2xl">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(249,115,22,0.16),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.16),transparent_35%)]"></div>
-                  <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)', backgroundSize: '28px 28px' }}></div>
-                  <div className="relative p-6 md:p-8">
-                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-orange-500/20 bg-orange-500/10 text-orange-400 text-[10px] font-bold uppercase tracking-[0.24em]">
-                          <Flag size={12} /> Kanban da Temporada
-                      </div>
-                      <h2 className="text-3xl md:text-4xl font-black text-white mt-4 leading-tight">Fluxo tatico para transformar ideia em entrega de campeonato.</h2>
+          <div className="mb-6">
+              <div className="self-start rounded-[28px] border border-white/10 bg-[#151520] p-6 shadow-2xl">
+                  <div>
+                      <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Quadro de tarefas</p>
+                      <h2 className="text-2xl md:text-3xl font-black text-white mt-2 leading-tight">Busca e leitura rapida do kanban</h2>
                       <p className="text-sm text-gray-300 mt-3 max-w-3xl">{boardMessage}</p>
 
                       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-6">
@@ -5541,142 +5717,21 @@ const handleFileSelect = (e) => {
                               placeholder="Buscar tarefas por nome, tag ou responsavel..."
                               value={searchTerm}
                               onChange={(e) => setSearchTerm(e.target.value)}
-                              className="w-full bg-black/30 border border-white/10 rounded-xl p-3 pl-12 text-white focus:border-orange-500 outline-none transition-all"
+                              className="w-full bg-black/30 border border-white/10 rounded-xl p-3 pl-12 pr-28 text-white focus:border-orange-500 outline-none transition-all"
                           />
-                      </div>
-                  </div>
-              </div>
-
-              <div className="rounded-[28px] border border-white/10 bg-[#151520] p-6 shadow-2xl">
-                  <div className="flex items-start justify-between gap-3">
-                      <div>
-                          <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Filtros Taticos</p>
-                          <h3 className="text-white font-black text-2xl mt-2">Visao atual do quadro</h3>
-                      </div>
-                      {hasActiveFilters && (
-                          <button
-                              onClick={() => {
-                                  setSearchTerm('');
-                                  setActiveTagFilter('all');
-                                  setActiveOwnerFilter('all');
-                                  setFocusFilter('all');
-                              }}
-                              className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-xs font-bold text-white transition-colors"
-                          >
-                              <X size={12} /> Limpar
-                          </button>
-                      )}
-                  </div>
-
-                  <div className="mt-5">
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold mb-2">Foco rapido</p>
-                      <div className="flex flex-wrap gap-2">
-                          {focusOptions.map((option) => (
+                          {hasActiveFilters && (
                               <button
-                                  key={option.id}
-                                  onClick={() => setFocusFilter(option.id)}
-                                  className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${focusFilter === option.id ? 'bg-orange-500 text-black border-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.2)]' : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'}`}
+                                  type="button"
+                                  onClick={() => setSearchTerm('')}
+                                  className="absolute right-3 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-white/10"
                               >
-                                  {option.icon} {option.label}
+                                  <X size={12} /> Limpar
                               </button>
-                          ))}
+                          )}
                       </div>
-                  </div>
-
-                  <div className="mt-5">
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold mb-2">Modo do quadro</p>
-                      <div className="grid grid-cols-2 gap-2">
-                          <button
-                              onClick={() => setKanbanLayout('swimlanes')}
-                              className={`px-3 py-3 rounded-xl border text-xs font-bold transition-all ${kanbanLayout === 'swimlanes' ? 'bg-orange-500 text-black border-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.2)]' : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'}`}
-                          >
-                              Swimlanes
-                          </button>
-                          <button
-                              onClick={() => setKanbanLayout('compact')}
-                              className={`px-3 py-3 rounded-xl border text-xs font-bold transition-all ${kanbanLayout === 'compact' ? 'bg-white text-black border-white shadow-lg' : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'}`}
-                          >
-                              Compacto
-                          </button>
-                      </div>
-                  </div>
-
-                  <div className="mt-5">
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold mb-2">Area</p>
-                      <div className="flex flex-wrap gap-2">
-                          <button
-                              onClick={() => setActiveTagFilter('all')}
-                              className={`px-3 py-2 rounded-xl border text-xs font-bold transition-all ${activeTagFilter === 'all' ? 'bg-white text-black border-white shadow-lg' : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'}`}
-                          >
-                              Todas
-                          </button>
-                          {KANBAN_TAGS.map((tag) => (
-                              <button
-                                  key={tag.id}
-                                  onClick={() => setActiveTagFilter(tag.id)}
-                                  className={`px-3 py-2 rounded-xl border text-xs font-bold transition-all ${activeTagFilter === tag.id ? tag.color : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'}`}
-                              >
-                                  {tag.label}
-                              </button>
-                          ))}
-                      </div>
-                  </div>
-
-                  <div className="mt-5">
-                      <label className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold mb-2 block">Responsavel</label>
-                      <select
-                          value={activeOwnerFilter}
-                          onChange={(e) => setActiveOwnerFilter(e.target.value)}
-                          className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-orange-500 outline-none"
-                      >
-                          {ownerOptions.map((option) => (
-                              <option key={option.value} value={option.value} className="bg-zinc-900 text-white">
-                                  {option.label}
-                              </option>
-                          ))}
-                      </select>
-                  </div>
-
-                  <div className="mt-5 rounded-2xl border border-white/10 bg-black/30 p-4">
-                      <div className="flex items-center gap-2 text-sm font-bold text-white">
-                          <Target size={14} className="text-orange-400" /> Leitura rapida
-                      </div>
-                      <p className="text-xs text-gray-400 mt-2">Prioritarias: {priorityFilteredCount} · Atrasadas: {overdueFilteredCount} · Em execucao/revisao: {doingTasks.length + reviewTasks.length}</p>
-                  </div>
-
-                  <div className="mt-5 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                          <div>
-                              <p className="text-[10px] uppercase tracking-[0.18em] text-cyan-300 font-bold">Dashboard Semanal</p>
-                              <p className="text-sm font-bold text-white mt-1">{currentWeekData?.weekName || 'Semana atual'}</p>
-                          </div>
-                          <div className="text-right">
-                              <p className="text-2xl font-black text-white">{weeklyGoalProgress}%</p>
-                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500">meta concluida</p>
-                          </div>
-                      </div>
-                      <div className="w-full h-2 rounded-full bg-black/40 overflow-hidden mt-4">
-                          <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-blue-500 to-emerald-400" style={{ width: `${weeklyGoalProgress}%` }}></div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-3 mt-4 text-center">
-                          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                              <p className="text-lg font-black text-white">{tasksThisWeek.length}</p>
-                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 mt-1">metas</p>
-                          </div>
-                          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                              <p className="text-lg font-black text-white">{avgThroughput}</p>
-                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 mt-1">throughput/dia</p>
-                          </div>
-                          <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                              <p className="text-lg font-black text-white">{completedThisWeek}</p>
-                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 mt-1">entregues</p>
-                          </div>
-                      </div>
-                      <p className="text-xs text-gray-400 mt-3">Backlog da semana: {weeklyBacklogCount} · Em revisao: {weeklyReviewCount} · Sem dono: {weeklyUnassignedCount}</p>
                   </div>
               </div>
           </div>
-
           {tacticalAlerts.length > 0 && (
               <div className="grid lg:grid-cols-3 gap-4 mb-6">
                   {tacticalAlerts.map((alert) => (
@@ -5800,7 +5855,7 @@ const handleFileSelect = (e) => {
                               {column.tasks.length === 0 && (
                                   <div className="border border-dashed border-white/10 rounded-2xl p-6 text-center bg-black/20">
                                       <p className="text-sm font-bold text-white">{hasActiveFilters ? 'Nada encontrado nessa coluna' : 'Coluna organizada'}</p>
-                                      <p className="text-xs text-gray-500 mt-2">{hasActiveFilters ? 'Ajuste os filtros para ampliar a visao do quadro.' : column.emptyText}</p>
+                                      <p className="text-xs text-gray-500 mt-2">{hasActiveFilters ? 'Ajuste a busca para ampliar a visao do quadro.' : column.emptyText}</p>
                                   </div>
                               )}
 
@@ -6560,19 +6615,19 @@ const handleFileSelect = (e) => {
                   <div className="relative z-10 grid gap-6 xl:grid-cols-[1.15fr,0.85fr]">
                       <div>
                           <span className="inline-flex items-center gap-2 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-200">
-                              <CalendarDays size={12} /> Radar da agenda
+                              <CalendarDays size={12} /> Radar da equipe
                           </span>
-                          <h2 className="mt-4 text-3xl font-black leading-tight text-white">Agenda da equipe com foco em prioridade, confirmacao e proximo passo.</h2>
+                          <h2 className="mt-4 text-3xl font-black leading-tight text-white">Agenda da equipe em modo radar: o que vem agora, o que merece preparo e o que ja virou historia.</h2>
                           <p className="mt-4 max-w-3xl text-sm leading-relaxed text-gray-300">
-                              Use esta visao para enxergar o que vence agora, o que precisa de preparacao nos proximos dias e quais compromissos ja ficaram registrados no historico.
+                              Use esta visao para bater o olho e entender o que pede acao rapida, o que ja esta perto e o que pode ser organizado com mais calma pela equipe.
                           </p>
 
                           <div className="mt-6 flex flex-wrap gap-3">
                               <button onClick={() => setModal({type: 'eventForm'})} className="inline-flex items-center gap-2 rounded-2xl border border-indigo-500/20 bg-indigo-500/10 px-4 py-3 text-xs font-bold text-indigo-100 transition-all hover:bg-indigo-500 hover:text-white">
-                                  <Plus size={16}/> Novo compromisso
+                                  <Plus size={16}/> Novo evento
                               </button>
                               <button onClick={() => setAgendaScopeFilter('urgent')} className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-bold text-gray-200 transition-all hover:bg-white/10 hover:text-white">
-                                  <AlertTriangle size={16}/> Ver urgentes
+                                  <AlertTriangle size={16}/> So urgentes
                               </button>
                           </div>
 
@@ -6586,17 +6641,17 @@ const handleFileSelect = (e) => {
                                       </p>
                                   </div>
                               ) : (
-                                  <p className="mt-3 text-sm text-gray-400">Cadastre o proximo marco para transformar a agenda em um radar real da equipe.</p>
+                                  <p className="mt-3 text-sm text-gray-400">Cadastre o proximo evento para transformar a agenda num radar real da equipe.</p>
                               )}
                           </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
                           {[
-                              { label: 'Radar imediato', value: immediateEvents.length, helper: 'hoje e amanha', tone: 'border-red-500/20 bg-red-500/10 text-red-100', icon: <AlertTriangle size={14} /> },
-                              { label: 'Janela de 7 dias', value: upcomingMatches.filter((event) => getAgendaDayOffset(event.date) <= 7).length, helper: 'curto prazo', tone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-100', icon: <CalendarDays size={14} /> },
-                              { label: 'Alta prioridade', value: highlightedPriorityCount, helper: 'merecem preparacao', tone: 'border-orange-500/20 bg-orange-500/10 text-orange-100', icon: <Flag size={14} /> },
-                              { label: 'Confirmados', value: confirmedCount, helper: 'status pronto', tone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100', icon: <CheckCircle size={14} /> }
+                              { label: 'Missao relampago', value: immediateEvents.length, helper: 'hoje e amanha', tone: 'border-red-500/20 bg-red-500/10 text-red-100', icon: <AlertTriangle size={14} /> },
+                              { label: 'Semana em foco', value: upcomingMatches.filter((event) => getAgendaDayOffset(event.date) <= 7).length, helper: 'janela curta', tone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-100', icon: <CalendarDays size={14} /> },
+                              { label: 'Alertas quentes', value: highlightedPriorityCount, helper: 'pedem preparo', tone: 'border-orange-500/20 bg-orange-500/10 text-orange-100', icon: <Flag size={14} /> },
+                              { label: 'Ja confirmados', value: confirmedCount, helper: 'prontos para acontecer', tone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100', icon: <CheckCircle size={14} /> }
                           ].map((metric) => (
                               <div key={metric.label} className="rounded-[24px] border border-white/10 bg-black/25 p-4">
                                   <div className="flex items-center justify-between gap-3">
@@ -6670,21 +6725,21 @@ const handleFileSelect = (e) => {
                       </div>
                       <h3 className="mt-5 text-2xl font-black text-white">Nenhum compromisso encontrado.</h3>
                       <p className="mt-3 text-sm leading-relaxed text-gray-400">
-                          {hasActiveFilters ? 'Os filtros atuais nao encontraram eventos. Limpe a busca ou troque o recorte.' : 'Cadastre o primeiro evento para transformar a agenda em um centro de operacao da equipe.'}
+                          {hasActiveFilters ? 'Os filtros atuais nao encontraram eventos. Limpe a busca ou troque o recorte.' : 'Cadastre o primeiro evento para transformar a agenda num painel vivo da equipe.'}
                       </p>
                   </div>
               ) : (
                   <div className="space-y-8">
-                      {renderAgendaSection('Radar imediato', 'Compromissos que pedem reacao rapida', immediateEvents, { highlightFirst: true })}
-                      {renderAgendaSection('Proximos 7 dias', 'Preparacao tatica da janela curta', weekEvents)}
-                      {renderAgendaSection('Mais adiante', 'Marcos futuros para organizar com antecedencia', laterEvents)}
+                      {renderAgendaSection('Agora ou proximo', 'Eventos que pedem reacao rapida', immediateEvents, { highlightFirst: true })}
+                      {renderAgendaSection('Esta semana', 'Janela curta para preparar sem correria', weekEvents)}
+                      {renderAgendaSection('Mais pra frente', 'Marcos que podem ser organizados com calma', laterEvents)}
 
                       {(agendaScopeFilter === 'all' || agendaScopeFilter === 'past') && filteredPastEvents.length > 0 && (
                           <section className="space-y-4 border-t border-white/10 pt-8">
                               <div className="flex items-end justify-between gap-4">
                                   <div>
-                                      <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Historico recente</p>
-                                      <h3 className="mt-2 text-xl font-black text-white">Compromissos que ja passaram pela equipe</h3>
+                                      <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Memoria da equipe</p>
+                                      <h3 className="mt-2 text-xl font-black text-white">Eventos que ja passaram e viraram historico</h3>
                                   </div>
                                   <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">
                                       {filteredPastEvents.length} registro(s)
@@ -7232,10 +7287,10 @@ const handleFileSelect = (e) => {
               <button
                 onClick={toggleDashboardPanel}
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all border ${isDashboardPanelVisible ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.15)]' : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:text-white'}`}
-                title={isDashboardPanelVisible ? `Ocultar painel tatico (${visibleWorkspacePanelCount} blocos ativos)` : 'Mostrar painel tatico'}
+                title={isDashboardPanelVisible ? `Ocultar resumo (${visibleWorkspacePanelCount} blocos ativos)` : 'Mostrar resumo rapido'}
               >
                   <LayoutDashboard size={18} />
-                  <span className="font-bold text-xs">{isDashboardPanelVisible ? `Painel (${visibleWorkspacePanelCount})` : 'Abrir Painel'}</span>
+                  <span className="font-bold text-xs">{isDashboardPanelVisible ? `Resumo (${visibleWorkspacePanelCount})` : 'Resumo Rapido'}</span>
               </button>
               <button
                 onClick={openCommandCenterMode}
@@ -7311,12 +7366,12 @@ const handleFileSelect = (e) => {
 
           <div className="mb-6">
             <WorkspaceHero
-              eyebrow="Season Operations"
-              title="Central tatica da temporada para conduzir a equipe como candidata a campea."
-              subtitle={`Semana ativa: ${currentWeekData?.weekName || 'Em sincronizacao'}. Use esta camada para priorizar rubricas, controlar execucao e manter a narrativa da equipe forte para mesa, entrevistas e impacto.`}
+              eyebrow="Temporada FLL"
+              title="Central tatica da equipe"
+              subtitle={`Semana ativa: ${currentWeekData?.weekName || 'Em sincronizacao'}. Aqui ficam rodizio, estrategia, robo e apresentacao com leitura mais direta e menos poluida.`}
               metrics={adminHeroMetrics}
               actions={adminHeroActions}
-              accent="from-[#271534] via-[#151520] to-[#09131f]"
+              accent="from-[#22153b] via-[#151520] to-[#0a1730]"
               footerContent={adminHeroFooter}
             />
           </div>
@@ -7336,8 +7391,8 @@ const handleFileSelect = (e) => {
                 <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
                   {adminPanelState.prep && (
                     <CompetitionPrepPanel
-                      title="Preparacao de campeonato com visao executiva."
-                      summary="Este painel cruza rubricas, operacao, energia da equipe, codigo oficial e agenda para mostrar o que ainda separa o time de uma postura realmente campea."
+                      title="Mapa rapido do torneio para a equipe entrar confiante."
+                      summary="Este painel junta rubricas, ritmo, energia do time, codigo oficial e agenda numa leitura bem mais viva, para o site parecer equipe de robotica e nao painel corporativo."
                       readinessScore={commandCenterReadinessScore}
                       readinessLabel={commandCenterReadinessTone.label}
                       weekLabel={currentWeekData?.weekName || 'Semana em andamento'}
@@ -7348,8 +7403,8 @@ const handleFileSelect = (e) => {
                   )}
                   {adminPanelState.judge && (
                     <JudgeStoryPanel
-                      title="Roteiro de fala para a equipe chegar afiada com os juizes."
-                      summary="Use estes blocos para ensaiar explicacoes curtas, fortes e conectadas a evidencias reais do site."
+                      title="Roteiro rapido para a equipe falar com clareza, calma e cara de time preparado."
+                      summary="Use estes blocos para ensaiar explicacoes curtas, memoraveis e ligadas a provas reais do projeto, do robo e do impacto."
                       cards={judgeStoryCards}
                       spotlightQuestion={judgeSpotlightQuestion}
                     />
@@ -7385,7 +7440,7 @@ const handleFileSelect = (e) => {
                 <WorkspaceTabs eyebrow="Centro de Navegacao" tabs={adminWorkspaceTabs} activeId={adminTab} onChange={setAdminTab} />
 
                 {/* CONTEÚDO DA ABA SELECIONADA */}
-                <div className="bg-gradient-to-b from-[#161621] to-[#101018] rounded-[30px] border border-white/10 p-4 md:p-7 min-h-[500px] shadow-[0_20px_60px_rgba(0,0,0,0.28)]">
+                <div className="newgears-scene-shell p-4 md:p-7 min-h-[500px]">
                   <WorkspaceScene sceneId={`admin-${adminTab}`}>
                     {adminTab === 'rotation' && (
                       <RotationOperationsPanel
@@ -7443,12 +7498,12 @@ const handleFileSelect = (e) => {
 
           <div className="mb-6">
             <WorkspaceHero
-              eyebrow="Pilot Hub"
-              title={`Painel pessoal de ${viewAsStudent.name} para executar, evoluir e chegar pronto no torneio.`}
-              subtitle={`Estacao atual: ${viewAsStudent.station || 'Equipe'}. Use esta area para acompanhar suas entregas, entender as rubricas, agir no Kanban e manter seu papel claro na estrategia da temporada.`}
+              eyebrow="Painel do Aluno"
+              title={`Base pessoal de ${viewAsStudent.name} para jogar em equipe, evoluir e chegar pronto no torneio.`}
+              subtitle={`Estacao atual: ${viewAsStudent.station || 'Equipe'}. Aqui voce acompanha sua rotina da semana, entende as rubricas, treina sua fala e enxerga o time com uma energia mais viva e menos engessada.`}
               metrics={studentHeroMetrics}
               actions={studentHeroActions}
-              accent="from-[#132034] via-[#151520] to-[#101018]"
+              accent="from-[#13274a] via-[#151520] to-[#101018]"
               footerContent={studentHeroFooter}
             />
           </div>
@@ -7469,8 +7524,8 @@ const handleFileSelect = (e) => {
                   {studentPanelState.prep && (
                     <CompetitionPrepPanel
                       eyebrow="Mapa para o Torneio"
-                      title="Visao de equipe campea para estudar e agir durante a semana."
-                      summary="Esses blocos ajudam voce a entender onde a equipe esta forte, onde precisa subir e como falar com mais seguranca no torneio."
+                      title="Mapa da equipe para estudar, treinar e subir de nivel na semana."
+                      summary="Esses blocos mostram onde a equipe esta forte, onde precisa de boost e como voce pode entrar mais confiante na apresentacao e na mesa."
                       readinessScore={commandCenterReadinessScore}
                       readinessLabel={commandCenterReadinessTone.label}
                       weekLabel={currentWeekData?.weekName || 'Semana em andamento'}
@@ -7482,8 +7537,8 @@ const handleFileSelect = (e) => {
                   {studentPanelState.judge && (
                     <JudgeStoryPanel
                       eyebrow="Treino de Apresentacao"
-                      title="Roteiro rapido para voce falar como equipe preparada."
-                      summary="Estude estes blocos para conectar projeto, robo e impacto com mais clareza nas conversas com a equipe e com os juizes."
+                      title="Roteiro rapido para voce falar sem travar e com cara de equipe pronta."
+                      summary="Estude estes blocos para ligar projeto, robo e impacto de um jeito simples, seguro e facil de lembrar."
                       cards={judgeStoryCards}
                       spotlightQuestion={judgeSpotlightQuestion}
                     />
@@ -7548,54 +7603,71 @@ const handleFileSelect = (e) => {
                 <WorkspaceTabs eyebrow="Mapa do Aluno" tabs={studentWorkspaceTabs} activeId={studentTab} onChange={setStudentTab} />
 
                 {/* CONTEÚDO DA ABA SELECIONADA */}
-                <div className="bg-gradient-to-b from-[#161621] to-[#101018] rounded-[30px] border border-white/10 p-4 md:p-7 min-h-[500px] shadow-[0_20px_60px_rgba(0,0,0,0.28)]">
+                <div className="newgears-scene-shell p-4 md:p-7 min-h-[500px]">
                   <WorkspaceScene sceneId={`student-${studentTab}`}>
                     {studentTab === 'mission' && (
                         <>
                           {viewAsStudent.station ? (
                             <div className="space-y-6">
-                              <section className="rounded-[24px] border border-white/10 bg-[#11111a] p-4 shadow-[0_14px_40px_rgba(0,0,0,0.22)]">
-                                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                                  <div>
-                                    <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Visual da Missao</p>
+                              <section className="newgears-major-panel rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),rgba(0,0,0,0.18))] p-5 shadow-[0_14px_40px_rgba(0,0,0,0.22)]">
+                                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                  <div className="max-w-2xl">
+                                    <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Painel da Missao</p>
                                     <p className="text-sm text-gray-300 mt-2">
-                                      Alterne entre uma leitura rapida do foco da semana e a versao completa com orientacoes extras.
+                                      Este painel mostra o foco principal, a etapa em que voce esta e o melhor proximo passo para transformar a missao da semana em entrega real.
                                     </p>
                                   </div>
 
-                                  <div className="inline-flex rounded-2xl border border-white/10 bg-black/20 p-1">
+                                  <div className="inline-flex rounded-[18px] border border-white/10 bg-black/20 p-1">
                                     <button
                                       onClick={() => setStudentMissionMode('compact')}
-                                      className={`rounded-2xl px-4 py-2 text-xs font-bold transition-all ${!isStudentMissionDetailed ? 'bg-white text-black shadow-lg' : 'text-gray-300 hover:text-white hover:bg-white/5'}`}
+                                      className={`rounded-[16px] px-4 py-2 text-xs font-black uppercase tracking-[0.14em] transition-all ${!isStudentMissionDetailed ? 'bg-white text-black shadow-lg' : 'text-gray-300 hover:text-white hover:bg-white/5'}`}
                                     >
-                                      Modo compacto
+                                      Leitura rapida
                                     </button>
                                     <button
                                       onClick={() => setStudentMissionMode('detailed')}
-                                      className={`rounded-2xl px-4 py-2 text-xs font-bold transition-all ${isStudentMissionDetailed ? 'bg-white text-black shadow-lg' : 'text-gray-300 hover:text-white hover:bg-white/5'}`}
+                                      className={`rounded-[16px] px-4 py-2 text-xs font-black uppercase tracking-[0.14em] transition-all ${isStudentMissionDetailed ? 'bg-white text-black shadow-lg' : 'text-gray-300 hover:text-white hover:bg-white/5'}`}
                                     >
-                                      Modo detalhado
+                                      Modo completo
                                     </button>
                                   </div>
                                 </div>
+
+                                <div className="grid gap-3 mt-5 md:grid-cols-3">
+                                  {studentMissionFlow.map((step) => (
+                                    <div key={step.label} className={`rounded-[22px] border p-4 ${step.tone}`}>
+                                      <div className="flex items-center justify-between gap-3">
+                                        <span className="text-[10px] uppercase tracking-[0.18em] font-bold opacity-80">{step.label}</span>
+                                        <span>{step.icon}</span>
+                                      </div>
+                                      <p className="text-sm font-bold text-white mt-3 leading-relaxed">{step.detail}</p>
+                                    </div>
+                                  ))}
+                                </div>
                               </section>
 
-                              <section className={`relative overflow-hidden rounded-[30px] border ${studentMissionTone.border} bg-gradient-to-br ${studentMissionTone.bg} p-6 md:p-8 shadow-[0_20px_60px_rgba(0,0,0,0.25)]`}>
+                              <section className={`newgears-major-panel relative overflow-hidden rounded-[32px] border ${studentMissionTone.border} bg-gradient-to-br ${studentMissionTone.bg} p-6 md:p-8 shadow-[0_20px_60px_rgba(0,0,0,0.25)]`}>
                                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.08),transparent_30%)] pointer-events-none"></div>
                                 <div className="relative z-10 grid gap-6 xl:grid-cols-[1.1fr,0.9fr]">
                                   <div>
                                     <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] ${studentMissionTone.button}`}>
-                                      <Rocket size={12} /> Briefing da Semana
+                                      <Gamepad2 size={12} /> Minha Missao
                                     </span>
                                     <h3 className="text-3xl font-black text-white mt-4 leading-tight">
-                                      Missao principal em <span className={studentMissionTone.text}>{viewAsStudent.station}</span>
+                                      Sua missao principal em <span className={studentMissionTone.text}>{viewAsStudent.station}</span>
                                     </h3>
                                     <p className="text-sm text-gray-300 mt-4 max-w-2xl leading-relaxed">
-                                      Esta e a frente onde voce mais pode ajudar a equipe nesta semana. Foque nesta entrega para aumentar a qualidade tecnica, a clareza da apresentacao e a prontidao competitiva.
+                                      Esta e a frente onde voce mais pode ajudar a equipe nesta semana. Foque nessa frente para puxar a qualidade tecnica, a clareza da apresentacao e a prontidao competitiva.
                                     </p>
 
-                                    <div className="rounded-[24px] border border-white/10 bg-black/25 p-5 mt-6">
-                                      <p className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Missao Prioritaria</p>
+                                    <div className="rounded-[26px] border border-white/10 bg-black/25 p-5 mt-6">
+                                      <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <p className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Foco prioritario</p>
+                                        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-200">
+                                          {currentWeekData?.weekName || 'Semana ativa'}
+                                        </span>
+                                      </div>
                                       <p className="text-xl text-white font-bold italic leading-relaxed mt-3">
                                         "{studentMissionData?.text || 'Aguarde orientacao da equipe tecnica.'}"
                                       </p>
@@ -7606,7 +7678,7 @@ const handleFileSelect = (e) => {
                                         <button
                                           key={action.label}
                                           onClick={action.onClick}
-                                          className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-xs font-bold transition-all ${action.style}`}
+                                          className={`inline-flex items-center gap-2 rounded-[18px] border px-4 py-3 text-xs font-black uppercase tracking-[0.14em] transition-all hover:-translate-y-0.5 ${action.style}`}
                                         >
                                           {action.icon}
                                           {action.label}
@@ -7615,9 +7687,16 @@ const handleFileSelect = (e) => {
                                     </div>
                                   </div>
 
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  <div>
+                                    <div className="flex items-center justify-between gap-3 mb-3">
+                                      <p className="text-[10px] uppercase tracking-[0.18em] text-gray-300 font-bold">Loadout do jogador</p>
+                                      <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-200">
+                                        Visao rapida
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     {studentMissionCards.map((card) => (
-                                      <div key={card.label} className={`rounded-2xl border p-4 ${card.tone}`}>
+                                      <div key={card.label} className={`rounded-[22px] border p-4 ${card.tone}`}>
                                         <div className="flex items-center justify-between gap-3">
                                           <span className="text-[10px] uppercase tracking-[0.18em] font-bold opacity-80">{card.label}</span>
                                           <span>{card.icon}</span>
@@ -7626,6 +7705,7 @@ const handleFileSelect = (e) => {
                                         <p className="text-xs mt-2 opacity-90 leading-relaxed">{card.helper}</p>
                                       </div>
                                     ))}
+                                    </div>
                                   </div>
                                 </div>
                               </section>
@@ -7695,12 +7775,12 @@ const handleFileSelect = (e) => {
 
                                     <div className="rounded-[28px] border border-white/10 bg-[#12121b] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
                                       <h4 className="text-white font-bold flex items-center gap-2 border-b border-white/10 pb-3">
-                                        <Sparkles size={16} className="text-yellow-400" /> Mentalidade de Equipe Campea
+                                        <Sparkles size={16} className="text-yellow-400" /> Coach da Missao
                                       </h4>
                                       <div className="space-y-3 mt-4 text-sm text-gray-300">
-                                        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">Mostre o processo, nao so o resultado final.</div>
-                                        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">Conecte sua entrega com a rubrica e com a estrategia da semana.</div>
-                                        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">Se testar, registre. Se ajustar, explique. Se melhorar, compartilhe.</div>
+                                        {studentMissionCoachCards.map((tip) => (
+                                          <div key={tip} className="rounded-2xl border border-white/10 bg-white/5 p-4">{tip}</div>
+                                        ))}
                                       </div>
                                     </div>
                                   </div>
@@ -7724,21 +7804,21 @@ const handleFileSelect = (e) => {
                                     <div className="rounded-[24px] border border-white/10 bg-[#12121b] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
                                       <div className="flex items-center justify-between gap-3">
                                         <h4 className="text-white font-bold flex items-center gap-2">
-                                          <Sparkles size={16} className="text-yellow-400" /> Melhor proximo passo
+                                          <Sparkles size={16} className="text-yellow-400" /> Dica do coach
                                         </h4>
                                         <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.18em] font-bold text-gray-300">
-                                          Acao
+                                          Boost
                                         </span>
                                       </div>
-                                      <p className="text-sm text-gray-200 mt-5 leading-relaxed">{studentMissionNextStep}</p>
+                                      <p className="text-sm text-gray-200 mt-5 leading-relaxed">{studentMissionCoachCards[0] || studentMissionNextStep}</p>
                                     </div>
                                   </div>
                                 )}
                               </div>
                             </div>
                           ) : (
-                            <div className="max-w-3xl mx-auto text-center rounded-[32px] border border-white/10 bg-gradient-to-br from-white/10 via-[#171720] to-[#0f1017] p-10 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
-                              <div className="w-20 h-20 mx-auto rounded-[24px] border border-white/10 bg-white/5 flex items-center justify-center mb-6">
+                            <div className="max-w-3xl mx-auto text-center rounded-[34px] border border-white/10 bg-gradient-to-br from-white/10 via-[#171720] to-[#0f1017] p-10 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+                              <div className="w-20 h-20 mx-auto rounded-[24px] border border-white/10 bg-white/5 flex items-center justify-center mb-6 shadow-[0_14px_30px_rgba(0,0,0,0.24)]">
                                 <Rocket size={34} className="text-white" />
                               </div>
                               <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Minha Missao</p>
@@ -7746,7 +7826,7 @@ const handleFileSelect = (e) => {
                               <p className="text-sm text-gray-400 mt-4 leading-relaxed">
                                 Assim que a equipe tecnica definir a estacao da semana, este painel vai mostrar sua missao prioritaria, prazo, status e as acoes para entrega.
                               </p>
-                              <button onClick={() => setStudentTab('agenda')} className="mt-6 inline-flex items-center gap-2 rounded-2xl border border-indigo-500/20 bg-indigo-500/10 px-4 py-3 text-xs font-bold text-indigo-200 hover:bg-indigo-500 hover:text-white transition-all">
+                              <button onClick={() => setStudentTab('agenda')} className="mt-6 inline-flex items-center gap-2 rounded-[18px] border border-indigo-500/20 bg-indigo-500/10 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-indigo-200 hover:-translate-y-0.5 hover:bg-indigo-500 hover:text-white transition-all">
                                 <CalendarDays size={14} /> Ver agenda da equipe
                               </button>
                             </div>
@@ -7780,5 +7860,10 @@ const handleFileSelect = (e) => {
 }
 
 export default App;
+
+
+
+
+
 
 

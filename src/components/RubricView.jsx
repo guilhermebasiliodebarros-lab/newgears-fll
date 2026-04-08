@@ -376,9 +376,9 @@ const ROBOT_DESIGN_RUBRIC_ITEMS = [
 ];
 
 const RadarChart = ({ items, values, polygonFill, polygonStroke }) => {
-  const size = 300;
+  const size = 340;
   const center = size / 2;
-  const radius = (size / 2) - 60;
+  const radius = (size / 2) - 54;
   const maxVal = 4;
   const angleSlice = (Math.PI * 2) / items.length;
 
@@ -399,7 +399,12 @@ const RadarChart = ({ items, values, polygonFill, polygonStroke }) => {
   }).join(' ');
 
   return (
-    <svg width={size} height={size} className="mx-auto bg-black/20 rounded-full border border-white/5">
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      className="mx-auto h-auto w-full max-w-[360px] rounded-full border border-white/5 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.05),rgba(0,0,0,0.12))]"
+    >
       {[1, 2, 3, 4].map((level) => (
         <circle
           key={level}
@@ -423,7 +428,7 @@ const RadarChart = ({ items, values, polygonFill, polygonStroke }) => {
       {items.map((item, index) => {
         const val = values[item.key] || 1;
         const { x, y } = getCoords(val, index);
-        return <circle key={item.key} cx={x} cy={y} r="4" fill={polygonStroke} />;
+        return <circle key={item.key} cx={x} cy={y} r="4.5" fill={polygonStroke} />;
       })}
 
       {items.map((item, index) => {
@@ -435,8 +440,8 @@ const RadarChart = ({ items, values, polygonFill, polygonStroke }) => {
             y={y}
             textAnchor="middle"
             dominantBaseline="middle"
-            fill="white"
-            fontSize="10"
+            fill="#e5e7eb"
+            fontSize="11"
             fontWeight="bold"
           >
             {item.name}
@@ -447,127 +452,6 @@ const RadarChart = ({ items, values, polygonFill, polygonStroke }) => {
   );
 };
 
-const ScoreLegend = () => (
-  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-    <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-      <div>
-        <p className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Escala Oficial Adaptada</p>
-        <p className="text-sm text-gray-200 mt-1">Os alunos podem consultar aqui o que normalmente caracteriza cada nota da rubrica.</p>
-      </div>
-      <div className="text-[10px] text-gray-500 uppercase font-bold">1 a 4</div>
-    </div>
-
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-      {SCORE_LEVELS.map((level) => (
-        <div key={level.value} className={`rounded-xl border p-3 ${level.tone}`}>
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <span className="text-sm font-black">{level.value}</span>
-            <span className="text-[10px] uppercase tracking-[0.18em] font-bold">{level.shortLabel}</span>
-          </div>
-          <p className="text-sm font-bold">{level.label}</p>
-        </div>
-      ))}
-    </div>
-
-    <p className="text-xs text-gray-400 mt-3">
-      Nota 4: a rubrica oficial nao traz um checklist fixo. Ela pede que os juizes expliquem como a equipe excedeu o esperado.
-    </p>
-  </div>
-);
-
-const RubricDiagnosticPanel = ({ items, values, accentColor }) => {
-  const diagnostics = getRubricDiagnostics(items, values);
-
-  return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <p className={`text-[10px] uppercase tracking-[0.2em] font-bold ${accentColor}`}>Diagnostico Automatico</p>
-          <h4 className="text-white font-bold text-lg mt-2">{diagnostics.headline}</h4>
-          <p className="text-sm text-gray-300 mt-2 max-w-3xl">{diagnostics.detail}</p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 min-w-[220px]">
-          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-            <span className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Pronto p/ 3</span>
-            <div className="flex items-end justify-between gap-2 mt-2">
-              <span className="text-2xl font-black text-white">{diagnostics.readinessToFinalized}%</span>
-              <Target size={16} className="text-green-400" />
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-            <span className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Pronto p/ 4</span>
-            <div className="flex items-end justify-between gap-2 mt-2">
-              <span className="text-2xl font-black text-white">{diagnostics.readinessToExceeded}%</span>
-              <Sparkles size={16} className="text-yellow-400" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mt-4">
-        <div className="rounded-xl border border-gray-500/20 bg-gray-500/10 p-3">
-          <span className="text-[10px] uppercase tracking-[0.18em] text-gray-300 font-bold">Fase Inicial</span>
-          <p className="text-2xl font-black text-white mt-2">{diagnostics.counts.initial}</p>
-        </div>
-        <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-3">
-          <span className="text-[10px] uppercase tracking-[0.18em] text-blue-200 font-bold">Desenvolvimento</span>
-          <p className="text-2xl font-black text-white mt-2">{diagnostics.counts.developing}</p>
-        </div>
-        <div className="rounded-xl border border-green-500/20 bg-green-500/10 p-3">
-          <span className="text-[10px] uppercase tracking-[0.18em] text-green-200 font-bold">Finalizado</span>
-          <p className="text-2xl font-black text-white mt-2">{diagnostics.counts.finalized}</p>
-        </div>
-        <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3">
-          <span className="text-[10px] uppercase tracking-[0.18em] text-yellow-200 font-bold">Excedente</span>
-          <p className="text-2xl font-black text-white mt-2">{diagnostics.counts.exceeded}</p>
-        </div>
-      </div>
-
-      <div className="mt-5">
-        <div className="flex items-center gap-2 mb-3">
-          <AlertTriangle size={16} className="text-orange-400" />
-          <p className="text-sm font-bold text-white">Prioridades automaticas desta rubrica</p>
-        </div>
-
-        <div className="grid gap-3 xl:grid-cols-3">
-          {diagnostics.priorities.map((priority) => (
-            <div key={priority.item.key} className="rounded-2xl border border-white/10 bg-[#101018] p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className={`font-bold text-sm flex items-center gap-2 ${priority.item.color}`}>
-                    {priority.item.icon} {priority.item.name}
-                  </div>
-                  <p className="text-[11px] text-gray-500 mt-2">{priority.actionTitle}</p>
-                </div>
-                <div className="text-right">
-                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-bold ${priority.currentMeta.tone}`}>
-                    {priority.currentScore}
-                  </span>
-                  <div className="flex items-center justify-end gap-1 text-gray-500 mt-1">
-                    <ArrowUpRight size={12} />
-                    <span className="text-[10px] font-bold">{priority.targetScore}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2 mt-4">
-                {priority.guidance.map((line, index) => (
-                  <div key={index} className="flex items-start gap-2">
-                    <CheckCircle2 size={14} className="mt-0.5 text-green-400 shrink-0" />
-                    <p className="text-xs text-gray-200 leading-relaxed">{line}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const RubricCriterionCard = ({ item, value, rubricType, handleRubricUpdate }) => {
   const currentScore = value || 1;
   const currentMeta = getScoreMeta(currentScore);
@@ -575,16 +459,11 @@ const RubricCriterionCard = ({ item, value, rubricType, handleRubricUpdate }) =>
   const targetMeta = getScoreMeta(targetLevel);
   const targetTitle = currentScore >= 3 ? 'Como buscar nota 4' : 'Como buscar nota 3';
   const targetGuidance = currentScore >= 3 ? item.levels[4] : item.levels[3];
-  const diagnosticText = currentScore >= 4
-    ? 'A equipe ja esta em Excedente neste criterio. O foco agora e manter exemplos fortes e evidencias concretas para sustentar esse nivel.'
-    : currentScore >= 3
-      ? 'A equipe ja atingiu o nivel Finalizado. Agora o desafio e demonstrar algo acima do esperado pelos juizes.'
-      : 'A equipe ainda nao atingiu o nivel Finalizado neste criterio. O diagnostico abaixo mostra exatamente o que falta consolidar.';
 
   return (
     <div className="rounded-2xl border border-white/10 bg-black/25 p-4 md:p-5">
-      <div className="grid gap-5 xl:grid-cols-[320px,1fr]">
-        <div className="space-y-4">
+      <div className="grid gap-4 xl:grid-cols-[300px,1fr]">
+        <div className="space-y-3">
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className={`font-bold text-base flex items-center gap-2 ${item.color}`}>
@@ -628,14 +507,13 @@ const RubricCriterionCard = ({ item, value, rubricType, handleRubricUpdate }) =>
           </div>
 
           <div className={`rounded-2xl border p-4 ${targetMeta.tone}`}>
-            <p className="text-[10px] uppercase tracking-[0.18em] font-bold mb-2">Diagnostico automatico</p>
+            <p className="text-[10px] uppercase tracking-[0.18em] font-bold mb-2">Proximo salto</p>
             <p className="text-sm font-bold mb-2">{targetTitle}</p>
-            <p className="text-xs leading-relaxed opacity-90 mb-3">{diagnosticText}</p>
             <div className="space-y-2">
               {targetGuidance.map((line, index) => (
                 <div key={index} className="flex items-start gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-current opacity-80"></span>
-                  <p className="text-sm">{line}</p>
+                  <p className="text-xs leading-relaxed">{line}</p>
                 </div>
               ))}
             </div>
@@ -691,6 +569,7 @@ const RubricSection = ({
   handleRubricUpdate
 }) => {
   const summary = getRubricSummary(items, values);
+  const diagnostics = getRubricDiagnostics(items, values);
 
   return (
     <div className="bg-[#151520] border border-white/10 rounded-2xl p-6">
@@ -717,15 +596,116 @@ const RubricSection = ({
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[320px,1fr] mb-6">
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-          <p className={`text-[10px] uppercase tracking-[0.2em] font-bold mb-4 ${titleColor}`}>Radar da Rubrica</p>
-          <RadarChart items={items} values={values} polygonFill={polygonFill} polygonStroke={polygonStroke} />
+      <div className="grid gap-4 xl:grid-cols-[380px,1fr] mb-6">
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className={`text-[10px] uppercase tracking-[0.2em] font-bold ${titleColor}`}>Radar da Rubrica</p>
+              <h4 className="mt-2 text-base font-black text-white">Panorama visual da equipe</h4>
+            </div>
+            <span className={`rounded-xl border px-3 py-2 text-right ${summaryBorder} bg-black/30`}>
+              <span className="block text-[10px] uppercase tracking-[0.18em] font-bold text-gray-400">Media</span>
+              <span className="block text-lg font-black text-white">{summary.average}/4</span>
+            </span>
+          </div>
+          <div className="mt-4">
+            <RadarChart items={items} values={values} polygonFill={polygonFill} polygonStroke={polygonStroke} />
+          </div>
+          <div className="mt-4 grid grid-cols-4 gap-2">
+            {SCORE_LEVELS.map((level) => (
+              <div key={level.value} className={`rounded-xl border px-2 py-2 text-center ${level.tone}`}>
+                <span className="block text-sm font-black">{level.value}</span>
+                <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.14em]">{level.shortLabel}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="space-y-6">
-          <ScoreLegend />
-          <RubricDiagnosticPanel items={items} values={values} accentColor={titleColor} />
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div>
+                <p className={`text-[10px] uppercase tracking-[0.2em] font-bold ${titleColor}`}>Leitura rapida</p>
+                <h4 className="mt-2 text-lg font-black text-white">{diagnostics.headline}</h4>
+                <p className="mt-2 max-w-3xl text-sm text-gray-300">{diagnostics.detail}</p>
+              </div>
+
+              <div className="grid min-w-[220px] grid-cols-2 gap-3">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <span className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Pronto p/ 3</span>
+                  <div className="mt-2 flex items-end justify-between gap-2">
+                    <span className="text-2xl font-black text-white">{diagnostics.readinessToFinalized}%</span>
+                    <Target size={16} className="text-green-400" />
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                  <span className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Pronto p/ 4</span>
+                  <div className="mt-2 flex items-end justify-between gap-2">
+                    <span className="text-2xl font-black text-white">{diagnostics.readinessToExceeded}%</span>
+                    <Sparkles size={16} className="text-yellow-400" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="rounded-xl border border-gray-500/20 bg-gray-500/10 p-3">
+                <span className="text-[10px] uppercase tracking-[0.18em] text-gray-300 font-bold">Inicial</span>
+                <p className="mt-2 text-2xl font-black text-white">{diagnostics.counts.initial}</p>
+              </div>
+              <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-3">
+                <span className="text-[10px] uppercase tracking-[0.18em] text-blue-200 font-bold">Desenvolv.</span>
+                <p className="mt-2 text-2xl font-black text-white">{diagnostics.counts.developing}</p>
+              </div>
+              <div className="rounded-xl border border-green-500/20 bg-green-500/10 p-3">
+                <span className="text-[10px] uppercase tracking-[0.18em] text-green-200 font-bold">Finalizado</span>
+                <p className="mt-2 text-2xl font-black text-white">{diagnostics.counts.finalized}</p>
+              </div>
+              <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3">
+                <span className="text-[10px] uppercase tracking-[0.18em] text-yellow-200 font-bold">Excedente</span>
+                <p className="mt-2 text-2xl font-black text-white">{diagnostics.counts.exceeded}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <AlertTriangle size={16} className="text-orange-400" />
+              <p className="text-sm font-bold text-white">Prioridades da rubrica</p>
+            </div>
+            <div className="grid gap-3 xl:grid-cols-3">
+              {diagnostics.priorities.map((priority) => (
+                <div key={priority.item.key} className="rounded-2xl border border-white/10 bg-[#101018] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className={`flex items-center gap-2 text-sm font-bold ${priority.item.color}`}>
+                        {priority.item.icon} {priority.item.name}
+                      </div>
+                      <p className="mt-2 text-[11px] text-gray-500">{priority.actionTitle}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-bold ${priority.currentMeta.tone}`}>
+                        {priority.currentScore}
+                      </span>
+                      <div className="mt-1 flex items-center justify-end gap-1 text-gray-500">
+                        <ArrowUpRight size={12} />
+                        <span className="text-[10px] font-bold">{priority.targetScore}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    {priority.guidance.slice(0, 2).map((line, index) => (
+                      <div key={index} className="flex items-start gap-2">
+                        <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-green-400" />
+                        <p className="text-xs leading-relaxed text-gray-200">{line}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
