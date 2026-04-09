@@ -168,6 +168,7 @@ const normalizeRubricValues = (data, defaults) => ({
 });
 
 const ADMIN_PANEL_DEFAULTS = {
+  hero: false,
   dashboard: false,
   prep: true,
   judge: true,
@@ -2829,6 +2830,10 @@ const handleDeleteRound = async (id) => {
       setStudentPanelState((prev) => ({ ...prev, dashboard: !prev.dashboard }));
   };
 
+  const toggleAdminHeroPanel = () => {
+      setAdminPanelState((prev) => ({ ...prev, hero: !prev.hero }));
+  };
+
   const adminBatteryTone = teamAverage > 75
       ? 'border-green-500/20 bg-green-500/10 text-green-300'
       : teamAverage > 50
@@ -2852,38 +2857,38 @@ const handleDeleteRound = async (id) => {
 
   const adminHeroFooter = (
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.05fr,1.1fr,1fr,1fr]">
-          <div className="rounded-[24px] border border-white/10 bg-black/25 p-4 backdrop-blur-sm">
-              <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-4 min-w-0">
+          <div className="self-start rounded-[20px] border border-white/10 bg-black/25 p-3 backdrop-blur-sm">
+              <div className="flex items-start justify-between gap-2.5">
+                  <div className="flex items-center gap-3 min-w-0">
                   {adminProfile?.avatarImage ? (
-                      <img src={adminProfile.avatarImage} alt={adminProfile?.name || 'Tecnico'} className="w-16 h-16 rounded-2xl object-cover border border-red-500/25 shadow-[0_10px_30px_rgba(0,0,0,0.2)]" />
+                      <img src={adminProfile.avatarImage} alt={adminProfile?.name || 'Tecnico'} className="h-12 w-12 rounded-[16px] object-cover border border-red-500/25 shadow-[0_10px_30px_rgba(0,0,0,0.2)]" />
                   ) : (
-                      <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/25 flex items-center justify-center">
-                          <Bot size={30} className="text-red-300" />
+                      <div className="h-12 w-12 rounded-[16px] bg-red-500/10 border border-red-500/25 flex items-center justify-center">
+                          <Bot size={22} className="text-red-300" />
                       </div>
                   )}
 
                   <div className="min-w-0">
-                      <p className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Cockpit do tecnico</p>
-                      <h3 className="text-lg font-black text-white mt-2 leading-tight truncate">{adminProfile?.name || 'Tecnico'}</h3>
-                      <div className="flex flex-wrap items-center gap-2 mt-3 text-[10px] font-bold uppercase tracking-[0.16em]">
-                          <span className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-red-200">Acesso restrito</span>
-                          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-gray-200">{currentWeekData?.weekName || 'Semana ativa'}</span>
+                      <p className="text-[9px] uppercase tracking-[0.18em] text-gray-500 font-bold">Cockpit do tecnico</p>
+                      <h3 className="mt-1 text-[15px] font-black leading-tight text-white truncate">{adminProfile?.name || 'Tecnico'}</h3>
+                      <div className="mt-2 flex flex-wrap items-center gap-1 text-[8px] font-bold uppercase tracking-[0.12em]">
+                          <span className="rounded-full border border-red-500/20 bg-red-500/10 px-2 py-1 text-red-200">Restrito</span>
+                          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-gray-200">{currentWeekData?.weekName || 'Semana ativa'}</span>
                       </div>
                   </div>
                   </div>
                   <button
                       onClick={() => setModal({ type: 'editAdminProfile', data: adminProfile })}
-                      className="rounded-2xl border border-white/10 bg-white/5 p-3 text-gray-300 hover:bg-white/10 hover:text-white transition-all"
+                      className="rounded-[16px] border border-white/10 bg-white/5 p-2 text-gray-300 hover:bg-white/10 hover:text-white transition-all"
                       title="Editar perfil"
                   >
-                      <Pencil size={14} />
+                      <Pencil size={13} />
                   </button>
               </div>
 
-              <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-3">
-                  <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Janela da semana</p>
-                  <p className="text-sm text-white font-bold mt-2">
+              <div className="mt-2.5 rounded-[16px] border border-white/10 bg-white/5 px-2.5 py-2">
+                  <p className="text-[9px] uppercase tracking-[0.16em] text-gray-500 font-bold">Janela da semana</p>
+                  <p className="mt-1 text-[13px] font-bold text-white leading-snug">
                       {currentWeekData ? `${currentWeekData.startDate.split('-').reverse().join('/')} ate ${currentWeekData.endDate.split('-').reverse().join('/')}` : 'Semana em sincronizacao'}
                   </p>
               </div>
@@ -7397,6 +7402,20 @@ const handleFileSelect = (e) => {
                       {teamMoods.length > 0 ? `${teamAverage}%` : 'Check-in'}
                   </span>
               </button>
+              {isAdmin && (
+                <button
+                  onClick={toggleAdminHeroPanel}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all border ${
+                    adminPanelState.hero
+                      ? 'bg-fuchsia-500/12 border-fuchsia-500/30 text-fuchsia-100 shadow-[0_0_15px_rgba(217,70,239,0.16)]'
+                      : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:text-white'
+                  }`}
+                  title={adminPanelState.hero ? 'Ocultar card central da tatica' : 'Mostrar card central da tatica'}
+                >
+                  {adminPanelState.hero ? <EyeOff size={18} /> : <Eye size={18} />}
+                  <span className="font-bold text-xs">Central Tatica</span>
+                </button>
+              )}
               <button
                 onClick={toggleDashboardPanel}
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all border ${isDashboardPanelVisible ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.15)]' : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:text-white'}`}
@@ -7478,15 +7497,20 @@ const handleFileSelect = (e) => {
           <UrgentEventsBanner />
 
           <div className="mb-6">
-            <WorkspaceHero
-              eyebrow="Temporada FLL"
-              title="Central tatica da equipe"
-              subtitle={`Semana ativa: ${currentWeekData?.weekName || 'Em sincronizacao'}. Aqui ficam rodizio, estrategia, robo e apresentacao com leitura mais direta e menos poluida.`}
-              metrics={adminHeroMetrics}
-              actions={adminHeroActions}
-              accent="from-[#18376b] via-[#2b1559] to-[#140b2f]"
-              footerContent={adminHeroFooter}
-            />
+            <WorkspaceCollapsible isOpen={adminPanelState.hero}>
+              <WorkspaceHero
+                eyebrow="Temporada FLL"
+                title="Central tatica da equipe"
+                subtitle={`Semana ativa: ${currentWeekData?.weekName || 'Em sincronizacao'}. Aqui ficam rodizio, estrategia, robo e apresentacao com leitura mais direta e menos poluida.`}
+                metrics={adminHeroMetrics}
+                actions={adminHeroActions}
+                accent="from-[#18376b] via-[#2b1559] to-[#140b2f]"
+              />
+            </WorkspaceCollapsible>
+
+            <div className={`newgears-footer-shell newgears-hud-shell relative z-10 border border-white/10 bg-black/18 p-4 md:p-5 ${adminPanelState.hero ? 'mt-4' : ''}`}>
+              {adminHeroFooter}
+            </div>
           </div>
 
           <WorkspaceCollapsible isOpen={adminPanelState.dashboard}>
