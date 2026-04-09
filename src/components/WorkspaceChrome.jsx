@@ -107,25 +107,27 @@ export const WorkspaceTabs = ({ eyebrow, tabs, activeId, onChange }) => {
 
   return (
     <div className="newgears-tabs-shell newgears-hud-shell sticky top-[90px] z-30 overflow-hidden border border-white/12 bg-[linear-gradient(145deg,rgba(15,18,35,0.95),rgba(11,16,31,0.94))] shadow-[0_30px_80px_rgba(0,0,0,0.32)]">
-      <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),transparent_42%),linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:auto,24px_24px,24px_24px] px-5 pb-4 pt-5">
+      <div className="pointer-events-none absolute left-5 right-5 top-0 h-[2px] rounded-full bg-gradient-to-r from-blue-300 via-violet-400 to-fuchsia-400 opacity-85" />
+      <div className="pointer-events-none absolute left-10 right-10 -top-5 h-8 bg-[radial-gradient(circle_at_center,rgba(96,165,250,0.16),transparent_70%)] blur-xl" />
+      <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),transparent_42%),linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:auto,24px_24px,24px_24px] px-5 pb-3 pt-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-3xl">
             <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-300/62">{eyebrow}</p>
-            <div className="mt-2 flex items-center gap-3">
-              <span className={`newgears-kicker border px-3 py-3 shadow-[0_12px_24px_rgba(0,0,0,0.16)] ${activeTab.pillTone || 'border-white/10 bg-white/10 text-white'}`}>
+            <div className="mt-1.5 flex items-center gap-3">
+              <span className={`newgears-kicker border px-3 py-2.5 shadow-[0_12px_24px_rgba(0,0,0,0.16)] ${activeTab.pillTone || 'border-white/10 bg-white/10 text-white'}`}>
                 {activeTab.icon}
               </span>
               <div>
                 <h3 className="newgears-display text-lg font-black leading-tight text-white">{activeTab.label}</h3>
-                <p className="mt-1 text-sm text-slate-200/70">{activeTab.description}</p>
+                <p className="mt-0.5 text-sm text-slate-200/70">{activeTab.description}</p>
               </div>
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <span className="newgears-status-strip inline-flex items-center gap-2 border border-blue-400/20 bg-blue-400/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.22em] text-blue-100">
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              <span className="newgears-status-strip inline-flex items-center gap-2 border border-blue-400/20 bg-blue-400/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-blue-100">
                 <ScanSearch size={12} />
                 Aba ativa
               </span>
-              <span className="newgears-status-strip inline-flex items-center gap-2 border border-white/10 bg-white/6 px-3 py-2 text-[10px] font-black uppercase tracking-[0.22em] text-white/80">
+              <span className="newgears-status-strip inline-flex items-center gap-2 border border-white/10 bg-white/6 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-white/80">
                 <Zap size={12} />
                 {tabs.length} areas
               </span>
@@ -140,13 +142,13 @@ export const WorkspaceTabs = ({ eyebrow, tabs, activeId, onChange }) => {
         </div>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto p-2.5 custom-scrollbar">
+      <div className="flex gap-2 overflow-x-auto p-2 custom-scrollbar">
         {tabs.map((tab, index) => (
           <button
             key={tab.id}
             onClick={() => onChange(tab.id)}
             data-active={activeId === tab.id ? 'true' : 'false'}
-            className={`newgears-tab-button relative flex min-w-[182px] items-center gap-3 border px-4 py-3.5 text-left text-xs font-black uppercase tracking-[0.12em] shadow-[0_14px_28px_rgba(0,0,0,0.16)] transition-all hover:-translate-y-0.5 ${activeId === tab.id ? tab.activeClass : tab.inactiveClass}`}
+            className={`newgears-tab-button relative flex min-w-[182px] items-center gap-3 border px-4 py-3 text-left text-xs font-black uppercase tracking-[0.12em] shadow-[0_14px_28px_rgba(0,0,0,0.16)] transition-all hover:-translate-y-0.5 ${activeId === tab.id ? tab.activeClass : tab.inactiveClass}`}
           >
             <span className={`absolute left-0 top-0 h-full w-1.5 ${activeId === tab.id ? 'bg-gradient-to-b from-blue-300 via-violet-400 to-fuchsia-400' : 'bg-white/8'}`} />
             <span className="newgears-tab-index inline-flex h-10 min-w-10 items-center justify-center rounded-[14px] border border-white/12 bg-black/25 text-[11px] font-black text-white/85">

@@ -7737,7 +7737,7 @@ const handleFileSelect = (e) => {
         <main className={`newgears-stage max-w-[1600px] mx-auto animate-in fade-in duration-500 ${adminPanelState.compact ? 'p-4 md:p-6' : 'p-4 md:p-8'}`}>
           {!adminPanelState.compact && <UrgentEventsBanner />}
 
-          <div className={`${adminPanelState.compact ? 'mb-4' : 'mb-6'}`}>
+          <div className="mb-2">
             <WorkspaceCollapsible isOpen={adminPanelState.hero}>
               <WorkspaceHero
                 eyebrow="Temporada FLL"
@@ -7749,7 +7749,7 @@ const handleFileSelect = (e) => {
               />
             </WorkspaceCollapsible>
 
-            <div className={`newgears-footer-shell newgears-hud-shell relative z-10 border border-white/10 bg-black/18 ${adminPanelState.compact ? 'p-3 md:p-4' : 'p-4 md:p-5'} ${adminPanelState.hero ? 'mt-4' : ''}`}>
+            <div className={`newgears-footer-shell newgears-hud-shell relative z-10 border border-white/10 bg-black/18 ${adminPanelState.compact ? 'p-3 md:p-4' : 'p-4 md:p-5'} ${adminPanelState.hero ? 'mt-2' : ''}`}>
               {adminHeroFooter}
             </div>
           </div>
@@ -7815,12 +7815,14 @@ const handleFileSelect = (e) => {
 )}
           <div className="flex flex-col gap-6">
             
-            <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-3">
                 
-                <WorkspaceTabs eyebrow="Centro de Navegacao" tabs={adminWorkspaceTabs} activeId={adminTab} onChange={setAdminTab} />
+                <div className="-mt-10 md:-mt-12">
+                  <WorkspaceTabs eyebrow="Centro de Navegacao" tabs={adminWorkspaceTabs} activeId={adminTab} onChange={setAdminTab} />
+                </div>
 
                 {/* CONTEÚDO DA ABA SELECIONADA */}
-                <div className="newgears-scene-shell p-4 md:p-7 min-h-[500px]">
+                <div className="newgears-scene-shell px-4 pb-4 pt-3 md:px-7 md:pb-7 md:pt-4 min-h-[500px]">
                   <WorkspaceScene sceneId={`admin-${adminTab}`}>
                     {adminTab === 'rotation' && (
                       <RotationOperationsPanel
@@ -7877,7 +7879,7 @@ const handleFileSelect = (e) => {
         <main className="newgears-stage p-4 md:p-8 w-full max-w-[1800px] mx-auto animate-in slide-in-from-bottom-8">
           <UrgentEventsBanner />
 
-          <div className="mb-6">
+          <div className="mb-2">
             <WorkspaceCollapsible isOpen={studentPanelState.hero}>
               <WorkspaceHero
                 eyebrow="Painel do Aluno"
@@ -7889,7 +7891,7 @@ const handleFileSelect = (e) => {
               />
             </WorkspaceCollapsible>
 
-            <div className={`newgears-footer-shell newgears-hud-shell relative z-10 border border-white/10 bg-black/18 p-4 md:p-5 ${studentPanelState.hero ? 'mt-4' : ''}`}>
+            <div className={`newgears-footer-shell newgears-hud-shell relative z-10 border border-white/10 bg-black/18 p-4 md:p-5 ${studentPanelState.hero ? 'mt-2' : ''}`}>
               {studentHeroFooter}
             </div>
           </div>
@@ -7984,12 +7986,14 @@ const handleFileSelect = (e) => {
 
           {/* GRID PRINCIPAL DO ALUNO */}
           <div className="flex flex-col gap-6">
-            <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-3">
                 
-                <WorkspaceTabs eyebrow="Mapa do Aluno" tabs={studentWorkspaceTabs} activeId={studentTab} onChange={setStudentTab} />
+                <div className="-mt-10 md:-mt-12">
+                  <WorkspaceTabs eyebrow="Mapa do Aluno" tabs={studentWorkspaceTabs} activeId={studentTab} onChange={setStudentTab} />
+                </div>
 
                 {/* CONTEÚDO DA ABA SELECIONADA */}
-                <div className="newgears-scene-shell p-4 md:p-7 min-h-[500px]">
+                <div className="newgears-scene-shell px-4 pb-4 pt-3 md:px-7 md:pb-7 md:pt-4 min-h-[500px]">
                   <WorkspaceScene sceneId={`student-${studentTab}`}>
                     {studentTab === 'mission' && (
                         <>
