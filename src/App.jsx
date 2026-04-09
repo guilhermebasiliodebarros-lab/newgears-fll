@@ -279,9 +279,13 @@ function App() {
     if (typeof window === 'undefined') return 'compact';
     return localStorage.getItem('newgears_student_mission_mode') || 'compact';
   });
+  const getStandaloneView = () => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get('view') || '';
+  };
   const [adminTab, setAdminTab] = useState('rotation');
   const [studentTab, setStudentTab] = useState('mission');
-  const [isTvMode, setIsTvMode] = useState(false);
+  const [isTvMode, setIsTvMode] = useState(() => getStandaloneView() === 'tv');
   const [isJudgeMode, setIsJudgeMode] = useState(false);
   const [isCommandCenterMode, setIsCommandCenterMode] = useState(false);
   const [strategySubTab, setStrategySubTab] = useState('innovation');
@@ -334,6 +338,7 @@ function App() {
   const [studentLogbookSearchQuery, setStudentLogbookSearchQuery] = useState('');
   const [studentLogbookWeekFilter, setStudentLogbookWeekFilter] = useState('all');
   const [studentLogbookDraft, setStudentLogbookDraft] = useState('');
+  const isTvOnlyView = getStandaloneView() === 'tv';
   const today = new Date().toISOString().split('T')[0];
   const [missions, setMissions] = useState({
     Engenharia: { text: "Definir estratégia do robô.", deadline: today },
@@ -425,7 +430,13 @@ function App() {
   };
 
   const openTvMode = () => {
-      void openImmersiveMode(setIsTvMode);
+      if (typeof window === 'undefined') return;
+      const tvUrl = new URL(window.location.href);
+      tvUrl.searchParams.set('view', 'tv');
+      const openedWindow = window.open(tvUrl.toString(), '_blank', 'noopener,noreferrer');
+      if (!openedWindow) {
+          window.location.href = tvUrl.toString();
+      }
   };
 
 // --- LISTA DE BADGES (VERSÃO FINAL) ---
@@ -4678,16 +4689,38 @@ const handleFileSelect = (e) => {
   }
 
   // --- GRÁFICO DE EVOLUÇÃO (SVG PURO) ---
-  const ScoreEvolutionChart = ({ isTvMode = false }) => {
+  const ScoreEvolutionChart = ({ isTvMode = false, tvModeVariant = 'default' }) => {
       // Estado local para filtrar o gráfico
       const [chartFilter, setChartFilter] = useState('score_total'); // 'score_total' ou ID do round
       const [isFullscreen, setIsFullscreen] = useState(false);
+      const isTvFullRoundsView = isTvMode && tvModeVariant === 'full_rounds';
       
       // Prepara os dados baseado no filtro
+      const isGeneral = chartFilter === 'score_total';
+      const chartPalette = isTvMode
+          ? {
+              primary: "#D01BF1",
+              secondary: "#6293E9",
+              better: "#D01BF1",
+              worse: "#6293E9",
+              avg: "#E8D9FF",
+              grid: "rgba(255,255,255,0.16)",
+              tooltipBorder: "#5D58D3",
+              tooltipSubtle: "#A5B8D7",
+            }
+          : {
+              primary: "#22c55e",
+              secondary: "#3b82f6",
+              better: "#22c55e",
+              worse: "#ef4444",
+              avg: "#facc15",
+              grid: "#333",
+              tooltipBorder: "#555",
+              tooltipSubtle: "#9ca3af",
+            };
       let rawData = [];
       let yLabel = "pts";
-      let color = "#22c55e"; // Verde para pontos
-      const isGeneral = chartFilter === 'score_total';
+      let color = chartPalette.primary;
 
       if (isGeneral) {
           // Pega apenas históricos de pontuação total
@@ -4696,7 +4729,13 @@ const handleFileSelect = (e) => {
           // Pega histórico de TEMPO de um round específico
           rawData = scoreHistory.filter(h => h.roundId === chartFilter);
           yLabel = "seg";
-          color = "#3b82f6"; // Azul para tempo
+          color = chartPalette.secondary;
+      }
+
+      if (isTvFullRoundsView) {
+          rawData = scoreHistory.filter(h => !h.roundId && (h.practiceType === 'full_round' || h.time != null));
+          yLabel = "seg";
+          color = chartPalette.secondary;
       }
 
       // --- FUNÇÃO PARA LIMPAR O GRÁFICO ATUAL ---
@@ -4720,19 +4759,19 @@ const handleFileSelect = (e) => {
 
       const data = [...rawData].sort((a,b) => new Date(a.date) - new Date(b.date));
 
-      if (data.length < 2 && isGeneral) return (
-        <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 mb-8 text-center text-gray-500 text-sm flex flex-col items-center justify-center h-48">
+      if (data.length < 2 && (isGeneral || isTvFullRoundsView)) return (
+        <div className={`border rounded-2xl p-6 text-center text-sm flex flex-col items-center justify-center h-48 ${isTvMode ? 'bg-black/20 border-white/10 text-slate-300' : 'bg-[#151520] border-white/10 text-gray-500 mb-8'}`}>
             <TrendingUp size={32} className="mb-2 opacity-50"/>
-            <p>Registre pelo menos 2 treinos para ver o gráfico de evolução.</p>
+            <p>{isTvFullRoundsView ? 'Registre pelo menos 2 rounds completos para acompanhar a meta de 2:30.' : 'Registre pelo menos 2 treinos para ver o gráfico de evolução.'}</p>
         </div>
       );
 
       const width = 800;
-      const height = 200;
-      const padding = 20;
+      const height = isTvFullRoundsView ? 188 : isTvMode ? 146 : 200;
+      const padding = isTvFullRoundsView ? 16 : isTvMode ? 14 : 20;
       
       // Se for tempo, queremos ver cair (mas gráfico svg padrão sobe valores, então tratamos visualmente)
-      const valKey = chartFilter === 'score_total' ? 'score' : 'time';
+      const valKey = isTvFullRoundsView ? 'time' : chartFilter === 'score_total' ? 'score' : 'time';
       
       // ESCALAS (Máximos)
       const maxScore = Math.max(...data.map(d => d.score || 0), 100);
@@ -4750,10 +4789,10 @@ const handleFileSelect = (e) => {
       };
 
       // Cria o caminho da linha (path d)
-      const pathDataMain = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d[valKey], isGeneral ? 'score' : 'time')}`).join(' ');
+      const pathDataMain = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d[valKey], isTvFullRoundsView ? 'time' : isGeneral ? 'score' : 'time')}`).join(' ');
       
       // Linha secundária (Tempo) apenas se for Geral
-      const pathDataTime = isGeneral ? data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d.time || 0, 'time')}`).join(' ') : "";
+      const pathDataTime = isGeneral && !isTvFullRoundsView ? data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d.time || 0, 'time')}`).join(' ') : "";
 
       // Cria o caminho para o preenchimento (area fill)
       const fillPathData = `${pathDataMain} L ${width - padding} ${height} L ${padding} ${height} Z`;
@@ -4768,16 +4807,38 @@ const handleFileSelect = (e) => {
       const consistencyLabel = isGeneral && recentGeneralAttempts.length > 0
           ? `${attemptsWithinLimit}/${recentGeneralAttempts.length} em 2:30`
           : '--';
+      const recentTvRounds = isTvFullRoundsView ? data.slice(-10) : [];
+      const tvWithinLimitCount = recentTvRounds.filter((entry) => Number(entry.time) <= 150).length;
+      const tvConsistencyLabel = recentTvRounds.length > 0 ? `${tvWithinLimitCount}/${recentTvRounds.length}` : '--';
+      const buildLocalDateKey = (value) => {
+          const parsed = new Date(value);
+          if (Number.isNaN(parsed.getTime())) return 'sem-data';
+          const year = parsed.getFullYear();
+          const month = String(parsed.getMonth() + 1).padStart(2, '0');
+          const day = String(parsed.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+      };
+      const roundsByDay = isTvFullRoundsView
+          ? data.reduce((acc, entry) => {
+                const key = buildLocalDateKey(entry.date);
+                acc[key] = (acc[key] || 0) + 1;
+                return acc;
+            }, {})
+          : {};
+      const roundDays = Object.keys(roundsByDay);
+      const roundsToday = roundsByDay[buildLocalDateKey(new Date())] || 0;
+      const averageRoundsPerDay = roundDays.length > 0 ? (data.length / roundDays.length) : 0;
 
       // Coordenadas da Média para o Gradiente
-      const currentAvg = isGeneral ? parseFloat(avgScore) : parseFloat(avgTime);
-      const avgY = getY(currentAvg, isGeneral ? 'score' : 'time');
+      const currentAvg = isTvFullRoundsView ? parseFloat(avgTime) : isGeneral ? parseFloat(avgScore) : parseFloat(avgTime);
+      const avgY = getY(currentAvg, isTvFullRoundsView ? 'time' : isGeneral ? 'score' : 'time');
       const avgPercent = Math.max(0, Math.min(100, (avgY / height) * 100));
+      const tvTargetY = getY(150, 'time');
 
       const renderChartContent = () => (
           <>
-              <div className="flex justify-between items-center mb-6">
-                  <h3 className={`text-white font-bold flex items-center gap-2 ${isTvMode || isFullscreen ? 'text-2xl' : ''}`}>
+              <div className={`${isTvMode ? 'mb-0 hidden' : 'mb-6 flex items-center justify-between'}`}>
+                  <h3 className={`text-white font-bold flex items-center gap-2 ${isFullscreen ? 'text-2xl' : ''}`}>
                       <TrendingUp style={{ color }}/> {isGeneral ? 'Evolução (Pontos vs Tempo)' : 'Melhoria de Tempo (Segundos)'}
                   </h3>
                   
@@ -4813,60 +4874,89 @@ const handleFileSelect = (e) => {
               </div>
 
               {data.length === 0 ? (
-                  <div className={`flex items-center justify-center text-gray-500 text-xs italic border border-dashed border-white/10 rounded-xl ${isFullscreen ? 'flex-1 min-h-[400px]' : 'h-32'}`}>
+                  <div className={`flex items-center justify-center text-gray-500 text-xs italic border border-dashed border-white/10 rounded-xl ${isFullscreen ? 'flex-1 min-h-[400px]' : isTvMode ? 'h-28' : 'h-32'}`}>
                       Sem dados registrados para este gráfico ainda.
                   </div>
               ) : (
               <div className="w-full overflow-hidden relative flex-1 flex flex-col justify-center">
+                  {isTvFullRoundsView ? (
+                      <div className="mb-3 grid gap-2 md:grid-cols-3">
+                          <div className="rounded-[18px] border border-[#6293E9]/20 bg-[#6293E9]/10 px-3 py-2.5">
+                              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-200/68">Meta 2:30</p>
+                              <p className="mt-1.5 text-lg font-black text-white">{tvConsistencyLabel}</p>
+                              <p className="mt-1 text-[10px] text-slate-100/68">ultimos 10 rounds dentro do tempo</p>
+                          </div>
+                          <div className="rounded-[18px] border border-[#5D58D3]/20 bg-[#5D58D3]/10 px-3 py-2.5">
+                              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-200/68">Hoje</p>
+                              <p className="mt-1.5 text-lg font-black text-white">{roundsToday}</p>
+                              <p className="mt-1 text-[10px] text-slate-100/68">rounds registrados no dia</p>
+                          </div>
+                          <div className="rounded-[18px] border border-[#D01BF1]/20 bg-[#D01BF1]/10 px-3 py-2.5">
+                              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-200/68">Media/dia</p>
+                              <p className="mt-1.5 text-lg font-black text-white">{averageRoundsPerDay.toFixed(1)}</p>
+                              <p className="mt-1 text-[10px] text-slate-100/68">quantas tentativas por dia</p>
+                          </div>
+                      </div>
+                  ) : null}
+
                   <svg viewBox={`0 0 ${width} ${height}`} className={`w-full h-auto drop-shadow-2xl ${isFullscreen ? 'max-h-[60vh]' : ''}`}>
                       {/* Gradiente de Fundo */}
                       <defs>
                           <linearGradient id="trendLineGradient" x1="0" y1="0" x2="0" y2={height} gradientUnits="userSpaceOnUse">
-                              <stop offset={`${avgPercent}%`} stopColor={isGeneral ? "#22c55e" : "#ef4444"} />
-                              <stop offset={`${avgPercent}%`} stopColor={isGeneral ? "#ef4444" : "#22c55e"} />
+                              <stop offset={`${avgPercent}%`} stopColor={chartPalette.better} />
+                              <stop offset={`${avgPercent}%`} stopColor={chartPalette.worse} />
                           </linearGradient>
                           <linearGradient id="trendFillGradient" x1="0" y1="0" x2="0" y2={height} gradientUnits="userSpaceOnUse">
-                              <stop offset="0%" stopColor={isGeneral ? "#22c55e" : "#ef4444"} stopOpacity="0.2"/>
-                              <stop offset={`${avgPercent}%`} stopColor={isGeneral ? "#22c55e" : "#ef4444"} stopOpacity="0.1"/>
-                              <stop offset={`${avgPercent}%`} stopColor={isGeneral ? "#ef4444" : "#22c55e"} stopOpacity="0.1"/>
-                              <stop offset="100%" stopColor={isGeneral ? "#ef4444" : "#22c55e"} stopOpacity="0"/>
+                              <stop offset="0%" stopColor={chartPalette.better} stopOpacity="0.2"/>
+                              <stop offset={`${avgPercent}%`} stopColor={chartPalette.better} stopOpacity="0.1"/>
+                              <stop offset={`${avgPercent}%`} stopColor={chartPalette.worse} stopOpacity="0.1"/>
+                              <stop offset="100%" stopColor={chartPalette.worse} stopOpacity="0"/>
                           </linearGradient>
                       </defs>
 
                       {/* Linhas de Grade Horizontal (Baseadas na escala principal) */}
                       {[0, 0.25, 0.5, 0.75, 1].map(p => {
                           const y = height - padding - (p * (height - 2 * padding));
-                          return <line key={p} x1={padding} y1={y} x2={width-padding} y2={y} stroke="#333" strokeDasharray="4 4" strokeWidth="1"/>
+                          return <line key={p} x1={padding} y1={y} x2={width-padding} y2={y} stroke={chartPalette.grid} strokeDasharray="4 4" strokeWidth="1"/>
                       })}
 
                       {/* Linha da Média */}
-                      <line x1={padding} y1={avgY} x2={width-padding} y2={avgY} stroke="#facc15" strokeDasharray="5 5" strokeWidth="1" opacity="0.6"/>
-                      <text x={padding + 5} y={avgY - 5} fill="#facc15" fontSize="10" fontWeight="bold" opacity="0.8">MÉDIA: {currentAvg}</text>
+                      {isTvFullRoundsView ? (
+                        <>
+                            <line x1={padding} y1={tvTargetY} x2={width-padding} y2={tvTargetY} stroke={chartPalette.avg} strokeDasharray="5 5" strokeWidth="1" opacity="0.75"/>
+                            <text x={padding + 5} y={tvTargetY - 5} fill={chartPalette.avg} fontSize="10" fontWeight="bold" opacity="0.92">META 2:30</text>
+                        </>
+                      ) : (
+                        <>
+                            <line x1={padding} y1={avgY} x2={width-padding} y2={avgY} stroke={chartPalette.avg} strokeDasharray="5 5" strokeWidth="1" opacity="0.6"/>
+                            <text x={padding + 5} y={avgY - 5} fill={chartPalette.avg} fontSize="10" fontWeight="bold" opacity="0.8">MÉDIA: {currentAvg}</text>
+                        </>
+                      )}
 
                       {/* Área Preenchida (Apenas Principal) */}
-                      <path d={fillPathData} fill={isGeneral ? "url(#trendFillGradient)" : "none"} />
+                      <path d={fillPathData} fill={isGeneral && !isTvFullRoundsView ? "url(#trendFillGradient)" : "none"} />
 
                       {/* SEGUNDA LINHA: TEMPO (AZUL) - Só no Geral */}
-                      {isGeneral && (
+                      {isGeneral && !isTvFullRoundsView && (
                         <>
-                            <path d={pathDataTime} fill="none" stroke="#3b82f6" strokeWidth="2" strokeDasharray="5 5" strokeLinecap="round" strokeLinejoin="round" opacity="0.7"/>
+                            <path d={pathDataTime} fill="none" stroke={chartPalette.secondary} strokeWidth="2" strokeDasharray="5 5" strokeLinecap="round" strokeLinejoin="round" opacity="0.7"/>
                             {data.map((d, i) => (
-                                <circle key={`t-${d.id}`} cx={getX(i)} cy={getY(d.time || 0, 'time')} r="3" fill="#151520" stroke="#3b82f6" strokeWidth="2" />
+                                <circle key={`t-${d.id}`} cx={getX(i)} cy={getY(d.time || 0, 'time')} r="3" fill="#151520" stroke={chartPalette.secondary} strokeWidth="2" />
                             ))}
                         </>
                       )}
 
                       {/* LINHA PRINCIPAL (VERDE ou AZUL) */}
-                      <path d={pathDataMain} fill="none" stroke="url(#trendLineGradient)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d={pathDataMain} fill="none" stroke={isTvFullRoundsView ? chartPalette.secondary : "url(#trendLineGradient)"} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
 
                       {/* Pontos */}
                       {data.map((d, i) => (
                           (() => {
-                            const yPos = getY(d[valKey], isGeneral ? 'score' : 'time');
+                            const yPos = getY(d[valKey], isTvFullRoundsView ? 'time' : isGeneral ? 'score' : 'time');
                             const dateText = new Date(d.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 
-                            const isBetter = isGeneral ? d[valKey] >= currentAvg : d[valKey] <= currentAvg;
-                            const ptColor = isBetter ? "#22c55e" : "#ef4444";
+                            const isBetter = isTvFullRoundsView ? Number(d.time) <= 150 : isGeneral ? d[valKey] >= currentAvg : d[valKey] <= currentAvg;
+                            const ptColor = isBetter ? chartPalette.better : chartPalette.worse;
 
                             return (
                                 <g key={d.id} className="group">
@@ -4887,15 +4977,21 @@ const handleFileSelect = (e) => {
                                             rx="5" 
                                             fill="black" 
                                             fillOpacity="0.9"
-                                            stroke="#555"
+                                            stroke={chartPalette.tooltipBorder}
                                             strokeWidth="1"
                                         />
                                         
-                                        {isGeneral ? (
+                                        {isTvFullRoundsView ? (
+                                            <>
+                                                <text x={getX(i)} y={yPos - 45} textAnchor="middle" fill="white" fontSize="12" fontWeight="bold">{d.time} seg</text>
+                                                <text x={getX(i)} y={yPos - 30} textAnchor="middle" fill={chartPalette.avg} fontSize="10" fontWeight="bold">{Number(d.time) <= 150 ? 'Dentro de 2:30' : 'Acima de 2:30'}</text>
+                                                <text x={getX(i)} y={yPos - 15} textAnchor="middle" fill={chartPalette.tooltipSubtle} fontSize="10">{dateText}</text>
+                                            </>
+                                        ) : isGeneral ? (
                                             <>
                                                 <text x={getX(i)} y={yPos - 45} textAnchor="middle" fill="white" fontSize="12" fontWeight="bold">{d.score} pts</text>
-                                                <text x={getX(i)} y={yPos - 30} textAnchor="middle" fill="#3b82f6" fontSize="10" fontWeight="bold">{d.time ? `${d.time}s` : '--'}</text>
-                                                <text x={getX(i)} y={yPos - 15} textAnchor="middle" fill="#9ca3af" fontSize="10">{dateText}</text>
+                                                <text x={getX(i)} y={yPos - 30} textAnchor="middle" fill={chartPalette.secondary} fontSize="10" fontWeight="bold">{d.time ? `${d.time}s` : '--'}</text>
+                                                <text x={getX(i)} y={yPos - 15} textAnchor="middle" fill={chartPalette.tooltipSubtle} fontSize="10">{dateText}</text>
                                             </>
                                         ) : (
                                             <>
@@ -4911,7 +5007,7 @@ const handleFileSelect = (e) => {
                   </svg>
                   
                   {/* Legenda X (Datas) */}
-                  <div className="flex justify-between px-4 mt-2 text-[10px] text-gray-500 uppercase font-mono select-none">
+                  <div className={`flex justify-between ${isTvMode ? 'mt-0.5 px-2 text-[8px]' : 'mt-2 px-4 text-[10px]'} text-gray-500 uppercase font-mono select-none`}>
                       <span>{new Date(data[0].date).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})}</span>
                       {data.length > 3 && (<span>{new Date(data[Math.floor(data.length / 2)].date).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})}</span>)}
                       <span>{new Date(data[data.length-1].date).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})}</span>
@@ -4977,7 +5073,7 @@ const handleFileSelect = (e) => {
       }
 
       return (
-          <div className={`bg-[#151520] border border-white/10 rounded-2xl p-6 ${isTvMode ? 'shadow-2xl' : 'mb-8'}`}>
+          <div className={`rounded-2xl ${isTvMode ? 'border-0 bg-transparent p-0 shadow-none' : 'bg-[#151520] border border-white/10 p-6 mb-8'}`}>
               {renderChartContent()}
           </div>
       );
@@ -6926,6 +7022,23 @@ const handleFileSelect = (e) => {
               <p className="text-sm text-slate-300/70 max-w-md">Estamos puxando cronograma, tarefas, ranking e tudo que a equipe precisa para entrar em modo missao.</p>
           </div>
       )
+  }
+
+  if (isTvOnlyView) {
+      return (
+          <TvModePanel
+              isTvMode={true}
+              setIsTvMode={setIsTvMode}
+              standalone={true}
+              currentWeekData={currentWeekData}
+              students={students}
+              missions={missions}
+              tasks={tasks}
+              events={events}
+              outreachEvents={outreachEvents}
+              ScoreEvolutionChart={ScoreEvolutionChart}
+          />
+      );
   }
 
   // --- RENDER PRINCIPAL (SÓ CHEGA AQUI SE ESTIVER LOGADO) ---

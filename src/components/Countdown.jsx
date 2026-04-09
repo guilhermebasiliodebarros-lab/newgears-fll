@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './Countdown.css';
 
-const Countdown = ({ targetDate, title, compact = false }) => {
+const Countdown = ({ targetDate, title, compact = false, dense = false }) => {
   const calculateTimeLeft = () => {
     const difference = +new Date(targetDate) - +new Date();
     let timeLeft = {};
@@ -38,8 +38,8 @@ const Countdown = ({ targetDate, title, compact = false }) => {
       // Modo Compacto (para o Header)
       const labels = { dias: 'd', horas: 'h', minutos: 'm', segundos: 's' };
       timerComponents.push(
-        <span key={interval} className="flex items-center gap-1 rounded-[14px] border border-white/10 bg-black/20 px-2 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-          <span className="font-mono font-black text-white text-sm">{timeLeft[interval]}</span>
+        <span key={interval} className={`flex items-center gap-1 rounded-[14px] border border-white/10 bg-black/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ${dense ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}>
+          <span className={`font-mono font-black text-white ${dense ? 'text-xs' : 'text-sm'}`}>{timeLeft[interval]}</span>
           <span className="text-[10px] uppercase text-cyan-200/80">{labels[interval] || interval.charAt(0)}</span>
         </span>
       );
@@ -56,12 +56,12 @@ const Countdown = ({ targetDate, title, compact = false }) => {
 
   if (compact) {
     return (
-      <div className="hidden xl:flex items-center gap-2 rounded-[20px] border border-white/12 bg-[linear-gradient(145deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] px-3 py-2 shadow-[0_14px_30px_rgba(0,0,0,0.18)]">
-        <span className="rounded-full border border-yellow-300/20 bg-yellow-300/10 px-2.5 py-1 text-[10px] font-black uppercase text-yellow-100 tracking-[0.18em]">
+      <div className={`hidden xl:flex items-center gap-1.5 rounded-[20px] border border-white/12 bg-[linear-gradient(145deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] shadow-[0_14px_30px_rgba(0,0,0,0.18)] ${dense ? 'px-2.5 py-1.5' : 'px-3 py-2'}`}>
+        <span className={`rounded-full border border-yellow-300/20 bg-yellow-300/10 font-black uppercase text-yellow-100 tracking-[0.18em] ${dense ? 'px-2 py-0.5 text-[9px]' : 'px-2.5 py-1 text-[10px]'}`}>
           {title}
         </span>
-        <div className="flex items-center gap-1.5">
-          {timerComponents.length ? timerComponents : <span className="rounded-full border border-green-400/20 bg-green-400/10 px-3 py-1 text-xs font-black text-green-200">Chegou!</span>}
+        <div className="flex items-center gap-1">
+          {timerComponents.length ? timerComponents : <span className={`rounded-full border border-green-400/20 bg-green-400/10 font-black text-green-200 ${dense ? 'px-2 py-0.5 text-[10px]' : 'px-3 py-1 text-xs'}`}>Chegou!</span>}
         </div>
       </div>
     );
