@@ -169,6 +169,7 @@ const normalizeRubricValues = (data, defaults) => ({
 
 const ADMIN_PANEL_DEFAULTS = {
   hero: false,
+  compact: false,
   dashboard: false,
   prep: true,
   judge: true,
@@ -177,6 +178,7 @@ const ADMIN_PANEL_DEFAULTS = {
 };
 
 const STUDENT_PANEL_DEFAULTS = {
+  hero: true,
   dashboard: false,
   prep: true,
   judge: true,
@@ -297,7 +299,7 @@ function App() {
   const [tasks, setTasks] = useState([]);
   const [logbookEntries, setLogbookEntries] = useState([]);
   const [events, setEvents] = useState([]);
-  const [adminProfile, setAdminProfile] = useState({ name: 'Técnico', avatarImage: null });
+  const [adminProfile, setAdminProfile] = useState({ name: 'Técnico', avatarImage: null, specialty: '' });
   const [isCropping, setIsCropping] = useState(false);
   const [cropImgSrc, setCropImgSrc] = useState(null);
   const [cropScale, setCropScale] = useState(1);
@@ -1980,6 +1982,7 @@ const handleDeleteRound = async (id) => {
       const studentData = { 
           name: fd.get('name'), 
           turma: fd.get('turma'), 
+          specialty: (fd.get('specialty') || '').toString().trim(),
           username: fd.get('username'), 
           password: fd.get('password'), 
           avatarImage: avatarImage, // Novo campo para a foto
@@ -2485,7 +2488,8 @@ const handleDeleteRound = async (id) => {
       
       const dataToSave = {
           name: fd.get('name') || 'Técnico',
-          avatarImage: modal.data?.avatarImage || null
+          avatarImage: modal.data?.avatarImage || null,
+          specialty: (fd.get('specialty') || '').toString().trim()
       };
 
       // Se digitou uma senha nova, envia pro banco
@@ -2621,6 +2625,89 @@ const handleDeleteRound = async (id) => {
       ? Math.min(100, ((viewAsStudent.xp - studentCurrentLevel.min) / (studentNextLevel.min - studentCurrentLevel.min)) * 100)
       : 100;
   const unlockedStudentBadges = BADGES_LIST.filter((badge) => viewAsStudent?.badges?.includes(badge.id));
+  const featuredStudentBadge = unlockedStudentBadges[0];
+  const studentSpecialtyText = (viewAsStudent?.specialty || '').trim();
+  const normalizedStudentSpecialty = studentSpecialtyText
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+  const specialtyMatchesEngineering = ['engenharia', 'mecanica', 'mecanico', 'robo', 'robot', 'programa', 'codigo', 'anexo', 'teste']
+      .some((keyword) => normalizedStudentSpecialty.includes(keyword));
+  const specialtyMatchesInnovation = ['inovacao', 'pesquisa', 'narrativa', 'projeto', 'impacto', 'criativa', 'criativo', 'ideia', 'solucao']
+      .some((keyword) => normalizedStudentSpecialty.includes(keyword));
+  const specialtyMatchesLeadership = ['gestao', 'lideranca', 'organizacao', 'comunicacao', 'ritmo', 'estrategia', 'lider']
+      .some((keyword) => normalizedStudentSpecialty.includes(keyword));
+  const matchedStudentSpecialtyCount = [specialtyMatchesEngineering, specialtyMatchesInnovation, specialtyMatchesLeadership].filter(Boolean).length;
+  const studentProfileSpecialty = studentSpecialtyText
+      || (featuredStudentBadge ? `Destaque: ${featuredStudentBadge.name}` : 'Especialidade em definicao');
+  const studentProfileSpecialtyHelper = studentSpecialtyText
+      ? 'identidade principal do competidor, fixa no perfil'
+      : featuredStudentBadge
+          ? 'sugestao visual baseada nas badges do aluno'
+          : 'defina o melhor jogo do aluno no perfil';
+  const studentStationTone = viewAsStudent?.station === 'Engenharia'
+      ? 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200'
+      : viewAsStudent?.station === 'Inovação'
+          ? 'border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-200'
+          : viewAsStudent?.station === 'Gestão'
+              ? 'border-violet-500/20 bg-violet-500/10 text-violet-200'
+              : 'border-white/10 bg-white/5 text-gray-200';
+  const studentPrimarySeal = studentSpecialtyText && (normalizedStudentSpecialty.includes('tudo') || normalizedStudentSpecialty.includes('multi') || normalizedStudentSpecialty.includes('geral') || matchedStudentSpecialtyCount > 1)
+      ? {
+          label: 'Multidisciplinar',
+          helper: 'Brilha em varias frentes',
+          badgeClass: 'border-amber-300/30 bg-amber-400/14 text-amber-100',
+          stampClass: 'border-amber-300/35 bg-amber-400/18 text-amber-100 shadow-[0_14px_28px_rgba(251,191,36,0.18)]',
+          Icon: Sparkles
+        }
+      : studentSpecialtyText && specialtyMatchesEngineering
+      ? {
+          label: 'Engenharia',
+          helper: 'Mecanica e testes',
+          badgeClass: 'border-cyan-400/30 bg-cyan-500/14 text-cyan-100',
+          stampClass: 'border-cyan-400/35 bg-cyan-500/18 text-cyan-100 shadow-[0_14px_28px_rgba(34,211,238,0.18)]',
+          Icon: Wrench
+        }
+      : studentSpecialtyText && specialtyMatchesInnovation
+          ? {
+              label: 'Inovação',
+              helper: 'Ideia e narrativa',
+              badgeClass: 'border-fuchsia-400/30 bg-fuchsia-500/14 text-fuchsia-100',
+              stampClass: 'border-fuchsia-400/35 bg-fuchsia-500/18 text-fuchsia-100 shadow-[0_14px_28px_rgba(217,70,239,0.18)]',
+              Icon: Microscope
+            }
+          : studentSpecialtyText && specialtyMatchesLeadership
+              ? {
+                  label: 'Gestão',
+                  helper: 'Lideranca e ritmo',
+                  badgeClass: 'border-violet-400/30 bg-violet-500/14 text-violet-100',
+                  stampClass: 'border-violet-400/35 bg-violet-500/18 text-violet-100 shadow-[0_14px_28px_rgba(139,92,246,0.18)]',
+                  Icon: Crown
+                }
+              : studentSpecialtyText
+                  ? {
+                      label: 'Talento FLL',
+                      helper: 'Especialidade personalizada',
+                      badgeClass: 'border-emerald-300/30 bg-emerald-400/14 text-emerald-100',
+                      stampClass: 'border-emerald-300/35 bg-emerald-400/18 text-emerald-100 shadow-[0_14px_28px_rgba(52,211,153,0.18)]',
+                      Icon: Star
+                    }
+                  : featuredStudentBadge
+                      ? {
+                          label: 'Destaque FLL',
+                          helper: 'Leitura sugerida por badges',
+                          badgeClass: 'border-yellow-300/30 bg-yellow-400/14 text-yellow-100',
+                          stampClass: 'border-yellow-300/35 bg-yellow-400/18 text-yellow-100 shadow-[0_14px_28px_rgba(250,204,21,0.18)]',
+                          Icon: Medal
+                        }
+                      : {
+                          label: 'Em evolucao',
+                          helper: 'Especialidade ainda aberta',
+                          badgeClass: 'border-white/15 bg-white/8 text-white',
+                          stampClass: 'border-white/15 bg-white/10 text-white shadow-[0_14px_28px_rgba(148,163,184,0.16)]',
+                          Icon: Users
+                        };
+  const StudentPrimarySealIcon = studentPrimarySeal.Icon;
   const totalTeamXP = students.reduce((sum, student) => sum + (student.xp || 0), 0);
   const totalTeamImpact = outreachEvents.reduce((sum, event) => sum + (event.people || 0), 0);
   const totalTeamTasksDone = tasks.filter((task) => task.status === 'done').length;
@@ -2639,24 +2726,60 @@ const handleDeleteRound = async (id) => {
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr,0.95fr,0.95fr,1fr]">
           <button
               onClick={() => openProfileModal(viewAsStudent)}
-              className="rounded-[24px] border border-white/10 bg-black/25 p-4 backdrop-blur-sm text-left transition-all hover:bg-white/10"
+              className="rounded-[24px] border border-white/10 bg-black/25 p-4 backdrop-blur-sm text-left transition-all hover:bg-white/10 h-full flex flex-col"
           >
-              <div className="flex items-center gap-4">
-                  {viewAsStudent.avatarImage ? (
-                      <img src={viewAsStudent.avatarImage} alt={viewAsStudent.name} className="w-16 h-16 rounded-2xl object-cover border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,0.2)]" />
-                  ) : (
-                      <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-                          <UserCircle size={30} className="text-gray-400" />
-                      </div>
-                  )}
+              <div className="flex items-start gap-4">
+                  <div className="relative shrink-0">
+                      {viewAsStudent.avatarImage ? (
+                          <img src={viewAsStudent.avatarImage} alt={viewAsStudent.name} className="w-20 h-20 rounded-[22px] object-cover border border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.24)]" />
+                      ) : (
+                          <div className="w-20 h-20 rounded-[22px] bg-white/5 border border-white/10 flex items-center justify-center">
+                              <UserCircle size={38} className="text-gray-400" />
+                          </div>
+                      )}
 
-                  <div className="min-w-0">
-                      <p className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Identidade do piloto</p>
-                      <h3 className="text-lg font-black text-white leading-tight mt-2 truncate">{viewAsStudent.name}</h3>
+                      <div className={`absolute -bottom-2 -right-2 flex h-10 w-10 items-center justify-center rounded-[16px] border ${studentPrimarySeal.stampClass}`}>
+                          <StudentPrimarySealIcon size={16} />
+                      </div>
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                              <p className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Passaporte FLL</p>
+                              <h3 className="text-lg font-black text-white leading-tight mt-2 truncate">{viewAsStudent.name}</h3>
+                              <p className={`mt-2 text-xs font-semibold leading-relaxed ${viewAsStudent?.station === 'Engenharia' ? 'text-cyan-200' : viewAsStudent?.station === 'Inovação' ? 'text-fuchsia-200' : viewAsStudent?.station === 'Gestão' ? 'text-violet-200' : 'text-slate-200'}`}>
+                                  {studentProfileSpecialty}
+                              </p>
+                          </div>
+
+                          <div className={`hidden md:flex flex-col rounded-[18px] border px-3 py-2 text-right ${studentPrimarySeal.badgeClass}`}>
+                              <span className="inline-flex items-center justify-end gap-2 text-[10px] font-black uppercase tracking-[0.18em]">
+                                  <StudentPrimarySealIcon size={14} />
+                                  {studentPrimarySeal.label}
+                              </span>
+                              <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] opacity-80">{studentPrimarySeal.helper}</span>
+                          </div>
+                      </div>
+
                       <div className="flex flex-wrap items-center gap-2 mt-3 text-[10px] font-bold uppercase tracking-[0.16em]">
                           <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-gray-200">{viewAsStudent.turma || 'Turma nao definida'}</span>
-                          <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-cyan-200">{viewAsStudent.station || 'Equipe'}</span>
+                          <span className={`rounded-full border px-3 py-1 ${studentStationTone}`}>Estacao {viewAsStudent.station || 'Equipe'}</span>
                       </div>
+                      <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Selo fixo do aluno • estacao muda por semana</p>
+                  </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Nivel atual</p>
+                      <p className={`mt-2 text-sm font-black ${studentCurrentLevel?.color || 'text-white'}`}>{studentCurrentLevel?.name || 'Equipe'}</p>
+                      <p className="mt-1 text-[11px] text-gray-400">{viewAsStudent.xp || 0} XP acumulados</p>
+                  </div>
+                  <div className={`rounded-2xl border p-3 ${studentPrimarySeal.badgeClass}`}>
+                      <p className="text-[10px] uppercase tracking-[0.16em] font-bold opacity-80">Especialidade fixa</p>
+                      <p className="mt-2 text-sm font-black">{studentSpecialtyText ? 'Assinatura do aluno' : featuredStudentBadge ? 'Sugestao inicial' : 'Em definicao'}</p>
+                      <p className="mt-1 text-[11px] leading-relaxed opacity-90">{studentProfileSpecialtyHelper}</p>
                   </div>
               </div>
           </button>
@@ -2823,7 +2946,15 @@ const handleDeleteRound = async (id) => {
 
   const toggleDashboardPanel = () => {
       if (isAdmin) {
-          setAdminPanelState((prev) => ({ ...prev, dashboard: !prev.dashboard }));
+          setAdminPanelState((prev) => {
+              const nextDashboard = !prev.dashboard;
+
+              if (prev.compact && nextDashboard) {
+                  return { ...prev, compact: false, dashboard: true };
+              }
+
+              return { ...prev, dashboard: nextDashboard };
+          });
           return;
       }
 
@@ -2834,6 +2965,14 @@ const handleDeleteRound = async (id) => {
       setAdminPanelState((prev) => ({ ...prev, hero: !prev.hero }));
   };
 
+  const toggleStudentHeroPanel = () => {
+      setStudentPanelState((prev) => ({ ...prev, hero: !prev.hero }));
+  };
+
+  const toggleAdminCompactMode = () => {
+      setAdminPanelState((prev) => ({ ...prev, compact: !prev.compact }));
+  };
+
   const adminBatteryTone = teamAverage > 75
       ? 'border-green-500/20 bg-green-500/10 text-green-300'
       : teamAverage > 50
@@ -2841,6 +2980,9 @@ const handleDeleteRound = async (id) => {
           : teamAverage > 0
               ? 'border-red-500/20 bg-red-500/10 text-red-300'
               : 'border-white/10 bg-white/5 text-gray-300';
+  const adminProfileSpecialty = (adminProfile?.specialty || '').trim() || 'Comando geral, ritmo da semana e leitura da equipe.';
+  const adminProfilePulse = teamMoods.length > 0 ? `${teamAverage}% de energia media da equipe` : 'Equipe ainda sem check-in do dia';
+  const adminProfileWatch = urgentTasksCount > 0 ? `${urgentTasksCount} alerta(s) pedem resposta` : 'Fluxo principal sob controle';
 
   const adminExecutiveSignals = [
       { label: 'Prontidao FLL', value: `${commandCenterReadinessScore}%`, helper: commandCenterReadinessTone.label, icon: <Crown size={14} />, tone: `${commandCenterReadinessTone.border} ${commandCenterReadinessTone.bg} ${commandCenterReadinessTone.color}` },
@@ -2856,24 +2998,26 @@ const handleDeleteRound = async (id) => {
   ].filter(Boolean).slice(0, 3);
 
   const adminHeroFooter = (
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.05fr,1.1fr,1fr,1fr]">
-          <div className="self-start rounded-[20px] border border-white/10 bg-black/25 p-3 backdrop-blur-sm">
+      <div className="grid items-stretch gap-3 md:grid-cols-2 xl:auto-rows-fr xl:grid-cols-[1.05fr,1.1fr,1fr,1fr]">
+          <div className="rounded-[20px] border border-white/10 bg-black/25 p-3 backdrop-blur-sm h-full flex flex-col">
               <div className="flex items-start justify-between gap-2.5">
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-4 min-w-0">
                   {adminProfile?.avatarImage ? (
-                      <img src={adminProfile.avatarImage} alt={adminProfile?.name || 'Tecnico'} className="h-12 w-12 rounded-[16px] object-cover border border-red-500/25 shadow-[0_10px_30px_rgba(0,0,0,0.2)]" />
+                      <img src={adminProfile.avatarImage} alt={adminProfile?.name || 'Tecnico'} className="h-20 w-20 rounded-[22px] object-cover border border-red-500/25 shadow-[0_16px_40px_rgba(0,0,0,0.24)]" />
                   ) : (
-                      <div className="h-12 w-12 rounded-[16px] bg-red-500/10 border border-red-500/25 flex items-center justify-center">
-                          <Bot size={22} className="text-red-300" />
+                      <div className="h-20 w-20 rounded-[22px] bg-red-500/10 border border-red-500/25 flex items-center justify-center">
+                          <Bot size={34} className="text-red-300" />
                       </div>
                   )}
 
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                       <p className="text-[9px] uppercase tracking-[0.18em] text-gray-500 font-bold">Cockpit do tecnico</p>
                       <h3 className="mt-1 text-[15px] font-black leading-tight text-white truncate">{adminProfile?.name || 'Tecnico'}</h3>
+                      <p className="mt-2 text-xs font-semibold leading-relaxed text-red-100/85">{adminProfileSpecialty}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-1 text-[8px] font-bold uppercase tracking-[0.12em]">
                           <span className="rounded-full border border-red-500/20 bg-red-500/10 px-2 py-1 text-red-200">Restrito</span>
                           <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-gray-200">{currentWeekData?.weekName || 'Semana ativa'}</span>
+                          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-gray-200">{students.length} alunos</span>
                       </div>
                   </div>
                   </div>
@@ -2886,15 +3030,30 @@ const handleDeleteRound = async (id) => {
                   </button>
               </div>
 
-              <div className="mt-2.5 rounded-[16px] border border-white/10 bg-white/5 px-2.5 py-2">
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                  <div className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2.5">
+                      <p className="text-[9px] uppercase tracking-[0.16em] text-gray-500 font-bold">Pulso da equipe</p>
+                      <p className="mt-2 text-sm font-black text-white">{teamMoods.length > 0 ? `${teamAverage}%` : 'Check-in'}</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-gray-400">{adminProfilePulse}</p>
+                  </div>
+                  <div className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2.5">
+                      <p className="text-[9px] uppercase tracking-[0.16em] text-gray-500 font-bold">Radar imediato</p>
+                      <p className="mt-2 text-sm font-black text-white">{urgentTasksCount > 0 ? `${urgentTasksCount} alerta(s)` : 'Tudo sob controle'}</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-gray-400">{adminProfileWatch}</p>
+                  </div>
+              </div>
+
+              <div className="mt-auto pt-2.5">
+                <div className="rounded-[16px] border border-white/10 bg-white/5 px-2.5 py-2">
                   <p className="text-[9px] uppercase tracking-[0.16em] text-gray-500 font-bold">Janela da semana</p>
                   <p className="mt-1 text-[13px] font-bold text-white leading-snug">
                       {currentWeekData ? `${currentWeekData.startDate.split('-').reverse().join('/')} ate ${currentWeekData.endDate.split('-').reverse().join('/')}` : 'Semana em sincronizacao'}
                   </p>
+                </div>
               </div>
           </div>
 
-          <div className="rounded-[24px] border border-white/10 bg-black/25 p-4 backdrop-blur-sm">
+          <div className="rounded-[24px] border border-white/10 bg-black/25 p-4 backdrop-blur-sm h-full flex flex-col">
               <div className="flex items-center justify-between gap-3">
                   <span className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Radar da equipe</span>
                   <span className="inline-flex items-center gap-1 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-[10px] font-bold text-cyan-200">
@@ -2902,9 +3061,9 @@ const handleDeleteRound = async (id) => {
                   </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 mt-4">
+              <div className="grid flex-1 auto-rows-fr grid-cols-2 gap-2 mt-4">
                   {adminExecutiveSignals.map((signal) => (
-                      <div key={signal.label} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                      <div key={signal.label} className="rounded-2xl border border-white/10 bg-white/5 p-3 h-full">
                           <div className="flex items-center justify-between gap-2">
                               <span className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">{signal.label}</span>
                               <span className={`rounded-xl border px-2 py-1 ${signal.tone}`}>{signal.icon}</span>
@@ -2916,7 +3075,7 @@ const handleDeleteRound = async (id) => {
               </div>
           </div>
 
-          <div className="rounded-[24px] border border-white/10 bg-black/25 p-4 backdrop-blur-sm">
+          <div className="rounded-[24px] border border-white/10 bg-black/25 p-4 backdrop-blur-sm h-full flex flex-col">
               <div className="flex items-center justify-between gap-3">
                   <span className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Foco imediato</span>
                   <span className="inline-flex items-center gap-1 rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-[10px] font-bold text-yellow-200">
@@ -2924,7 +3083,7 @@ const handleDeleteRound = async (id) => {
                   </span>
               </div>
 
-              <div className="space-y-2 mt-4">
+              <div className="space-y-2 mt-4 flex-1">
                   {adminPriorityFocus.length > 0 ? adminPriorityFocus.slice(0, 2).map((item, index) => (
                       <button
                           key={`${item.title}-${index}`}
@@ -2942,7 +3101,7 @@ const handleDeleteRound = async (id) => {
                   )}
               </div>
 
-              <div className="mt-4">
+              <div className="mt-auto pt-4">
                   <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold mb-2">Controle rapido</p>
                   <div className="grid grid-cols-2 gap-2">
                       <button onClick={handleApplyRotation} className="rounded-2xl border border-blue-500/20 bg-blue-500/10 px-3 py-3 text-xs font-bold text-blue-100 hover:bg-blue-500 hover:text-white transition-all">
@@ -2961,7 +3120,7 @@ const handleDeleteRound = async (id) => {
               </div>
           </div>
 
-          <div className="rounded-[24px] border border-white/10 bg-black/25 p-4 backdrop-blur-sm">
+          <div className="rounded-[24px] border border-white/10 bg-black/25 p-4 backdrop-blur-sm h-full flex flex-col">
               <div className="flex items-center justify-between gap-3">
                   <span className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Raio-X e conquistas</span>
                   <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-bold text-emerald-200">
@@ -2969,23 +3128,23 @@ const handleDeleteRound = async (id) => {
                   </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 mt-4">
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+              <div className="grid flex-1 auto-rows-fr grid-cols-2 gap-2 mt-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3 h-full">
                       <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Impacto</p>
                       <p className="text-lg font-black text-white mt-2">{totalTeamImpact}</p>
                       <p className="text-[11px] text-gray-400 mt-1">pessoas alcancadas</p>
                   </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3 h-full">
                       <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">XP da equipe</p>
                       <p className="text-lg font-black text-white mt-2">{totalTeamXP}</p>
                       <p className="text-[11px] text-gray-400 mt-1">forca acumulada</p>
                   </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3 h-full">
                       <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Entregas</p>
                       <p className="text-lg font-black text-white mt-2">{totalTeamTasksDone}</p>
                       <p className="text-[11px] text-gray-400 mt-1">tarefas concluidas</p>
                   </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3 h-full">
                       <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Especialistas</p>
                       <p className="text-lg font-black text-white mt-2">{totalTeamExperts}</p>
                       <p className="text-[11px] text-gray-400 mt-1">consultas registradas</p>
@@ -3328,6 +3487,34 @@ const handleDeleteRound = async (id) => {
           showNotification("Erro ao salvar mudança.", "error");
       }
   }
+
+  const updateStudentSpecialty = async (student, specialty) => {
+      if (!isAdmin || !student?.id) return;
+
+      try {
+          await updateDoc(doc(db, "students", student.id), {
+              specialty,
+          });
+
+          setStudents((prev) =>
+              prev.map((item) => (item.id === student.id ? { ...item, specialty } : item))
+          );
+
+          setViewAsStudent((prev) =>
+              prev?.id === student.id ? { ...prev, specialty } : prev
+          );
+
+          showNotification(
+              specialty
+                  ? `Especialidade de ${student.name} atualizada para ${specialty}.`
+                  : `Especialidade de ${student.name} limpa com sucesso.`,
+              "success"
+          );
+      } catch (error) {
+          console.error("Erro ao atualizar especialidade do aluno:", error);
+          showNotification("Erro ao atualizar especialidade.", "error");
+      }
+  };
 
   // --- APROVAÇÃO RÁPIDA DE ATIVIDADES (EMAIL/EXTERNO) ---
   const toggleActivityStatus = async (student, newStatus) => {
@@ -3796,6 +3983,20 @@ const handleFileSelect = (e) => {
  </div>
                         <h2 className="text-3xl font-black text-white uppercase tracking-wider">{modal.data.name}</h2>
                         <p className="text-gray-400 font-mono text-sm bg-white/5 px-3 py-1 rounded-full mt-2 border border-white/10">{modal.data.turma} • {modal.data.station || "Membro da Equipe"}</p>
+                        {(modal.data.specialty || modal.data.station) && (
+                            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                                {modal.data.specialty && (
+                                    <span className="rounded-full border border-purple-500/20 bg-purple-500/10 px-4 py-2 text-xs font-bold text-purple-100">
+                                        Especialidade fixa: {modal.data.specialty}
+                                    </span>
+                                )}
+                                {modal.data.station && (
+                                    <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-4 py-2 text-xs font-bold text-cyan-100">
+                                        Estacao da semana: {modal.data.station}
+                                    </span>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -3883,6 +4084,12 @@ const handleFileSelect = (e) => {
         </div>
     </div>
 
+    <div className="mb-4">
+        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Especialidade principal (fixa)</label>
+        <input name="specialty" defaultValue={modal.data?.specialty || ''} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Lideranca, inovacao e engenharia" />
+        <p className="mt-1 text-[10px] text-gray-500">Esse campo representa o melhor jogo do aluno e nao muda com o rodizio semanal.</p>
+    </div>
+
     {/* DADOS DE LOGIN (COM FUNDO CINZA PARA ORGANIZAR) */}
     <div className="bg-white/5 p-4 rounded-xl border border-white/10 mb-6">
         <div className="flex items-center gap-2 mb-3 text-yellow-500">
@@ -3929,9 +4136,15 @@ const handleFileSelect = (e) => {
                 <Shield className="text-red-500"/> Editar Perfil do Técnico
               </h3>
               
-              <div className="mb-4">
-                  <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome de Exibição</label>
-                  <input name="name" defaultValue={modal.data?.name} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-red-500 outline-none" placeholder="Ex: Técnico Guilherme" />
+              <div className="grid grid-cols-1 gap-4 mb-4 md:grid-cols-2">
+                  <div>
+                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome de Exibição</label>
+                      <input name="name" defaultValue={modal.data?.name} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-red-500 outline-none" placeholder="Ex: Técnico Guilherme" />
+                  </div>
+                  <div>
+                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Especialidade / assinatura</label>
+                      <input name="specialty" defaultValue={modal.data?.specialty || ''} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-red-500 outline-none" placeholder="Ex: Estrategia, ritmo e leitura da equipe" />
+                  </div>
               </div>
 
               <div className="mb-4">
@@ -7416,6 +7629,34 @@ const handleFileSelect = (e) => {
                   <span className="font-bold text-xs">Central Tatica</span>
                 </button>
               )}
+              {!isAdmin && viewAsStudent && (
+                <button
+                  onClick={toggleStudentHeroPanel}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all border ${
+                    studentPanelState.hero
+                      ? 'bg-blue-500/12 border-blue-500/30 text-blue-100 shadow-[0_0_15px_rgba(96,165,250,0.16)]'
+                      : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:text-white'
+                  }`}
+                  title={studentPanelState.hero ? 'Ocultar painel principal do aluno' : 'Mostrar painel principal do aluno'}
+                >
+                  {studentPanelState.hero ? <EyeOff size={18} /> : <Eye size={18} />}
+                  <span className="font-bold text-xs">Painel FLL</span>
+                </button>
+              )}
+              {isAdmin && (
+                <button
+                  onClick={toggleAdminCompactMode}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all border ${
+                    adminPanelState.compact
+                      ? 'bg-violet-500/12 border-violet-500/30 text-violet-100 shadow-[0_0_15px_rgba(139,92,246,0.16)]'
+                      : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:text-white'
+                  }`}
+                  title={adminPanelState.compact ? 'Voltar ao layout completo do tecnico' : 'Ativar modo compacto para operacao rapida'}
+                >
+                  {adminPanelState.compact ? <Maximize size={18} /> : <Minimize size={18} />}
+                  <span className="font-bold text-xs">{adminPanelState.compact ? 'Layout Completo' : 'Modo Compacto'}</span>
+                </button>
+              )}
               <button
                 onClick={toggleDashboardPanel}
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all border ${isDashboardPanelVisible ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.15)]' : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:text-white'}`}
@@ -7493,10 +7734,10 @@ const handleFileSelect = (e) => {
 
       {/* --- ÁREA DO TÉCNICO (ADMIN) --- */}
       {isAdmin && (
-        <main className="newgears-stage p-4 md:p-8 max-w-[1600px] mx-auto animate-in fade-in duration-500">
-          <UrgentEventsBanner />
+        <main className={`newgears-stage max-w-[1600px] mx-auto animate-in fade-in duration-500 ${adminPanelState.compact ? 'p-4 md:p-6' : 'p-4 md:p-8'}`}>
+          {!adminPanelState.compact && <UrgentEventsBanner />}
 
-          <div className="mb-6">
+          <div className={`${adminPanelState.compact ? 'mb-4' : 'mb-6'}`}>
             <WorkspaceCollapsible isOpen={adminPanelState.hero}>
               <WorkspaceHero
                 eyebrow="Temporada FLL"
@@ -7508,11 +7749,12 @@ const handleFileSelect = (e) => {
               />
             </WorkspaceCollapsible>
 
-            <div className={`newgears-footer-shell newgears-hud-shell relative z-10 border border-white/10 bg-black/18 p-4 md:p-5 ${adminPanelState.hero ? 'mt-4' : ''}`}>
+            <div className={`newgears-footer-shell newgears-hud-shell relative z-10 border border-white/10 bg-black/18 ${adminPanelState.compact ? 'p-3 md:p-4' : 'p-4 md:p-5'} ${adminPanelState.hero ? 'mt-4' : ''}`}>
               {adminHeroFooter}
             </div>
           </div>
 
+          {!adminPanelState.compact && (
           <WorkspaceCollapsible isOpen={adminPanelState.dashboard}>
             <div className="flex flex-col gap-6 mb-6">
               <WorkspacePanelToolbar
@@ -7565,6 +7807,7 @@ const handleFileSelect = (e) => {
               )}
             </div>
           </WorkspaceCollapsible>
+          )}
 
             {/* Dentro do seu <main> ou área de conteúdo central, junto com os outros 'ifs' de abas */}
 {activeTab === 'ranking' && (
@@ -7597,6 +7840,7 @@ const handleFileSelect = (e) => {
                         onDeleteStudent={handleDeleteStudent}
                         onToggleActivityStatus={toggleActivityStatus}
                         onOpenReviewModal={openReviewModal}
+                        onUpdateStudentSpecialty={updateStudentSpecialty}
                         onHandleCloseStationWeek={handleCloseStationWeek}
                         onUpdateMission={updateMission}
                         onSaveMission={handleSaveStationMission}
@@ -7634,15 +7878,20 @@ const handleFileSelect = (e) => {
           <UrgentEventsBanner />
 
           <div className="mb-6">
-            <WorkspaceHero
-              eyebrow="Painel do Aluno"
-              title={`Base pessoal de ${viewAsStudent.name} para jogar em equipe, evoluir e chegar pronto no torneio.`}
-              subtitle={`Estacao atual: ${viewAsStudent.station || 'Equipe'}. Aqui voce acompanha sua rotina da semana, entende as rubricas, treina sua fala e enxerga o time com uma energia mais viva e menos engessada.`}
-              metrics={studentHeroMetrics}
-              actions={studentHeroActions}
-              accent="from-[#101f4a] via-[#2a1458] to-[#1a0d32]"
-              footerContent={studentHeroFooter}
-            />
+            <WorkspaceCollapsible isOpen={studentPanelState.hero}>
+              <WorkspaceHero
+                eyebrow="Painel do Aluno"
+                title={`Base pessoal de ${viewAsStudent.name} para jogar em equipe, evoluir e chegar pronto no torneio.`}
+                subtitle={`Estacao atual: ${viewAsStudent.station || 'Equipe'}. Aqui voce acompanha sua rotina da semana, entende as rubricas, treina sua fala e enxerga o time com uma energia mais viva e menos engessada.`}
+                metrics={studentHeroMetrics}
+                actions={studentHeroActions}
+                accent="from-[#101f4a] via-[#2a1458] to-[#1a0d32]"
+              />
+            </WorkspaceCollapsible>
+
+            <div className={`newgears-footer-shell newgears-hud-shell relative z-10 border border-white/10 bg-black/18 p-4 md:p-5 ${studentPanelState.hero ? 'mt-4' : ''}`}>
+              {studentHeroFooter}
+            </div>
           </div>
 
           <WorkspaceCollapsible isOpen={studentPanelState.dashboard}>

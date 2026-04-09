@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertCircle,
   AlertTriangle,
@@ -61,12 +62,115 @@ const STATION_CONFIGS = [
   },
 ];
 
+const SPECIALTY_PRESETS = [
+  {
+    value: 'Engenharia',
+    label: 'Engenharia',
+    short: 'ENG',
+    Icon: Rocket,
+    tone: 'border-blue-500/20 bg-blue-500/10 text-blue-100 hover:bg-blue-500 hover:text-white',
+  },
+  {
+    value: 'Inovacao',
+    label: 'Inovacao',
+    short: 'INO',
+    Icon: Microscope,
+    tone: 'border-pink-500/20 bg-pink-500/10 text-pink-100 hover:bg-pink-500 hover:text-white',
+  },
+  {
+    value: 'Gestao',
+    label: 'Gestao',
+    short: 'GES',
+    Icon: Crown,
+    tone: 'border-purple-500/20 bg-purple-500/10 text-purple-100 hover:bg-purple-500 hover:text-white',
+  },
+  {
+    value: 'Multidisciplinar',
+    label: 'Multidisciplinar',
+    short: 'MULTI',
+    Icon: Sparkles,
+    tone: 'border-amber-500/20 bg-amber-500/10 text-amber-100 hover:bg-amber-400 hover:text-black',
+  },
+];
+
+const SPECIALTY_GROUP_CONFIGS = [
+  {
+    id: 'engenharia',
+    label: 'Engenharia',
+    short: 'ENG',
+    Icon: Rocket,
+    tone: 'border-blue-500/20 bg-blue-500/10 text-blue-100',
+    headerTone: 'border-blue-500/20 bg-blue-500/10',
+    matches: ['engenharia', 'robotica', 'programacao', 'codigo', 'mecanica', 'mesa', 'testes'],
+  },
+  {
+    id: 'inovacao',
+    label: 'Inovacao',
+    short: 'INO',
+    Icon: Microscope,
+    tone: 'border-pink-500/20 bg-pink-500/10 text-pink-100',
+    headerTone: 'border-pink-500/20 bg-pink-500/10',
+    matches: ['inovacao', 'pesquisa', 'narrativa', 'projeto', 'apresentacao', 'defesa', 'pitch'],
+  },
+  {
+    id: 'gestao',
+    label: 'Gestao',
+    short: 'GES',
+    Icon: Crown,
+    tone: 'border-purple-500/20 bg-purple-500/10 text-purple-100',
+    headerTone: 'border-purple-500/20 bg-purple-500/10',
+    matches: ['gestao', 'lideranca', 'organizacao', 'estrategia', 'comunicacao', 'ritmo'],
+  },
+  {
+    id: 'multidisciplinar',
+    label: 'Multidisciplinar',
+    short: 'MULTI',
+    Icon: Sparkles,
+    tone: 'border-amber-500/20 bg-amber-500/10 text-amber-100',
+    headerTone: 'border-amber-500/20 bg-amber-500/10',
+    matches: ['multidisciplinar', 'multifuncional', 'geral', 'tudo', 'all-rounder'],
+  },
+  {
+    id: 'undefined',
+    label: 'Sem frente definida',
+    short: 'SEM',
+    Icon: UserCircle,
+    tone: 'border-white/10 bg-white/5 text-gray-200',
+    headerTone: 'border-white/10 bg-white/5',
+    matches: [],
+  },
+];
+
 const normalizeValue = (value) =>
   `${value || ''}`
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .trim()
     .toLowerCase();
+
+const resolveSpecialtyGroupId = (specialty) => {
+  const normalized = normalizeValue(specialty);
+  if (!normalized) return 'undefined';
+
+  if (SPECIALTY_GROUP_CONFIGS.find((group) => group.id === 'multidisciplinar')?.matches.some((term) => normalized.includes(term))) {
+    return 'multidisciplinar';
+  }
+
+  const matchedGroups = SPECIALTY_GROUP_CONFIGS
+    .filter((group) => group.id !== 'multidisciplinar' && group.id !== 'undefined')
+    .filter((group) => group.matches.some((term) => normalized.includes(term)))
+    .map((group) => group.id);
+
+  const uniqueMatches = Array.from(new Set(matchedGroups));
+  if (uniqueMatches.length > 1) return 'multidisciplinar';
+  if (uniqueMatches.length === 1) return uniqueMatches[0];
+
+  return 'undefined';
+};
+
+const getSpecialtyGroupConfig = (specialty) =>
+  SPECIALTY_GROUP_CONFIGS.find((group) => group.id === resolveSpecialtyGroupId(specialty))
+  || SPECIALTY_GROUP_CONFIGS[SPECIALTY_GROUP_CONFIGS.length - 1];
 
 const formatDate = (value) => {
   if (!value) return 'Sem data';
@@ -142,6 +246,22 @@ const ActionIconButton = ({ title, onClick, children, tone = 'text-gray-400 hove
   </button>
 );
 
+const SpecialtyHeaderBadge = ({ specialty }) => {
+  const specialtyGroup = getSpecialtyGroupConfig(specialty);
+  const SpecialtyGroupIcon = specialtyGroup.Icon;
+  const badgeLabel = specialtyGroup.id === 'undefined' ? 'Sem frente' : specialtyGroup.label;
+
+  return (
+    <span
+      title={specialty || badgeLabel}
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-[0.16em] ${specialtyGroup.tone}`}
+    >
+      <SpecialtyGroupIcon size={10} />
+      {badgeLabel}
+    </span>
+  );
+};
+
 const StudentAvatar = ({ student }) => (
   student.avatarImage ? (
     <img src={student.avatarImage} alt={student.name} className="h-11 w-11 rounded-2xl object-cover border border-white/10" />
@@ -152,14 +272,18 @@ const StudentAvatar = ({ student }) => (
   )
 );
 
-const StationMoveButtons = ({ onMoveStudent, studentId }) => (
-  <div className="grid grid-cols-3 gap-1.5">
+const StationMoveButtons = ({ onMoveStudent, studentId, compact = false }) => (
+  <div className={compact ? 'flex flex-wrap gap-1.5' : 'grid grid-cols-3 gap-1.5'}>
     {STATION_CONFIGS.map((station) => (
       <button
         key={station.key}
         type="button"
         onClick={() => onMoveStudent(studentId, station.key)}
-        className={`rounded-2xl border px-2 py-2.5 text-[9px] font-black uppercase tracking-[0.16em] transition-all hover:-translate-y-0.5 ${station.actionTone}`}
+        className={`border font-black uppercase transition-all hover:-translate-y-0.5 ${station.actionTone} ${
+          compact
+            ? 'rounded-full px-2.5 py-1.5 text-[8px] tracking-[0.18em]'
+            : 'rounded-2xl px-2 py-2.5 text-[9px] tracking-[0.16em]'
+        }`}
       >
         {station.label.slice(0, 3)}
       </button>
@@ -167,30 +291,110 @@ const StationMoveButtons = ({ onMoveStudent, studentId }) => (
   </div>
 );
 
+const SpecialtyQuickPanel = ({
+  student,
+  canManage,
+  onUpdateStudentSpecialty,
+  onOpenNewStudentModal,
+  compact = false,
+}) => {
+  const normalizedSpecialty = normalizeValue(student.specialty);
+  const specialtyGroup = getSpecialtyGroupConfig(student.specialty);
+  const SpecialtyGroupIcon = specialtyGroup.Icon;
+
+  return (
+    <div className={`rounded-[20px] border border-white/10 bg-black/25 ${compact ? 'p-3' : 'p-3.5'}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Especialidade fixa</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-black uppercase tracking-[0.16em] ${specialtyGroup.tone}`}>
+              <SpecialtyGroupIcon size={11} />
+              {specialtyGroup.short}
+            </span>
+            <p className={`font-bold leading-relaxed text-white ${compact ? 'text-xs' : 'text-sm'}`}>
+              {student.specialty || 'Sem especialidade definida'}
+            </p>
+          </div>
+          {!student.specialty && (
+            <p className="mt-1 text-[11px] text-gray-500">Escolha um preset rapido ou personalize.</p>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onOpenNewStudentModal(student)}
+          className="rounded-2xl border border-white/10 bg-white/5 p-2 text-gray-400 transition-all hover:bg-white/10 hover:text-white"
+          title="Editar especialidade personalizada"
+        >
+          <Pencil size={13} />
+        </button>
+      </div>
+
+      <div className="mt-3 grid grid-cols-4 gap-1.5">
+        {SPECIALTY_PRESETS.map((preset) => {
+          const isActive = normalizedSpecialty === normalizeValue(preset.value);
+          const PresetIcon = preset.Icon;
+
+          return (
+            <button
+              key={preset.value}
+              type="button"
+              onClick={() => onUpdateStudentSpecialty(student, preset.value)}
+              disabled={!canManage}
+              title={preset.label}
+              className={`rounded-[14px] border px-1.5 py-2 text-center transition-all ${
+                isActive
+                  ? preset.tone
+                  : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white'
+              } ${canManage ? 'hover:-translate-y-0.5' : 'cursor-not-allowed opacity-50'}`}
+            >
+              <span className="flex flex-col items-center justify-center gap-1 text-[9px] font-black uppercase tracking-[0.14em]">
+                <PresetIcon size={12} />
+                {preset.short}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {student.specialty && (
+        <button
+          type="button"
+          onClick={() => onUpdateStudentSpecialty(student, '')}
+          disabled={!canManage}
+          className={`mt-2.5 w-full rounded-[14px] border px-3 py-2 text-[9px] font-black uppercase tracking-[0.18em] transition-all ${
+            canManage
+              ? 'border-white/10 bg-white/5 text-gray-300 hover:-translate-y-0.5 hover:bg-white/10 hover:text-white'
+              : 'cursor-not-allowed opacity-50 border-white/10 bg-white/5 text-gray-500'
+          }`}
+        >
+          Limpar especialidade
+        </button>
+      )}
+    </div>
+  );
+};
+
 const TeamBenchCard = ({
   student,
   expectedStation,
   level,
   canManage,
   onMoveStudent,
-  onOpenXPModal,
-  onOpenGradesModal,
   onOpenProfileModal,
-  onOpenNewStudentModal,
-  onSetBadgeStudent,
-  onToggleEnglishChallenge,
-  onDeleteStudent,
-  onToggleActivityStatus,
+  onOpenBenchManagement,
 }) => {
   const submissionMeta = getSubmissionMeta(student);
   const expectedConfig = STATION_CONFIGS.find((item) => item.key === expectedStation);
+  const ExpectedStationIcon = expectedConfig?.Icon;
 
   return (
     <div className={`rounded-[26px] border p-4 transition-all ${submissionMeta.cardClass}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
+      <div className="flex items-start gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <StudentAvatar student={student} />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-cyan-100">
                 Banco
@@ -200,13 +404,13 @@ const TeamBenchCard = ({
                 {submissionMeta.label}
               </span>
             </div>
-            <p className="mt-3 truncate text-base font-black text-white">{student.name}</p>
+            <p className="mt-2 text-[15px] font-black leading-tight text-white line-clamp-2">{student.name}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className={`rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold uppercase ${level.color}`}>
-                {level.name}
-              </span>
               <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold text-gray-300">
                 {student.turma || 'Turma nao informada'}
+              </span>
+              <span className={`rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold uppercase ${level.color}`}>
+                {level.name}
               </span>
               <span className="rounded-full border border-yellow-500/20 bg-yellow-500/10 px-2 py-1 text-[10px] font-bold text-yellow-100">
                 {student.xp || 0} XP
@@ -214,101 +418,260 @@ const TeamBenchCard = ({
             </div>
           </div>
         </div>
-
-        <div className="flex flex-wrap items-center justify-end gap-1">
-          <ActionIconButton title="Ver perfil" onClick={() => onOpenProfileModal(student)}>
-            <UserCircle size={15} />
-          </ActionIconButton>
-          <ActionIconButton title="Editar aluno" onClick={() => onOpenNewStudentModal(student)}>
-            <Pencil size={15} />
-          </ActionIconButton>
-          <ActionIconButton title="Entregar conquista" onClick={() => onSetBadgeStudent(student)} tone="text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10 hover:border-yellow-500/20">
-            <Trophy size={15} />
-          </ActionIconButton>
-          <ActionIconButton
-            title={student.englishChallengeUnlocked ? 'Desativar ingles' : 'Ativar ingles'}
-            onClick={() => onToggleEnglishChallenge(student)}
-            tone={student.englishChallengeUnlocked ? 'text-green-400 hover:bg-green-500/10 hover:border-green-500/20' : 'text-gray-400 hover:text-blue-300 hover:bg-blue-500/10 hover:border-blue-500/20'}
-          >
-            <span className="font-mono text-[10px] font-black border border-current rounded px-1">EN</span>
-          </ActionIconButton>
-          <ActionIconButton title="Excluir aluno" onClick={() => onDeleteStudent(student.id)} tone="text-gray-400 hover:text-red-300 hover:bg-red-500/10 hover:border-red-500/20">
-            <Trash2 size={15} />
-          </ActionIconButton>
-        </div>
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-[1.05fr,0.95fr]">
-        <div className="rounded-[22px] border border-white/10 bg-black/25 p-4">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Radar do banco</p>
-          <p className="mt-3 text-sm font-bold text-white">
-            {expectedConfig ? `Escala prevista em ${expectedConfig.label}.` : 'Ainda sem estacao prevista na escala oficial.'}
-          </p>
-          <p className="mt-2 text-xs leading-relaxed text-gray-300">
-            Use o banco como area de embarque rapido para mover o aluno quando a rodada pedir reforco.
-          </p>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            {expectedConfig ? (
-              <>
-                <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${expectedConfig.badgeTone}`}>
-                  {expectedConfig.label}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onMoveStudent(student.id, expectedConfig.key)}
-                  className={`rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] transition-all hover:-translate-y-0.5 ${expectedConfig.actionTone}`}
-                >
-                  Enviar agora
-                </button>
-              </>
-            ) : (
-              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold text-gray-300">Sem escala marcada</span>
-            )}
+      <div className="mt-3 rounded-[22px] border border-white/10 bg-black/25 p-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Estacao da semana</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold ${expectedConfig ? expectedConfig.badgeTone : 'border-white/10 bg-white/5 text-gray-300'}`}>
+                {ExpectedStationIcon ? <ExpectedStationIcon size={12} /> : <LayoutDashboard size={12} />}
+                {expectedConfig ? expectedConfig.label : 'Banco livre'}
+              </span>
+            </div>
           </div>
-        </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => onOpenXPModal(student)}
-            disabled={!canManage}
-            className={`rounded-[20px] border border-yellow-500/20 bg-yellow-500/10 px-3 py-3 text-xs font-black uppercase tracking-[0.14em] text-yellow-100 transition-all ${canManage ? 'hover:-translate-y-0.5 hover:bg-yellow-500 hover:text-black' : 'opacity-50 cursor-not-allowed'}`}
-          >
-            {student.xp || 0} XP
-          </button>
-          <button
-            type="button"
-            onClick={() => onOpenGradesModal(student)}
-            disabled={!canManage}
-            className={`rounded-[20px] border border-white/10 bg-white/5 px-3 py-3 text-xs font-black uppercase tracking-[0.14em] text-white transition-all ${canManage ? 'hover:-translate-y-0.5 hover:bg-white/10' : 'opacity-50 cursor-not-allowed'}`}
-          >
-            Notas
-          </button>
-          <div className="col-span-2 rounded-[20px] border border-white/10 bg-black/25 p-3">
-            <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold mb-2">Mover manualmente</p>
-            <StationMoveButtons onMoveStudent={onMoveStudent} studentId={student.id} />
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between gap-3 rounded-[22px] border border-white/10 bg-black/25 p-3">
-        <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Status rapido</p>
-        <div className="flex items-center gap-1 rounded-2xl border border-white/10 bg-black/30 p-1">
-          <button type="button" onClick={() => onToggleActivityStatus(student, 'approved')} className={`rounded-xl p-2 transition-all ${student.submission?.status === 'approved' ? 'bg-green-500 text-black' : 'text-gray-400 hover:text-green-300 hover:bg-green-500/10'}`} title="Aprovar atividade">
-            <CheckCircle size={13} />
-          </button>
-          <button type="button" onClick={() => onToggleActivityStatus(student, 'rejected')} className={`rounded-xl p-2 transition-all ${student.submission?.status === 'rejected' ? 'bg-red-500 text-white' : 'text-gray-400 hover:text-red-300 hover:bg-red-500/10'}`} title="Recusar atividade">
-            <XCircle size={13} />
-          </button>
-          {student.submission && (
-            <button type="button" onClick={() => onToggleActivityStatus(student, null)} className="rounded-xl p-2 text-gray-400 transition-all hover:bg-white/10 hover:text-white" title="Limpar status">
-              <Trash2 size={12} />
+          {expectedConfig ? (
+            <button
+              type="button"
+              onClick={() => onMoveStudent(student.id, expectedConfig.key)}
+              className={`shrink-0 rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] transition-all hover:-translate-y-0.5 ${expectedConfig.actionTone}`}
+            >
+              Enviar
             </button>
+          ) : (
+            <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold text-gray-300">
+              Sem escala
+            </span>
           )}
         </div>
+
+        <div className="mt-3">
+          <StationMoveButtons onMoveStudent={onMoveStudent} studentId={student.id} compact />
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => onOpenBenchManagement(student)}
+          className="rounded-[20px] border border-cyan-500/20 bg-cyan-500/10 px-3 py-3 text-xs font-black uppercase tracking-[0.14em] text-cyan-100 transition-all hover:-translate-y-0.5 hover:bg-cyan-500 hover:text-black"
+        >
+          Gerenciar aluno
+        </button>
+        <button
+          type="button"
+          onClick={() => onOpenProfileModal(student)}
+          className="rounded-[20px] border border-white/10 bg-white/5 px-3 py-3 text-xs font-black uppercase tracking-[0.14em] text-white transition-all hover:-translate-y-0.5 hover:bg-white/10"
+        >
+          Ver perfil
+        </button>
       </div>
     </div>
   );
+};
+
+const BenchStudentManagementDrawer = ({
+  student,
+  level,
+  expectedStation,
+  canManage,
+  onClose,
+  onOpenXPModal,
+  onOpenGradesModal,
+  onOpenProfileModal,
+  onOpenNewStudentModal,
+  onSetBadgeStudent,
+  onToggleEnglishChallenge,
+  onDeleteStudent,
+  onToggleActivityStatus,
+  onUpdateStudentSpecialty,
+}) => {
+  const submissionMeta = getSubmissionMeta(student);
+  const expectedConfig = STATION_CONFIGS.find((item) => item.key === expectedStation);
+  const ExpectedStationIcon = expectedConfig?.Icon || LayoutDashboard;
+  const handleCloseAndRun = (callback, targetStudent = student) => {
+    onClose();
+    callback(targetStudent);
+  };
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  const drawerContent = (
+    <div className="fixed inset-0 z-[80] animate-in fade-in duration-300">
+      <button
+        type="button"
+        aria-label="Fechar gestao do aluno"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+      />
+
+      <div className="absolute inset-0 flex items-center justify-center p-3 sm:p-4 lg:p-6">
+        <aside className="relative flex max-h-[92vh] w-full max-w-[1040px] flex-col overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(12,16,28,0.98),rgba(10,12,20,0.98))] shadow-[0_30px_100px_rgba(0,0,0,0.45)] animate-in slide-in-from-bottom-4 duration-300">
+          <div className="border-b border-white/10">
+            <div className="mx-auto flex w-full max-w-[920px] flex-col gap-4 px-4 py-5 sm:px-5 lg:px-6 xl:px-8 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex min-w-0 items-center gap-3">
+                <StudentAvatar student={student} />
+                <div className="min-w-0">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-cyan-300 font-bold">Gestao do aluno</p>
+                  <p className="mt-2 text-lg font-black text-white line-clamp-2">{student.name}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold ${submissionMeta.badgeClass}`}>
+                      {submissionMeta.icon}
+                      {submissionMeta.label}
+                    </span>
+                    <SpecialtyHeaderBadge specialty={student.specialty} />
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="self-end rounded-2xl border border-white/10 bg-white/5 p-2 text-gray-400 transition-all hover:bg-white/10 hover:text-white sm:self-start"
+                title="Fechar painel"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+
+          <div className="mx-auto flex w-full max-w-[920px] flex-1 flex-col overflow-y-auto px-4 py-5 sm:px-5 lg:px-6 xl:px-8 custom-scrollbar">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,0.96fr),minmax(0,1.04fr)] xl:items-start">
+              <div className="space-y-4">
+                <div className="rounded-[24px] border border-white/10 bg-black/25 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold text-gray-300">
+                      {student.turma || 'Turma nao informada'}
+                    </span>
+                    <span className={`rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase ${level.color}`}>
+                      {level.name}
+                    </span>
+                    <span className="rounded-full border border-yellow-500/20 bg-yellow-500/10 px-2.5 py-1 text-[10px] font-bold text-yellow-100">
+                      {student.xp || 0} XP
+                    </span>
+                    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-bold ${expectedConfig ? expectedConfig.badgeTone : 'border-white/10 bg-white/5 text-gray-300'}`}>
+                      <ExpectedStationIcon size={12} />
+                      {expectedConfig ? expectedConfig.label : 'Banco livre'}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-xs leading-relaxed text-gray-300">
+                    Painel rapido para badges, XP, especialidade, notas e acoes de acompanhamento.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => handleCloseAndRun(onOpenNewStudentModal)}
+                    className="rounded-[20px] border border-white/10 bg-white/5 px-3 py-3 text-xs font-black uppercase tracking-[0.14em] text-white transition-all hover:-translate-y-0.5 hover:bg-white/10"
+                  >
+                    Editar aluno
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCloseAndRun(onOpenProfileModal)}
+                    className="rounded-[20px] border border-cyan-500/20 bg-cyan-500/10 px-3 py-3 text-xs font-black uppercase tracking-[0.14em] text-cyan-100 transition-all hover:-translate-y-0.5 hover:bg-cyan-500 hover:text-black"
+                  >
+                    Ver perfil
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => handleCloseAndRun(onOpenXPModal)}
+                    disabled={!canManage}
+                    className={`rounded-[20px] border border-yellow-500/20 bg-yellow-500/10 px-3 py-3 text-xs font-black uppercase tracking-[0.14em] text-yellow-100 transition-all ${canManage ? 'hover:-translate-y-0.5 hover:bg-yellow-500 hover:text-black' : 'opacity-50 cursor-not-allowed'}`}
+                  >
+                    Ajustar XP
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCloseAndRun(onOpenGradesModal)}
+                    disabled={!canManage}
+                    className={`rounded-[20px] border border-white/10 bg-white/5 px-3 py-3 text-xs font-black uppercase tracking-[0.14em] text-white transition-all ${canManage ? 'hover:-translate-y-0.5 hover:bg-white/10' : 'opacity-50 cursor-not-allowed'}`}
+                  >
+                    Notas
+                  </button>
+                </div>
+
+                <div className="rounded-[24px] border border-white/10 bg-black/25 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleCloseAndRun(onSetBadgeStudent)}
+                      className="rounded-2xl border border-yellow-500/20 bg-yellow-500/10 px-3 py-2.5 text-[11px] font-black text-yellow-100 transition-all hover:bg-yellow-500 hover:text-black"
+                    >
+                      Conquista
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onToggleEnglishChallenge(student)}
+                      className={`rounded-2xl border px-3 py-2.5 text-[11px] font-black transition-all ${student.englishChallengeUnlocked ? 'border-green-500/20 bg-green-500/10 text-green-100 hover:bg-green-500 hover:text-black' : 'border-blue-500/20 bg-blue-500/10 text-blue-100 hover:bg-blue-500 hover:text-white'}`}
+                    >
+                      {student.englishChallengeUnlocked ? 'Ingles ativo' : 'Ativar ingles'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <SpecialtyQuickPanel
+                  student={student}
+                  canManage={canManage}
+                  onUpdateStudentSpecialty={onUpdateStudentSpecialty}
+                  onOpenNewStudentModal={(targetStudent) => handleCloseAndRun(onOpenNewStudentModal, targetStudent)}
+                  compact
+                />
+
+                <div className="rounded-[24px] border border-white/10 bg-black/25 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Status rapido</p>
+                    <div className="flex items-center gap-1 rounded-2xl border border-white/10 bg-black/30 p-1">
+                      <button type="button" onClick={() => onToggleActivityStatus(student, 'approved')} className={`rounded-xl p-2 transition-all ${student.submission?.status === 'approved' ? 'bg-green-500 text-black' : 'text-gray-400 hover:text-green-300 hover:bg-green-500/10'}`} title="Aprovar atividade">
+                        <CheckCircle size={13} />
+                      </button>
+                      <button type="button" onClick={() => onToggleActivityStatus(student, 'rejected')} className={`rounded-xl p-2 transition-all ${student.submission?.status === 'rejected' ? 'bg-red-500 text-white' : 'text-gray-400 hover:text-red-300 hover:bg-red-500/10'}`} title="Recusar atividade">
+                        <XCircle size={13} />
+                      </button>
+                      {student.submission && (
+                        <button type="button" onClick={() => onToggleActivityStatus(student, null)} className="rounded-xl p-2 text-gray-400 transition-all hover:bg-white/10 hover:text-white" title="Limpar status">
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onDeleteStudent(student.id);
+                  }}
+                  className="w-full rounded-[20px] border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-red-100 transition-all hover:-translate-y-0.5 hover:bg-red-500 hover:text-white"
+                >
+                  Excluir aluno
+                </button>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(drawerContent, document.body);
 };
 
 const StationStudentCard = ({
@@ -324,6 +687,8 @@ const StationStudentCard = ({
   onToggleEnglishChallenge,
   onToggleActivityStatus,
   onOpenReviewModal,
+  onOpenNewStudentModal,
+  onUpdateStudentSpecialty,
 }) => {
   const submissionMeta = getSubmissionMeta(student);
   const isLeader = stationKey === 'Gestão' && !CAPTAIN_NAMES.includes(student.name);
@@ -344,7 +709,11 @@ const StationStudentCard = ({
               {submissionMeta.icon}
               {submissionMeta.label}
             </span>
+            <SpecialtyHeaderBadge specialty={student.specialty} />
           </div>
+          <p className="mt-2 text-[11px] font-semibold leading-relaxed text-gray-300 line-clamp-2">
+            {student.specialty || 'Especialidade em definicao'}
+          </p>
           <div className="flex flex-wrap items-center gap-2 mt-3">
             <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold text-gray-300">{student.turma || 'Turma nao informada'}</span>
             <span className={`rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold uppercase ${level.color}`}>{level.name}</span>
@@ -385,6 +754,16 @@ const StationStudentCard = ({
         ) : (
           <p className="text-xs text-gray-500 mt-3">Sem tarefas abertas no Kanban para este aluno agora.</p>
         )}
+      </div>
+
+      <div className="mt-4">
+        <SpecialtyQuickPanel
+          student={student}
+          canManage={canManage}
+          onUpdateStudentSpecialty={onUpdateStudentSpecialty}
+          onOpenNewStudentModal={onOpenNewStudentModal}
+          compact
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-2 mt-4">
@@ -466,6 +845,7 @@ const RotationOperationsPanel = ({
   onDeleteStudent,
   onToggleActivityStatus,
   onOpenReviewModal,
+  onUpdateStudentSpecialty,
   onHandleCloseStationWeek,
   onUpdateMission,
   onSaveMission,
@@ -476,6 +856,7 @@ const RotationOperationsPanel = ({
 }) => {
   const [benchSearch, setBenchSearch] = useState('');
   const [benchFilter, setBenchFilter] = useState('all');
+  const [selectedBenchStudentId, setSelectedBenchStudentId] = useState(null);
 
   const tasksByAuthor = useMemo(() => {
     const map = new Map();
@@ -505,17 +886,58 @@ const RotationOperationsPanel = ({
     .filter((student) => student.station === null)
     .sort((left, right) => left.name.localeCompare(right.name));
 
-  const filteredBenchStudents = unassignedStudents.filter((student) => {
-    const searchValue = `${student.name} ${student.turma || ''}`;
-    const matchesSearch = normalizeValue(searchValue).includes(normalizeValue(benchSearch));
-    if (!matchesSearch) return false;
+  const filteredBenchStudents = useMemo(() => (
+    unassignedStudents.filter((student) => {
+      const searchValue = `${student.name} ${student.turma || ''} ${student.specialty || ''}`;
+      const matchesSearch = normalizeValue(searchValue).includes(normalizeValue(benchSearch));
+      if (!matchesSearch) return false;
 
-    const expectedStation = expectedStationByStudent.get(normalizeValue(student.name));
-    if (benchFilter === 'planned') return Boolean(expectedStation);
-    if (benchFilter === 'pending') return student.submission?.status === 'pending';
-    if (benchFilter === 'without-status') return !student.submission;
-    return true;
-  });
+      const expectedStation = expectedStationByStudent.get(normalizeValue(student.name));
+      if (benchFilter === 'planned') return Boolean(expectedStation);
+      if (benchFilter === 'pending') return student.submission?.status === 'pending';
+      if (benchFilter === 'without-status') return !student.submission;
+      return true;
+    })
+  ), [unassignedStudents, benchSearch, benchFilter, expectedStationByStudent]);
+
+  const groupedBenchStudents = useMemo(() => {
+    const groups = SPECIALTY_GROUP_CONFIGS.map((group) => ({
+      ...group,
+      students: [],
+    }));
+
+    filteredBenchStudents.forEach((student) => {
+      const targetGroupId = resolveSpecialtyGroupId(student.specialty);
+      const targetGroup = groups.find((group) => group.id === targetGroupId) || groups[groups.length - 1];
+      targetGroup.students.push(student);
+    });
+
+    return groups.filter((group) => group.students.length > 0);
+  }, [filteredBenchStudents]);
+
+  const selectedBenchStudent = useMemo(
+    () => students.find((student) => student.id === selectedBenchStudentId) || null,
+    [students, selectedBenchStudentId],
+  );
+
+  useEffect(() => {
+    if (selectedBenchStudentId && (!selectedBenchStudent || selectedBenchStudent.station !== null)) {
+      setSelectedBenchStudentId(null);
+    }
+  }, [selectedBenchStudent, selectedBenchStudentId]);
+
+  useEffect(() => {
+    if (!selectedBenchStudentId) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setSelectedBenchStudentId(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedBenchStudentId]);
 
   const benchFilterOptions = [
     { id: 'all', label: 'Todos', count: unassignedStudents.length },
@@ -635,32 +1057,32 @@ const RotationOperationsPanel = ({
         </div>
       </section>
 
-      <div className="grid xl:grid-cols-[320px,minmax(0,1fr)] 2xl:grid-cols-[340px,minmax(0,1fr)] gap-5">
-        <section className="rounded-[30px] border border-white/10 bg-[#151520] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div className="grid xl:grid-cols-[295px,minmax(0,1fr)] 2xl:grid-cols-[310px,minmax(0,1fr)] gap-5">
+        <section className="rounded-[30px] border border-white/10 bg-[#151520] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
               <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Fila de entrada</p>
-              <h3 className="text-xl font-black text-white mt-2">Area de boost rapido</h3>
+              <h3 className="text-lg font-black text-white mt-2">Fila pronta por frente</h3>
             </div>
             <button onClick={() => onOpenNewStudentModal()} className="rounded-[18px] border border-green-500/20 bg-green-500/10 px-4 py-2.5 text-xs font-black uppercase tracking-[0.14em] text-green-100 hover:-translate-y-0.5 hover:bg-green-500 hover:text-black transition-all">
               Novo aluno
             </button>
           </div>
 
-          <div className="mt-5 rounded-[24px] border border-white/10 bg-black/20 p-4">
-            <p className="text-sm font-bold text-white">Quem esta aqui ainda nao foi encaixado em uma estacao ativa.</p>
-            <p className="text-xs leading-relaxed text-gray-300 mt-2">
-              Essa area funciona como fila de entrada para reforco, troca rapida e ajustes de ultima hora sem baguncar a escala do time.
+          <div className="mt-4 rounded-[22px] border border-white/10 bg-black/20 p-3.5">
+            <p className="text-sm font-bold text-white">Alunos fora das estacoes ativas.</p>
+            <p className="text-[11px] leading-relaxed text-gray-300 mt-1.5">
+              Separados por frente principal para reforco e remanejamento rapido.
             </p>
           </div>
 
-          <div className="grid gap-3 mt-5">
-            <label className="rounded-[22px] border border-white/10 bg-black/25 px-4 py-3 flex items-center gap-3">
+          <div className="grid gap-2.5 mt-4">
+            <label className="rounded-[20px] border border-white/10 bg-black/25 px-3.5 py-3 flex items-center gap-3">
               <Search size={16} className="text-gray-500" />
               <input
                 value={benchSearch}
                 onChange={(event) => setBenchSearch(event.target.value)}
-                placeholder="Buscar por nome ou turma"
+                placeholder="Buscar nome, turma ou frente"
                 className="w-full bg-transparent text-sm text-white outline-none placeholder:text-gray-500"
               />
             </label>
@@ -671,7 +1093,7 @@ const RotationOperationsPanel = ({
                   key={filter.id}
                   type="button"
                   onClick={() => setBenchFilter(filter.id)}
-                  className={`rounded-[18px] border px-3 py-2.5 text-left transition-all ${benchFilter === filter.id ? 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200' : 'border-white/10 bg-white/5 text-gray-300 hover:-translate-y-0.5 hover:bg-white/10'}`}
+                  className={`rounded-[16px] border px-3 py-2 text-left transition-all ${benchFilter === filter.id ? 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200' : 'border-white/10 bg-white/5 text-gray-300 hover:-translate-y-0.5 hover:bg-white/10'}`}
                 >
                   <span className="block text-[10px] font-black uppercase tracking-[0.18em]">{filter.label}</span>
                   <span className="mt-1 block text-[10px] opacity-75">{filter.count} aluno(s)</span>
@@ -680,25 +1102,46 @@ const RotationOperationsPanel = ({
             </div>
           </div>
 
-          <div className="space-y-3 mt-6 max-h-[1040px] overflow-y-auto pr-1 custom-scrollbar">
-            {filteredBenchStudents.length > 0 ? filteredBenchStudents.map((student) => (
-              <TeamBenchCard
-                key={student.id}
-                student={student}
-                expectedStation={expectedStationByStudent.get(normalizeValue(student.name))}
-                level={getCurrentLevel(student.xp || 0)}
-                canManage={canManage}
-                onMoveStudent={onMoveStudent}
-                onOpenXPModal={onOpenXPModal}
-                onOpenGradesModal={onOpenGradesModal}
-                onOpenProfileModal={onOpenProfileModal}
-                onOpenNewStudentModal={onOpenNewStudentModal}
-                onSetBadgeStudent={onSetBadgeStudent}
-                onToggleEnglishChallenge={onToggleEnglishChallenge}
-                onDeleteStudent={onDeleteStudent}
-                onToggleActivityStatus={onToggleActivityStatus}
-              />
-            )) : (
+          <div className="space-y-4 mt-5 max-h-[980px] overflow-y-auto pr-1 custom-scrollbar">
+            {groupedBenchStudents.length > 0 ? groupedBenchStudents.map((group) => {
+              const GroupIcon = group.Icon;
+
+              return (
+                <div key={group.id} className="space-y-3">
+                  <div className={`sticky top-0 z-10 rounded-[20px] border px-3.5 py-3 backdrop-blur-xl ${group.headerTone}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] border ${group.tone}`}>
+                          <GroupIcon size={15} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">Frente principal</p>
+                          <p className="truncate text-sm font-black text-white">{group.label}</p>
+                        </div>
+                      </div>
+                      <span className="rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-[10px] font-bold text-gray-200">
+                        {group.students.length} aluno(s)
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {group.students.map((student) => (
+                      <TeamBenchCard
+                        key={student.id}
+                        student={student}
+                        expectedStation={expectedStationByStudent.get(normalizeValue(student.name))}
+                        level={getCurrentLevel(student.xp || 0)}
+                        canManage={canManage}
+                        onMoveStudent={onMoveStudent}
+                        onOpenProfileModal={onOpenProfileModal}
+                        onOpenBenchManagement={(targetStudent) => setSelectedBenchStudentId(targetStudent.id)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            }) : (
               <EmptyState
                 title="Equipe bem distribuida"
                 description="Nao ha alunos no banco com esse filtro. Quando todos estiverem alocados, esta area fica limpa e mais tranquila de acompanhar."
@@ -793,6 +1236,8 @@ const RotationOperationsPanel = ({
                     onToggleEnglishChallenge={onToggleEnglishChallenge}
                     onToggleActivityStatus={onToggleActivityStatus}
                     onOpenReviewModal={onOpenReviewModal}
+                    onOpenNewStudentModal={onOpenNewStudentModal}
+                    onUpdateStudentSpecialty={onUpdateStudentSpecialty}
                   />
                 )) : (
                   <EmptyState
@@ -805,6 +1250,25 @@ const RotationOperationsPanel = ({
           ))}
         </section>
       </div>
+
+      {selectedBenchStudent && (
+        <BenchStudentManagementDrawer
+          student={selectedBenchStudent}
+          expectedStation={expectedStationByStudent.get(normalizeValue(selectedBenchStudent.name))}
+          level={getCurrentLevel(selectedBenchStudent.xp || 0)}
+          canManage={canManage}
+          onClose={() => setSelectedBenchStudentId(null)}
+          onOpenXPModal={onOpenXPModal}
+          onOpenGradesModal={onOpenGradesModal}
+          onOpenProfileModal={onOpenProfileModal}
+          onOpenNewStudentModal={onOpenNewStudentModal}
+          onSetBadgeStudent={onSetBadgeStudent}
+          onToggleEnglishChallenge={onToggleEnglishChallenge}
+          onDeleteStudent={onDeleteStudent}
+          onToggleActivityStatus={onToggleActivityStatus}
+          onUpdateStudentSpecialty={onUpdateStudentSpecialty}
+        />
+      )}
     </div>
   );
 };
