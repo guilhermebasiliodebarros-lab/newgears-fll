@@ -4684,7 +4684,7 @@ const handleFileSelect = (e) => {
 
   const StrategyView = () => {
       return (
-      <div className="animate-in fade-in duration-300 space-y-6">
+      <div className="animate-in fade-in duration-300 space-y-6 pt-2 md:pt-3">
           
           {/* --- NAVEGAÇÃO DA ÁREA DE ESTRATÉGIA --- */}
           <section className="newgears-major-panel relative overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(135deg,rgba(19,21,35,0.96),rgba(12,14,24,0.96))] p-4 md:p-5 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
@@ -7822,7 +7822,7 @@ const handleFileSelect = (e) => {
                 </div>
 
                 {/* CONTEÚDO DA ABA SELECIONADA */}
-                <div className="newgears-scene-shell px-4 pb-4 pt-3 md:px-7 md:pb-7 md:pt-4 min-h-[500px]">
+                <div className="newgears-scene-shell px-4 pb-4 pt-5 md:px-7 md:pb-7 md:pt-6 min-h-[500px]">
                   <WorkspaceScene sceneId={`admin-${adminTab}`}>
                     {adminTab === 'rotation' && (
                       <RotationOperationsPanel
@@ -7993,7 +7993,7 @@ const handleFileSelect = (e) => {
                 </div>
 
                 {/* CONTEÚDO DA ABA SELECIONADA */}
-                <div className="newgears-scene-shell px-4 pb-4 pt-3 md:px-7 md:pb-7 md:pt-4 min-h-[500px]">
+                <div className="newgears-scene-shell px-4 pb-4 pt-5 md:px-7 md:pb-7 md:pt-6 min-h-[500px]">
                   <WorkspaceScene sceneId={`student-${studentTab}`}>
                     {studentTab === 'mission' && (
                         <>

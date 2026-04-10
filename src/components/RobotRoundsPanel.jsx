@@ -298,6 +298,7 @@ const RobotRoundsPanel = ({
       inactiveClass: 'border-white/10 bg-black/20 text-gray-300 hover:bg-white/5 hover:text-white',
     },
   ];
+  const activeRobotTab = robotTabs.find((tab) => tab.id === robotSubTab) || robotTabs[0];
 
   const roundsFocusCards = [
     {
@@ -343,27 +344,35 @@ const RobotRoundsPanel = ({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      <div className="mt-4 rounded-[28px] border border-white/10 bg-[#151520] p-2.5 shadow-[0_20px_60px_rgba(0,0,0,0.22)] md:mt-5">
-        <div className="grid gap-2 md:grid-cols-2">
-          {robotTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => onChangeRobotSubTab(tab.id)}
-              className={`rounded-[22px] border px-4 py-4 text-left transition-all ${robotSubTab === tab.id ? tab.activeClass : tab.inactiveClass}`}
-            >
-              <div className="flex items-center gap-3">
-                <span className={`rounded-2xl border px-2 py-2 ${robotSubTab === tab.id ? 'border-white/15 bg-white/10 text-current' : tab.tone}`}>
-                  {tab.icon}
-                </span>
-                <div>
-                  <p className="text-sm font-black">{tab.label}</p>
-                  <p className="text-xs text-current/80 mt-1 leading-relaxed">{tab.description}</p>
-                </div>
-              </div>
-            </button>
-          ))}
+      <section className="newgears-major-panel relative overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(19,21,35,0.96),rgba(12,14,24,0.96))] p-4 md:mt-5 md:p-5 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px),radial-gradient(circle_at_top_left,rgba(6,182,212,0.14),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.12),transparent_28%)] bg-[size:22px_22px,22px_22px,auto,auto]" />
+        <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-gray-500">Trilha do robo</p>
+            <h3 className="newgears-display mt-2 text-2xl font-black text-white">Escolha entre rounds e mesa tatica sem apertar a leitura.</h3>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              <span className={`inline-flex items-center gap-2 self-start rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] ${activeRobotTab.tone}`}>
+                {activeRobotTab.icon}
+                {activeRobotTab.label}
+              </span>
+              <p className="text-sm leading-relaxed text-gray-300">{activeRobotTab.description}</p>
+            </div>
+          </div>
+
+          <div className="inline-flex w-full flex-col rounded-[24px] border border-white/10 bg-black/20 p-1.5 sm:w-auto sm:min-w-[360px] sm:flex-row">
+            {robotTabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => onChangeRobotSubTab(tab.id)}
+                className={`flex items-center justify-center gap-2 rounded-[18px] px-5 py-3 text-sm font-black transition-all ${robotSubTab === tab.id ? tab.activeClass : 'text-gray-300 hover:bg-white/8 hover:text-white'}`}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      </section>
 
       {activeTimer ? (
         <div
