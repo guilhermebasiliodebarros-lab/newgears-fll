@@ -210,6 +210,30 @@ const EVENT_STATUS_OPTIONS = [
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
+const normalizeStationKey = (value = '') =>
+  String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+const resolveTaskTagFromStation = (station) => {
+  const normalizedStation = normalizeStationKey(station);
+
+  if (normalizedStation === 'engenharia') return 'engenharia';
+  if (normalizedStation === 'inovacao') return 'inovacao';
+  if (normalizedStation === 'gestao') return 'gestao';
+
+  return 'geral';
+};
+
+const buildInitialKanbanTaskDraft = (station) => ({
+  text: '',
+  dueDate: '',
+  tag: resolveTaskTagFromStation(station),
+  priority: 'normal'
+});
+
 const readStoredPrefs = (storageKey, defaults) => {
   if (typeof window === 'undefined') return defaults;
 
@@ -341,6 +365,7 @@ function App() {
   const [studentLogbookSearchQuery, setStudentLogbookSearchQuery] = useState('');
   const [studentLogbookWeekFilter, setStudentLogbookWeekFilter] = useState('all');
   const [studentLogbookDraft, setStudentLogbookDraft] = useState('');
+  const [kanbanTaskDraft, setKanbanTaskDraft] = useState(() => buildInitialKanbanTaskDraft());
   const isTvOnlyView = getStandaloneView() === 'tv';
   const today = new Date().toISOString().split('T')[0];
   const [missions, setMissions] = useState({
@@ -393,6 +418,16 @@ function App() {
 
       localStorage.removeItem(draftKey);
   }, [studentLogbookDraft, viewAsStudent?.id]);
+
+  useEffect(() => {
+      const nextTag = isAdmin ? 'geral' : resolveTaskTagFromStation(viewAsStudent?.station);
+
+      setKanbanTaskDraft((prev) => {
+          if (prev.text.trim()) return prev;
+          if (prev.tag === nextTag) return prev;
+          return { ...prev, tag: nextTag };
+      });
+  }, [isAdmin, viewAsStudent?.station]);
 
   const openImmersiveMode = async (setter) => {
       setter(true);
@@ -1548,12 +1583,16 @@ function App() {
       });
   };
 
+  const updateKanbanTaskDraft = (field, value) => {
+      setKanbanTaskDraft((prev) => ({ ...prev, [field]: value }));
+  };
+
   const handleAddTask = async (e) => {
       e.preventDefault();
-      const text = e.target.taskText.value;
-      const date = e.target.taskDate.value;
-      const tag = e.target.taskTag ? e.target.taskTag.value : 'geral';
-      const priority = e.target.taskPriority ? e.target.taskPriority.value : 'normal';
+      const text = kanbanTaskDraft.text.trim();
+      const date = kanbanTaskDraft.dueDate;
+      const tag = kanbanTaskDraft.tag || 'geral';
+      const priority = kanbanTaskDraft.priority || 'normal';
       if(!text) return;
 
       try {
@@ -1563,7 +1602,7 @@ function App() {
               tag,
               priority
           });
-          setStudentLogbookDraft('');
+          setKanbanTaskDraft(buildInitialKanbanTaskDraft(isAdmin ? null : viewAsStudent?.station));
       } catch (error) {
           console.error("Erro ao criar tarefa:", error);
       }
@@ -6155,22 +6194,53 @@ const handleFileSelect = (e) => {
 
                           {column.id === 'todo' && (
                               <form onSubmit={handleAddTask} className="mb-4 space-y-2">
-                                  <input name="taskText" placeholder="+ Nova Tarefa..." className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-orange-500 outline-none transition-all" />
-                                  <div className="flex gap-2">
-                                      <select name="taskTag" className="bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-300 focus:border-orange-500 outline-none w-1/4">
+                                  <input
+                                      name="taskText"
+                                      value={kanbanTaskDraft.text}
+                                      onChange={(e) => updateKanbanTaskDraft('text', e.target.value)}
+                                      autoComplete="off"
+                                      placeholder="+ Nova Tarefa..."
+                                      className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-orange-500 outline-none transition-all"
+                                  />
+                                  <div className="flex flex-col gap-2 md:flex-row">
+                                      <select
+                                          name="taskTag"
+                                          value={kanbanTaskDraft.tag}
+                                          onChange={(e) => updateKanbanTaskDraft('tag', e.target.value)}
+                                          className="w-full bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-300 focus:border-orange-500 outline-none md:w-1/4"
+                                      >
                                           <option value="engenharia">Engenharia</option>
                                           <option value="inovacao">Inovacao</option>
                                           <option value="gestao">Gestao</option>
                                           <option value="geral">Geral</option>
                                       </select>
-                                      <select name="taskPriority" className="bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-300 focus:border-orange-500 outline-none w-1/4" title="Prioridade">
+                                      <select
+                                          name="taskPriority"
+                                          value={kanbanTaskDraft.priority}
+                                          onChange={(e) => updateKanbanTaskDraft('priority', e.target.value)}
+                                          className="w-full bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-300 focus:border-orange-500 outline-none md:w-1/4"
+                                          title="Prioridade"
+                                      >
                                           <option value="normal">Normal</option>
                                           <option value="baixa">Baixa</option>
                                           <option value="alta">Alta</option>
                                           <option value="urgente">Urgente</option>
                                       </select>
-                                      <input type="date" name="taskDate" className="bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-300 focus:border-orange-500 outline-none w-1/4" title="Prazo"/>
-                                      <button className="flex-1 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-bold uppercase">Add</button>
+                                      <input
+                                          type="date"
+                                          name="taskDate"
+                                          value={kanbanTaskDraft.dueDate}
+                                          onChange={(e) => updateKanbanTaskDraft('dueDate', e.target.value)}
+                                          className="w-full bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-300 focus:border-orange-500 outline-none md:w-1/4"
+                                          title="Prazo"
+                                      />
+                                      <button
+                                          type="submit"
+                                          disabled={!kanbanTaskDraft.text.trim()}
+                                          className="flex-1 bg-orange-600 hover:bg-orange-500 disabled:bg-orange-900/40 disabled:text-white/50 disabled:cursor-not-allowed text-white rounded-lg text-xs font-bold uppercase"
+                                      >
+                                          Add
+                                      </button>
                                   </div>
                               </form>
                           )}
