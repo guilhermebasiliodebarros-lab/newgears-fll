@@ -148,6 +148,35 @@ const normalizeValue = (value) =>
     .trim()
     .toLowerCase();
 
+const SCHOOL_REPORT_STAGES = [
+  { id: 'etapa1', label: '1ª etapa', shortLabel: '1ª Etapa' },
+  { id: 'etapa2', label: '2ª etapa', shortLabel: '2ª Etapa' },
+];
+
+const getSchoolStageRecord = (student, stageId) => {
+  const schoolGrades = student?.schoolGrades;
+
+  if (!schoolGrades || typeof schoolGrades !== 'object') return null;
+
+  if (schoolGrades.etapa1 || schoolGrades.etapa2) {
+    return schoolGrades[stageId] || null;
+  }
+
+  if (stageId === 'etapa1') {
+    return {
+      grades: schoolGrades,
+      migratedFromLegacy: true,
+    };
+  }
+
+  return null;
+};
+
+const hasSchoolStageGrades = (student, stageId) => {
+  const stageRecord = getSchoolStageRecord(student, stageId);
+  return Boolean(stageRecord?.grades && Object.keys(stageRecord.grades).length > 0);
+};
+
 const resolveSpecialtyGroupId = (specialty) => {
   const normalized = normalizeValue(specialty);
   if (!normalized) return 'undefined';
@@ -491,9 +520,9 @@ const BenchStudentManagementDrawer = ({
   const submissionMeta = getSubmissionMeta(student);
   const expectedConfig = STATION_CONFIGS.find((item) => item.key === expectedStation);
   const ExpectedStationIcon = expectedConfig?.Icon || LayoutDashboard;
-  const handleCloseAndRun = (callback, targetStudent = student) => {
+  const handleCloseAndRun = (callback, ...args) => {
     onClose();
-    callback(targetStudent);
+    callback(...(args.length > 0 ? args : [student]));
   };
 
   useEffect(() => {
@@ -584,7 +613,7 @@ const BenchStudentManagementDrawer = ({
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <button
                     type="button"
                     onClick={() => handleCloseAndRun(onOpenXPModal)}
@@ -593,14 +622,27 @@ const BenchStudentManagementDrawer = ({
                   >
                     Ajustar XP
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => handleCloseAndRun(onOpenGradesModal)}
-                    disabled={!canManage}
-                    className={`rounded-[20px] border border-white/10 bg-white/5 px-3 py-3 text-xs font-black uppercase tracking-[0.14em] text-white transition-all ${canManage ? 'hover:-translate-y-0.5 hover:bg-white/10' : 'opacity-50 cursor-not-allowed'}`}
-                  >
-                    Notas
-                  </button>
+                  {SCHOOL_REPORT_STAGES.map((stage) => {
+                    const alreadyLaunched = hasSchoolStageGrades(student, stage.id);
+
+                    return (
+                      <button
+                        key={stage.id}
+                        type="button"
+                        onClick={() => handleCloseAndRun(onOpenGradesModal, student, stage.id)}
+                        disabled={!canManage}
+                        className={`rounded-[20px] border px-3 py-3 text-left transition-all ${!canManage ? 'opacity-50 cursor-not-allowed border-white/10 bg-white/5 text-white' : alreadyLaunched ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100 hover:-translate-y-0.5 hover:bg-emerald-500 hover:text-black' : 'border-white/10 bg-white/5 text-white hover:-translate-y-0.5 hover:bg-white/10'}`}
+                      >
+                        <span className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em]">
+                          {alreadyLaunched && <CheckCircle size={13} />}
+                          {stage.shortLabel}
+                        </span>
+                        <span className="mt-1 block text-[10px] font-semibold opacity-80">
+                          {alreadyLaunched ? 'Editar notas' : 'Lançar notas'}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
 
                 <div className="rounded-[24px] border border-white/10 bg-black/25 p-4">
@@ -766,7 +808,7 @@ const StationStudentCard = ({
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-2 mt-4">
+      <div className="grid grid-cols-1 gap-2 mt-4 sm:grid-cols-3">
         <button
           type="button"
           onClick={() => onOpenXPModal(student)}
@@ -775,14 +817,27 @@ const StationStudentCard = ({
         >
           Ajustar XP
         </button>
-        <button
-          type="button"
-          onClick={() => onOpenGradesModal(student)}
-          disabled={!canManage}
-          className={`rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-xs font-black uppercase tracking-[0.14em] text-white transition-all ${canManage ? 'hover:-translate-y-0.5 hover:bg-white/10' : 'opacity-50 cursor-not-allowed'}`}
-        >
-          Lancar notas
-        </button>
+        {SCHOOL_REPORT_STAGES.map((stage) => {
+          const alreadyLaunched = hasSchoolStageGrades(student, stage.id);
+
+          return (
+            <button
+              key={stage.id}
+              type="button"
+              onClick={() => onOpenGradesModal(student, stage.id)}
+              disabled={!canManage}
+              className={`rounded-2xl border px-3 py-3 text-left transition-all ${!canManage ? 'opacity-50 cursor-not-allowed border-white/10 bg-white/5 text-white' : alreadyLaunched ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100 hover:-translate-y-0.5 hover:bg-emerald-500 hover:text-black' : 'border-white/10 bg-white/5 text-white hover:-translate-y-0.5 hover:bg-white/10'}`}
+            >
+              <span className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em]">
+                {alreadyLaunched && <CheckCircle size={13} />}
+                {stage.shortLabel}
+              </span>
+              <span className="mt-1 block text-[10px] font-semibold opacity-80">
+                {alreadyLaunched ? 'Editar notas' : 'Lançar notas'}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
