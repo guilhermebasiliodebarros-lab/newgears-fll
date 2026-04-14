@@ -4513,7 +4513,7 @@ const handleFileSelect = (e) => {
                                           step="0.1"
                                           min="0"
                                           max="10"
-                                          defaultValue={stageRecord?.grades?.[subj] || ''}
+                                          defaultValue={stageRecord?.grades?.[subj] ?? ''}
                                           className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white focus:border-yellow-500 outline-none font-mono text-sm"
                                           placeholder="0.0"
                                       />
