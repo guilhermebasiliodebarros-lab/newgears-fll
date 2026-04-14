@@ -2346,6 +2346,7 @@ const handleDeleteRound = async (id) => {
                   if (grade === 10) bonusXP += 10;
                   else if (grade >= 9.0) bonusXP += 7;
                   else if (grade >= 8.0) bonusXP += 5;
+                  else bonusXP -= 2;
               }
           }
       });
@@ -2359,7 +2360,8 @@ const handleDeleteRound = async (id) => {
           });
 
           closeModal();
-          showNotification(`Boletim lançado! +${bonusXP} XP salvos.`, "success");
+          const xpChangeLabel = bonusXP > 0 ? `+${bonusXP}` : `${bonusXP}`;
+          showNotification(`Boletim lançado! ${xpChangeLabel} XP ajustados.`, "success");
       } catch (error) {
           console.error("Erro ao lançar notas:", error);
           showNotification("Erro ao atualizar XP.", "error");
@@ -4445,7 +4447,7 @@ const handleFileSelect = (e) => {
                           <p>• Nota 10 = <span className="text-green-500 font-bold">+10 XP</span></p>
                           <p>• Nota 9.0 a 9.9 = <span className="text-cyan-500 font-bold">+7 XP</span></p>
                           <p>• Nota 8.0 a 8.9 = <span className="text-purple-500 font-bold">+5 XP</span></p>
-                          <p>• Abaixo de 8.0 = <span className="text-gray-500 font-bold">+0 XP</span></p>
+                          <p>• Nota 7.9 ou menos = <span className="text-red-400 font-bold">-2 XP</span></p>
                       </div>
                   </div>
                   <button className="w-full bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-3 rounded-lg shadow-lg shadow-yellow-900/20">Processar Boletim</button>
