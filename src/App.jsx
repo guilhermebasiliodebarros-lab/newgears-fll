@@ -281,9 +281,9 @@ const resolveTaskTagFromStation = (station) => {
   return 'geral';
 };
 
-const buildInitialKanbanTaskDraft = (station) => ({
+const buildInitialKanbanTaskDraft = (station, dueDate = '') => ({
   text: '',
-  dueDate: '',
+  dueDate,
   tag: resolveTaskTagFromStation(station),
   priority: 'normal'
 });
@@ -419,7 +419,6 @@ function App() {
   const [studentLogbookSearchQuery, setStudentLogbookSearchQuery] = useState('');
   const [studentLogbookWeekFilter, setStudentLogbookWeekFilter] = useState('all');
   const [studentLogbookDraft, setStudentLogbookDraft] = useState('');
-  const [kanbanTaskDraft, setKanbanTaskDraft] = useState(() => buildInitialKanbanTaskDraft());
   const isTvOnlyView = getStandaloneView() === 'tv';
   const today = new Date().toISOString().split('T')[0];
   const [missions, setMissions] = useState({
@@ -472,16 +471,6 @@ function App() {
 
       localStorage.removeItem(draftKey);
   }, [studentLogbookDraft, viewAsStudent?.id]);
-
-  useEffect(() => {
-      const nextTag = isAdmin ? 'geral' : resolveTaskTagFromStation(viewAsStudent?.station);
-
-      setKanbanTaskDraft((prev) => {
-          if (prev.text.trim()) return prev;
-          if (prev.tag === nextTag) return prev;
-          return { ...prev, tag: nextTag };
-      });
-  }, [isAdmin, viewAsStudent?.station]);
 
   const openImmersiveMode = async (setter) => {
       setter(true);
@@ -1637,28 +1626,21 @@ function App() {
       });
   };
 
-  const updateKanbanTaskDraft = (field, value) => {
-      setKanbanTaskDraft((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleAddTask = async (e) => {
-      e.preventDefault();
-      const text = kanbanTaskDraft.text.trim();
-      const date = kanbanTaskDraft.dueDate;
-      const tag = kanbanTaskDraft.tag || 'geral';
-      const priority = kanbanTaskDraft.priority || 'normal';
-      if(!text) return;
+  const handleAddTask = async ({ text, dueDate = '', tag = 'geral', priority = 'normal' }) => {
+      const normalizedText = text.trim();
+      if (!normalizedText) return false;
 
       try {
           await createKanbanTask({
-              text,
-              dueDate: date,
+              text: normalizedText,
+              dueDate,
               tag,
               priority
           });
-          setKanbanTaskDraft(buildInitialKanbanTaskDraft(isAdmin ? null : viewAsStudent?.station));
+          return true;
       } catch (error) {
           console.error("Erro ao criar tarefa:", error);
+          return false;
       }
   }
 
@@ -5605,6 +5587,47 @@ const handleFileSelect = (e) => {
       const [editingTaskId, setEditingTaskId] = useState(null);
       const [editingTaskText, setEditingTaskText] = useState("");
       const [draggedOverCol, setDraggedOverCol] = useState(null);
+      const [kanbanTaskDraft, setKanbanTaskDraft] = useState(() =>
+          buildInitialKanbanTaskDraft(isAdmin ? null : viewAsStudent?.station, localTodayStr)
+      );
+
+      useEffect(() => {
+          const nextTag = isAdmin ? 'geral' : resolveTaskTagFromStation(viewAsStudent?.station);
+
+          setKanbanTaskDraft((prev) => {
+              const nextDraft = {
+                  ...prev,
+                  dueDate: prev.dueDate || localTodayStr
+              };
+
+              if (!prev.text.trim()) {
+                  nextDraft.tag = nextTag;
+              }
+
+              if (prev.tag === nextDraft.tag && prev.dueDate === nextDraft.dueDate) {
+                  return prev;
+              }
+
+              return nextDraft;
+          });
+      }, [isAdmin, viewAsStudent?.station, localTodayStr]);
+
+      const updateKanbanTaskDraft = (field, value) => {
+          setKanbanTaskDraft((prev) => ({ ...prev, [field]: value }));
+      };
+
+      const stopKanbanInputKeyDown = (event) => {
+          event.stopPropagation();
+      };
+
+      const handleAddTaskSubmit = async (event) => {
+          event.preventDefault();
+
+          const created = await handleAddTask(kanbanTaskDraft);
+          if (!created) return;
+
+          setKanbanTaskDraft(buildInitialKanbanTaskDraft(isAdmin ? null : viewAsStudent?.station, localTodayStr));
+      };
 
       const handleSaveTaskEdit = async (taskId) => {
           if (!editingTaskText.trim()) return;
@@ -5670,11 +5693,9 @@ const handleFileSelect = (e) => {
 
       const getDeadlineStatus = (date) => {
           if (!date) return null;
-          const today = new Date();
-          today.setHours(0,0,0,0);
-          const due = new Date(date);
-          due.setHours(23,59,59);
-          const diffTime = due - today;
+          const due = parseLocalDateValue(date, true);
+          if (!due) return null;
+          const diffTime = due.getTime() - localTodayStart.getTime();
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
           
           const parts = date.split('-');
@@ -5737,8 +5758,8 @@ const handleFileSelect = (e) => {
           const priorityDiff = (priorityRank[b.priority] || 0) - (priorityRank[a.priority] || 0);
           if (priorityDiff !== 0) return priorityDiff;
 
-          const aDue = a.dueDate ? new Date(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
-          const bDue = b.dueDate ? new Date(b.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
+          const aDue = a.dueDate ? (parseLocalDateValue(a.dueDate)?.getTime() ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
+          const bDue = b.dueDate ? (parseLocalDateValue(b.dueDate)?.getTime() ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
           if (aDue !== bDue) return aDue - bDue;
 
           return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
@@ -6164,6 +6185,7 @@ const handleFileSelect = (e) => {
                               placeholder="Buscar tarefas por nome, tag ou responsavel..."
                               value={searchTerm}
                               onChange={(e) => setSearchTerm(e.target.value)}
+                              onKeyDown={stopKanbanInputKeyDown}
                               className="w-full bg-black/30 border border-white/10 rounded-xl p-3 pl-12 pr-28 text-white focus:border-orange-500 outline-none transition-all"
                           />
                           {hasActiveFilters && (
@@ -6277,11 +6299,12 @@ const handleFileSelect = (e) => {
                           </div>
 
                           {column.id === 'todo' && (
-                              <form onSubmit={handleAddTask} className="mb-4 space-y-2">
+                              <form onSubmit={handleAddTaskSubmit} onKeyDown={stopKanbanInputKeyDown} className="mb-4 space-y-2">
                                   <input
                                       name="taskText"
                                       value={kanbanTaskDraft.text}
                                       onChange={(e) => updateKanbanTaskDraft('text', e.target.value)}
+                                      onKeyDown={stopKanbanInputKeyDown}
                                       autoComplete="off"
                                       placeholder="+ Nova Tarefa..."
                                       className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-orange-500 outline-none transition-all"
@@ -6291,6 +6314,7 @@ const handleFileSelect = (e) => {
                                           name="taskTag"
                                           value={kanbanTaskDraft.tag}
                                           onChange={(e) => updateKanbanTaskDraft('tag', e.target.value)}
+                                          onKeyDown={stopKanbanInputKeyDown}
                                           className="w-full bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-300 focus:border-orange-500 outline-none md:w-1/4"
                                       >
                                           <option value="engenharia">Engenharia</option>
@@ -6302,6 +6326,7 @@ const handleFileSelect = (e) => {
                                           name="taskPriority"
                                           value={kanbanTaskDraft.priority}
                                           onChange={(e) => updateKanbanTaskDraft('priority', e.target.value)}
+                                          onKeyDown={stopKanbanInputKeyDown}
                                           className="w-full bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-300 focus:border-orange-500 outline-none md:w-1/4"
                                           title="Prioridade"
                                       >
@@ -6315,6 +6340,8 @@ const handleFileSelect = (e) => {
                                           name="taskDate"
                                           value={kanbanTaskDraft.dueDate}
                                           onChange={(e) => updateKanbanTaskDraft('dueDate', e.target.value)}
+                                          onKeyDown={stopKanbanInputKeyDown}
+                                          min={isAdmin ? undefined : localTodayStr}
                                           className="w-full bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-300 focus:border-orange-500 outline-none md:w-1/4"
                                           title="Prazo"
                                       />
@@ -6323,7 +6350,7 @@ const handleFileSelect = (e) => {
                                           disabled={!kanbanTaskDraft.text.trim()}
                                           className="flex-1 bg-orange-600 hover:bg-orange-500 disabled:bg-orange-900/40 disabled:text-white/50 disabled:cursor-not-allowed text-white rounded-lg text-xs font-bold uppercase"
                                       >
-                                          Add
+                                          Criar
                                       </button>
                                   </div>
                               </form>
