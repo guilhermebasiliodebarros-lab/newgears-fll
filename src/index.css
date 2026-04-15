@@ -141,6 +141,39 @@ button:active {
   isolation: isolate;
 }
 
+.newgears-shell.newgears-lite-mode::before,
+.newgears-shell.newgears-lite-mode::after,
+.newgears-lite-mode .newgears-floating-layer,
+.newgears-lite-mode .newgears-orb {
+  display: none;
+}
+
+.newgears-lite-mode [class*='animate-'] {
+  animation: none !important;
+}
+
+.newgears-lite-mode .backdrop-blur,
+.newgears-lite-mode .backdrop-blur-sm,
+.newgears-lite-mode .backdrop-blur-md,
+.newgears-lite-mode .backdrop-blur-lg,
+.newgears-lite-mode .backdrop-blur-xl,
+.newgears-lite-mode [class*='backdrop-blur'] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.newgears-lite-mode .newgears-topbar,
+.newgears-lite-mode .newgears-major-panel,
+.newgears-lite-mode .newgears-scene-shell,
+.newgears-lite-mode .newgears-footer-shell,
+.newgears-lite-mode .newgears-hud-shell {
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18) !important;
+}
+
+.newgears-lite-mode * {
+  scroll-behavior: auto !important;
+}
+
 .newgears-shell::before {
   content: '';
   position: fixed;

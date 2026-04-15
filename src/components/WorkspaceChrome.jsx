@@ -148,15 +148,17 @@ export const WorkspaceTabs = ({ eyebrow, tabs, activeId, onChange }) => {
             key={tab.id}
             onClick={() => onChange(tab.id)}
             data-active={activeId === tab.id ? 'true' : 'false'}
+            title={tab.label}
+            aria-label={tab.label}
             className={`newgears-tab-button relative flex min-w-[198px] items-center gap-2.5 border px-3.5 py-2.5 text-left text-xs font-black uppercase tracking-[0.12em] shadow-[0_14px_28px_rgba(0,0,0,0.16)] transition-all hover:-translate-y-0.5 md:min-w-[214px] ${activeId === tab.id ? tab.activeClass : tab.inactiveClass}`}
           >
             <span className={`absolute left-0 top-0 h-full w-1.5 ${activeId === tab.id ? 'bg-gradient-to-b from-blue-300 via-violet-400 to-fuchsia-400' : 'bg-white/8'}`} />
             <span className="newgears-tab-index inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-[13px] border border-white/12 bg-black/25 text-[11px] font-black text-white/85">
               {String(index + 1).padStart(2, '0')}
             </span>
-            <span className="newgears-tab-label flex min-w-0 flex-1 items-center gap-2">
-              {tab.icon}
-              {tab.label}
+            <span className="newgears-tab-label flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+              <span className="shrink-0">{tab.icon}</span>
+              <span className="min-w-0 flex-1 truncate">{tab.label}</span>
             </span>
             {tab.badge ? (
               <span className="newgears-tab-badge ml-auto inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-black/24 px-1.5 text-[10px] font-black">

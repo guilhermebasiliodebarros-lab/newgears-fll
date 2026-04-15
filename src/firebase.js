@@ -1,5 +1,10 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import {
+  initializeFirestore,
+  memoryLocalCache,
+  persistentLocalCache,
+  persistentMultipleTabManager
+} from "firebase/firestore";
 
 // --- AQUI ENTRA O CÓDIGO QUE VOCÊ COPIOU DO SITE ---
 const firebaseConfig = {
@@ -13,4 +18,30 @@ const firebaseConfig = {
 // ---------------------------------------------------
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+
+const createFirestore = () => {
+  const canUsePersistentCache =
+    typeof window !== "undefined" &&
+    typeof indexedDB !== "undefined";
+
+  if (!canUsePersistentCache) {
+    return initializeFirestore(app, {
+      localCache: memoryLocalCache()
+    });
+  }
+
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager()
+      })
+    });
+  } catch (error) {
+    console.warn("Cache persistente indisponivel, usando cache em memoria.", error);
+    return initializeFirestore(app, {
+      localCache: memoryLocalCache()
+    });
+  }
+};
+
+export const db = createFirestore();

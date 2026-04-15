@@ -1,24 +1,9 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { Suspense, lazy, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy, limit } from "firebase/firestore";
 import { db } from './firebase'; // Importa a instância já inicializada
 import Countdown from './components/Countdown';
-import PitStopModal from './components/PitStopModal';
-import RankingPanel from './components/RankingPanel';
-import TeamCheckInModal from './components/TeamCheckInModal';
-import FullScheduleModal from './components/FullScheduleModal';
 import LogoNewGears from './components/LogoNewGears';
-import TvModePanel from './components/TvModePanel';
-import RubricViewPanel from './components/RubricView';
-import JudgePresentationView from './components/JudgePresentationView';
-import ChampionCommandCenter from './components/ChampionCommandCenter';
-import CompetitionPrepPanel from './components/CompetitionPrepPanel';
-import JudgeStoryPanel from './components/JudgeStoryPanel';
-import InnovationStrategyPanel from './components/InnovationStrategyPanel';
-import RobotDesignStrategyPanel from './components/RobotDesignStrategyPanel';
-import RobotRoundsPanel from './components/RobotRoundsPanel';
-import RotationOperationsPanel from './components/RotationOperationsPanel';
 import { WorkspaceHero, WorkspaceTabs, WorkspaceScene, WorkspaceCollapsible, WorkspacePanelToolbar } from './components/WorkspaceChrome';
-import Confetti from 'react-confetti';
 import { 
   User, 
   LogOut, 
@@ -122,6 +107,46 @@ import {
   Minimize,      // <--- NOVO: Minimizar gráfico
   Sparkles,
 } from 'lucide-react';
+
+const PitStopModal = lazy(() => import('./components/PitStopModal'));
+const RankingPanel = lazy(() => import('./components/RankingPanel'));
+const TeamCheckInModal = lazy(() => import('./components/TeamCheckInModal'));
+const FullScheduleModal = lazy(() => import('./components/FullScheduleModal'));
+const TvModePanel = lazy(() => import('./components/TvModePanel'));
+const RubricViewPanel = lazy(() => import('./components/RubricView'));
+const JudgePresentationView = lazy(() => import('./components/JudgePresentationView'));
+const ChampionCommandCenter = lazy(() => import('./components/ChampionCommandCenter'));
+const CompetitionPrepPanel = lazy(() => import('./components/CompetitionPrepPanel'));
+const JudgeStoryPanel = lazy(() => import('./components/JudgeStoryPanel'));
+const InnovationStrategyPanel = lazy(() => import('./components/InnovationStrategyPanel'));
+const RobotDesignStrategyPanel = lazy(() => import('./components/RobotDesignStrategyPanel'));
+const RobotRoundsPanel = lazy(() => import('./components/RobotRoundsPanel'));
+const ConfettiBurst = lazy(() => import('react-confetti'));
+const RotationOperationsPanel = lazy(() => import('./components/RotationOperationsPanel'));
+
+const LazyPanelFallback = ({ label = 'Carregando modulo...', minHeightClass = 'min-h-[220px]' }) => (
+  <div className={`newgears-major-panel flex ${minHeightClass} items-center justify-center rounded-[28px] border border-white/10 bg-[#11131d]/92 p-6 text-center shadow-[0_18px_48px_rgba(0,0,0,0.24)]`}>
+    <div>
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[18px] border border-cyan-400/20 bg-cyan-400/10">
+        <Loader2 size={24} className="animate-spin text-cyan-300" />
+      </div>
+      <p className="mt-4 text-[10px] font-black uppercase tracking-[0.22em] text-slate-300/70">Streaming de interface</p>
+      <p className="mt-2 text-sm text-slate-200/80">{label}</p>
+    </div>
+  </div>
+);
+
+const LazyOverlayFallback = ({ label = 'Carregando modo...' }) => (
+  <div className="fixed inset-0 z-[210] flex items-center justify-center bg-[#05060a]/96 px-6 text-center text-white backdrop-blur-sm">
+    <div className="rounded-[30px] border border-white/10 bg-white/5 p-8 shadow-[0_30px_90px_rgba(0,0,0,0.42)]">
+      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] border border-cyan-400/20 bg-cyan-400/10">
+        <Loader2 size={28} className="animate-spin text-cyan-300" />
+      </div>
+      <p className="mt-4 text-[10px] font-black uppercase tracking-[0.22em] text-slate-300/70">Preparando ambiente</p>
+      <p className="mt-2 text-sm text-slate-200/80">{label}</p>
+    </div>
+  </div>
+);
 
 
 // --- CONFIGURAÇÃO DE NÍVEIS ---
@@ -288,6 +313,11 @@ const buildInitialKanbanTaskDraft = (station, dueDate = '') => ({
   priority: 'normal'
 });
 
+const STUDENT_TASKS_LABEL = 'Tarefas';
+const STUDENT_TASKS_OPEN_LABEL = 'Abrir Tarefas';
+const STUDENT_TASKS_SHORT_LABEL = 'Minhas Tarefas';
+const STUDENT_TASKS_VIEW_LABEL = 'Ver Tarefas';
+
 const readStoredPrefs = (storageKey, defaults) => {
   if (typeof window === 'undefined') return defaults;
 
@@ -299,6 +329,24 @@ const readStoredPrefs = (storageKey, defaults) => {
   } catch {
     return defaults;
   }
+};
+
+const getNetworkConnection = () => {
+  if (typeof navigator === 'undefined') return null;
+  return navigator.connection || navigator.mozConnection || navigator.webkitConnection || null;
+};
+
+const detectLiteMode = () => {
+  if (typeof window === 'undefined') return false;
+
+  const connection = getNetworkConnection();
+  const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  const saveDataEnabled = Boolean(connection?.saveData);
+  const slowConnection = ['slow-2g', '2g', '3g'].includes(connection?.effectiveType || '');
+  const lowMemoryDevice = typeof navigator.deviceMemory === 'number' && navigator.deviceMemory <= 4;
+  const lowCpuDevice = typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 4;
+
+  return prefersReducedMotion || saveDataEnabled || slowConnection || lowMemoryDevice || lowCpuDevice;
 };
 
 const getNextOrSameWeekday = (dateObj, weekday) => {
@@ -349,7 +397,9 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [badgeStudent, setBadgeStudent] = useState(null);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [isLiteMode, setIsLiteMode] = useState(() => detectLiteMode());
   const prevXpRef = useRef(null);
+  const confettiTimeoutRef = useRef(null);
   const [showBatteryModal, setShowBatteryModal] = useState(false);
   const [teamMoods, setTeamMoods] = useState([]);
   const [isStudentLink, setIsStudentLink] = useState(false);
@@ -397,10 +447,8 @@ function App() {
   const FULL_ROUND_TIME_KEY = '__full_round_time__';
   const FULL_ROUND_SCORE_KEY = '__full_round_score__';
   const [pitStopRecords, setPitStopRecords] = useState([]);
-  const [compliments, setCompliments] = useState([]);
   const [innovationRubric, setInnovationRubric] = useState(DEFAULT_INNOVATION_RUBRIC);
   const [robotDesignRubric, setRobotDesignRubric] = useState(DEFAULT_ROBOT_DESIGN_RUBRIC);
-  const [questions, setQuestions] = useState([]);
   const [outreachEvents, setOutreachEvents] = useState([]);
   const [projectSummary, setProjectSummary] = useState({ title: "Nome do Projeto", problem: "", solution: "", sharing: "", image: null });
   const [modal, setModal] = useState({ type: null, data: null });
@@ -421,6 +469,30 @@ function App() {
   const [studentLogbookDraft, setStudentLogbookDraft] = useState('');
   const isTvOnlyView = getStandaloneView() === 'tv';
   const today = new Date().toISOString().split('T')[0];
+  const isLogbookViewActive = isAdmin ? adminTab === 'logbook' : studentTab === 'logbook';
+  const isPitStopModalOpen = modal.type === 'pitstop';
+  const dashboardNeedsStrategyData =
+    (adminPanelState.dashboard && (adminPanelState.prep || adminPanelState.judge || adminPanelState.stats || adminPanelState.achievements))
+    || (studentPanelState.dashboard && (studentPanelState.prep || studentPanelState.judge || studentPanelState.stats || studentPanelState.achievements));
+  const dashboardNeedsRobotData =
+    (adminPanelState.dashboard && (adminPanelState.prep || adminPanelState.judge || adminPanelState.stats))
+    || (studentPanelState.dashboard && (studentPanelState.prep || studentPanelState.judge || studentPanelState.stats));
+  const shouldLoadStrategyWorkspaceData =
+    isTvOnlyView
+    || isTvMode
+    || isJudgeMode
+    || isCommandCenterMode
+    || ((adminTab === 'strategy' || studentTab === 'strategy') && strategySubTab === 'innovation')
+    || dashboardNeedsStrategyData;
+  const shouldLoadRobotWorkspaceData =
+    isTvOnlyView
+    || isTvMode
+    || isJudgeMode
+    || isCommandCenterMode
+    || adminTab === 'rounds'
+    || studentTab === 'rounds'
+    || ((adminTab === 'strategy' || studentTab === 'strategy') && strategySubTab === 'robot_design')
+    || dashboardNeedsRobotData;
   const [missions, setMissions] = useState({
     Engenharia: { text: "Definir estratégia do robô.", deadline: today },
     Inovação: { text: "Pesquisar especialistas.", deadline: today },
@@ -446,6 +518,41 @@ function App() {
   useEffect(() => {
       localStorage.setItem('newgears_student_mission_mode', studentMissionMode);
   }, [studentMissionMode]);
+
+  useEffect(() => {
+      if (typeof window === 'undefined') return;
+
+      const syncLiteMode = () => {
+          setIsLiteMode(detectLiteMode());
+      };
+
+      const motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+      const connection = getNetworkConnection();
+
+      syncLiteMode();
+
+      if (motionQuery?.addEventListener) {
+          motionQuery.addEventListener('change', syncLiteMode);
+      } else if (motionQuery?.addListener) {
+          motionQuery.addListener(syncLiteMode);
+      }
+
+      connection?.addEventListener?.('change', syncLiteMode);
+      window.addEventListener('online', syncLiteMode);
+      window.addEventListener('offline', syncLiteMode);
+
+      return () => {
+          if (motionQuery?.removeEventListener) {
+              motionQuery.removeEventListener('change', syncLiteMode);
+          } else if (motionQuery?.removeListener) {
+              motionQuery.removeListener(syncLiteMode);
+          }
+
+          connection?.removeEventListener?.('change', syncLiteMode);
+          window.removeEventListener('online', syncLiteMode);
+          window.removeEventListener('offline', syncLiteMode);
+      };
+  }, []);
 
   useEffect(() => {
       if (typeof window === 'undefined') return;
@@ -615,6 +722,20 @@ function App() {
   // --- LÓGICA DA CHUVA DE CONFETES (LEVEL UP E GRANDES GANHOS DE XP) ---
 
   useEffect(() => {
+      return () => {
+          if (confettiTimeoutRef.current) {
+              clearTimeout(confettiTimeoutRef.current);
+          }
+      };
+  }, []);
+
+  useEffect(() => {
+      if (isLiteMode && showConfetti) {
+          setShowConfetti(false);
+      }
+  }, [isLiteMode, showConfetti]);
+
+  useEffect(() => {
       if (viewAsStudent) {
           const currentXp = viewAsStudent.xp || 0;
 
@@ -648,11 +769,18 @@ function App() {
           }
 
           if (triggerConfetti) {
-              setShowConfetti(true);
               if (msg) showNotification(msg, "success");
-              
-              // Desliga os confetes depois de 8 segundos para não travar a tela
-              setTimeout(() => setShowConfetti(false), 8000);
+
+              if (!isLiteMode) {
+                  setShowConfetti(true);
+
+                  if (confettiTimeoutRef.current) {
+                      clearTimeout(confettiTimeoutRef.current);
+                  }
+
+                  // Desliga os confetes mais cedo para reduzir custo visual em dispositivos lentos
+                  confettiTimeoutRef.current = setTimeout(() => setShowConfetti(false), 4500);
+              }
           }
 
           // 4. Salva o nível atual para não repetir a animação toda hora
@@ -664,7 +792,7 @@ function App() {
           // Se deslogar, limpa a memória temporária do XP
           prevXpRef.current = null;
       }
-  }, [viewAsStudent?.xp, viewAsStudent?.id]);
+  }, [isLiteMode, viewAsStudent?.xp, viewAsStudent?.id]);
 
   const CHECK_IN_REWARD_XP = 2;
   const getTodayMoodDate = () => {
@@ -1177,7 +1305,7 @@ function App() {
                           <div className="p-3 bg-orange-500/20 rounded-full animate-pulse"><ClipboardList className="text-orange-500" size={24} /></div>
                           <div><h4 className="text-orange-400 font-bold text-xs uppercase tracking-widest mb-1 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-orange-500 animate-ping"></div> TAREFA VENCENDO</h4><p className="text-white font-bold md:text-lg leading-none">{task.text}</p></div>
                       </div>
-                      <button onClick={() => { isAdmin ? setAdminTab('kanban') : setStudentTab('kanban') }} className="hidden md:block text-xs bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-lg font-bold transition-all shadow-lg shadow-orange-900/20 whitespace-nowrap">Ver Kanban</button>
+                      <button onClick={() => { isAdmin ? setAdminTab('kanban') : setStudentTab('kanban') }} className="hidden md:block text-xs bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-lg font-bold transition-all shadow-lg shadow-orange-900/20 whitespace-nowrap">{isAdmin ? 'Ver Kanban' : STUDENT_TASKS_VIEW_LABEL}</button>
                   </div>
               ))}
           </div>
@@ -1388,53 +1516,9 @@ function App() {
     };
 
     const unsubStudents = createListener("students", setStudents);
-    const unsubExperts = createListener("experts", setExperts);
-    const unsubRobot = createListener("robotVersions", setRobotVersions);
-    const unsubAttachments = createListener("attachments", setAttachments); // <--- LISTENER DE GARRAS
-    const unsubCodeSnippets = createListener("codeSnippets", setCodeSnippets); // <--- LISTENER DE CÓDIGOS
-    const unsubRounds = createListener("rounds", setRounds);
-    const unsubCompliments = createListener("compliments", setCompliments);
-    const unsubMatrix = createListener("decisionMatrix", setDecisionMatrix);
-    const unsubQuestions = createListener("questions", setQuestions);
-    const unsubOutreach = createListener("outreach", setOutreachEvents);
-    const unsubTasks = createListener("tasks", setTasks); // <--- GARANTINDO O LISTENER DE TAREFAS
-    const unsubScoreHistory = createListener("score_history", setScoreHistory); // <--- LISTENER DO GRÁFICO
-    const unsubEvents = createListener("events", setEvents); // <--- LISTENER DA AGENDA
+    const unsubTasks = createListener("tasks", setTasks);
+    const unsubEvents = createListener("events", setEvents);
     
-    // Listener do Diário de Bordo (agora condicional)
-    let unsubLogbook;
-    
-    // Listener do Ranking de Pit Stop (Top 5 Melhores Tempos)
-    const pitStopQuery = query(collection(db, "pitstop_records"), orderBy("time", "asc"), limit(5));
-    const unsubPitStop = onSnapshot(pitStopQuery, (snap) => {
-        setPitStopRecords(snap.docs.map(d => ({...d.data(), id: d.id})));
-    });
-
-    if (isAdmin) {
-        // Admin: Pega todos os registros de todos os alunos
-        // REMOVIDO orderBy('date', 'desc') para evitar erro de índice composto no collectionGroup por enquanto
-        const logbookQuery = query(collectionGroup(db, 'logbook'));
-        unsubLogbook = onSnapshot(logbookQuery, (snapshot) => {
-            const entries = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, refPath: doc.ref.path })); 
-            // Ordena no cliente
-            setLogbookEntries(entries.sort((a,b) => (b.weekId || 0) - (a.weekId || 0))); // Ordena por semana
-        });
-    } else if (viewAsStudent?.id) {
-        // Aluno: Pega apenas os seus próprios registros
-        const logbookQuery = query(collection(db, 'students', viewAsStudent.id, 'logbook'));
-        unsubLogbook = onSnapshot(logbookQuery, (snapshot) => {
-            const entries = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, refPath: doc.ref.path }));
-            setLogbookEntries(entries.sort((a,b) => (b.weekId || 0) - (a.weekId || 0)));
-        });
-    }
-
-    // ... dentro do useEffect principal ...
-    const unsubProject = onSnapshot(collection(db, "project"), (s) => {
-        if (!s.empty) {
-            // Pega o primeiro documento encontrado
-            setProjectSummary({ ...s.docs[0].data(), id: s.docs[0].id });
-        }
-    });
 
     // Listeners para as Rubricas
     const unsubInnovationRubric = onSnapshot(doc(db, "settings", "rubric_innovation"), (docSnap) => {
@@ -1457,17 +1541,118 @@ function App() {
     // ... e não esqueça de adicionar no return para limpar:
     // return () => { ... unsubProject(); };
     
-    const unsubMissions = onSnapshot(collection(db, "missions"), (s) => {
-        if (!s.empty) setMissionsList(s.docs.map(d => ({...d.data(), id: d.id})));
+    return () => {
+        unsubStudents();
+        unsubTasks();
+        unsubEvents();
+        unsubInnovationRubric();
+        unsubRobotDesignRubric();
+        unsubAdminProfile();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!db || !shouldLoadStrategyWorkspaceData) return;
+
+    const createListener = (colName, setter) => {
+        return onSnapshot(collection(db, colName), (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            setter(data);
+        }, (error) => {
+            console.error(`Erro critico em ${colName}:`, error);
+            showNotification(`Erro de conexao: ${error.code}`, "error");
+        });
+    };
+
+    const unsubExperts = createListener("experts", setExperts);
+    const unsubMatrix = createListener("decisionMatrix", setDecisionMatrix);
+    const unsubOutreach = createListener("outreach", setOutreachEvents);
+
+    const unsubProject = onSnapshot(collection(db, "project"), (snapshot) => {
+        if (!snapshot.empty) {
+            setProjectSummary({ ...snapshot.docs[0].data(), id: snapshot.docs[0].id });
+        }
     });
 
     return () => {
-        unsubStudents(); unsubExperts(); unsubRobot(); unsubRounds();
-        unsubCompliments(); unsubMatrix(); unsubQuestions(); unsubScoreHistory();
-        unsubEvents(); unsubAttachments(); unsubCodeSnippets();
-        unsubOutreach(); unsubMissions(); unsubTasks(); unsubInnovationRubric(); unsubRobotDesignRubric(); unsubAdminProfile(); if (unsubLogbook) unsubLogbook(); unsubPitStop();
+        unsubExperts();
+        unsubMatrix();
+        unsubOutreach();
+        unsubProject();
     };
-  }, []);
+  }, [shouldLoadStrategyWorkspaceData]);
+
+  useEffect(() => {
+    if (!db || !shouldLoadRobotWorkspaceData) return;
+
+    const createListener = (colName, setter) => {
+        return onSnapshot(collection(db, colName), (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            setter(data);
+        }, (error) => {
+            console.error(`Erro critico em ${colName}:`, error);
+            showNotification(`Erro de conexao: ${error.code}`, "error");
+        });
+    };
+
+    const unsubRobot = createListener("robotVersions", setRobotVersions);
+    const unsubAttachments = createListener("attachments", setAttachments);
+    const unsubCodeSnippets = createListener("codeSnippets", setCodeSnippets);
+    const unsubRounds = createListener("rounds", setRounds);
+    const unsubScoreHistory = createListener("score_history", setScoreHistory);
+
+    const unsubMissions = onSnapshot(collection(db, "missions"), (snapshot) => {
+        if (!snapshot.empty) {
+            setMissionsList(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
+        }
+    });
+
+    return () => {
+        unsubRobot();
+        unsubAttachments();
+        unsubCodeSnippets();
+        unsubRounds();
+        unsubScoreHistory();
+        unsubMissions();
+    };
+  }, [shouldLoadRobotWorkspaceData]);
+
+  useEffect(() => {
+    if (!db || !isLogbookViewActive) return;
+
+    let unsubLogbook;
+
+    if (isAdmin) {
+        const logbookQuery = query(collectionGroup(db, 'logbook'));
+        unsubLogbook = onSnapshot(logbookQuery, (snapshot) => {
+            const entries = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, refPath: doc.ref.path }));
+            setLogbookEntries(entries.sort((a, b) => (b.weekId || 0) - (a.weekId || 0)));
+        });
+    } else if (viewAsStudent?.id) {
+        const logbookQuery = query(collection(db, 'students', viewAsStudent.id, 'logbook'));
+        unsubLogbook = onSnapshot(logbookQuery, (snapshot) => {
+            const entries = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, refPath: doc.ref.path }));
+            setLogbookEntries(entries.sort((a, b) => (b.weekId || 0) - (a.weekId || 0)));
+        });
+    }
+
+    return () => {
+        if (unsubLogbook) unsubLogbook();
+    };
+  }, [isAdmin, isLogbookViewActive, viewAsStudent?.id]);
+
+  useEffect(() => {
+    if (!db || !isPitStopModalOpen) return;
+
+    const pitStopQuery = query(collection(db, "pitstop_records"), orderBy("time", "asc"), limit(5));
+    const unsubPitStop = onSnapshot(pitStopQuery, (snapshot) => {
+        setPitStopRecords(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
+    });
+
+    return () => {
+        unsubPitStop();
+    };
+  }, [isPitStopModalOpen]);
 
   // --- LÓGICA DO CRONÔMETRO ---
   useEffect(() => {
@@ -2969,7 +3154,7 @@ const handleDeleteRound = async (id) => {
   const studentHeroActions = [
       { label: 'Minha Missao', onClick: () => setStudentTab('mission'), icon: <Rocket size={14} />, style: 'bg-white/10 text-white border-white/15 hover:bg-white hover:text-black' },
       { label: 'Rubricas', onClick: () => setStudentTab('rubrics'), icon: <Scale size={14} />, style: 'bg-purple-500/10 text-purple-200 border-purple-500/20 hover:bg-purple-500 hover:text-white' },
-      { label: 'Kanban', onClick: () => setStudentTab('kanban'), icon: <ClipboardList size={14} />, style: 'bg-orange-500/10 text-orange-300 border-orange-500/20 hover:bg-orange-500 hover:text-white' },
+      { label: STUDENT_TASKS_LABEL, onClick: () => setStudentTab('kanban'), icon: <ClipboardList size={14} />, style: 'bg-orange-500/10 text-orange-300 border-orange-500/20 hover:bg-orange-500 hover:text-white' },
       { label: 'Agenda', onClick: () => setStudentTab('agenda'), icon: <CalendarDays size={14} />, style: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20 hover:bg-indigo-500 hover:text-white' }
   ];
 
@@ -2988,7 +3173,7 @@ const handleDeleteRound = async (id) => {
       { id: 'strategy', label: 'Estrategia', icon: <Lightbulb size={16} />, description: 'Entenda o projeto, o impacto e o caminho competitivo do time.', pillTone: 'border-purple-500/20 bg-purple-500/10 text-purple-200', activeClass: 'bg-purple-500 text-white shadow-lg shadow-purple-900/20', inactiveClass: 'text-gray-400 hover:text-purple-300 hover:bg-purple-500/10' },
       { id: 'rubrics', label: 'Rubricas', icon: <Scale size={16} />, description: 'Veja o placar da equipe e onde subir de nivel.', pill: `${overallRubricAverage}/4`, pillTone: 'border-gray-400/20 bg-gray-400/10 text-gray-100', activeClass: 'bg-gray-300 text-black shadow-lg shadow-gray-900/20', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
       { id: 'rounds', label: 'Robo', icon: <ListTodo size={16} />, description: 'Rounds, estrategia de mesa, codigo e anexos do robo.', pillTone: 'border-blue-500/20 bg-blue-500/10 text-blue-200', activeClass: 'bg-blue-600 text-white shadow-lg shadow-blue-900/20', inactiveClass: 'text-gray-400 hover:text-blue-300 hover:bg-blue-500/10' },
-      { id: 'kanban', label: 'Tarefas', icon: <ClipboardList size={16} />, description: 'Seu quadro da semana para agir sem se perder nas entregas.', badge: urgentTasksCount > 0 ? urgentTasksCount : null, pillTone: 'border-orange-500/20 bg-orange-500/10 text-orange-200', activeClass: 'bg-orange-500 text-white shadow-lg shadow-orange-900/20', inactiveClass: 'text-gray-400 hover:text-orange-300 hover:bg-orange-500/10' },
+      { id: 'kanban', label: STUDENT_TASKS_LABEL, icon: <ClipboardList size={16} />, description: 'Seu quadro da semana para agir sem se perder nas entregas.', badge: urgentTasksCount > 0 ? urgentTasksCount : null, pillTone: 'border-orange-500/20 bg-orange-500/10 text-orange-200', activeClass: 'bg-orange-500 text-white shadow-lg shadow-orange-900/20', inactiveClass: 'text-gray-400 hover:text-orange-300 hover:bg-orange-500/10' },
       { id: 'logbook', label: 'Diario', icon: <Book size={16} />, description: 'Guarde o que aprendeu, testou e melhorou na temporada.', pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
       { id: 'agenda', label: 'Agenda', icon: <CalendarDays size={16} />, description: 'Prazos, encontros e marcos importantes da equipe.', badge: urgentEventsCount > 0 ? urgentEventsCount : null, pillTone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200', activeClass: 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20', inactiveClass: 'text-gray-400 hover:text-indigo-300 hover:bg-indigo-500/10' }
   ];
@@ -3293,7 +3478,7 @@ const handleDeleteRound = async (id) => {
   const isStudentMissionDetailed = studentMissionMode === 'detailed';
   const studentMissionDeadlineLabel = officialStudentDeadlineStr.split('-').reverse().join('/');
   const studentMissionNextStep = studentOpenTasksCount > 0
-      ? 'Abra o Kanban, escolha a tarefa mais urgente ligada a sua frente e avance nela ainda hoje.'
+      ? 'Abra Tarefas, escolha a tarefa mais urgente ligada a sua frente e avance nela ainda hoje.'
       : 'Converse com a equipe e assuma uma tarefa da sua estacao para transformar a missao em entrega concreta.';
   const studentSubmissionStatus = viewAsStudent?.submission?.status || 'idle';
   const studentSubmissionTone = studentSubmissionStatus === 'approved'
@@ -3307,12 +3492,12 @@ const handleDeleteRound = async (id) => {
   const studentMissionCards = [
       { label: 'Estacao', value: viewAsStudent?.station || 'Equipe', helper: studentMissionData ? 'frente principal da semana' : 'aguardando definicao', icon: <Target size={16} />, tone: studentMissionTone.button },
       { label: 'Prazo', value: studentMissionDeadlineLabel, helper: 'quarta-feira da semana atual', icon: <CalendarDays size={16} />, tone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-100' },
-      { label: 'Tarefas', value: studentOpenTasksCount, helper: studentOpenTasksCount > 0 ? 'tarefas abertas no Kanban' : 'nenhuma pendencia aberta', icon: <ClipboardList size={16} />, tone: 'border-orange-500/20 bg-orange-500/10 text-orange-100' },
+      { label: STUDENT_TASKS_LABEL, value: studentOpenTasksCount, helper: studentOpenTasksCount > 0 ? 'tarefas abertas no seu quadro' : 'nenhuma pendencia aberta', icon: <ClipboardList size={16} />, tone: 'border-orange-500/20 bg-orange-500/10 text-orange-100' },
       { label: 'Status', value: studentSubmissionTone.label, helper: studentSubmissionTone.detail, icon: studentSubmissionTone.icon, tone: studentSubmissionTone.card }
   ];
 
   const studentMissionActions = [
-      { label: 'Abrir Kanban', onClick: () => setStudentTab('kanban'), icon: <ClipboardList size={14} />, style: 'bg-orange-500/10 text-orange-200 border-orange-500/20 hover:bg-orange-500 hover:text-white' },
+      { label: STUDENT_TASKS_OPEN_LABEL, onClick: () => setStudentTab('kanban'), icon: <ClipboardList size={14} />, style: 'bg-orange-500/10 text-orange-200 border-orange-500/20 hover:bg-orange-500 hover:text-white' },
       { label: 'Ver Rubricas', onClick: () => setStudentTab('rubrics'), icon: <Scale size={14} />, style: 'bg-purple-500/10 text-purple-100 border-purple-500/20 hover:bg-purple-500 hover:text-white' },
       { label: 'Registrar Diario', onClick: () => setStudentTab('logbook'), icon: <Book size={14} />, style: 'bg-yellow-500/10 text-yellow-100 border-yellow-500/20 hover:bg-yellow-500 hover:text-black' }
   ];
@@ -3400,7 +3585,7 @@ const handleDeleteRound = async (id) => {
           studentOverdueTasksCount > 0 && {
               title: 'Zerar atrasos da semana',
               detail: `${studentOverdueTasksCount} tarefa(s) ja passaram do prazo e precisam de resposta imediata.`,
-              actionLabel: 'Abrir Kanban',
+              actionLabel: STUDENT_TASKS_OPEN_LABEL,
               onClick: () => setStudentTab('kanban'),
               tone: 'border-red-500/20 bg-red-500/10 text-red-100'
           },
@@ -3435,7 +3620,7 @@ const handleDeleteRound = async (id) => {
         ]
       : [
           { label: 'Abrir Rubricas', onClick: () => setStudentTab('rubrics'), icon: <Scale size={14} />, style: 'bg-purple-500/10 text-purple-200 border-purple-500/20 hover:bg-purple-500 hover:text-white' },
-          { label: 'Meu Kanban', onClick: () => setStudentTab('kanban'), icon: <ClipboardList size={14} />, style: 'bg-orange-500/10 text-orange-200 border-orange-500/20 hover:bg-orange-500 hover:text-white' },
+          { label: STUDENT_TASKS_SHORT_LABEL, onClick: () => setStudentTab('kanban'), icon: <ClipboardList size={14} />, style: 'bg-orange-500/10 text-orange-200 border-orange-500/20 hover:bg-orange-500 hover:text-white' },
           { label: 'Minha Missao', onClick: () => setStudentTab('mission'), icon: <Rocket size={14} />, style: 'bg-white/10 text-white border-white/15 hover:bg-white hover:text-black' }
         ];
 
@@ -4520,7 +4705,11 @@ const handleFileSelect = (e) => {
 
           
           {/* --- NOVO MODAL: TREINO DE PIT STOP --- */}
-          {modal.type === 'pitstop' && <PitStopModal viewAsStudent={viewAsStudent} pitStopRecords={pitStopRecords} showNotification={showNotification} />}
+          {modal.type === 'pitstop' && (
+            <Suspense fallback={<LazyOverlayFallback label="Carregando treino de pit stop..." />}>
+              <PitStopModal viewAsStudent={viewAsStudent} pitStopRecords={pitStopRecords} showNotification={showNotification} />
+            </Suspense>
+          )}
 
           {/* NOVO MODAL: EDITOR DE MISSÕES */}
           {modal.type === 'missionForm' && (
@@ -4831,51 +5020,55 @@ const handleFileSelect = (e) => {
           </section>
 
           {strategySubTab === 'innovation' && (
-              <InnovationStrategyPanel
-                  projectSummary={projectSummary}
-                  projectImpactNarrative={projectImpactNarrative}
-                  decisionMatrix={decisionMatrix}
-                  experts={experts}
-                  outreachEvents={outreachEvents}
-                  totalImpactPeople={totalImpactPeople}
-                  isAdmin={isAdmin}
-                  viewAsStudent={viewAsStudent}
-                  onOpenProject={() => setModal({ type: 'projectForm' })}
-                  onOpenMatrix={openMatrixForm}
-                  onDeleteMatrix={handleDeleteMatrix}
-                  onOpenExpert={() => openExpertModal()}
-                  onOpenExpertEdit={openExpertModal}
-                  onOpenExpertView={openExpertView}
-                  onDeleteExpert={handleDeleteExpert}
-                  onOpenImpact={() => openOutreachForm()}
-                  onDeleteOutreach={handleDeleteOutreach}
-              />
+              <Suspense fallback={<LazyPanelFallback label="Carregando painel de inovacao..." minHeightClass="min-h-[360px]" />}>
+                <InnovationStrategyPanel
+                    projectSummary={projectSummary}
+                    projectImpactNarrative={projectImpactNarrative}
+                    decisionMatrix={decisionMatrix}
+                    experts={experts}
+                    outreachEvents={outreachEvents}
+                    totalImpactPeople={totalImpactPeople}
+                    isAdmin={isAdmin}
+                    viewAsStudent={viewAsStudent}
+                    onOpenProject={() => setModal({ type: 'projectForm' })}
+                    onOpenMatrix={openMatrixForm}
+                    onDeleteMatrix={handleDeleteMatrix}
+                    onOpenExpert={() => openExpertModal()}
+                    onOpenExpertEdit={openExpertModal}
+                    onOpenExpertView={openExpertView}
+                    onDeleteExpert={handleDeleteExpert}
+                    onOpenImpact={() => openOutreachForm()}
+                    onDeleteOutreach={handleDeleteOutreach}
+                />
+              </Suspense>
           )}
 
           {strategySubTab === 'robot_design' && (
-              <RobotDesignStrategyPanel
-                  robotVersions={robotVersions}
-                  attachments={attachments}
-                  codeSnippets={codeSnippets}
-                  rounds={rounds}
-                  activeCommandCode={activeCommandCode}
-                  iterationRecords={iterationRecords}
-                  isAdmin={isAdmin}
-                  viewAsStudent={viewAsStudent}
-                  onOpenRobot={() => openRobotModal()}
-                  onOpenRobotEdit={openRobotModal}
-                  onOpenRobotView={openRobotView}
-                  onDeleteRobotVersion={handleDeleteRobotVersion}
-                  onOpenAttachment={() => openAttachmentModal()}
-                  onOpenAttachmentEdit={openAttachmentModal}
-                  onOpenAttachmentView={openAttachmentView}
-                  onDeleteAttachment={handleDeleteAttachment}
-                  onOpenCode={() => openCodeModal()}
-                  onOpenCodeEdit={openCodeModal}
-                  onOpenCodeView={openCodeView}
-                  onApplyCode={handleApplyCodeSnippet}
-                  onDeleteCode={handleDeleteCode}
-              />
+              <Suspense fallback={<LazyPanelFallback label="Carregando painel de robo..." minHeightClass="min-h-[360px]" />}>
+                <RobotDesignStrategyPanel
+                    robotVersions={robotVersions}
+                    attachments={attachments}
+                    codeSnippets={codeSnippets}
+                    rounds={rounds}
+                    activeCommandCode={activeCommandCode}
+                    iterationRecords={iterationRecords}
+                    isAdmin={isAdmin}
+                    viewAsStudent={viewAsStudent}
+                    onOpenRobot={() => openRobotModal()}
+                    onOpenRobotEdit={openRobotModal}
+                    onOpenRobotView={openRobotView}
+                    onDeleteRobotVersion={handleDeleteRobotVersion}
+                    onOpenAttachment={() => openAttachmentModal()}
+                    onOpenAttachmentEdit={openAttachmentModal}
+                    onOpenAttachmentView={openAttachmentView}
+                    onDeleteAttachment={handleDeleteAttachment}
+                    onOpenCode={() => openCodeModal()}
+                    onOpenCodeEdit={openCodeModal}
+                    onOpenCodeView={openCodeView}
+                    onApplyCode={handleApplyCodeSnippet}
+                    onDeleteCode={handleDeleteCode}
+                />
+              </Suspense>
           )}
 
           {strategySubTab === 'innovation_legacy' && (
@@ -5542,40 +5735,44 @@ const handleFileSelect = (e) => {
   // --- COMPONENTE DE ROUNDS ---
 
   const RoundsView = ({ readonly = false }) => (
-      <RobotRoundsPanel
-          rounds={rounds}
-          missionsList={missionsList}
-          attachments={attachments}
-          activeCommandCode={activeCommandCode}
-          scoreHistory={scoreHistory}
-          robotSubTab={robotSubTab}
-          onChangeRobotSubTab={setRobotSubTab}
-          activeTimer={activeTimer}
-          timerDisplay={timerDisplay}
-          roundFormValues={roundFormValues}
-          fullRoundTimeValue={roundFormValues[FULL_ROUND_TIME_KEY] ?? ''}
-          fullRoundScoreValue={roundFormValues[FULL_ROUND_SCORE_KEY] ?? ''}
-          fullRoundTimerActive={activeTimer?.roundId === FULL_ROUND_TIMER_ID}
-        onRoundFormValueChange={(roundId, value) => setRoundFormValues(prev => ({ ...prev, [roundId]: value }))}
-        onFullRoundFieldChange={(field, value) => setRoundFormValues(prev => ({ ...prev, [field]: value }))}
-        onToggleTimer={toggleTimer}
-        onToggleFullRoundTimer={() => toggleTimer({ id: FULL_ROUND_TIMER_ID, name: 'Round completo' })}
-        onOpenNewRound={openNewRoundModal}
-        onOpenRoundEdit={openEditRoundModal}
-        onOpenMissionForm={() => openMissionForm()}
-        onOpenPitStop={openPitStopModal}
-          onSavePracticeScore={handleSavePracticeScore}
-          onDeleteRound={handleDeleteRound}
-          onSaveFullRoundRun={handleSaveFullRoundRun}
-          onSaveRoundRun={handleSaveRoundRun}
-          scoreChart={<ScoreEvolutionChart />}
-          readonly={readonly}
-      />
+      <Suspense fallback={<LazyPanelFallback label="Carregando central de rounds..." minHeightClass="min-h-[420px]" />}>
+        <RobotRoundsPanel
+            rounds={rounds}
+            missionsList={missionsList}
+            attachments={attachments}
+            activeCommandCode={activeCommandCode}
+            scoreHistory={scoreHistory}
+            robotSubTab={robotSubTab}
+            onChangeRobotSubTab={setRobotSubTab}
+            activeTimer={activeTimer}
+            timerDisplay={timerDisplay}
+            roundFormValues={roundFormValues}
+            fullRoundTimeValue={roundFormValues[FULL_ROUND_TIME_KEY] ?? ''}
+            fullRoundScoreValue={roundFormValues[FULL_ROUND_SCORE_KEY] ?? ''}
+            fullRoundTimerActive={activeTimer?.roundId === FULL_ROUND_TIMER_ID}
+          onRoundFormValueChange={(roundId, value) => setRoundFormValues(prev => ({ ...prev, [roundId]: value }))}
+          onFullRoundFieldChange={(field, value) => setRoundFormValues(prev => ({ ...prev, [field]: value }))}
+          onToggleTimer={toggleTimer}
+          onToggleFullRoundTimer={() => toggleTimer({ id: FULL_ROUND_TIMER_ID, name: 'Round completo' })}
+          onOpenNewRound={openNewRoundModal}
+          onOpenRoundEdit={openEditRoundModal}
+          onOpenMissionForm={() => openMissionForm()}
+          onOpenPitStop={openPitStopModal}
+            onSavePracticeScore={handleSavePracticeScore}
+            onDeleteRound={handleDeleteRound}
+            onSaveFullRoundRun={handleSaveFullRoundRun}
+            onSaveRoundRun={handleSaveRoundRun}
+            scoreChart={<ScoreEvolutionChart />}
+            readonly={readonly}
+        />
+      </Suspense>
   );
 
   // --- COMPONENTE KANBAN (REUTILIZÁVEL) ---
   const KanbanView = () => {
       const [searchTerm, setSearchTerm] = useState("");
+      const deferredSearchTerm = useDeferredValue(searchTerm);
+      const normalizedSearchTerm = deferredSearchTerm.trim().toLowerCase();
       const kanbanLayout = 'swimlanes';
       const activeTagFilter = 'all';
       const activeOwnerFilter = 'all';
@@ -5934,10 +6131,10 @@ const handleFileSelect = (e) => {
 
       // Lógica de Filtro e Ordenação
       const filteredTasks = tasks.filter((task) => {
-          const matchesSearch = !searchTerm ||
-              task.text.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              (task.author && task.author.toLowerCase().includes(searchTerm.toLowerCase())) ||
-              (task.tag && task.tag.toLowerCase().includes(searchTerm.toLowerCase()));
+          const matchesSearch = !normalizedSearchTerm ||
+              task.text.toLowerCase().includes(normalizedSearchTerm) ||
+              (task.author && task.author.toLowerCase().includes(normalizedSearchTerm)) ||
+              (task.tag && task.tag.toLowerCase().includes(normalizedSearchTerm));
 
           const matchesTag = activeTagFilter === 'all' || (task.tag || 'geral') === activeTagFilter;
 
@@ -5966,7 +6163,7 @@ const handleFileSelect = (e) => {
       const doneTasks = filteredTasks.filter(t => t.status === 'done')
           .sort((a, b) => new Date(b.completedAt || b.createdAt) - new Date(a.completedAt || a.createdAt));
 
-      const hasActiveFilters = Boolean(searchTerm);
+      const hasActiveFilters = Boolean(normalizedSearchTerm);
 
       const displayedTodoTasks = (showAllTodo || hasActiveFilters) ? todoTasks : todoTasks.slice(0, 10);
       const displayedDoingTasks = (showAllDoing || hasActiveFilters) ? doingTasks : doingTasks.slice(0, 10);
@@ -6263,7 +6460,7 @@ const handleFileSelect = (e) => {
                       {studentTasksThisWeek.length === 0 && (
                           <div className="md:col-span-2 xl:col-span-4 rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-center">
                               <p className="text-sm font-bold text-white">Voce ainda nao tem entregas ligadas a esta semana.</p>
-                              <p className="text-xs text-gray-500 mt-2">Use o Kanban para assumir uma tarefa e deixar seu plano visivel.</p>
+                              <p className="text-xs text-gray-500 mt-2">Use Tarefas para assumir uma tarefa e deixar seu plano visivel.</p>
                           </div>
                       )}
                   </div>
@@ -7435,24 +7632,26 @@ const handleFileSelect = (e) => {
 
   if (isTvOnlyView) {
       return (
-          <TvModePanel
-              isTvMode={true}
-              setIsTvMode={setIsTvMode}
-              standalone={true}
-              currentWeekData={currentWeekData}
-              students={students}
-              missions={missions}
-              tasks={tasks}
-              events={events}
-              outreachEvents={outreachEvents}
-              ScoreEvolutionChart={ScoreEvolutionChart}
-          />
+          <Suspense fallback={<LazyOverlayFallback label="Carregando modo TV..." />}>
+            <TvModePanel
+                isTvMode={true}
+                setIsTvMode={setIsTvMode}
+                standalone={true}
+                currentWeekData={currentWeekData}
+                students={students}
+                missions={missions}
+                tasks={tasks}
+                events={events}
+                outreachEvents={outreachEvents}
+                ScoreEvolutionChart={ScoreEvolutionChart}
+            />
+          </Suspense>
       );
   }
 
   // --- RENDER PRINCIPAL (SÓ CHEGA AQUI SE ESTIVER LOGADO) ---
   return (
-    <div className="newgears-shell min-h-screen text-white selection:bg-yellow-300 selection:text-slate-950 pb-20 relative overflow-hidden">
+    <div className={`newgears-shell min-h-screen text-white selection:bg-yellow-300 selection:text-slate-950 pb-20 relative overflow-hidden ${isLiteMode ? 'newgears-lite-mode' : ''}`}>
       {/* Estilo da Animação de Fundo */}
       <div className="newgears-floating-layer">
         <div className="newgears-orb newgears-orb--cyan"></div>
@@ -7469,7 +7668,9 @@ const handleFileSelect = (e) => {
         {/* EFEITO DE CONFETES (Fica no topo de tudo, z-index gigante) */}
         {showConfetti && (
           <div className="fixed inset-0 z-[9999] pointer-events-none">
-             <Confetti width={window.innerWidth} height={window.innerHeight} recycle={false} numberOfPieces={800} gravity={0.15} />
+            <Suspense fallback={null}>
+              <ConfettiBurst width={window.innerWidth} height={window.innerHeight} recycle={false} numberOfPieces={420} gravity={0.14} />
+            </Suspense>
           </div>
         )}
 
@@ -7492,47 +7693,63 @@ const handleFileSelect = (e) => {
           </>
         )}
 
-        <ChampionCommandCenter
-            isOpen={isCommandCenterMode}
-            onClose={closeCommandCenterMode}
-            readinessTone={commandCenterReadinessTone}
-            commandCards={commandCenterCards}
-            readinessScore={commandCenterReadinessScore}
-            readinessItems={commandCenterReadinessItems}
-            quickActions={commandCenterQuickActions}
-            priorityCards={commandCenterPriorityCards}
-        />
-        <JudgePresentationView
-            isOpen={isJudgeMode}
-            onClose={closeJudgeMode}
-            projectSummary={projectSummary}
-            experts={experts}
-            outreachEvents={outreachEvents}
-            robotVersions={robotVersions}
-            attachments={attachments}
-            codeSnippets={codeSnippets}
-            rounds={rounds}
-            innovationRubric={innovationRubric}
-            robotDesignRubric={robotDesignRubric}
-        />
-        <TvModePanel 
-            isTvMode={isTvMode} 
-            setIsTvMode={setIsTvMode} 
-            currentWeekData={currentWeekData} 
-            students={students} 
-            missions={missions} 
-            tasks={tasks} 
-            events={events} 
-            outreachEvents={outreachEvents} 
-            ScoreEvolutionChart={ScoreEvolutionChart} 
-        />
-        <FullScheduleModal
-            isOpen={showFullSchedule}
-            onClose={() => setShowFullSchedule(false)}
-            rotationSchedule={rotationSchedule}
-            currentWeekData={currentWeekData}
-            students={students}
-        />
+        {isCommandCenterMode && (
+          <Suspense fallback={<LazyOverlayFallback label="Carregando central de comando..." />}>
+            <ChampionCommandCenter
+                isOpen={isCommandCenterMode}
+                onClose={closeCommandCenterMode}
+                readinessTone={commandCenterReadinessTone}
+                commandCards={commandCenterCards}
+                readinessScore={commandCenterReadinessScore}
+                readinessItems={commandCenterReadinessItems}
+                quickActions={commandCenterQuickActions}
+                priorityCards={commandCenterPriorityCards}
+            />
+          </Suspense>
+        )}
+        {isJudgeMode && (
+          <Suspense fallback={<LazyOverlayFallback label="Carregando modo apresentacao..." />}>
+            <JudgePresentationView
+                isOpen={isJudgeMode}
+                onClose={closeJudgeMode}
+                projectSummary={projectSummary}
+                experts={experts}
+                outreachEvents={outreachEvents}
+                robotVersions={robotVersions}
+                attachments={attachments}
+                codeSnippets={codeSnippets}
+                rounds={rounds}
+                innovationRubric={innovationRubric}
+                robotDesignRubric={robotDesignRubric}
+            />
+          </Suspense>
+        )}
+        {isTvMode && (
+          <Suspense fallback={<LazyOverlayFallback label="Carregando modo TV..." />}>
+            <TvModePanel 
+                isTvMode={isTvMode} 
+                setIsTvMode={setIsTvMode} 
+                currentWeekData={currentWeekData} 
+                students={students} 
+                missions={missions} 
+                tasks={tasks} 
+                events={events} 
+                outreachEvents={outreachEvents} 
+                ScoreEvolutionChart={ScoreEvolutionChart} 
+            />
+          </Suspense>
+        )}
+        {showFullSchedule && (
+          <Suspense fallback={<LazyOverlayFallback label="Carregando cronograma completo..." />}>
+            <FullScheduleModal
+                isOpen={showFullSchedule}
+                onClose={() => setShowFullSchedule(false)}
+                rotationSchedule={rotationSchedule}
+                currentWeekData={currentWeekData}
+                students={students}
+            />
+          </Suspense>
+        )}
 
 {/* --- MODAL DO TÉCNICO: ENTREGAR BADGES --- */}
       {isAdmin && badgeStudent && (
@@ -7736,17 +7953,21 @@ const handleFileSelect = (e) => {
         </div>
       )}
 
-      <TeamCheckInModal
-        isOpen={showBatteryModal}
-        onClose={() => setShowBatteryModal(false)}
-        teamMoods={teamMoods}
-        students={students}
-        teamAverage={teamAverage}
-        viewAsStudent={viewAsStudent}
-        onSubmit={handleTeamCheckInSubmit}
-        localTodayStr={localTodayStr}
-        rewardXp={CHECK_IN_REWARD_XP}
-      />
+      {showBatteryModal && (
+        <Suspense fallback={<LazyOverlayFallback label="Carregando check-in da equipe..." />}>
+          <TeamCheckInModal
+            isOpen={showBatteryModal}
+            onClose={() => setShowBatteryModal(false)}
+            teamMoods={teamMoods}
+            students={students}
+            teamAverage={teamAverage}
+            viewAsStudent={viewAsStudent}
+            onSubmit={handleTeamCheckInSubmit}
+            localTodayStr={localTodayStr}
+            rewardXp={CHECK_IN_REWARD_XP}
+          />
+        </Suspense>
+      )}
 
  {/* HEADER DO SISTEMA (COMPLETO) */}
       <header className="newgears-topbar sticky top-0 z-40 px-4 md:px-6 py-4 flex justify-between items-center gap-4 flex-wrap">
@@ -7960,24 +8181,28 @@ const handleFileSelect = (e) => {
               {(adminPanelState.prep || adminPanelState.judge) && (
                 <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
                   {adminPanelState.prep && (
-                    <CompetitionPrepPanel
-                      title="Mapa rapido do torneio para a equipe entrar confiante."
-                      summary="Este painel junta rubricas, ritmo, energia do time, codigo oficial e agenda numa leitura bem mais viva, para o site parecer equipe de robotica e nao painel corporativo."
-                      readinessScore={commandCenterReadinessScore}
-                      readinessLabel={commandCenterReadinessTone.label}
-                      weekLabel={currentWeekData?.weekName || 'Semana em andamento'}
-                      checklistItems={championshipChecklistItems}
-                      focusItems={championshipFocusCards}
-                      actionButtons={championshipActionButtons}
-                    />
+                    <Suspense fallback={<LazyPanelFallback label="Carregando mapa rapido do torneio..." minHeightClass="min-h-[260px]" />}>
+                      <CompetitionPrepPanel
+                        title="Mapa rapido do torneio para a equipe entrar confiante."
+                        summary="Este painel junta rubricas, ritmo, energia do time, codigo oficial e agenda numa leitura bem mais viva, para o site parecer equipe de robotica e nao painel corporativo."
+                        readinessScore={commandCenterReadinessScore}
+                        readinessLabel={commandCenterReadinessTone.label}
+                        weekLabel={currentWeekData?.weekName || 'Semana em andamento'}
+                        checklistItems={championshipChecklistItems}
+                        focusItems={championshipFocusCards}
+                        actionButtons={championshipActionButtons}
+                      />
+                    </Suspense>
                   )}
                   {adminPanelState.judge && (
-                    <JudgeStoryPanel
-                      title="Roteiro rapido para a equipe falar com clareza, calma e cara de time preparado."
-                      summary="Use estes blocos para ensaiar explicacoes curtas, memoraveis e ligadas a provas reais do projeto, do robo e do impacto."
-                      cards={judgeStoryCards}
-                      spotlightQuestion={judgeSpotlightQuestion}
-                    />
+                    <Suspense fallback={<LazyPanelFallback label="Carregando roteiro da apresentacao..." minHeightClass="min-h-[260px]" />}>
+                      <JudgeStoryPanel
+                        title="Roteiro rapido para a equipe falar com clareza, calma e cara de time preparado."
+                        summary="Use estes blocos para ensaiar explicacoes curtas, memoraveis e ligadas a provas reais do projeto, do robo e do impacto."
+                        cards={judgeStoryCards}
+                        spotlightQuestion={judgeSpotlightQuestion}
+                      />
+                    </Suspense>
                   )}
                 </div>
               )}
@@ -8002,7 +8227,9 @@ const handleFileSelect = (e) => {
 
             {/* Dentro do seu <main> ou área de conteúdo central, junto com os outros 'ifs' de abas */}
 {activeTab === 'ranking' && (
-  <RankingPanel students={students} setActiveTab={setActiveTab} />
+  <Suspense fallback={<LazyPanelFallback label="Carregando ranking da equipe..." minHeightClass="min-h-[340px]" />}>
+    <RankingPanel students={students} setActiveTab={setActiveTab} />
+  </Suspense>
 )}
           <div className="flex flex-col gap-6">
             
@@ -8016,42 +8243,46 @@ const handleFileSelect = (e) => {
                 <div className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(adminTab)}`}>
                   <WorkspaceScene sceneId={`admin-${adminTab}`}>
                     {adminTab === 'rotation' && (
-                      <RotationOperationsPanel
-                        students={students}
-                        tasks={tasks}
-                        missions={missions}
-                        currentWeekData={currentWeekData}
-                        getCurrentLevel={getCurrentLevel}
-                        canManage={currentUser?.type === 'admin'}
-                        onMoveStudent={moveStudent}
-                        onOpenXPModal={openXPModal}
-                        onOpenGradesModal={openGradesModal}
-                        onOpenProfileModal={openProfileModal}
-                        onOpenNewStudentModal={openNewStudentModal}
-                        onSetBadgeStudent={setBadgeStudent}
-                        onToggleEnglishChallenge={toggleEnglishChallenge}
-                        onDeleteStudent={handleDeleteStudent}
-                        onToggleActivityStatus={toggleActivityStatus}
-                        onOpenReviewModal={openReviewModal}
-                        onUpdateStudentSpecialty={updateStudentSpecialty}
-                        onHandleCloseStationWeek={handleCloseStationWeek}
-                        onUpdateMission={updateMission}
-                        onSaveMission={handleSaveStationMission}
-                        onApplyRotation={handleApplyRotation}
-                        onOpenAttendance={openAttendanceModal}
-                        onResetAllActivities={handleResetAllActivities}
-                        onOpenSchedule={() => setShowFullSchedule(true)}
-                      />
+                      <Suspense fallback={<LazyPanelFallback label="Carregando operacoes de rotacao..." minHeightClass="min-h-[420px]" />}>
+                        <RotationOperationsPanel
+                          students={students}
+                          tasks={tasks}
+                          missions={missions}
+                          currentWeekData={currentWeekData}
+                          getCurrentLevel={getCurrentLevel}
+                          canManage={currentUser?.type === 'admin'}
+                          onMoveStudent={moveStudent}
+                          onOpenXPModal={openXPModal}
+                          onOpenGradesModal={openGradesModal}
+                          onOpenProfileModal={openProfileModal}
+                          onOpenNewStudentModal={openNewStudentModal}
+                          onSetBadgeStudent={setBadgeStudent}
+                          onToggleEnglishChallenge={toggleEnglishChallenge}
+                          onDeleteStudent={handleDeleteStudent}
+                          onToggleActivityStatus={toggleActivityStatus}
+                          onOpenReviewModal={openReviewModal}
+                          onUpdateStudentSpecialty={updateStudentSpecialty}
+                          onHandleCloseStationWeek={handleCloseStationWeek}
+                          onUpdateMission={updateMission}
+                          onSaveMission={handleSaveStationMission}
+                          onApplyRotation={handleApplyRotation}
+                          onOpenAttendance={openAttendanceModal}
+                          onResetAllActivities={handleResetAllActivities}
+                          onOpenSchedule={() => setShowFullSchedule(true)}
+                        />
+                      </Suspense>
                     )}
 
                     {adminTab === 'strategy' && <StrategyView />}
                     {adminTab === 'rounds' && <RoundsView />} {/* StrategyBoard agora mora dentro de RoundsView */}
                     {adminTab === 'rubrics' && (
-                      <RubricViewPanel
-                        innovationRubric={innovationRubric}
-                        robotDesignRubric={robotDesignRubric}
-                        handleRubricUpdate={handleRubricUpdate}
-                      />
+                      <Suspense fallback={<LazyPanelFallback label="Carregando rubricas..." minHeightClass="min-h-[320px]" />}>
+                        <RubricViewPanel
+                          innovationRubric={innovationRubric}
+                          robotDesignRubric={robotDesignRubric}
+                          handleRubricUpdate={handleRubricUpdate}
+                        />
+                      </Suspense>
                     )}
                     
                     {/* --- VISUALIZAÇÃO KANBAN --- */}
@@ -8101,26 +8332,30 @@ const handleFileSelect = (e) => {
               {(studentPanelState.prep || studentPanelState.judge) && (
                 <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
                   {studentPanelState.prep && (
-                    <CompetitionPrepPanel
-                      eyebrow="Mapa para o Torneio"
-                      title="Mapa da equipe para estudar, treinar e subir de nivel na semana."
-                      summary="Esses blocos mostram onde a equipe esta forte, onde precisa de boost e como voce pode entrar mais confiante na apresentacao e na mesa."
-                      readinessScore={commandCenterReadinessScore}
-                      readinessLabel={commandCenterReadinessTone.label}
-                      weekLabel={currentWeekData?.weekName || 'Semana em andamento'}
-                      checklistItems={championshipChecklistItems}
-                      focusItems={championshipFocusCards}
-                      actionButtons={championshipActionButtons}
-                    />
+                    <Suspense fallback={<LazyPanelFallback label="Carregando mapa do torneio..." minHeightClass="min-h-[260px]" />}>
+                      <CompetitionPrepPanel
+                        eyebrow="Mapa para o Torneio"
+                        title="Mapa da equipe para estudar, treinar e subir de nivel na semana."
+                        summary="Esses blocos mostram onde a equipe esta forte, onde precisa de boost e como voce pode entrar mais confiante na apresentacao e na mesa."
+                        readinessScore={commandCenterReadinessScore}
+                        readinessLabel={commandCenterReadinessTone.label}
+                        weekLabel={currentWeekData?.weekName || 'Semana em andamento'}
+                        checklistItems={championshipChecklistItems}
+                        focusItems={championshipFocusCards}
+                        actionButtons={championshipActionButtons}
+                      />
+                    </Suspense>
                   )}
                   {studentPanelState.judge && (
-                    <JudgeStoryPanel
-                      eyebrow="Treino de Apresentacao"
-                      title="Roteiro rapido para voce falar sem travar e com cara de equipe pronta."
-                      summary="Estude estes blocos para ligar projeto, robo e impacto de um jeito simples, seguro e facil de lembrar."
-                      cards={judgeStoryCards}
-                      spotlightQuestion={judgeSpotlightQuestion}
-                    />
+                    <Suspense fallback={<LazyPanelFallback label="Carregando roteiro da apresentacao..." minHeightClass="min-h-[260px]" />}>
+                      <JudgeStoryPanel
+                        eyebrow="Treino de Apresentacao"
+                        title="Roteiro rapido para voce falar sem travar e com cara de equipe pronta."
+                        summary="Estude estes blocos para ligar projeto, robo e impacto de um jeito simples, seguro e facil de lembrar."
+                        cards={judgeStoryCards}
+                        spotlightQuestion={judgeSpotlightQuestion}
+                      />
+                    </Suspense>
                   )}
                 </div>
               )}
@@ -8143,7 +8378,7 @@ const handleFileSelect = (e) => {
           </WorkspaceCollapsible>
 
           {/* ALERTA DE TAREFAS ATRASADAS DO ALUNO */}
-          {tasks.filter(t => t.status !== 'done' && t.dueDate && t.dueDate < localTodayStr && t.author && t.author.includes(viewAsStudent.name)).length > 0 && (
+          {studentOverdueTasksCount > 0 && (
               <div className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.2)] mb-6 flex items-center justify-between animate-pulse hover:animate-none transition-all">
                   <div className="flex items-center gap-4">
                       <div className="bg-red-500/20 p-3 rounded-full">
@@ -8151,7 +8386,7 @@ const handleFileSelect = (e) => {
                       </div>
                       <div>
                           <h3 className="text-red-400 font-bold text-xs uppercase tracking-widest mb-1">Ação Necessária</h3>
-                          <p className="text-white font-bold md:text-lg leading-tight">Você possui tarefas atrasadas no Kanban!</p>
+                          <p className="text-white font-bold md:text-lg leading-tight">Você possui tarefas atrasadas no quadro de tarefas!</p>
                       </div>
                   </div>
                   <button onClick={() => setStudentTab('kanban')} className="hidden md:block bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-lg shadow-red-900/20 transition-colors whitespace-nowrap">
@@ -8419,11 +8654,13 @@ const handleFileSelect = (e) => {
                     {studentTab === 'rounds' && <div className="text-left"><RoundsView /></div>}
                     {studentTab === 'rubrics' && (
                       <div className="text-left">
-                        <RubricViewPanel
-                          innovationRubric={innovationRubric}
-                          robotDesignRubric={robotDesignRubric}
-                          handleRubricUpdate={handleRubricUpdate}
-                        />
+                        <Suspense fallback={<LazyPanelFallback label="Carregando rubricas..." minHeightClass="min-h-[320px]" />}>
+                          <RubricViewPanel
+                            innovationRubric={innovationRubric}
+                            robotDesignRubric={robotDesignRubric}
+                            handleRubricUpdate={handleRubricUpdate}
+                          />
+                        </Suspense>
                       </div>
                     )}
                     {studentTab === 'kanban' && <div className="text-left"><KanbanView /></div>}
