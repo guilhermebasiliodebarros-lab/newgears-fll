@@ -1,9 +1,16 @@
 import { Suspense, lazy, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy, limit } from "firebase/firestore";
-import { db } from './firebase'; // Importa a instância já inicializada
+import { db } from './firebase'; // Importa a instÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ncia jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ inicializada
 import Countdown from './components/Countdown';
 import LogoNewGears from './components/LogoNewGears';
 import { WorkspaceHero, WorkspaceTabs, WorkspaceScene, WorkspaceCollapsible, WorkspacePanelToolbar } from './components/WorkspaceChrome';
+import StrategyView from './views/StrategyView';
+import RoundsView from './views/RoundsView';
+import LogbookView from './views/LogbookView';
+import KanbanView from './views/KanbanView';
+import AgendaView from './views/AgendaView';
+import { STATION_KEYS } from './constants/workspace';
+import { DEFAULT_PROJECT_SUMMARY, PROJECT_MAIN_DOC_ID, resolveProjectSummary } from './utils/projectSummary';
 import { 
   User, 
   LogOut, 
@@ -19,7 +26,7 @@ import {
   Cpu, 
   Trophy, 
   Medal, 
-  Briefcase, // <--- Ícone que faltava para o modal de especialista
+  Briefcase, // <--- ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âcone que faltava para o modal de especialista
   Star, 
   Shield, 
   Target, 
@@ -30,7 +37,7 @@ import {
   Image as ImageIcon, 
   ListTodo, 
   Calculator, 
-  Timer, // <--- Agora só tem um aqui!
+  Timer, // <--- Agora sÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ tem um aqui!
   ThumbsUp, 
   AlertTriangle, 
   GraduationCap, 
@@ -60,51 +67,51 @@ import {
   Brain,          
   LayoutDashboard, 
   Settings,
-  Microscope,  // <--- O Culpado de agora (Inovação)
+  Microscope,  // <--- O Culpado de agora (InovaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o)
   Gamepad2,    // <--- Provavelmente vai pedir em seguida (Robot Game)
   Megaphone,   // <--- Provavelmente vai pedir em seguida (Marketing/Social)
-  Laptop,      // <--- Provavelmente vai pedir em seguida (Programação)
+  Laptop,      // <--- Provavelmente vai pedir em seguida (ProgramaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o)
   Code,
   BarChart3,   // <--- O Culpado de agora
-  PieChart,    // <--- Provavelmente vai pedir em seguida (Gráfico de Pizza)
-  TrendingUp,  // <--- Provavelmente vai pedir em seguida (Tendência de alta)
+  PieChart,    // <--- Provavelmente vai pedir em seguida (GrÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico de Pizza)
+  TrendingUp,  // <--- Provavelmente vai pedir em seguida (TendÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia de alta)
   Flag,
   Tag,
-  MessageSquare, // <--- O Culpado de agora (Comentários)
-  Share2,        // <--- Provavelmente usado para compartilhar estratégia
+  MessageSquare, // <--- O Culpado de agora (ComentÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rios)
+  Share2,        // <--- Provavelmente usado para compartilhar estratÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©gia
   Download,      // <--- Provavelmente usado para baixar PDF
-  Plus,          // <--- Botão de "Nova Estratégia" (+)
-  Trash2,        // <--- Botão de Lixeira (Apagar estratégia)
+  Plus,          // <--- BotÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de "Nova EstratÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©gia" (+)
+  Trash2,        // <--- BotÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de Lixeira (Apagar estratÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©gia)
   Edit3,
   GitCommit,     // <--- O Culpado de agora
-  GitBranch,     // <--- Provavelmente vai pedir em seguida (Versões/Ramos)
-  GitPullRequest,// <--- Provavelmente vai pedir em seguida (Solicitação de Mudança)
+  GitBranch,     // <--- Provavelmente vai pedir em seguida (VersÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes/Ramos)
+  GitPullRequest,// <--- Provavelmente vai pedir em seguida (SolicitaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de MudanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a)
   GitMerge,
   Users,       // <--- O Culpado de agora (Lista da Equipe)
   UserPlus,    // <--- Provavelmente vai pedir em seguida (Adicionar Aluno)
-  UserCheck,   // <--- Provavelmente vai pedir em seguida (Presença/Status)
+  UserCheck,   // <--- Provavelmente vai pedir em seguida (PresenÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a/Status)
   UserX,       // <--- Provavelmente vai pedir em seguida (Remover Aluno)
   ClipboardList,
   AlertCircle,   // <--- O Culpado de agora (Erro/Aviso)
   Check,         // <--- Provavelmente vai pedir em seguida (Sucesso/Visto)
-  Info,          // <--- Provavelmente vai pedir em seguida (Informação)
+  Info,          // <--- Provavelmente vai pedir em seguida (InformaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o)
   HelpCircle,    // <--- Provavelmente vai pedir em seguida (Ajuda)
   XCircle,
   CheckSquare, // <--- O Culpado de agora (Checkbox marcado)
   Square,
   Loader2,
-  Scale,         // <--- O Culpado de agora (Avaliação)
-  Crop,          // <--- Ícone de Corte
+  Scale,         // <--- O Culpado de agora (AvaliaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o)
+  Crop,          // <--- ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âcone de Corte
   CheckCheck,    // <--- Provavelmente vai pedir em seguida (Aprovado Duplo)
   ExternalLink,  // <--- Provavelmente vai pedir em seguida (Abrir Arquivo em outra aba)
   FileWarning,
-  Book,          // <--- Ícone do Diário
-  Play,          // <--- NOVO: Ícone de Play para o Cronômetro
-  Clock,         // <--- NOVO: Ícone de Relógio (Agenda)
-  MapPin,        // <--- NOVO: Ícone de Localização (Agenda)
-  MonitorPlay,   // <--- NOVO: Ícone do Modo TV
-  Maximize,      // <--- NOVO: Expandir gráfico
-  Minimize,      // <--- NOVO: Minimizar gráfico
+  Book,          // <--- ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âcone do DiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio
+  Play,          // <--- NOVO: ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âcone de Play para o CronÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´metro
+  Clock,         // <--- NOVO: ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âcone de RelÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³gio (Agenda)
+  MapPin,        // <--- NOVO: ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âcone de LocalizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (Agenda)
+  MonitorPlay,   // <--- NOVO: ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âcone do Modo TV
+  Maximize,      // <--- NOVO: Expandir grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico
+  Minimize,      // <--- NOVO: Minimizar grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico
   Sparkles,
 } from 'lucide-react';
 
@@ -149,7 +156,7 @@ const LazyOverlayFallback = ({ label = 'Carregando modo...' }) => (
 );
 
 
-// --- CONFIGURAÇÃO DE NÍVEIS ---
+// --- CONFIGURAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DE NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂVEIS ---
 
 const LEVELS = [
 
@@ -162,7 +169,7 @@ const LEVELS = [
     { name: "Mestre FLL", min: 2400, max: 10000, color: "text-yellow-400" }
 
 ];
-// --- LISTA DE TÉCNICOS (ADMINISTRADORES) ---
+// --- LISTA DE TÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°CNICOS (ADMINISTRADORES) ---
 const ADMIN_USERS = [
   { user: "Guilherme", pass: "dti2@15!!" },
   { user: "Felipe", pass: "dti2@15!!" },
@@ -211,17 +218,17 @@ const STUDENT_PANEL_DEFAULTS = {
   achievements: true
 };
 
-const SCHOOL_REPORT_SUBJECTS = ['Matemática', 'Português', 'Ciências', 'História', 'Geografia', 'Inglês', 'Artes', 'Ed. Física', 'Robótica', 'STEAM'];
+const SCHOOL_REPORT_SUBJECTS = ['Matematica', 'Portugues', 'Ciencias', 'Historia', 'Geografia', 'Ingles', 'Artes', 'Ed. Fisica', 'Robotica', 'STEAM'];
 
 const SCHOOL_REPORT_STAGE_CONFIG = {
   etapa1: {
     id: 'etapa1',
-    label: '1ª etapa',
+    label: '1a etapa',
     periodLabel: 'fechamento do fim de abril'
   },
   etapa2: {
     id: 'etapa2',
-    label: '2ª etapa',
+    label: '2a etapa',
     periodLabel: 'fechamento de meados de setembro'
   }
 };
@@ -268,10 +275,10 @@ const getSchoolStageRecord = (studentOrGrades, stageId) => {
 const EVENT_TYPE_OPTIONS = [
   { value: 'Visita', label: 'Visita Tecnica' },
   { value: 'Especialista', label: 'Mentoria / Especialista' },
-  { value: 'Reunião', label: 'Reuniao Extra' },
+  { value: 'ReuniÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o', label: 'Reuniao Extra' },
   { value: 'Treino', label: 'Treino' },
   { value: 'Prazo', label: 'Prazo / Entrega' },
-  { value: 'Competição', label: 'Competicao' },
+  { value: 'CompetiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o', label: 'Competicao' },
   { value: 'Outro', label: 'Outro' }
 ];
 
@@ -288,30 +295,6 @@ const EVENT_STATUS_OPTIONS = [
 ];
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
-
-const normalizeStationKey = (value = '') =>
-  String(value)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
-
-const resolveTaskTagFromStation = (station) => {
-  const normalizedStation = normalizeStationKey(station);
-
-  if (normalizedStation === 'engenharia') return 'engenharia';
-  if (normalizedStation === 'inovacao') return 'inovacao';
-  if (normalizedStation === 'gestao') return 'gestao';
-
-  return 'geral';
-};
-
-const buildInitialKanbanTaskDraft = (station, dueDate = '') => ({
-  text: '',
-  dueDate,
-  tag: resolveTaskTagFromStation(station),
-  priority: 'normal'
-});
 
 const STUDENT_TASKS_LABEL = 'Tarefas';
 const STUDENT_TASKS_OPEN_LABEL = 'Abrir Tarefas';
@@ -427,7 +410,7 @@ function App() {
   const [tasks, setTasks] = useState([]);
   const [logbookEntries, setLogbookEntries] = useState([]);
   const [events, setEvents] = useState([]);
-  const [adminProfile, setAdminProfile] = useState({ name: 'Técnico', avatarImage: null, specialty: '' });
+  const [adminProfile, setAdminProfile] = useState({ name: 'Tecnico', avatarImage: null, specialty: '' });
   const [isCropping, setIsCropping] = useState(false);
   const [cropImgSrc, setCropImgSrc] = useState(null);
   const [cropScale, setCropScale] = useState(1);
@@ -450,7 +433,7 @@ function App() {
   const [innovationRubric, setInnovationRubric] = useState(DEFAULT_INNOVATION_RUBRIC);
   const [robotDesignRubric, setRobotDesignRubric] = useState(DEFAULT_ROBOT_DESIGN_RUBRIC);
   const [outreachEvents, setOutreachEvents] = useState([]);
-  const [projectSummary, setProjectSummary] = useState({ title: "Nome do Projeto", problem: "", solution: "", sharing: "", image: null });
+  const [projectSummary, setProjectSummary] = useState(DEFAULT_PROJECT_SUMMARY);
   const [modal, setModal] = useState({ type: null, data: null });
   const [notification, setNotification] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -494,9 +477,9 @@ function App() {
     || ((adminTab === 'strategy' || studentTab === 'strategy') && strategySubTab === 'robot_design')
     || dashboardNeedsRobotData;
   const [missions, setMissions] = useState({
-    Engenharia: { text: "Definir estratégia do robô.", deadline: today },
-    Inovação: { text: "Pesquisar especialistas.", deadline: today },
-    Gestão: { text: "Atualizar o Cronograma.", deadline: today }
+    [STATION_KEYS.ENGINEERING]: { text: 'Definir estrategia do robo.', deadline: today },
+    [STATION_KEYS.INNOVATION]: { text: 'Pesquisar especialistas.', deadline: today },
+    [STATION_KEYS.MANAGEMENT]: { text: 'Atualizar o cronograma.', deadline: today }
   });
 
   useEffect(() => {
@@ -627,19 +610,19 @@ function App() {
       }
   };
 
-// --- LISTA DE BADGES (VERSÃO FINAL) ---
+// --- LISTA DE BADGES (VERSÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O FINAL) ---
   const BADGES_LIST = [
     { id: 'pitstop', name: 'Pit Stop F1', icon: <Timer size={20}/>, color: 'text-red-500', desc: 'Troca de anexo em menos de 3s.' },
-    { id: 'engineer', name: 'Engenheiro Minimalista', icon: <Wrench size={20}/>, color: 'text-gray-400', desc: 'Solução mecânica simples e genial.' },
-    { id: 'ice_blood', name: 'Sangue Frio', icon: <ThermometerSnowflake size={20}/>, color: 'text-blue-400', desc: 'Manteve a calma no erro crítico.' },
-    { id: 'repetition', name: 'Rei da Repetição', icon: <RotateCcw size={20}/>, color: 'text-green-500', desc: '10 acertos seguidos na mesa.' },
-    { id: 'helper', name: 'Braço Direito', icon: <HeartHandshake size={20}/>, color: 'text-pink-500', desc: 'Ajudou o time em qualquer situação.' },
-    { id: 'data_keeper', name: 'Guardião dos Dados', icon: <BarChart size={20}/>, color: 'text-blue-500', desc: 'Trouxe estatísticas reais pro Projeto.' },
+    { id: 'engineer', name: 'Engenheiro Minimalista', icon: <Wrench size={20}/>, color: 'text-gray-400', desc: 'SoluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o mecÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢nica simples e genial.' },
+    { id: 'ice_blood', name: 'Sangue Frio', icon: <ThermometerSnowflake size={20}/>, color: 'text-blue-400', desc: 'Manteve a calma no erro crÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­tico.' },
+    { id: 'repetition', name: 'Rei da RepetiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o', icon: <RotateCcw size={20}/>, color: 'text-green-500', desc: '10 acertos seguidos na mesa.' },
+    { id: 'helper', name: 'BraÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§o Direito', icon: <HeartHandshake size={20}/>, color: 'text-pink-500', desc: 'Ajudou o time em qualquer situaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o.' },
+    { id: 'data_keeper', name: 'GuardiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o dos Dados', icon: <BarChart size={20}/>, color: 'text-blue-500', desc: 'Trouxe estatÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­sticas reais pro Projeto.' },
     { id: 'legend', name: 'Lenda do XP', icon: <Zap size={20}/>, color: 'text-yellow-400', desc: 'Destaque absoluto no Ranking de XP.' },
     { id: 'ambassador', name: 'Embaixador', icon: <Crown size={20}/>, color: 'text-purple-500', desc: 'Liderou pelo exemplo e uniu a equipe.' },
   ];
 
-  // --- DESAFIO DE INGLÊS: Função do Técnico ---
+  // --- DESAFIO DE INGLÃƒÆ’Ã†â€™Ãƒâ€¦Ã‚Â S: FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o do TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico ---
   const toggleEnglishChallenge = async (student) => {
       if (!isAdmin) return;
       try {
@@ -655,21 +638,21 @@ function App() {
               s.id === student.id ? { ...s, englishChallengeUnlocked: newState } : s
           ));
       } catch (error) {
-          console.error("Erro ao liberar desafio de inglês:", error);
+          console.error("Erro ao liberar desafio de inglÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªs:", error);
       }
   };
 
-  // --- DESAFIO DE INGLÊS: Função do Aluno ---
+  // --- DESAFIO DE INGLÃƒÆ’Ã†â€™Ãƒâ€¦Ã‚Â S: FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o do Aluno ---
   const claimEnglishXP = async () => {
       if (!viewAsStudent || !viewAsStudent.englishChallengeUnlocked) return;
 
       try {
           const studentRef = doc(db, "students", viewAsStudent.id);
-          const xpBonus = 20; // Quanto de XP ele ganha por falar inglês
+          const xpBonus = 20; // Quanto de XP ele ganha por falar inglÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªs
 
           await updateDoc(studentRef, {
               xp: (viewAsStudent.xp || 0) + xpBonus,
-              englishChallengeUnlocked: false // Bloqueia o botão de novo automaticamente!
+              englishChallengeUnlocked: false // Bloqueia o botÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de novo automaticamente!
           });
 
           // Atualiza a tela do aluno
@@ -679,12 +662,12 @@ function App() {
               englishChallengeUnlocked: false 
           }));
           
-          alert("Great job! Mandou bem no inglês! +20 XP 🇺🇸✨");
+          alert("Great job! Mandou bem no inglÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªs! +20 XP ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡Ãƒâ€šÃ‚ÂºÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“Ãƒâ€šÃ‚Â¨");
       } catch (error) {
-          console.error("Erro ao resgatar XP de inglês:", error);
+          console.error("Erro ao resgatar XP de inglÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªs:", error);
       }
   };
- // Função atualizada para o Técnico dar Badges
+ // FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o atualizada para o TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico dar Badges
   const toggleBadge = async (student, badgeId) => {
       if (!isAdmin) return;
       
@@ -692,13 +675,13 @@ function App() {
       let newBadges;
       let xpBonus = 0;
 
-      // Lógica de Adicionar/Remover
+      // LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³gica de Adicionar/Remover
       if (currentBadges.includes(badgeId)) {
           newBadges = currentBadges.filter(b => b !== badgeId);
-          // Opcional: Remover XP se tirar a badge? Melhor não, deixa o XP ganho.
+          // Opcional: Remover XP se tirar a badge? Melhor nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o, deixa o XP ganho.
       } else {
           newBadges = [...currentBadges, badgeId];
-          xpBonus = 100; // Bônus de XP ao ganhar
+          xpBonus = 100; // BÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´nus de XP ao ganhar
       }
 
       // 1. Atualiza no Firebase
@@ -708,7 +691,7 @@ function App() {
          xp: (student.xp || 0) + xpBonus
       });
 
-      // 2. Atualiza o estado local para ver a mudança na hora (sem recarregar)
+      // 2. Atualiza o estado local para ver a mudanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a na hora (sem recarregar)
       const updatedStudent = { ...student, badges: newBadges, xp: (student.xp || 0) + xpBonus };
       
       // Atualiza o aluno selecionado no modal
@@ -718,8 +701,8 @@ function App() {
       setStudents(prevStudents => 
         prevStudents.map(s => s.id === student.id ? updatedStudent : s)
       );
-  };
-  // --- LÓGICA DA CHUVA DE CONFETES (LEVEL UP E GRANDES GANHOS DE XP) ---
+      };
+  // --- LÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œGICA DA CHUVA DE CONFETES (LEVEL UP E GRANDES GANHOS DE XP) ---
 
   useEffect(() => {
       return () => {
@@ -739,32 +722,32 @@ function App() {
       if (viewAsStudent) {
           const currentXp = viewAsStudent.xp || 0;
 
-          // 1. Descobre o nível atual baseado no XP do aluno
+          // 1. Descobre o nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel atual baseado no XP do aluno
           const currentLevelObj = getCurrentLevel(currentXp);
-          // Encontra a posição numérica desse nível (0 = Novato, 1 = Aprendiz, etc)
+          // Encontra a posiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o numÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©rica desse nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel (0 = Novato, 1 = Aprendiz, etc)
           const currentLevelIndex = LEVELS.findIndex(l => l.name === currentLevelObj.name);
           
-          // 2. Busca na memória qual foi o último nível que esse aluno assistiu
+          // 2. Busca na memÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ria qual foi o ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºltimo nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel que esse aluno assistiu
           const storageKey = `last_seen_level_${viewAsStudent.id}`;
           const lastSeenLevel = localStorage.getItem(storageKey);
 
           let triggerConfetti = false;
           let msg = "";
 
-          // 3. Se não for o primeiro carregamento da tela, verifica as vitórias
+          // 3. Se nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o for o primeiro carregamento da tela, verifica as vitÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rias
           if (prevXpRef.current !== null) {
               const prevXp = prevXpRef.current;
               const gainedXp = currentXp - prevXp;
 
-              // Condição A: Subiu de nível!
+              // CondiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o A: Subiu de nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel!
               if (lastSeenLevel !== null && currentLevelIndex > parseInt(lastSeenLevel)) {
                   triggerConfetti = true;
-                  msg = `🎉 PARABÉNS! Você alcançou o nível ${currentLevelObj.name.toUpperCase()}!`;
+                  msg = `ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã‚Â½ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â° PARABÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°NS! VocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª alcanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ou o nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel ${currentLevelObj.name.toUpperCase()}!`;
               } 
-              // Condição B: Recebeu recompensa de Fechamento de Semana (35 ou 50 XP) ou outra bonificação alta
+              // CondiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o B: Recebeu recompensa de Fechamento de Semana (35 ou 50 XP) ou outra bonificaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o alta
               else if (gainedXp >= 35) {
                   triggerConfetti = true;
-                  msg = `🎉 RECOMPENSA COLETADA! Você ganhou +${gainedXp} XP!`;
+                  msg = `ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã‚Â½ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â° RECOMPENSA COLETADA! VocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª ganhou +${gainedXp} XP!`;
               }
           }
 
@@ -783,13 +766,13 @@ function App() {
               }
           }
 
-          // 4. Salva o nível atual para não repetir a animação toda hora
+          // 4. Salva o nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel atual para nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o repetir a animaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o toda hora
           localStorage.setItem(storageKey, currentLevelIndex.toString());
           
-          // Atualiza o valor anterior para a próxima renderização
+          // Atualiza o valor anterior para a prÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³xima renderizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
           prevXpRef.current = currentXp;
       } else {
-          // Se deslogar, limpa a memória temporária do XP
+          // Se deslogar, limpa a memÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ria temporÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ria do XP
           prevXpRef.current = null;
       }
   }, [isLiteMode, viewAsStudent?.xp, viewAsStudent?.id]);
@@ -803,7 +786,7 @@ function App() {
       return `${year}-${month}-${day}`;
   };
 
-  // Função para carregar a bateria de hoje do banco
+  // FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o para carregar a bateria de hoje do banco
   useEffect(() => {
       if (!db) return;
       const today = getTodayMoodDate();
@@ -817,21 +800,21 @@ function App() {
       return () => unsubscribe();
   }, [db]);
 
-  // Função para Salvar o Humor
+  // FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o para Salvar o Humor
   const handleMoodSubmit = async (level) => {
       if (!viewAsStudent) return;
 
       // Trava 1: Apenas dias de treino (Segunda=1, Quarta=3)
       const dayOfWeek = new Date().getDay();
       if (dayOfWeek !== 1 && dayOfWeek !== 3) {
-          alert("Check-in bloqueado. Votação permitida apenas às segundas e quartas.");
+          alert("Check-in bloqueado. VotaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o permitida apenas ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â s segundas e quartas.");
           return;
       }
 
       // Trava 2: Impedir Farm de XP (apenas um voto por dia)
       const hasVotedToday = teamMoods.some(mood => mood.studentId === viewAsStudent.id);
       if (hasVotedToday) {
-          alert("Você já respondeu hoje! Foco no treino.");
+          alert("VocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ respondeu hoje! Foco no treino.");
           return;
       }
 
@@ -848,19 +831,19 @@ function App() {
           });
           
           // Ganha 5 XP por participar (Incentivo!)
-          // (Aqui reaproveitamos sua função de dar XP se ela existir, ou fazemos direto)
+          // (Aqui reaproveitamos sua funÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de dar XP se ela existir, ou fazemos direto)
           await updateDoc(doc(db, "students", viewAsStudent.id), {
               xp: (viewAsStudent.xp || 0) + 2
           });
 
           setShowBatteryModal(false);
-          alert(`Obrigado por compartilhar! +5 XP ⚡`);
+          alert(`Obrigado por compartilhar! +5 XP ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â¡`);
       } catch (error) {
           console.error("Erro ao salvar bateria:", error);
       }
   };
 
-  // Cálculo da Média da Equipe (Para você ver)
+  // CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡lculo da MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia da Equipe (Para vocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª ver)
   const teamAverage = teamMoods.length > 0 
       ? Math.round(teamMoods.reduce((acc, curr) => acc + curr.level, 0) / teamMoods.length) 
       : 0;
@@ -869,20 +852,20 @@ function App() {
     e.preventDefault();
     setLoginError("");
     
-    // Normaliza (remove espaços e deixa minúsculo) para evitar erros de digitação
+    // Normaliza (remove espaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§os e deixa minÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºsculo) para evitar erros de digitaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
     const userClean = loginUser.trim().toLowerCase();
     const passClean = loginPass.trim();
 
-    // 1. Lógica de login de Admin (SIMPLIFICADA)
-    // TODO: Substituir por Firebase Auth. Por enquanto, uma verificação simples.
+    // 1. LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³gica de login de Admin (SIMPLIFICADA)
+    // TODO: Substituir por Firebase Auth. Por enquanto, uma verificaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o simples.
     let adminFound = ADMIN_USERS.find(a => a.user.toLowerCase() === userClean && a.pass === passClean);
 
     // Verifica se tem senha personalizada no Firebase
     if (!adminFound && adminProfile?.password) {
-        // Pode logar usando "admin", "tecnico" ou o próprio nome configurado no perfil
-        const allowedUsers = ['admin', 'técnico', 'tecnico', (adminProfile?.name || '').toLowerCase().trim()];
+        // Pode logar usando "admin", "tecnico" ou o prÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³prio nome configurado no perfil
+        const allowedUsers = ['admin', 'tecnico', (adminProfile?.name || '').toLowerCase().trim()];
         if (allowedUsers.includes(userClean) && passClean === adminProfile.password) {
-            adminFound = { user: adminProfile.name || 'Técnico' };
+            adminFound = { user: adminProfile.name || 'Tecnico' };
         }
     }
 
@@ -892,14 +875,14 @@ function App() {
         setCurrentUser(userObj);
         setIsAdmin(true);
         setViewAsStudent(null);
-        localStorage.setItem("roboquest_user", JSON.stringify(userObj)); // Salva na memória
+        localStorage.setItem("roboquest_user", JSON.stringify(userObj)); // Salva na memÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ria
         return;
     }
 
     console.log("Tentando logar aluno:", userClean);
     console.log("Alunos carregados no sistema:", students.length);
 
-    // 2. Tenta logar como Aluno (busca no array 'students' que já existe no seu código)
+    // 2. Tenta logar como Aluno (busca no array 'students' que jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ existe no seu cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo)
     // Nota: Certifique-se de que o cadastro de aluno salva 'username' e 'password'
     const studentFound = students.find(s => 
         s.username && s.username.toLowerCase().trim() === userClean && s.password === passClean
@@ -909,12 +892,12 @@ function App() {
         const userObj = { type: 'student', data: studentFound };
         setCurrentUser(userObj);
         setIsAdmin(false); // Remove flag de admin
-        setViewAsStudent(studentFound); // Força a visão para este aluno
-        localStorage.setItem("roboquest_user", JSON.stringify(userObj)); // Salva na memória
+        setViewAsStudent(studentFound); // ForÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a a visÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o para este aluno
+        localStorage.setItem("roboquest_user", JSON.stringify(userObj)); // Salva na memÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ria
     } else {
         // Log para ajudar a descobrir o erro (veja no F12)
-        console.log("Falha no login. Usuários disponíveis:", students.map(s => s.username));
-        setLoginError("Usuário ou senha incorretos.");
+        console.log("Falha no login. UsuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rios disponÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­veis:", students.map(s => s.username));
+        setLoginError("UsuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio ou senha incorretos.");
     }
   };
 
@@ -926,7 +909,7 @@ function App() {
       setViewAsStudent(null);
       setLoginUser("");
       setLoginPass("");
-      localStorage.removeItem("roboquest_user"); // Limpa a memória
+      localStorage.removeItem("roboquest_user"); // Limpa a memÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ria
         localStorage.removeItem("roboquest_last_activity"); // Limpa o controle de tempo
   };
   // ----------------------------------
@@ -937,11 +920,11 @@ function App() {
       let countdownIntervalId;
       let throttleTimer;
 
-      // O técnico (admin) não deve ser deslogado por inatividade
+      // O tÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico (admin) nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o deve ser deslogado por inatividade
       if (currentUser?.type === 'admin') return;
 
       const TIMEOUT_MINUTES = 30; // 30 minutos totais
-      const WARNING_SECONDS = 60; // Aviso nos últimos 60 segundos
+      const WARNING_SECONDS = 60; // Aviso nos ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºltimos 60 segundos
       
       const TIMEOUT_MS = TIMEOUT_MINUTES * 60 * 1000;
       const WARNING_MS = WARNING_SECONDS * 1000;
@@ -953,7 +936,7 @@ function App() {
         
         if (lastActivity) {
             const timeIdle = now - parseInt(lastActivity);
-            // Se houve atividade recente (outra aba), não mostra o aviso e reseta
+            // Se houve atividade recente (outra aba), nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o mostra o aviso e reseta
             if (timeIdle < IDLE_TIME_BEFORE_WARNING) {
                 resetTimer();
                 return;
@@ -980,7 +963,7 @@ function App() {
                 clearInterval(countdownIntervalId);
                 setLogoutCountdown(null);
                 handleLogout();
-                alert("Sessão encerrada por inatividade (30 minutos). Por favor, faça login novamente para sua segurança.");
+                alert("SessÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o encerrada por inatividade (30 minutos). Por favor, faÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a login novamente para sua seguranÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a.");
             } else {
                 setLogoutCountdown(timeLeft);
             }
@@ -1009,7 +992,7 @@ function App() {
         const now = new Date().getTime();
         if (lastActivity && now - parseInt(lastActivity) > TIMEOUT_MS) {
           handleLogout();
-          alert("Sessão encerrada por inatividade (30 minutos). Por favor, faça login novamente.");
+          alert("SessÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o encerrada por inatividade (30 minutos). Por favor, faÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a login novamente.");
           return;
         }
         
@@ -1032,7 +1015,7 @@ function App() {
     }, [currentUser]);
 
 
-  // --- LÓGICA DE NOTIFICAÇÕES DA AGENDA EM TEMPO REAL ---
+  // --- LÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œGICA DE NOTIFICAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES DA AGENDA EM TEMPO REAL ---
   const getLocalYYYYMMDD = (dateObj) => {
       const year = dateObj.getFullYear();
       const month = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -1109,7 +1092,7 @@ function App() {
           };
       }
 
-      if (type === 'Reunião') {
+      if (type === 'ReuniÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o') {
           return {
               label: 'Reuniao',
               tone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-100',
@@ -1133,7 +1116,7 @@ function App() {
           };
       }
 
-      if (type === 'Competição') {
+      if (type === 'CompetiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o') {
           return {
               label: 'Competicao',
               tone: 'border-red-500/20 bg-red-500/10 text-red-100',
@@ -1272,7 +1255,7 @@ function App() {
   const eventsTomorrow = events.filter(e => e.date === localTomorrowStr);
   const urgentEventsCount = eventsToday.length + eventsTomorrow.length;
 
-  // --- LÓGICA DE NOTIFICAÇÕES DO KANBAN ---
+  // --- LÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œGICA DE NOTIFICAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES DO KANBAN ---
   const urgentTasks = tasks.filter(t => t.status !== 'done' && t.dueDate && t.dueDate <= localTodayStr);
   const urgentTasksCount = urgentTasks.length;
 
@@ -1285,7 +1268,7 @@ function App() {
                   <div key={ev.id} className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl flex items-center justify-between animate-in slide-in-from-top-4 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
                       <div className="flex items-center gap-4">
                           <div className="p-3 bg-red-500/20 rounded-full animate-pulse"><AlertTriangle className="text-red-500" size={24} /></div>
-                          <div><h4 className="text-red-400 font-bold text-xs uppercase tracking-widest mb-1 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500 animate-ping"></div> EVENTO HOJE</h4><p className="text-white font-bold md:text-lg leading-none">{ev.title} <span className="text-gray-300 font-normal text-xs md:text-sm ml-2">às {ev.time}</span></p></div>
+                          <div><h4 className="text-red-400 font-bold text-xs uppercase tracking-widest mb-1 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500 animate-ping"></div> EVENTO HOJE</h4><p className="text-white font-bold md:text-lg leading-none">{ev.title} <span className="text-gray-300 font-normal text-xs md:text-sm ml-2">ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â s {ev.time}</span></p></div>
                       </div>
                       <button onClick={() => { isAdmin ? setAdminTab('agenda') : setStudentTab('agenda') }} className="hidden md:block text-xs bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg font-bold transition-all shadow-lg shadow-red-900/20 whitespace-nowrap">Ver na Agenda</button>
                   </div>
@@ -1294,7 +1277,7 @@ function App() {
                   <div key={ev.id} className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-xl flex items-center justify-between animate-in slide-in-from-top-4 shadow-[0_0_15px_rgba(234,179,8,0.1)]">
                       <div className="flex items-center gap-4">
                           <div className="p-3 bg-yellow-500/20 rounded-full"><CalendarDays className="text-yellow-500" size={24} /></div>
-                          <div><h4 className="text-yellow-500 font-bold text-xs uppercase tracking-widest mb-1">EVENTO AMANHÃ</h4><p className="text-white font-bold md:text-lg leading-none">{ev.title} <span className="text-gray-300 font-normal text-xs md:text-sm ml-2">às {ev.time}</span></p></div>
+                          <div><h4 className="text-yellow-500 font-bold text-xs uppercase tracking-widest mb-1">EVENTO AMANHÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢</h4><p className="text-white font-bold md:text-lg leading-none">{ev.title} <span className="text-gray-300 font-normal text-xs md:text-sm ml-2">ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â s {ev.time}</span></p></div>
                       </div>
                       <button onClick={() => { isAdmin ? setAdminTab('agenda') : setStudentTab('agenda') }} className="hidden md:block text-xs bg-yellow-600 hover:bg-yellow-500 text-black px-4 py-2 rounded-lg font-bold transition-all shadow-lg shadow-yellow-900/20 whitespace-nowrap">Ver na Agenda</button>
                   </div>
@@ -1315,7 +1298,7 @@ function App() {
   // --- NOVO: Sincroniza dados do aluno logado com o Firebase em tempo real ---
   useEffect(() => {
     if (currentUser?.type === 'student' && students.length > 0) {
-        // Procura a versão mais recente deste aluno na lista que veio do banco
+        // Procura a versÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o mais recente deste aluno na lista que veio do banco
         const freshStudent = students.find(s => s.id === currentUser.data.id);
         if (freshStudent) {
             setViewAsStudent(freshStudent);
@@ -1328,7 +1311,7 @@ function App() {
 
 
 
-// --- FUNÇÃO DE CRONOGRAMA OFICIAL (12 ALUNOS) ---
+// --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DE CRONOGRAMA OFICIAL (12 ALUNOS) ---
   // Usamos useMemo para reconectar os dados assim que os alunos carregarem do Firebase
   const buildLocalDate = (year, monthIndex, day, hour = 12, minute = 0, second = 0, millisecond = 0) =>
       new Date(year, monthIndex, day, hour, minute, second, millisecond);
@@ -1362,59 +1345,59 @@ function App() {
       const totalScheduleWeeks = 36;
       let currentDate = buildLocalDate(2026, 2, 22);
 
-      // 1. CAPITÃS (Sempre Fixas em Gestão - Tarde)
+      // 1. CAPITÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢S (Sempre Fixas em GestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o - Tarde)
       const capitasNames = ["Heloise", "Sofia"];
 
-      // 2. APRENDIZES (Sexto Ano): Antônio, Heloisa, Helena (Rodízio Simplificado)
+      // 2. APRENDIZES (Sexto Ano): AntÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´nio, Heloisa, Helena (RodÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­zio Simplificado)
 
-      // 3. POOL DO RODÍZIO (7 Alunos da Manhã)
-      // Estes rodam nas vagas: 3 Eng, 3 Inov, 1 Gestão (Líder da Manhã)
+      // 3. POOL DO RODÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂZIO (7 Alunos da ManhÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£)
+      // Estes rodam nas vagas: 3 Eng, 3 Inov, 1 GestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­der da ManhÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£)
       // Ciclo de 7 semanas para dar a volta completa
       const morningPool = [
           "Enzo", "Mariana", 
-          "Lívia", "Arthur Silva", 
+          "LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­via", "Arthur Silva", 
           "Benjamim", "Davi Miguel", 
-          "Antônio Yamaguchi" 
+          "AntÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´nio Yamaguchi" 
       ];
 
-      // Função auxiliar para criar objetos visuais (evita o "Vago")
+      // FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o auxiliar para criar objetos visuais (evita o "Vago")
       const getStudentObjects = (namesList) => {
           return namesList.map(nameStr => {
-              // Correção: Comparação exata para diferenciar "Antônio" de "Antônio Yamaguchi"
+              // CorreÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: ComparaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o exata para diferenciar "AntÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´nio" de "AntÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´nio Yamaguchi"
               const found = students.find(s => s.name && s.name.trim().toLowerCase() === nameStr.trim().toLowerCase());
               if (found) return found; 
-              // Cria objeto temporário se não achar no banco
+              // Cria objeto temporÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio se nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o achar no banco
               return { id: `fake-${nameStr}-${Math.random()}`, name: nameStr, avatarType: 'robot' };
           });
       };
 
       for (let i = 1; i <= totalScheduleWeeks; i++) { 
           const endDate = new Date(currentDate); 
-          endDate.setDate(currentDate.getDate() + 6); // Agora a semana vai de Domingo a Sábado
+          endDate.setDate(currentDate.getDate() + 6); // Agora a semana vai de Domingo a SÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡bado
           
-          // --- LÓGICA DE ROTAÇÃO (CICLO DE 7) ---
-          // A cada semana, giramos a lista dos 7 alunos uma posição
-          // Assim, todos passam por Eng -> Inov -> Gestão
+          // --- LÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œGICA DE ROTAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O (CICLO DE 7) ---
+          // A cada semana, giramos a lista dos 7 alunos uma posiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
+          // Assim, todos passam por Eng -> Inov -> GestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
           const shift = (i - 1) % 7;
           const currentRotation = [...morningPool];
           
-          // Realiza a rotação do array
+          // Realiza a rotaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o do array
           for(let k = 0; k < shift; k++) {
               currentRotation.push(currentRotation.shift());
           }
 
-          // DISTRIBUIÇÃO INTERCALADA (EVITA REPETIÇÕES SEGUIDAS)
-          // Para alternar e não ficar 3 semanas na mesma área:
-          // Eng: Pega índices 0, 3, 5
-          // Inov: Pega índices 2, 4, 6
-          // Gestão: Pega índice 1
+          // DISTRIBUIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O INTERCALADA (EVITA REPETIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES SEGUIDAS)
+          // Para alternar e nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o ficar 3 semanas na mesma ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rea:
+          // Eng: Pega ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­ndices 0, 3, 5
+          // Inov: Pega ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­ndices 2, 4, 6
+          // GestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: Pega ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­ndice 1
           const engTeam = [currentRotation[0], currentRotation[3], currentRotation[5]];
           const inovTeam = [currentRotation[2], currentRotation[4], currentRotation[6]];
           const morningLeader = [currentRotation[1]];
 
-          // ONDE ENTRAM OS TRAINEES (6º ANO)?
-          // Ciclo de 6 semanas: Rotaciona as duplas e as áreas para misturar bem (Todos trabalham com todos)
-          const tList = ["Antônio Echenique", "Helena", "Heloisa"];
+          // ONDE ENTRAM OS TRAINEES (6ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âº ANO)?
+          // Ciclo de 6 semanas: Rotaciona as duplas e as ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡reas para misturar bem (Todos trabalham com todos)
+          const tList = ["AntÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´nio Echenique", "Helena", "Heloisa"];
           const cycle = (i - 1) % 6; 
           
           let pair, solo;
@@ -1430,7 +1413,7 @@ function App() {
              engTeam.push(solo);
           }
 
-          // GESTÃO FINAL = Capitãs (Tarde) + Líder da Manhã
+          // GESTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O FINAL = CapitÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£s (Tarde) + LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­der da ManhÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£
           const gestaoFinal = [...capitasNames, ...morningLeader];
 
           schedule.push({ 
@@ -1439,19 +1422,19 @@ function App() {
               startDate: formatLocalDateValue(currentDate), 
               endDate: formatLocalDateValue(endDate), 
               assignments: { 
-                  Engenharia: getStudentObjects(engTeam), 
-                  Inovação:   getStudentObjects(inovTeam),
-                  Gestão:     getStudentObjects(gestaoFinal) // Capitãs + Alunos
+                  [STATION_KEYS.ENGINEERING]: getStudentObjects(engTeam), 
+                  [STATION_KEYS.INNOVATION]: getStudentObjects(inovTeam),
+                  [STATION_KEYS.MANAGEMENT]: getStudentObjects(gestaoFinal) // CapitÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£s + Alunos
               } 
           }); 
           currentDate.setDate(currentDate.getDate() + 7); 
       } 
       return schedule;
-  }, [students]); // <--- A mágica acontece aqui: atualiza quando "students" muda
+  }, [students]); // <--- A mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡gica acontece aqui: atualiza quando "students" muda
 
-  // --- 1. CÁLCULO DA SEMANA ATUAL (CÓDIGO NOVO) ---
+  // --- 1. CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂLCULO DA SEMANA ATUAL (CÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œDIGO NOVO) ---
   useEffect(() => {
-    // Se não tiver cronograma, não faz nada
+    // Se nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o tiver cronograma, nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o faz nada
     if (!rotationSchedule || rotationSchedule.length === 0) return;
     
     const calculateCurrentWeek = () => {
@@ -1466,7 +1449,7 @@ function App() {
         });
 
         if (found) {
-            // Atualiza apenas se mudou de semana para não causar re-renders atoa
+            // Atualiza apenas se mudou de semana para nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o causar re-renders atoa
             setCurrentWeekData(prev => prev?.id !== found.id ? found : prev);
         } else {
             const firstWeek = rotationSchedule[0];
@@ -1483,7 +1466,7 @@ function App() {
     // 2. Configura um timer para checar a data a cada 1 minuto (60000 milissegundos)
     const intervalId = setInterval(calculateCurrentWeek, 60000);
 
-    // 3. Limpa o timer para não dar vazamento de memória
+    // 3. Limpa o timer para nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o dar vazamento de memÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ria
     return () => clearInterval(intervalId);
   }, [rotationSchedule]);
 
@@ -1499,19 +1482,19 @@ function App() {
 
 
 
- // 1. Sincronização com Firebase (Carrega os dados)
+ // 1. SincronizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o com Firebase (Carrega os dados)
   useEffect(() => {
     if (!db) return;
 
-    // Função auxiliar para criar ouvintes seguros
+    // FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o auxiliar para criar ouvintes seguros
     const createListener = (colName, setter) => {
         return onSnapshot(collection(db, colName), (snapshot) => {
             const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-            console.log(`✅ ${colName} carregados com sucesso:`, data.length);
+            console.log(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ${colName} carregados com sucesso:`, data.length);
             setter(data);
         }, (error) => {
-            console.error(`❌ ERRO CRÍTICO em ${colName}:`, error);
-            showNotification(`Erro de conexão: ${error.code}`, "error");
+            console.error(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ ERRO CRÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂTICO em ${colName}:`, error);
+            showNotification(`Erro de conexÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: ${error.code}`, "error");
         });
     };
 
@@ -1538,7 +1521,7 @@ function App() {
         }
     });
 
-    // ... e não esqueça de adicionar no return para limpar:
+    // ... e nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o esqueÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a de adicionar no return para limpar:
     // return () => { ... unsubProject(); };
     
     return () => {
@@ -1568,17 +1551,34 @@ function App() {
     const unsubMatrix = createListener("decisionMatrix", setDecisionMatrix);
     const unsubOutreach = createListener("outreach", setOutreachEvents);
 
-    const unsubProject = onSnapshot(collection(db, "project"), (snapshot) => {
-        if (!snapshot.empty) {
-            setProjectSummary({ ...snapshot.docs[0].data(), id: snapshot.docs[0].id });
+    let hasProjectMain = false;
+
+    const unsubProjectMain = onSnapshot(doc(db, "project", PROJECT_MAIN_DOC_ID), (docSnap) => {
+        hasProjectMain = docSnap.exists();
+
+        if (docSnap.exists()) {
+            setProjectSummary(resolveProjectSummary({
+                mainSummary: { ...docSnap.data(), id: docSnap.id }
+            }));
         }
+    });
+
+    const unsubProjectFallback = onSnapshot(collection(db, "project"), (snapshot) => {
+        if (hasProjectMain) return;
+
+        const legacySummaries = snapshot.docs
+            .filter((docSnap) => docSnap.id !== PROJECT_MAIN_DOC_ID)
+            .map((docSnap) => ({ ...docSnap.data(), id: docSnap.id }));
+
+        setProjectSummary(resolveProjectSummary({ legacySummaries }));
     });
 
     return () => {
         unsubExperts();
         unsubMatrix();
         unsubOutreach();
-        unsubProject();
+        unsubProjectMain();
+        unsubProjectFallback();
     };
   }, [shouldLoadStrategyWorkspaceData]);
 
@@ -1654,7 +1654,7 @@ function App() {
     };
   }, [isPitStopModalOpen]);
 
-  // --- LÓGICA DO CRONÔMETRO ---
+  // --- LÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œGICA DO CRONÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂMETRO ---
   useEffect(() => {
     let interval;
     if (activeTimer) {
@@ -1687,7 +1687,7 @@ function App() {
 
   // --- FIM DOS USE EFFECTS ---
 
-  // Função de notificação (corrigida)
+  // FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de notificaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (corrigida)
   const showNotification = (msg, type = 'success') => { 
       setNotification({ msg, type }); 
       setTimeout(() => setNotification(null), 3000); 
@@ -1744,7 +1744,7 @@ function App() {
 
  
 
-  // --- FUNÇÃO ESPECÍFICA PARA FOTO DE PERFIL (COM CROP) ---
+  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O ESPECÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂFICA PARA FOTO DE PERFIL (COM CROP) ---
   const handleProfilePicSelect = async (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -1760,7 +1760,7 @@ function App() {
   // --- SALVAR O RECORTE ---
   const handleCropSave = () => {
       const canvas = document.createElement('canvas');
-      const size = 200; // Tamanho padrão do avatar
+      const size = 200; // Tamanho padrÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o do avatar
       canvas.width = size;
       canvas.height = size;
       const ctx = canvas.getContext('2d');
@@ -1772,7 +1772,7 @@ function App() {
           ctx.fillStyle = '#111';
           ctx.fillRect(0, 0, size, size);
           
-          // Desenha a imagem com as transformações do usuário
+          // Desenha a imagem com as transformaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes do usuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio
           ctx.drawImage(img, cropPos.x, cropPos.y, img.naturalWidth * cropScale, img.naturalHeight * cropScale);
           
           const resultBase64 = canvas.toDataURL('image/jpeg', 0.9);
@@ -1793,11 +1793,11 @@ function App() {
 
   const deleteStudent = (id) => { setStudents(prev => prev.filter(s => s.id !== id)); }
 
-  // --- FUNÇÕES DO KANBAN (TAREFAS) ---
+  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES DO KANBAN (TAREFAS) ---
   const createKanbanTask = async ({ text, dueDate = '', tag = 'geral', priority = 'normal', author, ...extraData }) => {
       if (!text) return;
 
-      const resolvedAuthor = author || (isAdmin ? "Técnico" : (viewAsStudent?.name || "Equipe"));
+      const resolvedAuthor = author || (isAdmin ? "Tecnico" : (viewAsStudent?.name || "Equipe"));
 
       await addDoc(collection(db, "tasks"), {
           text,
@@ -1829,7 +1829,7 @@ function App() {
       }
   }
 
-  // --- FUNÇÕES DA GARRA / ANEXO ---
+  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES DA GARRA / ANEXO ---
   const handleAttachmentSubmit = async (e) => { 
       e.preventDefault(); 
       const fd = new FormData(e.target); 
@@ -1843,7 +1843,7 @@ function App() {
           date: fd.get('date'), 
           changes: fd.get('changes'), 
           image: img,
-          author: modal.data?.author || viewAsStudent?.name || "Técnico"
+          author: modal.data?.author || viewAsStudent?.name || "Tecnico"
       };
 
       try {
@@ -1863,11 +1863,11 @@ function App() {
   const handleDeleteAttachment = async (e, id) => {
       e.stopPropagation();
       if (window.confirm("Tem certeza que deseja excluir esta garra/anexo?")) {
-          try { await deleteDoc(doc(db, "attachments", id)); showNotification("Garra excluída!"); } catch (error) {}
+          try { await deleteDoc(doc(db, "attachments", id)); showNotification("Garra excluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da!"); } catch (error) {}
       }
   };
 
-  // --- FUNÇÕES DO COFRE DE CÓDIGOS ---
+  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES DO COFRE DE CÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œDIGOS ---
   const handleCodeSubmit = async (e) => { 
       e.preventDefault(); 
       const fd = new FormData(e.target); 
@@ -1918,12 +1918,12 @@ function App() {
 
   const handleDeleteCode = async (e, id) => {
       e.stopPropagation();
-      if (window.confirm("Tem certeza que deseja excluir este código?")) {
+      if (window.confirm("Tem certeza que deseja excluir este cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo?")) {
           try { 
               await deleteDoc(doc(db, "codeSnippets", id)); 
-              showNotification("Código excluído!"); 
+              showNotification("CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo excluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­do!"); 
           } catch (error) {
-              console.error("Erro ao excluir código:", error);
+              console.error("Erro ao excluir cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo:", error);
               showNotification("Erro ao excluir.", "error");
           }
       }
@@ -1949,13 +1949,13 @@ function App() {
   };
 
   const moveTask = async (id, newStatus) => {
-      // --- TRAVA PARA MOVER PARA FEITO (SÓ TÉCNICO) ---
+      // --- TRAVA PARA MOVER PARA FEITO (SÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ TÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°CNICO) ---
       if (newStatus === 'done' && !isAdmin) {
-          alert("🛑 Acesso Bloqueado!\n\nApenas o Técnico pode mover tarefas para 'Feito' após aprová-las na coluna 'Em Revisão'.");
+          alert("Acesso bloqueado!\n\nApenas o Tecnico pode mover tarefas para 'Feito' depois de aprova-las na coluna 'Em Revisao'.");
           return;
       }
 
-      // --- TRAVA DE 3 HORAS (SÓ PARA ALUNOS) ---
+      // --- TRAVA DE 3 HORAS (SÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ PARA ALUNOS) ---
       if (newStatus === 'review' && !isAdmin) {
           const task = tasks.find(t => t.id === id);
           if (task && task.createdAt) {
@@ -1965,8 +1965,8 @@ function App() {
               
               if (hoursDiff < 3) {
                   const hoursLeft = (3 - hoursDiff).toFixed(1);
-                  alert(`🛑 Acesso Bloqueado!\n\nAs tarefas precisam de pelo menos 3 horas desde a criação para irem para "Em Revisão". Isso garante que vocês planejem ANTES de executar.\n\nAguarde mais ${hoursLeft} hora(s) para avançar.`);
-                  return; // Cancela a movimentação
+                  alert(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂºÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ Acesso Bloqueado!\n\nAs tarefas precisam de pelo menos 3 horas desde a criaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o para irem para "Em RevisÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o". Isso garante que vocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªs planejem ANTES de executar.\n\nAguarde mais ${hoursLeft} hora(s) para avanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ar.`);
+                  return; // Cancela a movimentaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
               }
           }
       }
@@ -1994,7 +1994,7 @@ function App() {
           if (!viewAsStudent) return;
           try {
               await updateDoc(doc(db, "tasks", id), { author: viewAsStudent.name });
-              showNotification("Você assumiu a responsabilidade desta tarefa!");
+              showNotification("VocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª assumiu a responsabilidade desta tarefa!");
           } catch (error) {
               console.error("Erro ao assumir:", error);
           }
@@ -2012,7 +2012,7 @@ function App() {
                 
                 const authorsArray = task.author.split(',').map(a => a.trim());
                 if (authorsArray.length >= 3) {
-                    showNotification("Esta tarefa já atingiu o limite de 3 participantes.", "error");
+                    showNotification("Esta tarefa jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ atingiu o limite de 3 participantes.", "error");
                     return;
                 }
                 
@@ -2020,7 +2020,7 @@ function App() {
             }
             
             await updateDoc(doc(db, "tasks", id), { author: newAuthor });
-            showNotification("Você entrou na tarefa!");
+            showNotification("VocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª entrou na tarefa!");
         } catch (error) {
             console.error("Erro ao participar da tarefa:", error);
         }
@@ -2038,7 +2038,7 @@ function App() {
             const newAuthor = authorsArray.length > 0 ? authorsArray.join(', ') : null;
             
             await updateDoc(doc(db, "tasks", id), { author: newAuthor });
-            showNotification("Você saiu da tarefa!");
+            showNotification("VocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª saiu da tarefa!");
         } catch (error) {
             console.error("Erro ao sair da tarefa:", error);
         }
@@ -2047,15 +2047,15 @@ function App() {
     const assignTaskToStudent = async (taskId, studentName) => {
         if (!isAdmin) return;
         
-        // Se o valor for vazio, desatribui (author: null). Senão, atribui.
+        // Se o valor for vazio, desatribui (author: null). SenÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o, atribui.
         const newAuthor = studentName === "" ? null : studentName;
 
         try {
             await updateDoc(doc(db, "tasks", taskId), { author: newAuthor });
             if (newAuthor) {
-              showNotification(`Tarefa atribuída para ${studentName}!`);
+              showNotification(`Tarefa atribuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da para ${studentName}!`);
             } else {
-              showNotification(`Tarefa agora é da equipe.`);
+              showNotification(`Tarefa agora ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© da equipe.`);
             }
         } catch (error) {
             console.error("Erro ao atribuir tarefa:", error);
@@ -2063,29 +2063,29 @@ function App() {
         }
     };
 
-  // --- FUNÇÃO PARA SALVAR DIÁRIO DE BORDO ---
+  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O PARA SALVAR DIÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂRIO DE BORDO ---
   const handleLogbookSubmit = async (e) => {
       e.preventDefault();
       const text = studentLogbookDraft.trim();
-      // Se não tiver semana definida, pega a atual ou a 1
+      // Se nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o tiver semana definida, pega a atual ou a 1
       const weekId = currentWeekData?.id || 1;
       const weekName = currentWeekData?.weekName || "Semana Inicial";
 
       if (!text || !viewAsStudent?.id) return; // Apenas alunos podem escrever
 
       try {
-          // O caminho agora é uma subcoleção dentro do documento do aluno
+          // O caminho agora ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© uma subcoleÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o dentro do documento do aluno
           const logbookRef = collection(db, 'students', viewAsStudent.id, 'logbook');
           
-          // Usamos setDoc com um ID específico para evitar duplicatas na mesma semana?
-          // Ou addDoc para permitir vários registros na semana?
-          // Vamos usar addDoc para permitir vários insights na mesma semana.
+          // Usamos setDoc com um ID especÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­fico para evitar duplicatas na mesma semana?
+          // Ou addDoc para permitir vÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rios registros na semana?
+          // Vamos usar addDoc para permitir vÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rios insights na mesma semana.
           
           const tags = Array.from(new Set((text.match(/#[^\s#]+/g) || []).map((tag) => tag.toLowerCase())));
           const wordCount = text.split(/\s+/).filter(Boolean).length;
 
           const newEntry = {
-              // Ainda salvamos o nome para a visualização consolidada do técnico
+              // Ainda salvamos o nome para a visualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o consolidada do tÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico
               studentName: viewAsStudent.name, 
               text: text,
               weekId: weekId,       // Para ordenar
@@ -2098,20 +2098,20 @@ function App() {
           await addDoc(logbookRef, newEntry);
 
           setStudentLogbookDraft('');
-          showNotification("Diário de Bordo atualizado! 📖");
+          showNotification("DiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio de Bordo atualizado! ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“");
       } catch (error) {
-          console.error("Erro ao salvar diário:", error);
+          console.error("Erro ao salvar diÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio:", error);
           showNotification("Erro ao salvar.", "error");
       }
   }
 
-  // --- FUNÇÃO PARA EXCLUIR REGISTRO DO DIÁRIO ---
+  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O PARA EXCLUIR REGISTRO DO DIÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂRIO ---
   const handleDeleteLogbookEntry = async (entry) => {
       if (!window.confirm("Tem certeza que deseja apagar este registro?")) return;
 
       try {
           // Se temos o caminho completo (refPath), usamos ele. 
-          // Senão (caso antigo), tentamos montar o caminho se soubermos o ID do aluno.
+          // SenÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (caso antigo), tentamos montar o caminho se soubermos o ID do aluno.
           const path = entry.refPath || `students/${viewAsStudent?.id}/logbook/${entry.id}`;
           await deleteDoc(doc(db, path));
           showNotification("Registro apagado.");
@@ -2121,22 +2121,22 @@ function App() {
       }
   }
 
- // 2. A função de excluir:
+ // 2. A funÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de excluir:
 const handleDeleteStudent = async (studentId) => {
-    // Confirmação para o técnico não excluir sem querer esbarrando no botão
-    if (window.confirm("Tem certeza que deseja excluir este aluno do banco de dados? A ação não pode ser desfeita.")) {
+    // ConfirmaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o para o tÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o excluir sem querer esbarrando no botÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
+    if (window.confirm("Tem certeza que deseja excluir este aluno do banco de dados? A aÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o pode ser desfeita.")) {
         try {
-            // A. Deleta o documento lá no Firebase
+            // A. Deleta o documento lÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ no Firebase
             const studentRef = doc(db, "students", studentId);
             await deleteDoc(studentRef);
 
-            // B. Atualiza a tela (remove da lista local sem precisar atualizar a página)
+            // B. Atualiza a tela (remove da lista local sem precisar atualizar a pÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡gina)
             setStudents(prevStudents => prevStudents.filter(s => s.id !== studentId));
 
-            alert("Aluno excluído com sucesso! 🗑️");
+            alert("Aluno excluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­do com sucesso! ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â");
         } catch (error) {
             console.error("Erro ao excluir aluno no Firebase:", error);
-            alert("Erro ao excluir. Verifique sua conexão ou regras do Firebase.");
+            alert("Erro ao excluir. Verifique sua conexÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o ou regras do Firebase.");
         }
     }
 };
@@ -2158,8 +2158,8 @@ const handleDeleteRound = async (id) => {
         // Tenta apagar com o nome 'history'
         await deleteDoc(doc(db, "history", id));
         
-        // --- NOVO: Apaga também o histórico do gráfico deste round ---
-        // Usamos o state 'scoreHistory' que já está carregado para não precisar fazer outra busca
+        // --- NOVO: Apaga tambÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©m o histÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico do grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico deste round ---
+        // Usamos o state 'scoreHistory' que jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ carregado para nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o precisar fazer outra busca
         const historyToDelete = scoreHistory.filter(h => h.roundId === id);
         historyToDelete.forEach(async (h) => await deleteDoc(doc(db, "score_history", h.id)));
 
@@ -2171,12 +2171,12 @@ const handleDeleteRound = async (id) => {
     }
   };
   
-  // --- FUNÇÕES DE EXCLUSÃO (MATRIZ, ESPECIALISTAS, ROBÔ) ---
+  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES DE EXCLUSÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O (MATRIZ, ESPECIALISTAS, ROBÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â) ---
   const handleDeleteMatrix = async (id) => {
       if (window.confirm("Tem certeza que deseja excluir esta ideia da matriz?")) {
           try {
               await deleteDoc(doc(db, "decisionMatrix", id));
-              showNotification("Ideia excluída com sucesso!");
+              showNotification("Ideia excluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da com sucesso!");
           } catch (error) {
               console.error("Erro ao excluir ideia:", error);
               showNotification("Erro ao excluir.", "error");
@@ -2185,11 +2185,11 @@ const handleDeleteRound = async (id) => {
   };
 
   const handleDeleteExpert = async (e, id) => {
-      e.stopPropagation(); // Evita abrir o modal de visualização ao clicar na lixeira
+      e.stopPropagation(); // Evita abrir o modal de visualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o ao clicar na lixeira
       if (window.confirm("Tem certeza que deseja excluir este especialista?")) {
           try {
               await deleteDoc(doc(db, "experts", id));
-              showNotification("Especialista excluído!");
+              showNotification("Especialista excluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­do!");
           } catch (error) {
               console.error("Erro ao excluir especialista:", error);
               showNotification("Erro ao excluir.", "error");
@@ -2198,36 +2198,36 @@ const handleDeleteRound = async (id) => {
   };
 
   const handleDeleteRobotVersion = async (e, id) => {
-      e.stopPropagation(); // Evita abrir o modal de visualização
-      if (window.confirm("Tem certeza que deseja excluir esta versão do robô?")) {
+      e.stopPropagation(); // Evita abrir o modal de visualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
+      if (window.confirm("Tem certeza que deseja excluir esta versÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o do robÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´?")) {
           try {
               await deleteDoc(doc(db, "robotVersions", id));
-              showNotification("Versão do robô excluída!");
+              showNotification("VersÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o do robÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´ excluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da!");
           } catch (error) {
-              console.error("Erro ao excluir versão:", error);
+              console.error("Erro ao excluir versÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o:", error);
               showNotification("Erro ao excluir.", "error");
           }
       }
   };
 
   const handleDeleteMission = async (id) => {
-      if (window.confirm("Tem certeza que deseja excluir esta missão? Ela será removida permanentemente do banco de dados.")) {
+      if (window.confirm("Tem certeza que deseja excluir esta missÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o? Ela serÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ removida permanentemente do banco de dados.")) {
           try {
               await deleteDoc(doc(db, "missions", id));
-              showNotification("Missão excluída com sucesso!");
-              // Se estava editando essa mesma missão, limpa o formulário
+              showNotification("MissÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o excluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da com sucesso!");
+              // Se estava editando essa mesma missÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o, limpa o formulÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio
               if (modal.data?.id === id) {
                   setModal({ type: 'missionForm', data: null });
                   setSelectedFile(null);
               }
           } catch (error) {
-              console.error("Erro ao excluir missão:", error);
+              console.error("Erro ao excluir missÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o:", error);
               showNotification("Erro ao excluir.", "error");
           }
       }
   };
 
-  // --- FUNÇÃO CORRIGIDA COM LOGS ---
+  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O CORRIGIDA COM LOGS ---
   const handleRegisterSubmit = async (e) => { 
       e.preventDefault(); 
       const fd = new FormData(e.target); 
@@ -2235,7 +2235,7 @@ const handleDeleteRound = async (id) => {
       // Verifica se estamos editando ou criando
       const isEditing = modal.data?.id;
 
-      // A imagem agora já vem processada e redimensionada pelo Crop e está em modal.data.avatarImage
+      // A imagem agora jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ vem processada e redimensionada pelo Crop e estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ em modal.data.avatarImage
       const avatarImage = modal.data?.avatarImage || null;
 
       // Cria o objeto de dados do aluno
@@ -2246,7 +2246,7 @@ const handleDeleteRound = async (id) => {
           username: fd.get('username'), 
           password: fd.get('password'), 
           avatarImage: avatarImage, // Novo campo para a foto
-          // Mantém os outros campos se estiver editando
+          // MantÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©m os outros campos se estiver editando
           xp: modal.data?.xp ?? 0,
           totalClasses: modal.data?.totalClasses ?? 0,
           attendedClasses: modal.data?.attendedClasses ?? 0,
@@ -2275,7 +2275,7 @@ const handleDeleteRound = async (id) => {
       }
   }
 
-  // --- NOVO: SALVAR PROJETO DE INOVAÇÃO ---
+  // --- NOVO: SALVAR PROJETO DE INOVAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O ---
   const handleProjectSubmit = async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
@@ -2294,25 +2294,17 @@ const handleDeleteRound = async (id) => {
       };
 
       try {
-          // Vamos salvar sempre com o ID 'main' para ser único
-          await api_setDoc(doc(db, "project", "main"), projectData);
-          setProjectSummary(projectData); // Atualiza na hora
+          await setDoc(doc(db, "project", PROJECT_MAIN_DOC_ID), projectData, { merge: true });
+          setProjectSummary({ ...projectData, id: PROJECT_MAIN_DOC_ID });
           closeModal();
-          showNotification("Projeto de Inovação atualizado!");
+          showNotification("Projeto de Inovacao atualizado!");
       } catch (error) {
           console.error("Erro ao salvar projeto:", error);
-          // Fallback se o setDoc falhar (usa addDoc)
-          try {
-             await addDoc(collection(db, "project"), projectData);
-             closeModal();
-             showNotification("Projeto salvo (novo registro)!");
-          } catch (e2) {
-             showNotification("Erro ao salvar.", "error");
-          }
+          showNotification("Erro ao salvar.", "error");
       }
   }
 
-  // --- FUNÇÕES DE OUTREACH (IMPACTO) ---
+  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES DE OUTREACH (IMPACTO) ---
   const handleOutreachSubmit = async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
@@ -2339,7 +2331,7 @@ const handleDeleteRound = async (id) => {
       if (window.confirm("Tem certeza que deseja excluir este registro de impacto?")) {
           try {
               await deleteDoc(doc(db, "outreach", id));
-              showNotification("Registro excluído com sucesso!");
+              showNotification("Registro excluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­do com sucesso!");
           } catch (error) {
               console.error("Erro ao excluir impacto:", error);
               showNotification("Erro ao excluir.", "error");
@@ -2351,7 +2343,7 @@ const handleDeleteRound = async (id) => {
       e.preventDefault();
       const fd = new FormData(e.target);
       
-      // Pega todos os IDs marcados no checkbox (agora são strings do Firebase)
+      // Pega todos os IDs marcados no checkbox (agora sÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o strings do Firebase)
       const presentIds = fd.getAll('present').map(id => String(id));
 
       try {
@@ -2375,10 +2367,10 @@ const handleDeleteRound = async (id) => {
           await Promise.all(updates);
           
           closeModal();
-          showNotification("Frequência registrada no Firebase!");
+          showNotification("FrequÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia registrada no Firebase!");
       } catch (error) {
           console.error("Erro na chamada:", error);
-          showNotification("Erro ao salvar frequência.", "error");
+          showNotification("Erro ao salvar frequÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia.", "error");
       }
   }
   const handleExpertSubmit = async (e) => { 
@@ -2401,10 +2393,10 @@ const handleDeleteRound = async (id) => {
 
       try {
           if (modal.data?.id) {
-              // Se já tem ID, atualiza (Editar)
+              // Se jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ tem ID, atualiza (Editar)
               await updateDoc(doc(db, "experts", modal.data.id), expertData);
           } else {
-              // Se não tem ID, cria novo (Salvar)
+              // Se nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o tem ID, cria novo (Salvar)
               await addDoc(collection(db, "experts"), expertData);
           }
           closeModal(); 
@@ -2437,9 +2429,9 @@ const handleDeleteRound = async (id) => {
               await addDoc(collection(db, "robotVersions"), robotData);
           }
           closeModal(); 
-          showNotification("Versão do robô salva!");
+          showNotification("VersÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o do robÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´ salva!");
       } catch (error) {
-          console.error("Erro ao salvar robô:", error);
+          console.error("Erro ao salvar robÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´:", error);
           showNotification("Erro ao salvar.", "error");
       }
   }
@@ -2453,7 +2445,7 @@ const handleDeleteRound = async (id) => {
       const selectedMissions = Array.from(fd.getAll('missions'));
       const estimatedTime = Number.parseInt(fd.get('time'), 10) || 0;
       
-      // Calcula pontos somando as missões selecionadas
+      // Calcula pontos somando as missÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes selecionadas
       const totalPoints = selectedMissions.reduce((acc, mid) => 
           acc + (missionsList.find(m => m.id === mid)?.points || 0), 0);
 
@@ -2486,7 +2478,7 @@ const handleDeleteRound = async (id) => {
       
       const complimentData = {
           from: viewAsStudent.name,
-          to: getStudentName(parseInt(fd.get('to'))), // Pega o nome do destinatário
+          to: getStudentName(parseInt(fd.get('to'))), // Pega o nome do destinatÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio
           msg: fd.get('msg'),
           date: new Date().toLocaleDateString().slice(0,5)
       };
@@ -2495,7 +2487,7 @@ const handleDeleteRound = async (id) => {
           // 1. Salva o elogio
           await addDoc(collection(db, "compliments"), complimentData);
 
-          // 2. Dá XP para quem enviou (Gamificação!)
+          // 2. DÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ XP para quem enviou (GamificaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o!)
           const senderRef = doc(db, "students", viewAsStudent.id);
           // Nota: Para atualizar XP de forma segura, o ideal seria ler o doc atual, 
           // mas para simplificar vamos assumir o dado local:
@@ -2531,12 +2523,12 @@ const handleDeleteRound = async (id) => {
           } else {
               await addDoc(collection(db, "missions"), missionData);
           }
-          // Após salvar, não fecha o modal: apenas limpa para que você possa adicionar/ver outras
+          // ApÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³s salvar, nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o fecha o modal: apenas limpa para que vocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª possa adicionar/ver outras
           setModal({ type: 'missionForm', data: null });
           setSelectedFile(null);
-          showNotification("Missão salva!");
+          showNotification("MissÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o salva!");
       } catch (error) {
-          console.error("Erro ao salvar missão:", error);
+          console.error("Erro ao salvar missÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o:", error);
           showNotification("Erro ao salvar.", "error");
       }
   }
@@ -2544,7 +2536,7 @@ const handleDeleteRound = async (id) => {
   const handleGradesSubmit = async (e) => {
       e.preventDefault();
       if (currentUser?.type !== 'admin') {
-          showNotification("Apenas técnicos podem lançar notas.", "error");
+          showNotification("Apenas tÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnicos podem lanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ar notas.", "error");
           closeModal();
           return;
       }
@@ -2596,7 +2588,7 @@ const handleDeleteRound = async (id) => {
           const xpChangeLabel = xpDelta > 0 ? `+${xpDelta}` : `${xpDelta}`;
           showNotification(`${stageMeta.label} salva! ${xpChangeLabel} XP ajustados.`, "success");
       } catch (error) {
-          console.error("Erro ao lançar notas:", error);
+          console.error("Erro ao lanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ar notas:", error);
           showNotification("Erro ao atualizar XP.", "error");
       }
   }
@@ -2626,7 +2618,7 @@ const handleDeleteRound = async (id) => {
       }
   }
 
-  // --- FUNÇÕES DA AGENDA ---
+  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES DA AGENDA ---
   const handleEventSubmit = async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
@@ -2639,7 +2631,7 @@ const handleDeleteRound = async (id) => {
           status: fd.get('status') || 'confirmado',
           location: fd.get('location'),
           description: fd.get('description'),
-          author: modal.data?.author || viewAsStudent?.name || "Técnico"
+          author: modal.data?.author || viewAsStudent?.name || "TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico"
       };
 
       try {
@@ -2660,7 +2652,7 @@ const handleDeleteRound = async (id) => {
       if(window.confirm("Deseja excluir este evento da agenda?")) {
           try {
               await deleteDoc(doc(db, "events", id));
-              showNotification("Evento excluído.");
+              showNotification("Evento excluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­do.");
           } catch(error) {
               console.error("Erro ao excluir evento:", error);
           }
@@ -2697,17 +2689,17 @@ const handleDeleteRound = async (id) => {
       const PARTIAL_TEAM_XP = 35;
 
       try {
-          // Cria uma lista de atualizações para enviar tudo de uma vez
+          // Cria uma lista de atualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes para enviar tudo de uma vez
           const updates = stationStudents.map(student => {
               const studentRef = doc(db, "students", student.id);
               
-              // Lógica de XP
+              // LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³gica de XP
               let xpGain = 0;
               if (student.submission?.status === 'approved') {
                   xpGain = isCompleteTeam ? FULL_TEAM_XP : PARTIAL_TEAM_XP;
               }
 
-              // Prepara a atualização: Dá XP, remove a estação e limpa a entrega
+              // Prepara a atualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: DÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ XP, remove a estaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o e limpa a entrega
               return updateDoc(studentRef, {
                   xp: (student.xp || 0) + xpGain,
                   station: null,
@@ -2715,7 +2707,7 @@ const handleDeleteRound = async (id) => {
               });
           });
 
-          // Executa todas as atualizações no banco
+          // Executa todas as atualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes no banco
           await Promise.all(updates);
 
           if(isCompleteTeam) showNotification(`Semana ${station} fechada! Sucesso Total!`, "success");
@@ -2727,41 +2719,41 @@ const handleDeleteRound = async (id) => {
       }
   }
 
-  // --- FUNÇÃO PARA APLICAR O RODÍZIO AUTOMATICAMENTE ---
+  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O PARA APLICAR O RODÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂZIO AUTOMATICAMENTE ---
   const handleApplyRotation = async () => {
       if (!currentWeekData) return;
-      if (!window.confirm(`Sincronizar a equipe com a ${currentWeekData.weekName}? Todos os alunos serão movidos para as suas estações.`)) return;
+      if (!window.confirm(`Sincronizar a equipe com a ${currentWeekData.weekName}? Todos os alunos serÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o movidos para as suas estaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes.`)) return;
       
       try {
-          // Cria uma lista de atualizações para enviar tudo de uma vez
+          // Cria uma lista de atualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes para enviar tudo de uma vez
           const updates = students.map(student => {
               let targetStation = null;
               
-              // Verifica em qual estação o aluno está escalado no cronograma
-              if (currentWeekData.assignments.Engenharia.some(s => s.name === student.name)) targetStation = 'Engenharia';
-              else if (currentWeekData.assignments.Inovação.some(s => s.name === student.name)) targetStation = 'Inovação';
-              else if (currentWeekData.assignments.Gestão.some(s => s.name === student.name)) targetStation = 'Gestão';
+              // Verifica em qual estaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o o aluno estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ escalado no cronograma
+              if (currentWeekData.assignments[STATION_KEYS.ENGINEERING].some(s => s.name === student.name)) targetStation = STATION_KEYS.ENGINEERING;
+              else if (currentWeekData.assignments[STATION_KEYS.INNOVATION].some(s => s.name === student.name)) targetStation = STATION_KEYS.INNOVATION;
+              else if (currentWeekData.assignments[STATION_KEYS.MANAGEMENT].some(s => s.name === student.name)) targetStation = STATION_KEYS.MANAGEMENT;
 
               // Atualiza o aluno no Firebase
               return updateDoc(doc(db, "students", student.id), { station: targetStation, submission: null });
           });
 
           await Promise.all(updates);
-          showNotification("Rodízio automático aplicado com sucesso!", "success");
+          showNotification("RodÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­zio automÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡tico aplicado com sucesso!", "success");
       } catch (error) {
-          console.error("Erro ao aplicar rodízio:", error);
-          showNotification("Erro ao aplicar rodízio.", "error");
+          console.error("Erro ao aplicar rodÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­zio:", error);
+          showNotification("Erro ao aplicar rodÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­zio.", "error");
       }
   };
 
-  // --- SALVAR PERFIL DO TÉCNICO ---
+  // --- SALVAR PERFIL DO TECNICO ---
   const handleAdminProfileSubmit = async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
       const newPassword = fd.get('password');
       
       const dataToSave = {
-          name: fd.get('name') || 'Técnico',
+          name: fd.get('name') || 'Tecnico',
           avatarImage: modal.data?.avatarImage || null,
           specialty: (fd.get('specialty') || '').toString().trim()
       };
@@ -2774,9 +2766,9 @@ const handleDeleteRound = async (id) => {
       try {
           await setDoc(doc(db, "settings", "admin_profile"), dataToSave, { merge: true });
           closeModal();
-          showNotification("Perfil do técnico atualizado com sucesso!");
+          showNotification("Perfil do tÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico atualizado com sucesso!");
       } catch (error) {
-          console.error("Erro ao salvar perfil do técnico:", error);
+          console.error("Erro ao salvar perfil do tÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico:", error);
           showNotification("Erro ao salvar perfil.", "error");
       }
   };
@@ -2919,11 +2911,11 @@ const handleDeleteRound = async (id) => {
       : featuredStudentBadge
           ? 'sugestao visual baseada nas badges do aluno'
           : 'defina o melhor jogo do aluno no perfil';
-  const studentStationTone = viewAsStudent?.station === 'Engenharia'
+  const studentStationTone = viewAsStudent?.station === STATION_KEYS.ENGINEERING
       ? 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200'
-      : viewAsStudent?.station === 'Inovação'
+      : viewAsStudent?.station === STATION_KEYS.INNOVATION
           ? 'border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-200'
-          : viewAsStudent?.station === 'Gestão'
+          : viewAsStudent?.station === STATION_KEYS.MANAGEMENT
               ? 'border-violet-500/20 bg-violet-500/10 text-violet-200'
               : 'border-white/10 bg-white/5 text-gray-200';
   const studentPrimarySeal = studentSpecialtyText && (normalizedStudentSpecialty.includes('tudo') || normalizedStudentSpecialty.includes('multi') || normalizedStudentSpecialty.includes('geral') || matchedStudentSpecialtyCount > 1)
@@ -2944,7 +2936,7 @@ const handleDeleteRound = async (id) => {
         }
       : studentSpecialtyText && specialtyMatchesInnovation
           ? {
-              label: 'Inovação',
+              label: STATION_KEYS.INNOVATION,
               helper: 'Ideia e narrativa',
               badgeClass: 'border-fuchsia-400/30 bg-fuchsia-500/14 text-fuchsia-100',
               stampClass: 'border-fuchsia-400/35 bg-fuchsia-500/18 text-fuchsia-100 shadow-[0_14px_28px_rgba(217,70,239,0.18)]',
@@ -2952,7 +2944,7 @@ const handleDeleteRound = async (id) => {
             }
           : studentSpecialtyText && specialtyMatchesLeadership
               ? {
-                  label: 'Gestão',
+                  label: STATION_KEYS.MANAGEMENT,
                   helper: 'Lideranca e ritmo',
                   badgeClass: 'border-violet-400/30 bg-violet-500/14 text-violet-100',
                   stampClass: 'border-violet-400/35 bg-violet-500/18 text-violet-100 shadow-[0_14px_28px_rgba(139,92,246,0.18)]',
@@ -3022,7 +3014,7 @@ const handleDeleteRound = async (id) => {
                           <div className="min-w-0">
                               <p className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Passaporte FLL</p>
                               <h3 className="text-lg font-black text-white leading-tight mt-2 truncate">{viewAsStudent.name}</h3>
-                              <p className={`mt-2 text-xs font-semibold leading-relaxed ${viewAsStudent?.station === 'Engenharia' ? 'text-cyan-200' : viewAsStudent?.station === 'Inovação' ? 'text-fuchsia-200' : viewAsStudent?.station === 'Gestão' ? 'text-violet-200' : 'text-slate-200'}`}>
+                              <p className={`mt-2 text-xs font-semibold leading-relaxed ${viewAsStudent?.station === STATION_KEYS.ENGINEERING ? 'text-cyan-200' : viewAsStudent?.station === STATION_KEYS.INNOVATION ? 'text-fuchsia-200' : viewAsStudent?.station === STATION_KEYS.MANAGEMENT ? 'text-violet-200' : 'text-slate-200'}`}>
                                   {studentProfileSpecialty}
                               </p>
                           </div>
@@ -3040,7 +3032,7 @@ const handleDeleteRound = async (id) => {
                           <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-gray-200">{viewAsStudent.turma || 'Turma nao definida'}</span>
                           <span className={`rounded-full border px-3 py-1 ${studentStationTone}`}>Estacao {viewAsStudent.station || 'Equipe'}</span>
                       </div>
-                      <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Selo fixo do aluno • estacao muda por semana</p>
+                      <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Selo fixo do aluno ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ estacao muda por semana</p>
                   </div>
               </div>
 
@@ -3446,21 +3438,21 @@ const handleDeleteRound = async (id) => {
       </div>
   );
 
-  const studentMissionTone = viewAsStudent?.station === 'Engenharia'
+  const studentMissionTone = viewAsStudent?.station === STATION_KEYS.ENGINEERING
       ? {
           text: 'text-cyan-300',
           border: 'border-cyan-500/20',
           bg: 'from-cyan-500/15 via-sky-500/10 to-transparent',
           button: 'bg-cyan-500/15 text-cyan-100 border-cyan-500/30 hover:bg-cyan-500/25'
         }
-      : viewAsStudent?.station === 'Inovação'
+      : viewAsStudent?.station === STATION_KEYS.INNOVATION
           ? {
               text: 'text-pink-300',
               border: 'border-pink-500/20',
               bg: 'from-pink-500/15 via-fuchsia-500/10 to-transparent',
               button: 'bg-pink-500/15 text-pink-100 border-pink-500/30 hover:bg-pink-500/25'
             }
-          : viewAsStudent?.station === 'Gestão'
+          : viewAsStudent?.station === STATION_KEYS.MANAGEMENT
               ? {
                   text: 'text-violet-300',
                   border: 'border-violet-500/20',
@@ -3523,19 +3515,19 @@ const handleDeleteRound = async (id) => {
       }
   ];
 
-  const studentMissionCoachCards = viewAsStudent?.station === 'Engenharia'
+  const studentMissionCoachCards = viewAsStudent?.station === STATION_KEYS.ENGINEERING
       ? [
           'Mostre teste, ajuste e motivo tecnico por tras da sua escolha.',
           'Se mexeu no robo, documente o que mudou e o que melhorou.',
           'Conecte sua entrega com uma missao real da mesa.'
         ]
-      : viewAsStudent?.station === 'InovaÃ§Ã£o'
+      : viewAsStudent?.station === STATION_KEYS.INNOVATION
           ? [
               'Explique o problema de um jeito que qualquer juiz entenda rapido.',
               'Use exemplos concretos para defender a solucao.',
               'Mostre como a ideia evoluiu depois de ouvir pessoas reais.'
             ]
-          : viewAsStudent?.station === 'GestÃ£o'
+          : viewAsStudent?.station === STATION_KEYS.MANAGEMENT
               ? [
                   'Organize prazos, combinados e proximos passos da equipe.',
                   'Mantenha a comunicacao clara para ninguem ficar perdido.',
@@ -3676,10 +3668,10 @@ const handleDeleteRound = async (id) => {
           : 'Qual feedback externo mais mudou o projeto ou o robo e como essa mudanca apareceu na pratica?';
 
 
-  // --- MODAL DE XP E APROVAÇÃO (CONECTADO) ---
+  // --- MODAL DE XP E APROVAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O (CONECTADO) ---
   const openXPModal = (student, context = "manual") => { 
       if (currentUser?.type !== 'admin') {
-          showNotification("Apenas técnicos podem gerenciar XP.", "error");
+          showNotification("Apenas tÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnicos podem gerenciar XP.", "error");
           return;
       }
 
@@ -3694,12 +3686,12 @@ const handleDeleteRound = async (id) => {
                   try {
                       const studentRef = doc(db, "students", student.id);
                       
-                      // Prepara a atualização do XP
+                      // Prepara a atualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o do XP
                       const updateData = { xp: (student.xp || 0) + val };
 
-                      // Se for contexto de aprovação, muda o status da entrega também
+                      // Se for contexto de aprovaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o, muda o status da entrega tambÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©m
                       if (context === 'approval') {
-                          // Mantém os dados da entrega, mas muda status para 'approved'
+                          // MantÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©m os dados da entrega, mas muda status para 'approved'
                           const newSubmission = { ...student.submission, status: 'approved' };
                           updateData.submission = newSubmission;
                       }
@@ -3720,7 +3712,7 @@ const handleDeleteRound = async (id) => {
       }) 
   }
 
-  const handleDeleteClick = (id) => { setModal({ type: 'confirm', data: { title: "Excluir?", msg: "Irreversível.", onConfirm: () => { deleteStudent(id); closeModal(); showNotification("Removido."); } } }) }
+  const handleDeleteClick = (id) => { setModal({ type: 'confirm', data: { title: "Excluir?", msg: "IrreversÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel.", onConfirm: () => { deleteStudent(id); closeModal(); showNotification("Removido."); } } }) }
 
   // --- RECUSAR ATIVIDADE (CONECTADO) ---
   const handleRejectClick = (student) => { 
@@ -3728,7 +3720,7 @@ const handleDeleteRound = async (id) => {
           type: 'confirm', 
           data: { 
               title: "Recusar Entrega?", 
-              msg: "O aluno receberá um aviso para refazer.", 
+              msg: "O aluno receberÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ um aviso para refazer.", 
               onConfirm: async () => { 
                   try {
                       const studentRef = doc(db, "students", student.id);
@@ -3749,14 +3741,14 @@ const handleDeleteRound = async (id) => {
       }) 
   }
 
-  // --- FUNÇÃO CORRIGIDA: MOVER ALUNO (Salva no Firebase) ---
+  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O CORRIGIDA: MOVER ALUNO (Salva no Firebase) ---
   const moveStudent = async (id, st) => {
       try {
-          // Referência ao documento do aluno no banco
+          // ReferÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia ao documento do aluno no banco
           const studentRef = doc(db, "students", id);
           
           // Atualiza o campo 'station' no Firebase
-          // Também limpamos a 'submission' anterior para ele começar zerado na nova estação
+          // TambÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©m limpamos a 'submission' anterior para ele comeÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ar zerado na nova estaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
           await updateDoc(studentRef, { 
               station: st,
               submission: null 
@@ -3768,7 +3760,7 @@ const handleDeleteRound = async (id) => {
 
       } catch (error) {
           console.error("Erro ao mover aluno:", error);
-          showNotification("Erro ao salvar mudança.", "error");
+          showNotification("Erro ao salvar mudanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a.", "error");
       }
   }
 
@@ -3800,7 +3792,7 @@ const handleDeleteRound = async (id) => {
       }
   };
 
-  // --- APROVAÇÃO RÁPIDA DE ATIVIDADES (EMAIL/EXTERNO) ---
+  // --- APROVAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O RÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂPIDA DE ATIVIDADES (EMAIL/EXTERNO) ---
   const toggleActivityStatus = async (student, newStatus) => {
       try {
           const studentRef = doc(db, "students", student.id);
@@ -3810,7 +3802,7 @@ const handleDeleteRound = async (id) => {
           } else {
               const newSubmission = { 
                   status: newStatus,
-                  text: "Avaliado manualmente pelo Técnico (E-mail/Externo)",
+                  text: "Avaliado manualmente pelo TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico (E-mail/Externo)",
                   date: new Date().toLocaleString(),
                   fileName: "Sem arquivo na plataforma"
               };
@@ -3823,9 +3815,9 @@ const handleDeleteRound = async (id) => {
       }
   };
 
-  // --- FUNÇÃO PARA RESETAR TODAS AS ATIVIDADES ---
+  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O PARA RESETAR TODAS AS ATIVIDADES ---
   async function handleResetAllActivities() {
-      if (!window.confirm("Tem certeza que deseja limpar as entregas de atividades de TODOS os alunos? Isso preparará o sistema para a próxima semana de treinos.")) return;
+      if (!window.confirm("Tem certeza que deseja limpar as entregas de atividades de TODOS os alunos? Isso prepararÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ o sistema para a prÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³xima semana de treinos.")) return;
       
       try {
           const updates = students.map(student => {
@@ -3843,20 +3835,24 @@ const handleDeleteRound = async (id) => {
       }
   }
 
-// --- CARREGAR AS METAS DO BANCO (Memória Longa) ---
+// --- CARREGAR AS METAS DO BANCO (MemÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ria Longa) ---
   useEffect(() => {
     const docRef = doc(db, "settings", "weekly_missions");
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         setMissions(docSnap.data());
       } else {
-        setMissions({ Engenharia: {}, Inovação: {}, Gestão: {} });
+        setMissions({
+          [STATION_KEYS.ENGINEERING]: {},
+          [STATION_KEYS.INNOVATION]: {},
+          [STATION_KEYS.MANAGEMENT]: {}
+        });
       }
     });
     return () => unsubscribe();
   }, []);
 
-  // --- ATUALIZAR NA TELA ENQUANTO DIGITAM (Memória Curta) ---
+  // --- ATUALIZAR NA TELA ENQUANTO DIGITAM (MemÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ria Curta) ---
   const updateMission = (station, field, value) => {
     setMissions(prev => ({
       ...prev,
@@ -3864,7 +3860,7 @@ const handleDeleteRound = async (id) => {
     }));
   };
 
-  // --- FUNÇÃO PARA SALVAR A AUTO-AVALIAÇÃO DA RUBRICA ---
+  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O PARA SALVAR A AUTO-AVALIAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DA RUBRICA ---
   const handleRubricUpdate = async (rubricType, category, value) => {
       const isInnovation = rubricType === 'innovation';
       const currentRubric = isInnovation ? innovationRubric : robotDesignRubric;
@@ -3875,11 +3871,11 @@ const handleDeleteRound = async (id) => {
       const newRubric = normalizeRubricValues({ ...currentRubric, [category]: value }, defaults);
       setRubricState(newRubric); // Atualiza na tela imediatamente
       try {
-          // Salva no banco de dados sem precisar de botão "Salvar"
+          // Salva no banco de dados sem precisar de botÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o "Salvar"
           await setDoc(doc(db, "settings", docId), newRubric);
       } catch (error) {
           console.error(`Erro ao salvar rubrica de ${rubricType}:`, error);
-          showNotification("Erro ao salvar auto-avaliação.", "error");
+          showNotification("Erro ao salvar auto-avaliaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o.", "error");
       }
   };
 
@@ -3903,7 +3899,7 @@ const handleDeleteRound = async (id) => {
 
   const closeModal = () => { setModal({ type: null, data: null }); setSelectedFile(null); }
 
-// --- FUNÇÃO AUXILIAR PARA TRANSFORMAR O ARQUIVO EM TEXTO ---
+// --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O AUXILIAR PARA TRANSFORMAR O ARQUIVO EM TEXTO ---
   const convertToBase64 = (file) => {
       return new Promise((resolve, reject) => {
           const reader = new FileReader();
@@ -3937,20 +3933,20 @@ const handleFileSelect = (e) => {
           });
 
           setSubmissionText(""); 
-          showNotification("Aviso de atividade enviado para validação pelo Técnico!");
+          showNotification("Aviso de atividade enviado para validaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o pelo TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico!");
       
       } catch (error) {
           console.error("Erro ao enviar:", error);
-          showNotification("Erro ao sinalizar o Técnico.", "error");
+          showNotification("Erro ao sinalizar o TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico.", "error");
       } finally {
           setIsSubmitting(false);
       }
   };
-// ATENÇÃO: COLOQUE ISSO NO SEU CÓDIGO DO TÉCNICO
-// --- FUNÇÃO DO BOTÃO 'BAIXAR ARQUIVO' NO PAINEL DO TÉCNICO ---
+// ATENÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O: COLOQUE ISSO NO SEU CÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œDIGO DO TÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°CNICO
+// --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DO BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O 'BAIXAR ARQUIVO' NO PAINEL DO TÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°CNICO ---
   const handleDownloadFile = (sub) => { 
       if (sub && sub.fileData) {
-          // O navegador recria o arquivo a partir do texto e força o download
+          // O navegador recria o arquivo a partir do texto e forÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a o download
           const link = document.createElement("a");
           link.href = sub.fileData;
           link.download = sub.fileName || "atividade_baixada.pdf";
@@ -3958,12 +3954,12 @@ const handleFileSelect = (e) => {
           link.click();
           document.body.removeChild(link);
       } else {
-          showNotification("Não há arquivo anexado ou o link está quebrado.", "error");
+          showNotification("NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o hÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ arquivo anexado ou o link estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ quebrado.", "error");
       }
   };
   // --- UI COMPONENTS ---
 
-  // --- COMPONENTE DE ESTATÍSTICAS DA EQUIPE (VISÃO DOS JUÍZES) ---
+  // --- COMPONENTE DE ESTATÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂSTICAS DA EQUIPE (VISÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DOS JUÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂZES) ---
   const TeamStatsPanel = () => {
       const totalXP = students.reduce((sum, s) => sum + (s.xp || 0), 0);
       const totalBadges = students.reduce((sum, s) => sum + (s.badges?.length || 0), 0);
@@ -3977,7 +3973,7 @@ const handleFileSelect = (e) => {
       const stats = [
           { label: 'Pessoas Impactadas', value: totalImpact, icon: <Megaphone size={16}/>, color: 'text-orange-500' },
           { label: 'Especialistas', value: totalExperts, icon: <Briefcase size={16}/>, color: 'text-purple-500' },
-          { label: 'Versões do Robô', value: totalRobotVersions, icon: <GitCommit size={16}/>, color: 'text-blue-500' },
+          { label: 'VersÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes do RobÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´', value: totalRobotVersions, icon: <GitCommit size={16}/>, color: 'text-blue-500' },
           { label: 'Recorde de Pontos', value: maxScore, icon: <Trophy size={16}/>, color: 'text-green-500' },
           { label: 'Tarefas Entregues', value: totalTasksDone, icon: <CheckCheck size={16}/>, color: 'text-pink-500' },
           { label: 'Badges Coletadas', value: totalBadges, icon: <Medal size={16}/>, color: 'text-cyan-500' },
@@ -3988,7 +3984,7 @@ const handleFileSelect = (e) => {
       return (
           <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 mb-4 shadow-xl relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><BarChart3 size={150} /></div>
-              <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2 relative z-10"><BarChart3 className="text-blue-500"/> Raio-X da Temporada (Dados para Juízes)</h3>
+              <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2 relative z-10"><BarChart3 className="text-blue-500"/> Raio-X da Temporada (Dados para JuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­zes)</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8 gap-4 relative z-10">
                   {stats.map((st, idx) => (
                       <div key={idx} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col items-center justify-center text-center hover:bg-white/5 transition-colors">
@@ -4010,9 +4006,9 @@ const handleFileSelect = (e) => {
       const totalExperts = experts.length;
 
       const achievements = [
-          { id: 'team_xp', name: 'Potência Máxima', icon: <Zap size={16}/>, color: 'text-yellow-400', bg: 'bg-yellow-500', desc: 'Atingir 6.000 XP somados por toda a equipe.', current: totalXP, target: 6000 },
-          { id: 'team_impact', name: 'Voz da Mudança', icon: <Megaphone size={16}/>, color: 'text-orange-500', bg: 'bg-orange-500', desc: 'Impactar mais de 350 pessoas com o projeto.', current: totalImpact, target: 350 },
-          { id: 'team_tasks', name: 'Máquina de Produtividade', icon: <CheckCheck size={16}/>, color: 'text-green-500', bg: 'bg-green-500', desc: 'Concluir 300 tarefas no Kanban da equipe.', current: totalTasksDone, target: 300 },
+          { id: 'team_xp', name: 'PotÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡xima', icon: <Zap size={16}/>, color: 'text-yellow-400', bg: 'bg-yellow-500', desc: 'Atingir 6.000 XP somados por toda a equipe.', current: totalXP, target: 6000 },
+          { id: 'team_impact', name: 'Voz da MudanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a', icon: <Megaphone size={16}/>, color: 'text-orange-500', bg: 'bg-orange-500', desc: 'Impactar mais de 350 pessoas com o projeto.', current: totalImpact, target: 350 },
+          { id: 'team_tasks', name: 'MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡quina de Produtividade', icon: <CheckCheck size={16}/>, color: 'text-green-500', bg: 'bg-green-500', desc: 'Concluir 300 tarefas no Kanban da equipe.', current: totalTasksDone, target: 300 },
           { id: 'team_experts', name: 'Mentes Conectadas', icon: <Briefcase size={16}/>, color: 'text-purple-500', bg: 'bg-purple-500', desc: 'Consultar 5 especialistas diferentes.', current: totalExperts, target: 5 }
       ];
 
@@ -4059,7 +4055,7 @@ const handleFileSelect = (e) => {
   const ScheduleModal = () => { 
     if(!showFullSchedule) return null; 
 
-    // Função interna inteligente para resolver o nome
+    // FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o interna inteligente para resolver o nome
     // Aceita: ID, Objeto {name: "Ana"} ou String "Ana"
     const resolveName = (item) => {
         if (!item) return "Vago";
@@ -4071,7 +4067,7 @@ const handleFileSelect = (e) => {
         const found = students.find(s => s.id === item);
         if (found) return found.name;
 
-        // 3. Se não achou ID, assume que o próprio item é o nome (Texto)
+        // 3. Se nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o achou ID, assume que o prÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³prio item ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© o nome (Texto)
         return item; 
     };
 
@@ -4079,7 +4075,7 @@ const handleFileSelect = (e) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4 animate-in fade-in backdrop-blur-sm"> 
             <div className="bg-[#151520] border border-white/10 rounded-2xl w-full max-w-5xl h-[80vh] flex flex-col relative shadow-2xl overflow-hidden"> 
                 
-                {/* Cabeçalho */}
+                {/* CabeÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§alho */}
                 <div className="p-6 border-b border-white/10 flex justify-between items-center bg-[#0a0a0f]">
                     <h3 className="text-2xl font-bold text-white flex items-center gap-3">
                         <CalendarDays className="text-blue-500"/> Cronograma Completo (36 Semanas)
@@ -4089,7 +4085,7 @@ const handleFileSelect = (e) => {
                     </button>
                 </div> 
 
-                {/* Conteúdo com Scroll */}
+                {/* ConteÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºdo com Scroll */}
                 <div className="flex-1 overflow-auto p-6 custom-scrollbar">
                     <div className="min-w-[800px]"> 
                         {rotationSchedule.map((week, idx) => (
@@ -4105,7 +4101,7 @@ const handleFileSelect = (e) => {
                                     <div className="flex-1 border-b border-white/5 ml-4"></div>
                                 </div>
 
-                                {/* Grid das Estações */}
+                                {/* Grid das EstaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes */}
                                 <div className="grid grid-cols-3 gap-4">
                                     
                                     {/* 1. Engenharia */}
@@ -4121,11 +4117,11 @@ const handleFileSelect = (e) => {
                                         </div>
                                     </div>
 
-                                    {/* 2. Inovação */}
+                                    {/* 2. InovaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o */}
                                     <div className="bg-pink-500/5 border border-pink-500/20 rounded-xl p-4">
-                                        <h4 className="text-pink-500 font-bold text-xs uppercase mb-3 flex items-center gap-2"><Microscope size={14}/> Inovação</h4>
+                                        <h4 className="text-pink-500 font-bold text-xs uppercase mb-3 flex items-center gap-2"><Microscope size={14}/> {STATION_KEYS.INNOVATION}</h4>
                                         <div className="space-y-2">
-                                            {week.assignments.Inovação.map((item, i) => (
+                                            {(week.assignments[STATION_KEYS.INNOVATION] || []).map((item, i) => (
                                                 <div key={i} className="flex items-center gap-2 bg-black/40 p-2 rounded-lg border border-white/5">
                                                     <div className="w-6 h-6 rounded-full bg-pink-500/20 flex items-center justify-center text-[10px] text-pink-500 font-bold"><UserCircle size={14}/></div>
                                                     <span className="text-sm text-gray-300">{resolveName(item)}</span>
@@ -4134,13 +4130,13 @@ const handleFileSelect = (e) => {
                                         </div>
                                     </div>
 
-                                    {/* 3. Gestão (CORRIGIDO) */}
+                                    {/* 3. GestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (CORRIGIDO) */}
                                     <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-4">
-                                        <h4 className="text-purple-500 font-bold text-xs uppercase mb-3 flex items-center gap-2"><BookOpen size={14}/> Gestão</h4>
+                                        <h4 className="text-purple-500 font-bold text-xs uppercase mb-3 flex items-center gap-2"><BookOpen size={14}/> {STATION_KEYS.MANAGEMENT}</h4>
                                         <div className="space-y-2">
-                                            {week.assignments.Gestão.map((item, i) => {
+                                            {(week.assignments[STATION_KEYS.MANAGEMENT] || []).map((item, i) => {
                                                 const studentName = resolveName(item);
-                                                // Verifica se é o aluno rotativo na gestão (que assume como líder)
+                                                // Verifica se ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© o aluno rotativo na gestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (que assume como lÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­der)
                                                 const isLeader = studentName !== 'Sofia' && studentName !== 'Heloise' && studentName !== 'Vago';
                                                 
                                                 return (
@@ -4155,7 +4151,7 @@ const handleFileSelect = (e) => {
                                                                 </span>
                                                                 {isLeader && (
                                                                     <span className="text-[8px] text-yellow-500 font-bold uppercase tracking-widest bg-yellow-500/10 px-1 py-0.5 rounded border border-yellow-500/20">
-                                                                        Líder
+                                                                        LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­der
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -4194,7 +4190,7 @@ const handleFileSelect = (e) => {
 
 
 
-          {modal.type === 'imageView' && <img src={modal.data} className="w-full h-auto rounded-lg" alt="Evidência" />}
+          {modal.type === 'imageView' && <img src={modal.data} className="w-full h-auto rounded-lg" alt="EvidÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia" />}
 
           {/* --- MODAL DE RECORTE (CROP) --- */}
           {isCropping && (
@@ -4202,7 +4198,7 @@ const handleFileSelect = (e) => {
                 <div className="bg-zinc-800 border border-white/10 rounded-2xl p-6 w-full max-w-sm flex flex-col items-center">
                     <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Crop size={20}/> Ajustar Foto</h3>
                     
-                    {/* Área de Visualização e Arrastar */}
+                    {/* ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Ârea de VisualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o e Arrastar */}
                     <div 
                         className="relative w-[200px] h-[200px] bg-black overflow-hidden rounded-full border-4 border-purple-500 shadow-2xl mb-6 cursor-move touch-none"
                         onMouseDown={(e) => { setIsDragging(true); setDragStart({ x: e.clientX - cropPos.x, y: e.clientY - cropPos.y }); }}
@@ -4266,7 +4262,7 @@ const handleFileSelect = (e) => {
      )}
  </div>
                         <h2 className="text-3xl font-black text-white uppercase tracking-wider">{modal.data.name}</h2>
-                        <p className="text-gray-400 font-mono text-sm bg-white/5 px-3 py-1 rounded-full mt-2 border border-white/10">{modal.data.turma} • {modal.data.station || "Membro da Equipe"}</p>
+                        <p className="text-gray-400 font-mono text-sm bg-white/5 px-3 py-1 rounded-full mt-2 border border-white/10">{modal.data.turma} ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ {modal.data.station || "Membro da Equipe"}</p>
                         {(modal.data.specialty || modal.data.station) && (
                             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                                 {modal.data.specialty && (
@@ -4288,13 +4284,13 @@ const handleFileSelect = (e) => {
                 <div className="grid grid-cols-2 gap-4 mb-8">
                     <div className="bg-[#151520] p-4 rounded-xl border border-white/10 flex flex-col items-center justify-center relative overflow-hidden">
                         <div className={`absolute top-0 left-0 w-1 h-full ${getCurrentLevel(modal.data.xp).color.replace('text-', 'bg-')}`}></div>
-                        <span className="text-gray-500 text-xs font-bold uppercase mb-1">Nível Atual</span>
+                        <span className="text-gray-500 text-xs font-bold uppercase mb-1">NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel Atual</span>
                         <span className={`text-xl font-black ${getCurrentLevel(modal.data.xp).color}`}>{getCurrentLevel(modal.data.xp).name}</span>
                         <span className="text-xs text-gray-400">{modal.data.xp} XP Totais</span>
                     </div>
                     <div className="bg-[#151520] p-4 rounded-xl border border-white/10 flex flex-col items-center justify-center relative overflow-hidden">
                         <div className={`absolute top-0 left-0 w-1 h-full ${getAttendanceStats(modal.data).percent > 75 ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                        <span className="text-gray-500 text-xs font-bold uppercase mb-1">Frequência</span>
+                        <span className="text-gray-500 text-xs font-bold uppercase mb-1">FrequÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia</span>
                         <span className={`text-xl font-black ${getAttendanceStats(modal.data).percent > 75 ? 'text-green-500' : 'text-red-500'}`}>{getAttendanceStats(modal.data).percent}%</span>
                         <span className="text-xs text-gray-400">{getAttendanceStats(modal.data).absences} Faltas</span>
                     </div>
@@ -4303,7 +4299,7 @@ const handleFileSelect = (e) => {
                 {/* Badges Collection */}
                 <div className="mb-8">
                     <h3 className="text-white font-bold mb-4 flex items-center gap-2 border-b border-white/10 pb-2">
-                        <Medal className="text-yellow-500"/> Coleção de Badges
+                        <Medal className="text-yellow-500"/> ColeÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de Badges
                     </h3>
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                         {BADGES_LIST.map(badge => {
@@ -4325,12 +4321,12 @@ const handleFileSelect = (e) => {
                 </div>
 
                 <div className="flex gap-4 mt-8">
-                    {/* Botão de Editar (só aparece para o próprio aluno) */}
+                    {/* BotÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de Editar (sÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ aparece para o prÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³prio aluno) */}
                     {viewAsStudent?.id === modal.data.id && (
                         <button 
                             onClick={() => {
                                 closeModal(); // Fecha o modal de perfil
-                                openNewStudentModal(modal.data); // Abre o modal de edição
+                                openNewStudentModal(modal.data); // Abre o modal de ediÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
                             }} 
                             className="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg transition-colors"
                         >
@@ -4356,7 +4352,7 @@ const handleFileSelect = (e) => {
       <UserPlus className="text-green-500"/> {modal.data ? 'Editar' : 'Novo'} Aluno
     </h3>
     
-    {/* DADOS BÁSICOS */}
+    {/* DADOS BÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂSICOS */}
     <div className="grid grid-cols-2 gap-4 mb-4">
         <div>
             <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome</label>
@@ -4364,7 +4360,7 @@ const handleFileSelect = (e) => {
         </div>
         <div>
             <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Turma</label>
-            <input name="turma" defaultValue={modal.data?.turma} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: 8º A" />
+            <input name="turma" defaultValue={modal.data?.turma} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: 8ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âº A" />
         </div>
     </div>
 
@@ -4382,7 +4378,7 @@ const handleFileSelect = (e) => {
         </div>
         <div className="grid grid-cols-2 gap-4">
             <div>
-                <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 block">Usuário</label>
+                <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 block">UsuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio</label>
                 <input name="username" defaultValue={modal.data?.username} required className="w-full bg-black/50 border border-white/20 rounded-lg p-2 text-white focus:border-yellow-500 outline-none" placeholder="ana.fll" />
             </div>
             <div>
@@ -4409,7 +4405,7 @@ const handleFileSelect = (e) => {
     </div>
     
     <button type="submit" className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-green-900/20 transition-all">
-        {modal.data ? 'Salvar Alterações' : 'Cadastrar Aluno'}
+        {modal.data ? 'Salvar AlteraÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes' : 'Cadastrar Aluno'}
     </button>
   </form>
 )}
@@ -4417,13 +4413,13 @@ const handleFileSelect = (e) => {
           {modal.type === 'editAdminProfile' && (
             <form onSubmit={handleAdminProfileSubmit}>
               <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white">
-                <Shield className="text-red-500"/> Editar Perfil do Técnico
+                <Shield className="text-red-500"/> Editar Perfil do TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico
               </h3>
               
               <div className="grid grid-cols-1 gap-4 mb-4 md:grid-cols-2">
                   <div>
-                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome de Exibição</label>
-                      <input name="name" defaultValue={modal.data?.name} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-red-500 outline-none" placeholder="Ex: Técnico Guilherme" />
+                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome de ExibiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</label>
+                      <input name="name" defaultValue={modal.data?.name} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-red-500 outline-none" placeholder="Ex: TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico Guilherme" />
                   </div>
                   <div>
                       <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Especialidade / assinatura</label>
@@ -4433,8 +4429,8 @@ const handleFileSelect = (e) => {
 
               <div className="mb-4">
                   <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nova Senha de Acesso (Opcional)</label>
-                  <input name="password" type="password" className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-red-500 outline-none" placeholder="Deixe em branco para não alterar" />
-                  <p className="text-[10px] text-gray-500 mt-1">Você poderá logar usando o usuário <strong className="text-gray-400">admin</strong> ou o seu <strong className="text-gray-400">Nome de Exibição</strong>.</p>
+                  <input name="password" type="password" className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-red-500 outline-none" placeholder="Deixe em branco para nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o alterar" />
+                  <p className="text-[10px] text-gray-500 mt-1">VocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª poderÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ logar usando o usuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio <strong className="text-gray-400">admin</strong> ou o seu <strong className="text-gray-400">Nome de ExibiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</strong>.</p>
               </div>
 
               {/* UPLOAD DE FOTO */}
@@ -4453,12 +4449,12 @@ const handleFileSelect = (e) => {
                   </div>
               </div>
               
-              <button type="submit" className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-red-900/20 transition-all">Salvar Alterações</button>
+              <button type="submit" className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-red-900/20 transition-all">Salvar AlteraÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes</button>
             </form>
           )}
-          {modal.type === 'expertForm' && (<form onSubmit={handleExpertSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Briefcase className="text-purple-500"/> {modal.data ? 'Editar' : 'Novo'} Especialista</h3><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome</label><input name="name" defaultValue={modal.data?.name} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div><div className="grid grid-cols-2 gap-4 mb-4"><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Cargo</label><input name="role" defaultValue={modal.data?.role} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data</label><input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Anotações</label><textarea name="notes" defaultValue={modal.data?.notes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none h-20" /></div><div className="mb-4 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Evidência (Foto)</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-purple-500/10 file:text-purple-500 hover:file:bg-purple-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}</div><div className="mb-6 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/10"><div><span className="text-sm font-bold text-white">Impactou?</span></div><select name="impact" defaultValue={modal.data?.impact} className="bg-black/50 border border-white/20 text-white p-2 rounded text-sm"><option value="Baixo">Baixo</option><option value="Médio">Médio</option><option value="Alto">Alto</option></select><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="applied" defaultChecked={modal.data?.applied} className="w-5 h-5 accent-green-500" /><span className="text-xs text-white">Aplicado</span></label></div><button className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg">Salvar Registro</button></form>)}
+          {modal.type === 'expertForm' && (<form onSubmit={handleExpertSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Briefcase className="text-purple-500"/> {modal.data ? 'Editar' : 'Novo'} Especialista</h3><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome</label><input name="name" defaultValue={modal.data?.name} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div><div className="grid grid-cols-2 gap-4 mb-4"><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Cargo</label><input name="role" defaultValue={modal.data?.role} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data</label><input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">AnotaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes</label><textarea name="notes" defaultValue={modal.data?.notes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none h-20" /></div><div className="mb-4 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">EvidÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia (Foto)</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-purple-500/10 file:text-purple-500 hover:file:bg-purple-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ salva</div>}</div><div className="mb-6 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/10"><div><span className="text-sm font-bold text-white">Impactou?</span></div><select name="impact" defaultValue={modal.data?.impact} className="bg-black/50 border border-white/20 text-white p-2 rounded text-sm"><option value="Baixo">Baixo</option><option value="MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dio">MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dio</option><option value="Alto">Alto</option></select><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="applied" defaultChecked={modal.data?.applied} className="w-5 h-5 accent-green-500" /><span className="text-xs text-white">Aplicado</span></label></div><button className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg">Salvar Registro</button></form>)}
 
-          {modal.type === 'robotForm' && (<form onSubmit={handleRobotSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><GitCommit className="text-blue-500"/> {modal.data ? 'Editar' : 'Novo'} Versão</h3><div className="grid grid-cols-2 gap-4 mb-4"><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Versão</label><input name="version" defaultValue={modal.data?.version} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: V2.0" /></div><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data</label><input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Apelido</label><input name="name" defaultValue={modal.data?.name} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">O que mudou?</label><textarea name="changes" defaultValue={modal.data?.changes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none h-24" /></div><div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Evidência (Foto)</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}</div><button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar Versão</button></form>)}
+          {modal.type === 'robotForm' && (<form onSubmit={handleRobotSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><GitCommit className="text-blue-500"/> {modal.data ? 'Editar' : 'Novo'} VersÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</h3><div className="grid grid-cols-2 gap-4 mb-4"><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">VersÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</label><input name="version" defaultValue={modal.data?.version} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: V2.0" /></div><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data</label><input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Apelido</label><input name="name" defaultValue={modal.data?.name} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">O que mudou?</label><textarea name="changes" defaultValue={modal.data?.changes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none h-24" /></div><div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">EvidÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia (Foto)</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ salva</div>}</div><button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar VersÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</button></form>)}
 
         
 
@@ -4518,7 +4514,7 @@ const handleFileSelect = (e) => {
     <div className="bg-black/50 p-4 rounded-xl mb-6 border border-white/5">
       <p className="text-gray-200 text-sm mb-4 leading-relaxed">"{modal.data.submission.text}"</p>
       
-      {/* --- BOTÃO DE DOWNLOAD (VERSÃO BASE64) --- */}
+      {/* --- BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DE DOWNLOAD (VERSÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O BASE64) --- */}
       <button 
         onClick={(e) => {
            e.stopPropagation();
@@ -4529,12 +4525,12 @@ const handleFileSelect = (e) => {
              // Truque para baixar arquivo Base64
              const link = document.createElement("a");
              link.href = fileData;
-             link.download = fileName; // O segredo está aqui: força o download com o nome certo
+             link.download = fileName; // O segredo estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ aqui: forÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a o download com o nome certo
              document.body.appendChild(link);
              link.click();
              document.body.removeChild(link);
            } else {
-             alert("⚠️ Erro: O conteúdo do arquivo não foi encontrado.");
+             alert("ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Erro: O conteÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºdo do arquivo nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o foi encontrado.");
            }
         }} 
         className="text-xs bg-white/10 px-3 py-2 rounded text-white flex items-center gap-2 hover:bg-white/20 transition-colors w-full justify-center font-bold border border-white/10"
@@ -4556,9 +4552,9 @@ const handleFileSelect = (e) => {
     </div>
   </div>
 )}
-          {modal.type === 'expertView' && (<div><h3 className="text-xl font-bold text-white mb-1">{modal.data.name}</h3><p className="text-sm text-purple-400 mb-4">{modal.data.role} • {modal.data.date}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-4"><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">"{modal.data.notes}"</p></div><div className="flex gap-4 mb-6"><div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-lg border border-white/10"><span className="text-[10px] text-gray-400 uppercase font-bold">Impacto</span><span className={`text-xs font-bold ${modal.data.impact==='Alto'?'text-green-500':modal.data.impact==='Médio'?'text-yellow-500':'text-gray-500'}`}>{modal.data.impact}</span></div>{modal.data.applied && <div className="flex items-center gap-2 bg-green-500/10 px-3 py-1.5 rounded-lg border border-green-500/20"><CheckCircle size={12} className="text-green-500"/><span className="text-xs font-bold text-green-500">Sugestão Aplicada</span></div>}</div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Evidência Anexada</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10" alt="Evidência" /></div>)}</div>)}
+          {modal.type === 'expertView' && (<div><h3 className="text-xl font-bold text-white mb-1">{modal.data.name}</h3><p className="text-sm text-purple-400 mb-4">{modal.data.role} ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ {modal.data.date}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-4"><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">"{modal.data.notes}"</p></div><div className="flex gap-4 mb-6"><div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-lg border border-white/10"><span className="text-[10px] text-gray-400 uppercase font-bold">Impacto</span><span className={`text-xs font-bold ${modal.data.impact==='Alto'?'text-green-500':modal.data.impact==='MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dio'?'text-yellow-500':'text-gray-500'}`}>{modal.data.impact}</span></div>{modal.data.applied && <div className="flex items-center gap-2 bg-green-500/10 px-3 py-1.5 rounded-lg border border-green-500/20"><CheckCircle size={12} className="text-green-500"/><span className="text-xs font-bold text-green-500">SugestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o Aplicada</span></div>}</div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">EvidÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia Anexada</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10" alt="EvidÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia" /></div>)}</div>)}
 
-          {modal.type === 'robotView' && (<div><div className="flex justify-between items-start mb-2"><h3 className="text-xl font-bold text-white">{modal.data.name}</h3><span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-mono font-bold">{modal.data.version}</span></div><p className="text-xs text-gray-500 mb-6">{modal.data.date}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Mudanças e Testes</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.changes}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto do Protótipo</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10" alt="Robô" /></div>)}</div>)}
+          {modal.type === 'robotView' && (<div><div className="flex justify-between items-start mb-2"><h3 className="text-xl font-bold text-white">{modal.data.name}</h3><span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-mono font-bold">{modal.data.version}</span></div><p className="text-xs text-gray-500 mb-6">{modal.data.date}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">MudanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§as e Testes</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.changes}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto do ProtÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³tipo</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10" alt="RobÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´" /></div>)}</div>)}
 
           {modal.type === 'attachmentForm' && (
               <form onSubmit={handleAttachmentSubmit}>
@@ -4569,7 +4565,7 @@ const handleFileSelect = (e) => {
                           <input name="name" defaultValue={modal.data?.name} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Garra 1" />
                       </div>
                       <div>
-                          <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Saída Associada</label>
+                          <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">SaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da Associada</label>
                           <select name="roundId" defaultValue={modal.data?.roundId} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none">
                               <option value="">Selecione...</option>
                               {rounds.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
@@ -4577,23 +4573,23 @@ const handleFileSelect = (e) => {
                       </div>
                   </div>
                   <div className="mb-4">
-                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data da Modificação</label>
+                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data da ModificaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</label>
                       <input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" />
                   </div>
                   <div className="mb-4">
-                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Mudanças / Funcionalidade</label>
-                      <textarea name="changes" defaultValue={modal.data?.changes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none h-24" placeholder="Para quais missões serve e o que foi alterado?" />
+                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">MudanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§as / Funcionalidade</label>
+                      <textarea name="changes" defaultValue={modal.data?.changes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none h-24" placeholder="Para quais missÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes serve e o que foi alterado?" />
                   </div>
                   <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10">
                       <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Garra</label>
                       <input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />
-                      {selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}
+                      {selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ salva</div>}
                   </div>
                   <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar Garra</button>
               </form>
           )}
 
-          {modal.type === 'attachmentView' && (<div><div className="flex justify-between items-start mb-2"><h3 className="text-xl font-bold text-white">{modal.data.name}</h3>{(() => { const roundName = rounds.find(r => r.id === modal.data.roundId)?.name || 'Saída Desconhecida'; return <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-mono font-bold">{roundName}</span> })()}</div><p className="text-xs text-gray-500 mb-6">{modal.data.date?.split('-').reverse().join('/')} {modal.data.author && `• Por ${modal.data.author}`}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Mudanças / Funcionalidade</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.changes}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Garra</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10 cursor-pointer hover:opacity-80 transition-opacity" alt="Garra" onClick={() => openImageModal(modal.data.image)} title="Clique para ampliar" /></div>)}</div>)}
+          {modal.type === 'attachmentView' && (<div><div className="flex justify-between items-start mb-2"><h3 className="text-xl font-bold text-white">{modal.data.name}</h3>{(() => { const roundName = rounds.find(r => r.id === modal.data.roundId)?.name || 'SaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da Desconhecida'; return <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-mono font-bold">{roundName}</span> })()}</div><p className="text-xs text-gray-500 mb-6">{modal.data.date?.split('-').reverse().join('/')} {modal.data.author && `ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ Por ${modal.data.author}`}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">MudanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§as / Funcionalidade</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.changes}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Garra</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10 cursor-pointer hover:opacity-80 transition-opacity" alt="Garra" onClick={() => openImageModal(modal.data.image)} title="Clique para ampliar" /></div>)}</div>)}
 
           {modal.type === 'codeForm' && (
               <form onSubmit={handleCodeSubmit}>
@@ -4624,30 +4620,30 @@ const handleFileSelect = (e) => {
               </form>
           )}
 
-          {modal.type === 'codeView' && (<div><h3 className="text-xl font-bold text-white mb-2">{modal.data.title}</h3><p className="text-xs text-gray-500 mb-6 flex items-center gap-2"><Calendar size={12}/> {modal.data.date?.split('-').reverse().join('/')} {modal.data.author && <><UserCircle size={12} className="ml-2"/> Por {modal.data.author}</>}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block flex items-center gap-1"><Lightbulb size={12}/> Lógica de Funcionamento</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.description}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block flex items-center gap-1"><ImageIcon size={12}/> Print do Código</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10 cursor-pointer hover:opacity-80 transition-opacity" alt="Código" onClick={() => openImageModal(modal.data.image)} title="Clique para ampliar" /></div>)}</div>)}
+          {modal.type === 'codeView' && (<div><h3 className="text-xl font-bold text-white mb-2">{modal.data.title}</h3><p className="text-xs text-gray-500 mb-6 flex items-center gap-2"><Calendar size={12}/> {modal.data.date?.split('-').reverse().join('/')} {modal.data.author && <><UserCircle size={12} className="ml-2"/> Por {modal.data.author}</>}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block flex items-center gap-1"><Lightbulb size={12}/> LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³gica de Funcionamento</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.description}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block flex items-center gap-1"><ImageIcon size={12}/> Print do CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10 cursor-pointer hover:opacity-80 transition-opacity" alt="CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo" onClick={() => openImageModal(modal.data.image)} title="Clique para ampliar" /></div>)}</div>)}
 
           {modal.type === 'newRound' && (<form onSubmit={handleRoundSubmit}>
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><ListTodo className="text-blue-500"/> {modal.data ? 'Editar Saída' : 'Planejar Saída'}</h3>
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><ListTodo className="text-blue-500"/> {modal.data ? 'Editar SaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da' : 'Planejar SaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da'}</h3>
               
               <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome da Saída</label><input name="name" defaultValue={modal.data?.name} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Saída 1" /></div>
+                  <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome da SaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da</label><input name="name" defaultValue={modal.data?.name} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: SaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da 1" /></div>
                   <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Tempo Estimado (s)</label><input name="time" type="number" defaultValue={modal.data?.estimatedTime} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="30" /></div>
               </div>
 
-              {/* SELEÇÃO DE BASE */}
+              {/* SELEÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DE BASE */}
               <div className="mb-4">
-                  <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Base de Saída</label>
+                  <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Base de SaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da</label>
                   <div className="flex gap-4">
                       <label className="flex items-center gap-2 bg-black/50 p-3 rounded-lg border border-white/20 flex-1 cursor-pointer hover:border-blue-500 transition-colors"><input type="radio" name="startBase" value="Esquerda" defaultChecked={modal.data?.startBase ? modal.data.startBase === 'Esquerda' : true} className="accent-blue-500"/><span className="text-sm text-white">Esquerda (Vermelho)</span></label>
                       <label className="flex items-center gap-2 bg-black/50 p-3 rounded-lg border border-white/20 flex-1 cursor-pointer hover:border-red-500 transition-colors"><input type="radio" name="startBase" value="Direita" defaultChecked={modal.data?.startBase === 'Direita'} className="accent-red-500"/><span className="text-sm text-white">Direita (Azul)</span></label>
                   </div>
               </div>
 
-              <div className="mb-6 max-h-40 overflow-y-auto custom-scrollbar border border-white/10 rounded-lg p-2"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block sticky top-0 bg-[#151520] pb-2">Missões (Selecione)</label>{missionsList.map(m => (<label key={m.id} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded cursor-pointer"><input type="checkbox" name="missions" value={m.id} defaultChecked={modal.data?.missions?.includes(m.id)} className="accent-blue-500 w-4 h-4"/><div className="flex items-center gap-2 flex-1">{m.image && <img src={m.image} className="w-6 h-6 rounded object-cover" alt="M" />}<span className="text-sm text-gray-300">{m.code} - {m.name}</span></div><span className="text-xs font-bold text-blue-500">+{m.points}pts</span></label>))}</div><button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">{modal.data ? 'Salvar alteracoes' : 'Salvar Saída'}</button></form>)}
+              <div className="mb-6 max-h-40 overflow-y-auto custom-scrollbar border border-white/10 rounded-lg p-2"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block sticky top-0 bg-[#151520] pb-2">MissÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes (Selecione)</label>{missionsList.map(m => (<label key={m.id} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded cursor-pointer"><input type="checkbox" name="missions" value={m.id} defaultChecked={modal.data?.missions?.includes(m.id)} className="accent-blue-500 w-4 h-4"/><div className="flex items-center gap-2 flex-1">{m.image && <img src={m.image} className="w-6 h-6 rounded object-cover" alt="M" />}<span className="text-sm text-gray-300">{m.code} - {m.name}</span></div><span className="text-xs font-bold text-blue-500">+{m.points}pts</span></label>))}</div><button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">{modal.data ? 'Salvar alteracoes' : 'Salvar SaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da'}</button></form>)}
 
     
 
-          {modal.type === 'attendance' && (<form onSubmit={handleAttendanceSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><ListTodo className="text-green-500"/> Chamada do Dia</h3><div className="mb-6 max-h-60 overflow-y-auto custom-scrollbar">{students.map(s => { const stats = getAttendanceStats(s); return ( <label key={s.id} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-lg border-b border-white/5 cursor-pointer"><input type="checkbox" name="present" value={s.id} defaultChecked className="accent-green-500 w-5 h-5"/><div className="flex-1"><span className="text-white font-bold block">{s.name}</span><span className="text-xs text-gray-500">{s.turma} • Presença: <span className={stats.percent < 75 ? 'text-red-500' : 'text-green-500'}>{stats.percent}%</span> • Faltas: {stats.absences}</span></div></label>) })}</div><button className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg">Confirmar Presença</button></form>)}
+          {modal.type === 'attendance' && (<form onSubmit={handleAttendanceSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><ListTodo className="text-green-500"/> Chamada do Dia</h3><div className="mb-6 max-h-60 overflow-y-auto custom-scrollbar">{students.map(s => { const stats = getAttendanceStats(s); return ( <label key={s.id} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-lg border-b border-white/5 cursor-pointer"><input type="checkbox" name="present" value={s.id} defaultChecked className="accent-green-500 w-5 h-5"/><div className="flex-1"><span className="text-white font-bold block">{s.name}</span><span className="text-xs text-gray-500">{s.turma} ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ PresenÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a: <span className={stats.percent < 75 ? 'text-red-500' : 'text-green-500'}>{stats.percent}%</span> ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ Faltas: {stats.absences}</span></div></label>) })}</div><button className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg">Confirmar PresenÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a</button></form>)}
 
           {modal.type === 'grades' && (() => {
               const stageId = modal.data.stageId || 'etapa1';
@@ -4657,15 +4653,15 @@ const handleFileSelect = (e) => {
 
               return (
                   <form onSubmit={handleGradesSubmit}>
-                      <h3 className="text-xl font-bold mb-2 flex items-center gap-2 text-white"><GraduationCap className="text-yellow-500"/> Boletim SESI • {stageMeta.label}</h3>
+                      <h3 className="text-xl font-bold mb-2 flex items-center gap-2 text-white"><GraduationCap className="text-yellow-500"/> Boletim SESI ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ {stageMeta.label}</h3>
                       <p className="text-xs text-gray-400 mb-4">Insira as notas do aluno(a) <strong className="text-white">{modal.data.student.name}</strong> para a <strong className="text-yellow-300">{stageMeta.label}</strong>.</p>
 
                       <div className={`mb-6 rounded-xl border p-3 text-xs ${stageHasGrades ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100' : 'border-yellow-500/20 bg-yellow-500/10 text-yellow-100'}`}>
                           <p className="font-bold uppercase tracking-[0.16em]">{stageMeta.periodLabel}</p>
                           <p className="mt-2 text-[11px] leading-relaxed text-white/80">
                               {stageHasGrades
-                                  ? 'Esta etapa já foi lançada. Se você corrigir alguma nota, o sistema recalcula só a diferença de XP.'
-                                  : 'As notas desta etapa ficam separadas da outra para evitar lançamento duplicado.'}
+                                  ? 'Esta etapa jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ foi lanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ada. Se vocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª corrigir alguma nota, o sistema recalcula sÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ a diferenÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a de XP.'
+                                  : 'As notas desta etapa ficam separadas da outra para evitar lanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§amento duplicado.'}
                           </p>
                       </div>
                       
@@ -4690,12 +4686,12 @@ const handleFileSelect = (e) => {
                       </div>
 
                       <div className="bg-white/5 p-4 rounded-xl text-xs text-gray-400 mb-6">
-                          <p className="font-bold text-white mb-2">Bônus de XP por Matéria:</p>
+                          <p className="font-bold text-white mb-2">BÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´nus de XP por MatÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©ria:</p>
                           <div className="grid grid-cols-2 gap-2">
-                              <p>• Nota 10 = <span className="text-green-500 font-bold">+10 XP</span></p>
-                              <p>• Nota 9.0 a 9.9 = <span className="text-cyan-500 font-bold">+7 XP</span></p>
-                              <p>• Nota 8.0 a 8.9 = <span className="text-purple-500 font-bold">+5 XP</span></p>
-                              <p>• Nota 7.9 ou menos = <span className="text-red-400 font-bold">-2 XP</span></p>
+                              <p>ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ Nota 10 = <span className="text-green-500 font-bold">+10 XP</span></p>
+                              <p>ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ Nota 9.0 a 9.9 = <span className="text-cyan-500 font-bold">+7 XP</span></p>
+                              <p>ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ Nota 8.0 a 8.9 = <span className="text-purple-500 font-bold">+5 XP</span></p>
+                              <p>ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ Nota 7.9 ou menos = <span className="text-red-400 font-bold">-2 XP</span></p>
                           </div>
                       </div>
                       <button className="w-full bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-3 rounded-lg shadow-lg shadow-yellow-900/20">Salvar {stageMeta.label}</button>
@@ -4711,21 +4707,21 @@ const handleFileSelect = (e) => {
             </Suspense>
           )}
 
-          {/* NOVO MODAL: EDITOR DE MISSÕES */}
+          {/* NOVO MODAL: EDITOR DE MISSÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES */}
           {modal.type === 'missionForm' && (
              <div>
                  <form onSubmit={handleMissionSubmit} className="mb-8 pb-8 border-b border-white/10">
-                    <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Settings className="text-blue-500"/> {modal.data ? 'Editar' : 'Nova'} Missão</h3>
+                    <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Settings className="text-blue-500"/> {modal.data ? 'Editar' : 'Nova'} MissÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</h3>
                     <div className="grid grid-cols-3 gap-4 mb-4">
-                        <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Código</label><input name="code" defaultValue={modal.data?.code} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: M01" /></div>
+                        <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo</label><input name="code" defaultValue={modal.data?.code} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: M01" /></div>
                         <div className="col-span-2"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome</label><input name="name" defaultValue={modal.data?.name} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Coral Nursery" /></div>
                     </div>
                     <div className="mb-4">
-                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Pontos (Máx)</label>
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Pontos (MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡x)</label>
                         <input name="points" type="number" defaultValue={modal.data?.points} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" />
                     </div>
                     <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10">
-                        <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Missão</label>
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da MissÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</label>
                         <input id="missionFileInput" type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />
                         {selectedFile ? (
                             <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1">
@@ -4734,23 +4730,23 @@ const handleFileSelect = (e) => {
                             </span>
                         ) : modal.data?.image && (
                             <div className="mt-2 text-xs text-blue-500 flex items-center gap-1">
-                                <CheckCircle size={10}/> Imagem já salva
+                                <CheckCircle size={10}/> Imagem jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ salva
                                 <button type="button" onClick={() => setModal(prev => ({ ...prev, data: { ...prev.data, image: null } }))} className="text-red-500 hover:text-red-400 ml-2 font-bold">Remover</button>
                             </div>
                         )}
                     </div>
                     <div className="flex gap-2">
-                        <button className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-colors">Salvar Missão</button>
+                        <button className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-colors">Salvar MissÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</button>
                         {modal.data && <button type="button" onClick={() => { setModal({type: 'missionForm', data: null}); setSelectedFile(null); }} className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancelar</button>}
                     </div>
                  </form>
 
-                 {/* LISTA GERENCIADORA DE MISSÕES */}
+                 {/* LISTA GERENCIADORA DE MISSÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES */}
                  <div>
-                    <h4 className="text-sm font-bold text-gray-400 uppercase mb-3 flex items-center gap-2"><ListTodo size={16}/> Missões Cadastradas</h4>
+                    <h4 className="text-sm font-bold text-gray-400 uppercase mb-3 flex items-center gap-2"><ListTodo size={16}/> MissÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes Cadastradas</h4>
                     <div className="max-h-60 overflow-y-auto custom-scrollbar space-y-2 pr-2">
                        {missionsList.length === 0 ? (
-                           <p className="text-xs text-gray-500 italic">Nenhuma missão cadastrada. Adicione no formulário acima.</p>
+                           <p className="text-xs text-gray-500 italic">Nenhuma missÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o cadastrada. Adicione no formulÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio acima.</p>
                        ) : (
                            [...missionsList].sort((a,b) => a.code.localeCompare(b.code)).map(m => (
                                <div key={m.id} className="flex items-center justify-between bg-black/40 p-3 rounded-lg border border-white/5 hover:bg-white/5 transition-colors group">
@@ -4781,7 +4777,7 @@ const handleFileSelect = (e) => {
 
 
 
-          {/* NOVO MODAL: MATRIZ DE DECISÃO */}
+          {/* NOVO MODAL: MATRIZ DE DECISÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O */}
 
           {modal.type === 'matrixForm' && (
 
@@ -4789,9 +4785,9 @@ const handleFileSelect = (e) => {
 
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><BarChart3 className="text-purple-500"/> Nova Ideia</h3>
 
-                <div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome da Ideia / Solução</label><input name="name" required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" placeholder="Ex: Filtro de Carvão" /></div>
+                <div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome da Ideia / SoluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</label><input name="name" required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" placeholder="Ex: Filtro de CarvÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o" /></div>
 
-                <p className="text-xs text-gray-400 font-bold mb-2 uppercase">Pontuação (1 = Ruim, 5 = Excelente)</p>
+                <p className="text-xs text-gray-400 font-bold mb-2 uppercase">PontuaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (1 = Ruim, 5 = Excelente)</p>
 
                 <div className="grid grid-cols-2 gap-4 mb-6">
 
@@ -4801,11 +4797,11 @@ const handleFileSelect = (e) => {
 
                     <div><label className="text-[10px] text-gray-500 block mb-1">Facilidade (Peso x1)</label><input name="feasibility" type="number" min="1" max="5" required className="w-full bg-black/50 border border-white/20 p-2 rounded text-white"/></div>
 
-                    <div><label className="text-[10px] text-gray-500 block mb-1">Inovação (Peso x2)</label><input name="innovation" type="number" min="1" max="5" required className="w-full bg-black/50 border border-white/20 p-2 rounded text-white"/></div>
+                    <div><label className="text-[10px] text-gray-500 block mb-1">InovaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (Peso x2)</label><input name="innovation" type="number" min="1" max="5" required className="w-full bg-black/50 border border-white/20 p-2 rounded text-white"/></div>
 
                 </div>
 
-                <button className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg">Adicionar à Matriz</button>
+                <button className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg">Adicionar ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â  Matriz</button>
 
              </form>
 
@@ -4815,32 +4811,32 @@ const handleFileSelect = (e) => {
           {modal.type === 'projectForm' && (
              <form onSubmit={handleProjectSubmit}>
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white">
-                    <Lightbulb className="text-yellow-500"/> Editar Projeto de Inovação
+                    <Lightbulb className="text-yellow-500"/> Editar Projeto de InovaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
                 </h3>
 
                 <div className="mb-4">
-                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome do Projeto / Solução</label>
-                    <input name="title" defaultValue={projectSummary?.title} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-yellow-500 outline-none font-bold text-lg" placeholder="Ex: Filtro Bio-Sintético" />
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome do Projeto / SoluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</label>
+                    <input name="title" defaultValue={projectSummary?.title} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-yellow-500 outline-none font-bold text-lg" placeholder="Ex: Filtro Bio-SintÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©tico" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
                         <label className="text-xs text-gray-400 uppercase font-bold mb-1 block text-red-400">O Problema</label>
-                        <textarea name="problem" defaultValue={projectSummary?.problem} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white h-32 focus:border-red-500 outline-none resize-none" placeholder="Qual problema vocês resolveram?" />
+                        <textarea name="problem" defaultValue={projectSummary?.problem} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white h-32 focus:border-red-500 outline-none resize-none" placeholder="Qual problema vocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªs resolveram?" />
                     </div>
                     <div>
-                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block text-green-400">A Solução</label>
-                        <textarea name="solution" defaultValue={projectSummary?.solution} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white h-32 focus:border-green-500 outline-none resize-none" placeholder="Como funciona a invenção?" />
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block text-green-400">A SoluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</label>
+                        <textarea name="solution" defaultValue={projectSummary?.solution} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white h-32 focus:border-green-500 outline-none resize-none" placeholder="Como funciona a invenÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o?" />
                     </div>
                 </div>
 
                 <div className="mb-4">
-                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block text-blue-400">Impacto (Para os Juízes)</label>
-                    <textarea name="impact" defaultValue={projectSummary?.impact} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white h-20 focus:border-blue-500 outline-none" placeholder="Quem isso ajuda? Qual o benefício real?" />
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block text-blue-400">Impacto (Para os JuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­zes)</label>
+                    <textarea name="impact" defaultValue={projectSummary?.impact} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white h-20 focus:border-blue-500 outline-none" placeholder="Quem isso ajuda? Qual o benefÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­cio real?" />
                 </div>
 
                 <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10">
-                    <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto do Protótipo / Desenho</label>
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto do ProtÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³tipo / Desenho</label>
                     <input id="projectFileInput" type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-yellow-500/10 file:text-yellow-500 hover:file:bg-yellow-500/20 cursor-pointer" />
                     {selectedFile ? (
                         <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1">
@@ -4849,7 +4845,7 @@ const handleFileSelect = (e) => {
                         </span>
                     ) : projectSummary?.image && (
                         <div className="mt-2 text-xs text-blue-500 flex items-center gap-1">
-                            <CheckCircle size={10}/> Imagem atual já salva
+                            <CheckCircle size={10}/> Imagem atual jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ salva
                             <button type="button" onClick={() => setProjectSummary(prev => ({ ...prev, image: null }))} className="text-red-500 hover:text-red-400 ml-2 font-bold">Remover</button>
                         </div>
                     )}
@@ -4865,13 +4861,13 @@ const handleFileSelect = (e) => {
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Megaphone className="text-orange-500"/> Registrar Impacto</h3>
                 
                 <div className="mb-4">
-                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome do Evento / Ação</label>
-                    <input name="name" required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-orange-500 outline-none" placeholder="Ex: Apresentação para o 6º Ano" />
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome do Evento / AÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</label>
+                    <input name="name" required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-orange-500 outline-none" placeholder="Ex: ApresentaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o para o 6ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âº Ano" />
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Público-Alvo</label>
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">PÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºblico-Alvo</label>
                         <select name="type" className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-orange-500 outline-none">
                             <option value="Escola">Escola / Alunos</option>
                             <option value="Especialistas">Especialistas</option>
@@ -4894,12 +4890,12 @@ const handleFileSelect = (e) => {
 
                 <div className="mb-6">
                     <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Feedback / Resultado (Opcional)</label>
-                    <textarea name="feedback" className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-orange-500 outline-none h-24 resize-none" placeholder="O que acharam? Deram alguma sugestão?"></textarea>
+                    <textarea name="feedback" className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-orange-500 outline-none h-24 resize-none" placeholder="O que acharam? Deram alguma sugestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o?"></textarea>
                 </div>
 
                 <div className="bg-orange-500/10 border border-orange-500/20 p-3 rounded-xl mb-6 text-xs text-orange-400 flex items-start gap-2">
                     <Info size={16} className="shrink-0 mt-0.5"/>
-                    <p>O Firebase não armazena fotos desta etapa para economizar espaço. Registre as fotos por conta própria no Drive da equipe e mostre aos juízes!</p>
+                    <p>O Firebase nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o armazena fotos desta etapa para economizar espaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§o. Registre as fotos por conta prÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³pria no Drive da equipe e mostre aos juÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­zes!</p>
                 </div>
 
                 <button type="submit" className="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-orange-900/20 transition-all">Salvar Registro</button>
@@ -4912,8 +4908,8 @@ const handleFileSelect = (e) => {
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><CalendarDays className="text-blue-500"/> {modal.data ? 'Editar' : 'Novo'} Evento</h3>
                 
                 <div className="mb-4">
-                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Título do Evento</label>
-                    <input name="title" defaultValue={modal.data?.title} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Reunião com Eng. Mecânico" />
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Titulo do Evento</label>
+                    <input name="title" defaultValue={modal.data?.title} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Reuniao com Eng. Mecanico" />
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4 mb-4">
@@ -4922,7 +4918,7 @@ const handleFileSelect = (e) => {
                         <input name="date" type="date" defaultValue={modal.data?.date || localTodayStr} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" />
                     </div>
                     <div>
-                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Horário</label>
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Horario</label>
                         <input name="time" type="time" defaultValue={modal.data?.time || '18:00'} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" />
                     </div>
                 </div>
@@ -4931,13 +4927,13 @@ const handleFileSelect = (e) => {
                     <div>
                         <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Tipo</label>
                         <select name="type" defaultValue={modal.data?.type || 'Visita'} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none">
-                            <option value="Visita">Visita Técnica</option>
+                            <option value="Visita">Visita Tecnica</option>
                             <option value="Especialista">Mentoria / Especialista</option>
-                            <option value="Reunião">Reunião Extra</option>
+                            <option value="ReuniÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o">Reuniao Extra</option>
                             <option value="Outro">Outro</option>
                             <option value="Treino">Treino</option>
                             <option value="Prazo">Prazo / Entrega</option>
-                            <option value="Competição">Competicao</option>
+                            <option value="CompetiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o">Competicao</option>
                         </select>
                     </div>
                     <div>
@@ -4966,8 +4962,8 @@ const handleFileSelect = (e) => {
                 </div>
 
                 <div className="mb-6">
-                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Descrição (Opcional)</label>
-                    <textarea name="description" defaultValue={modal.data?.description} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none h-24 resize-none" placeholder="Detalhes do encontro, materiais necessários, etc..."></textarea>
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">DescriÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (Opcional)</label>
+                    <textarea name="description" defaultValue={modal.data?.description} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none h-24 resize-none" placeholder="Detalhes do encontro, materiais necessÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rios, etc..."></textarea>
                 </div>
 
                 <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-blue-900/20">Salvar na Agenda</button>
@@ -4984,239 +4980,26 @@ const handleFileSelect = (e) => {
 
 
 
-  // --- COMPONENTE DE ESTRATÉGIA ---
+  // --- COMPONENTE DE ESTRATÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°GIA ---
 
-  const StrategyView = () => {
-      return (
-      <div className="animate-in fade-in duration-300 space-y-6">
-          
-          {/* --- NAVEGAÇÃO DA ÁREA DE ESTRATÉGIA --- */}
-          <section className="newgears-major-panel relative overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(135deg,rgba(19,21,35,0.96),rgba(12,14,24,0.96))] p-4 md:p-5 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
-              <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px),radial-gradient(circle_at_top_left,rgba(255,217,95,0.14),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(71,214,255,0.12),transparent_28%)] bg-[size:22px_22px,22px_22px,auto,auto]" />
-              <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="max-w-2xl">
-                      <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-black">Mapa da estrategia</p>
-                      <h3 className="newgears-display mt-2 text-2xl font-black text-white">Escolha a trilha que a equipe quer explorar agora.</h3>
-                      <p className="mt-2 text-sm leading-relaxed text-gray-300">
-                          Uma trilha cuida do projeto e do impacto. A outra mostra como o robo evoluiu. As duas precisam ter mais cara de equipe criativa e menos cara de relatorio.
-                      </p>
-                  </div>
+  // --- GRÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂFICO DE EVOLUÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O (SVG PURO) ---
+  const scoreEvolutionChartContextRef = useRef({});
+  scoreEvolutionChartContextRef.current = {
+      db,
+      rounds,
+      scoreHistory,
+      showNotification,
+  };
 
-                  <div className="inline-flex w-full flex-col rounded-[24px] border border-white/10 bg-black/20 p-1.5 sm:w-auto sm:flex-row">
-                      <button 
-                          onClick={() => setStrategySubTab('innovation')}
-                          className={`px-5 py-3 rounded-[18px] text-sm font-black flex items-center justify-center gap-2 transition-all ${strategySubTab === 'innovation' ? 'bg-yellow-500 text-black shadow-[0_16px_30px_rgba(234,179,8,0.26)]' : 'text-gray-300 hover:text-white hover:bg-white/8'}`}
-                      >
-                          <Lightbulb size={16}/> Projeto de Inovacao
-                      </button>
-                      <button 
-                          onClick={() => setStrategySubTab('robot_design')}
-                          className={`px-5 py-3 rounded-[18px] text-sm font-black flex items-center justify-center gap-2 transition-all ${strategySubTab === 'robot_design' ? 'bg-blue-600 text-white shadow-[0_16px_30px_rgba(37,99,235,0.26)]' : 'text-gray-300 hover:text-white hover:bg-white/8'}`}
-                      >
-                          <Wrench size={16}/> Design do Robo
-                      </button>
-                  </div>
-              </div>
-          </section>
-
-          {strategySubTab === 'innovation' && (
-              <Suspense fallback={<LazyPanelFallback label="Carregando painel de inovacao..." minHeightClass="min-h-[360px]" />}>
-                <InnovationStrategyPanel
-                    projectSummary={projectSummary}
-                    projectImpactNarrative={projectImpactNarrative}
-                    decisionMatrix={decisionMatrix}
-                    experts={experts}
-                    outreachEvents={outreachEvents}
-                    totalImpactPeople={totalImpactPeople}
-                    isAdmin={isAdmin}
-                    viewAsStudent={viewAsStudent}
-                    onOpenProject={() => setModal({ type: 'projectForm' })}
-                    onOpenMatrix={openMatrixForm}
-                    onDeleteMatrix={handleDeleteMatrix}
-                    onOpenExpert={() => openExpertModal()}
-                    onOpenExpertEdit={openExpertModal}
-                    onOpenExpertView={openExpertView}
-                    onDeleteExpert={handleDeleteExpert}
-                    onOpenImpact={() => openOutreachForm()}
-                    onDeleteOutreach={handleDeleteOutreach}
-                />
-              </Suspense>
-          )}
-
-          {strategySubTab === 'robot_design' && (
-              <Suspense fallback={<LazyPanelFallback label="Carregando painel de robo..." minHeightClass="min-h-[360px]" />}>
-                <RobotDesignStrategyPanel
-                    robotVersions={robotVersions}
-                    attachments={attachments}
-                    codeSnippets={codeSnippets}
-                    rounds={rounds}
-                    activeCommandCode={activeCommandCode}
-                    iterationRecords={iterationRecords}
-                    isAdmin={isAdmin}
-                    viewAsStudent={viewAsStudent}
-                    onOpenRobot={() => openRobotModal()}
-                    onOpenRobotEdit={openRobotModal}
-                    onOpenRobotView={openRobotView}
-                    onDeleteRobotVersion={handleDeleteRobotVersion}
-                    onOpenAttachment={() => openAttachmentModal()}
-                    onOpenAttachmentEdit={openAttachmentModal}
-                    onOpenAttachmentView={openAttachmentView}
-                    onDeleteAttachment={handleDeleteAttachment}
-                    onOpenCode={() => openCodeModal()}
-                    onOpenCodeEdit={openCodeModal}
-                    onOpenCodeView={openCodeView}
-                    onApplyCode={handleApplyCodeSnippet}
-                    onDeleteCode={handleDeleteCode}
-                />
-              </Suspense>
-          )}
-
-          {strategySubTab === 'innovation_legacy' && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                  {/* MATRIZ DE DECISÃO (NOVO) */}
-                  <div className="bg-[#151520] border border-white/10 rounded-2xl p-6">
-                      <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><BarChart3 className="text-purple-500"/> Matriz de Decisão (Pugh Matrix)</h3><button onClick={openMatrixForm} className="text-xs bg-purple-500/10 text-purple-500 border border-purple-500/20 px-3 py-1.5 rounded-lg hover:bg-purple-500 hover:text-white font-bold">+ Nova Ideia</button></div>
-                      <div className="overflow-x-auto"><table className="w-full text-left border-collapse"><thead className="text-xs text-gray-500 uppercase border-b border-white/10"><tr><th className="p-3">Ideia</th><th className="p-3 text-center">Impacto (x3)</th><th className="p-3 text-center">Custo (x2)</th><th className="p-3 text-center">Fácil (x1)</th><th className="p-3 text-center">Inovação (x2)</th><th className="p-3 text-right text-white">Total</th><th className="p-3"></th></tr></thead><tbody>
-                          {decisionMatrix.sort((a,b) => (b.impact*3 + b.cost*2 + b.feasibility + b.innovation*2) - (a.impact*3 + a.cost*2 + a.feasibility + a.innovation*2)).map(item => {
-                              const total = (item.impact*3) + (item.cost*2) + (item.feasibility) + (item.innovation*2);
-                              return (<tr key={item.id} className="border-b border-white/5 hover:bg-white/5 transition-colors"><td className="p-3 font-bold text-white">{item.name}{item.author && <span className="block text-[10px] text-gray-500 font-normal mt-0.5 flex items-center gap-1"><UserCircle size={10}/> {item.author}</span>}</td><td className="p-3 text-center text-gray-400">{item.impact}</td><td className="p-3 text-center text-gray-400">{item.cost}</td><td className="p-3 text-center text-gray-400">{item.feasibility}</td><td className="p-3 text-center text-gray-400">{item.innovation}</td><td className="p-3 text-right font-black text-purple-400 text-lg">{total}</td><td className="p-3 text-right">{(isAdmin || item.author === viewAsStudent?.name) && <button onClick={() => handleDeleteMatrix(item.id)} className="text-gray-600 hover:text-red-500 p-1 transition-colors"><Trash2 size={16}/></button>}</td></tr>)
-                          })}
-                      </tbody></table></div>
-                  </div>
-
-                  <div className="grid lg:grid-cols-2 gap-6">
-                      <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
-                          <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><MessageSquare className="text-pink-500"/> Especialistas</h3><button onClick={() => openExpertModal()} className="text-xs bg-pink-500/10 text-pink-500 border border-pink-500/20 px-3 py-1.5 rounded-lg hover:bg-pink-500 hover:text-white font-bold">+ Novo</button></div>
-                          <div className="space-y-4">{experts.map(exp => (<div key={exp.id} onClick={() => openExpertView(exp)} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col gap-2 relative group cursor-pointer hover:bg-white/5 transition-colors">
-                              {/* Botões de Ação (Editar e Excluir) */}
-                              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                                  <button onClick={(e) => { e.stopPropagation(); openExpertModal(exp); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
-                                  {(isAdmin || exp.author === viewAsStudent?.name) && <button onClick={(e) => handleDeleteExpert(e, exp.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
-                              </div>
-                              <div className="flex justify-between items-start pr-6"><div><span className="text-white font-bold block text-sm">{exp.name}</span><span className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">{exp.role} {exp.author && <><span className="mx-1">•</span> <UserCircle size={10}/> {exp.author}</>}</span></div>{exp.applied ? <span className="bg-green-500/20 text-green-500 text-[9px] px-2 py-1 rounded">APLICADO</span> : <span className="bg-gray-500/20 text-gray-500 text-[9px] px-2 py-1 rounded">CONSULTA</span>}</div><p className="text-xs text-gray-300 italic line-clamp-3">"{exp.notes}"</p>{exp.image && <div className="text-[10px] text-pink-400 flex items-center gap-1 mt-1"><ImageIcon size={10}/> Tem evidência</div>}<div className="h-1 rounded-full bg-gray-700 mt-1"><div className={`h-1 rounded-full ${exp.impact==='Alto'?'bg-green-500 w-full':exp.impact==='Médio'?'bg-yellow-500 w-1/2':'bg-gray-500 w-1/4'}`}></div></div></div>))}</div>
-                      </div>
-
-                      {/* COMPARTILHAMENTO E IMPACTO */}
-                      <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
-                          <div className="flex justify-between items-center mb-6">
-                              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                                  <Megaphone className="text-orange-500"/> Impacto
-                              </h3>
-                              <button onClick={() => openOutreachForm()} className="text-xs bg-orange-500/10 text-orange-500 border border-orange-500/20 px-3 py-1.5 rounded-lg hover:bg-orange-500 hover:text-white font-bold">+ Registro</button>
-                          </div>
-
-                          <div className="flex flex-col gap-4">
-                              {/* Resumo de Impacto */}
-                              <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl flex items-center justify-between">
-                                  <div>
-                                      <p className="text-[10px] text-orange-400 uppercase font-bold">Pessoas Alcançadas</p>
-                                      <h4 className="text-3xl font-black text-white">{outreachEvents.reduce((acc, ev) => acc + (ev.people || 0), 0)}</h4>
-                                  </div>
-                                  <Users size={32} className="text-orange-500 opacity-50"/>
-                              </div>
-
-                              {/* Lista de Eventos */}
-                              <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scrollbar pr-2 border-t border-white/10 pt-4">
-                                  {outreachEvents.sort((a, b) => new Date(b.date) - new Date(a.date)).map(ev => (
-                                      <div key={ev.id} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col relative group hover:bg-white/5 transition-colors">
-                                          <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                                              {(isAdmin || ev.author === viewAsStudent?.name) && <button onClick={() => handleDeleteOutreach(ev.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
-                                          </div>
-                                          <div className="flex justify-between items-start mb-2 pr-6">
-                                              <div>
-                                                  <span className="text-white font-bold text-sm block">{ev.name}</span>
-                                                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                                      <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-white/10 text-gray-300">{ev.type}</span>
-                                                      <span className="text-[10px] text-gray-500 flex items-center gap-1"><Calendar size={10}/> {ev.date.split('-').reverse().join('/')}</span>
-                                                      {ev.author && <span className="text-[10px] text-gray-500 flex items-center gap-1 ml-1 border-l border-white/10 pl-2"><UserCircle size={10}/> {ev.author}</span>}
-                                                  </div>
-                                              </div>
-                                          </div>
-                                          <div className="mt-2 text-sm text-orange-400 font-bold">
-                                              +{ev.people} pessoas
-                                          </div>
-                                          {ev.feedback && <p className="text-xs text-gray-300 italic mt-2 pt-2 border-t border-white/5">"{ev.feedback}"</p>}
-                                      </div>
-                                  ))}
-                                  {outreachEvents.length === 0 && (
-                                      <div className="text-center text-gray-500 text-sm italic py-4">Nenhum registro de impacto ainda.</div>
-                                  )}
-                              </div>
-                          </div>
-                      </div>
-                  </div>
-              </div>
-          )}
-
-          {strategySubTab === 'robot_design_legacy' && (
-              <div className="grid lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
-                  <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
-                      <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><GitCommit className="text-blue-500"/> Diário do Robô</h3><button onClick={() => openRobotModal()} className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-3 py-1.5 rounded-lg hover:bg-blue-500 hover:text-white font-bold">+ Versão</button></div>
-                      <div className="relative pl-4 border-l border-white/10 space-y-8">{robotVersions.map((ver) => (<div key={ver.id} onClick={() => openRobotView(ver)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-[#151520]"></div><div className="bg-black/40 border border-white/5 p-4 rounded-xl relative hover:bg-white/5 transition-colors">
-                          {/* Botões de Ação (Editar e Excluir) */}
-                          <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                              <button onClick={(e) => { e.stopPropagation(); openRobotModal(ver); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
-                              {(isAdmin || ver.author === viewAsStudent?.name) && <button onClick={(e) => handleDeleteRobotVersion(e, ver.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
-                          </div>
-                          <div className="flex justify-between mb-2"><span className="text-blue-400 font-mono font-bold text-xs">{ver.version}</span><span className="text-[10px] text-gray-500 flex items-center gap-1">{ver.date.split('-').reverse().slice(0,2).join('/')} {ver.author && <><span className="mx-1">•</span> <UserCircle size={10}/> {ver.author}</>}</span></div><h4 className="text-white font-bold mb-1 text-sm">{ver.name}</h4><p className="text-xs text-gray-400 line-clamp-2">{ver.changes}</p>{ver.image && <div className="text-[10px] text-blue-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Tem foto</div>}</div></div>))}</div>
-                  </div>
-
-                  {/* DIÁRIO DE GARRAS / ANEXOS */}
-                  <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
-                      <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><Wrench className="text-blue-500"/> Diário de Garras</h3><button onClick={() => openAttachmentModal()} className="text-xs bg-blue-500/10 text-blue-500 border border-blue-500/20 px-3 py-1.5 rounded-lg hover:bg-blue-500 hover:text-white font-bold">+ Garra</button></div>
-                      <div className="relative pl-4 border-l border-white/10 space-y-8">
-                          {attachments.sort((a,b) => new Date(b.date) - new Date(a.date)).map((att) => (
-                              <div key={att.id} onClick={() => openAttachmentView(att)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-blue-500 border-2 border-[#151520]"></div><div className="bg-black/40 border border-white/5 p-4 rounded-xl relative hover:bg-white/5 transition-colors">
-                              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                                  <button onClick={(e) => { e.stopPropagation(); openAttachmentModal(att); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
-                                  {(isAdmin || att.author === viewAsStudent?.name) && <button onClick={(e) => handleDeleteAttachment(e, att.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}
-                              </div>
-                              <div className="flex justify-between mb-2"><span className="text-blue-400 font-mono font-bold text-xs">{rounds.find(r => r.id === att.roundId)?.name || 'Geral'}</span><span className="text-[10px] text-gray-500 flex items-center gap-1">{att.date.split('-').reverse().slice(0,2).join('/')} {att.author && <><span className="mx-1">•</span> <UserCircle size={10}/> {att.author}</>}</span></div><h4 className="text-white font-bold mb-1 text-sm">{att.name}</h4><p className="text-xs text-gray-400 line-clamp-2">{att.changes}</p>{att.image && <div className="text-[10px] text-blue-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Tem foto</div>}</div></div>
-                          ))}
-                      </div>
-                  </div>
-
-                  {/* BIBLIOTECA DE CÓDIGOS */}
-                  <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 h-fit">
-                      <div className="flex justify-between items-center mb-6"><h3 className="text-lg font-bold text-white flex items-center gap-2"><Code className="text-green-500"/> Cofre de Códigos</h3><button onClick={() => openCodeModal()} className="text-xs bg-green-500/10 text-green-500 border border-green-500/20 px-3 py-1.5 rounded-lg hover:bg-green-500 hover:text-white font-bold">+ Código</button></div>
-                      {(() => {
-                          const activeCode = codeSnippets.find(code => code.applied);
-                          return (
-                              <div className={`mb-4 rounded-2xl border p-4 ${activeCode ? 'bg-green-500/10 border-green-500/20' : 'bg-black/30 border-white/10'}`}>
-                                  <div className="flex items-center justify-between gap-3">
-                                      <div>
-                                          <p className={`text-[10px] uppercase tracking-[0.2em] font-bold ${activeCode ? 'text-green-400' : 'text-gray-500'}`}>Programacao Ativa</p>
-                                          <p className="text-sm font-bold text-white mt-1">{activeCode ? activeCode.title : 'Nenhuma programacao definida ainda'}</p>
-                                      </div>
-                                      <div className={`px-3 py-1 rounded-full text-[10px] font-bold border ${activeCode ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-white/5 text-gray-400 border-white/10'}`}>
-                                          {activeCode ? 'Pronta para teste' : 'Escolha um codigo'}
-                                      </div>
-                                  </div>
-                              </div>
-                          );
-                      })()}
-                      <div className="relative pl-4 border-l border-white/10 space-y-8">
-                          {codeSnippets.sort((a,b) => new Date(b.date) - new Date(a.date)).map((code) => (
-                              <div key={code.id} onClick={() => openCodeView(code)} className="relative group cursor-pointer"><div className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-green-500 border-2 border-[#151520]"></div><div className={`border p-4 rounded-xl relative transition-colors ${code.applied ? 'bg-green-500/10 border-green-500/30 hover:bg-green-500/15' : 'bg-black/40 border-white/5 hover:bg-white/5'}`}> 
-                              <div className="absolute top-2 right-2 flex gap-1 opacity-100 z-10">
-                                  <button onClick={(e) => { e.stopPropagation(); openCodeModal(code); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
-                                  {isAdmin && !code.applied && <button onClick={(e) => { e.stopPropagation(); handleApplyCodeSnippet(code); }} className="text-green-400 hover:text-white p-1.5 bg-green-500/20 rounded-lg backdrop-blur-sm" title="Definir como oficial"><Laptop size={14}/></button>}
-                                  {(isAdmin || code.author === viewAsStudent?.name) && <button onClick={(e) => handleDeleteCode(e, code.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>}</div>
-                              <div className="flex justify-between mb-2"><span className="text-green-400 font-mono font-bold text-xs">{code.date?.split('-').reverse().slice(0,2).join('/')}</span><span className="text-[10px] text-gray-500 flex items-center gap-1">{code.author && <><UserCircle size={10}/> {code.author}</>}</span></div><h4 className="text-white font-bold mb-1 text-sm">{code.title}</h4><p className="text-xs text-gray-400 line-clamp-2">{code.description}</p>{code.applied && <div className="text-[10px] text-green-400 flex items-center gap-1 mt-2 font-bold"><CheckCircle size={10}/> Programacao ativa</div>}{code.image && <div className="text-[10px] text-green-400 flex items-center gap-1 mt-2"><ImageIcon size={10}/> Ver print</div>}{isAdmin && !code.applied && <button onClick={(e) => { e.stopPropagation(); handleApplyCodeSnippet(code); }} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-green-300 hover:bg-green-500 hover:text-black transition-all"><Laptop size={12}/> Definir como oficial</button>}</div></div>
-                          ))}
-                          {codeSnippets.length === 0 && <p className="text-xs text-gray-500 italic mt-2">Nenhum código documentado.</p>}
-                      </div>
-                  </div>
-              </div>
-          )}
-      </div>
-  )
-
-  }
-
-  // --- GRÁFICO DE EVOLUÇÃO (SVG PURO) ---
-  const ScoreEvolutionChart = ({ isTvMode = false, tvModeVariant = 'default' }) => {
-      // Estado local para filtrar o gráfico
+  const ScoreEvolutionChart = useMemo(() => {
+      return function ScoreEvolutionChartInner({ isTvMode = false, tvModeVariant = 'default' }) {
+      const {
+          db,
+          rounds,
+          scoreHistory,
+          showNotification,
+      } = scoreEvolutionChartContextRef.current;
+      // Estado local para filtrar o grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico
       const [chartFilter, setChartFilter] = useState('score_total'); // 'score_total' ou ID do round
       const [isFullscreen, setIsFullscreen] = useState(false);
       const isTvFullRoundsView = isTvMode && tvModeVariant === 'full_rounds';
@@ -5245,40 +5028,37 @@ const handleFileSelect = (e) => {
               tooltipSubtle: "#9ca3af",
             };
       let rawData = [];
-      let yLabel = "pts";
       let color = chartPalette.primary;
 
       if (isGeneral) {
-          // Pega apenas históricos de pontuação total
+          // Pega apenas histÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ricos de pontuaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o total
           rawData = scoreHistory.filter(h => !h.roundId);
       } else {
-          // Pega histórico de TEMPO de um round específico
+          // Pega histÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico de TEMPO de um round especÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­fico
           rawData = scoreHistory.filter(h => h.roundId === chartFilter);
-          yLabel = "seg";
           color = chartPalette.secondary;
       }
 
       if (isTvFullRoundsView) {
           rawData = scoreHistory.filter(h => !h.roundId && (h.practiceType === 'full_round' || h.time != null));
-          yLabel = "seg";
           color = chartPalette.secondary;
       }
 
-      // --- FUNÇÃO PARA LIMPAR O GRÁFICO ATUAL ---
+      // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O PARA LIMPAR O GRÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂFICO ATUAL ---
       const handleClearChart = async () => {
         const confirmMsg = isGeneral 
-            ? "ZERAR o gráfico geral de Pontos/Tempo? Isso apaga todo o histórico da equipe." 
-            : "Limpar o histórico de tempos deste round?";
+            ? "ZERAR o grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico geral de Pontos/Tempo? Isso apaga todo o histÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico da equipe." 
+            : "Limpar o histÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico de tempos deste round?";
             
         if (!window.confirm(confirmMsg)) return;
         
-        // Apaga apenas os documentos que estão sendo mostrados no gráfico agora
+        // Apaga apenas os documentos que estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o sendo mostrados no grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico agora
         try {
             const deletePromises = rawData.map(d => deleteDoc(doc(db, "score_history", d.id)));
             await Promise.all(deletePromises);
-            showNotification("Histórico do gráfico limpo!", "success");
+            showNotification("HistÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico do grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico limpo!", "success");
         } catch (error) {
-            console.error("Erro ao limpar gráfico:", error);
+            console.error("Erro ao limpar grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico:", error);
             showNotification("Erro ao limpar.", "error");
         }
       };
@@ -5288,7 +5068,7 @@ const handleFileSelect = (e) => {
       if (data.length < 2 && (isGeneral || isTvFullRoundsView)) return (
         <div className={`border rounded-2xl p-6 text-center text-sm flex flex-col items-center justify-center h-48 ${isTvMode ? 'bg-black/20 border-white/10 text-slate-300' : 'bg-[#151520] border-white/10 text-gray-500 mb-8'}`}>
             <TrendingUp size={32} className="mb-2 opacity-50"/>
-            <p>{isTvFullRoundsView ? 'Registre pelo menos 2 rounds completos para acompanhar a meta de 2:30.' : 'Registre pelo menos 2 treinos para ver o gráfico de evolução.'}</p>
+            <p>{isTvFullRoundsView ? 'Registre pelo menos 2 rounds completos para acompanhar a meta de 2:30.' : 'Registre pelo menos 2 treinos para ver o grafico de evolucao.'}</p>
         </div>
       );
 
@@ -5296,19 +5076,17 @@ const handleFileSelect = (e) => {
       const height = isTvFullRoundsView ? 188 : isTvMode ? 146 : 200;
       const padding = isTvFullRoundsView ? 16 : isTvMode ? 14 : 20;
       
-      // Se for tempo, queremos ver cair (mas gráfico svg padrão sobe valores, então tratamos visualmente)
+      // Se for tempo, queremos ver cair (mas grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico svg padrÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o sobe valores, entÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o tratamos visualmente)
       const valKey = isTvFullRoundsView ? 'time' : chartFilter === 'score_total' ? 'score' : 'time';
       
-      // ESCALAS (Máximos)
+      // ESCALAS (MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ximos)
       const maxScore = Math.max(...data.map(d => d.score || 0), 100);
       const maxTime = Math.max(...data.map(d => d.time || 0), isGeneral ? 150 : 60); // 150s para geral, 60s para round
 
-      const minVal = 0; // Sempre base zero para facilitar leitura
-
-      // Função para converter dados em coordenadas X,Y
+      // FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o para converter dados em coordenadas X,Y
       const getX = (index) => padding + (index / (data.length - 1)) * (width - 2 * padding);
       
-      // Y dinâmico (Pontos ou Tempo)
+      // Y dinÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢mico (Pontos ou Tempo)
       const getY = (val, type = 'score') => {
           const max = type === 'time' ? maxTime : maxScore;
           return height - padding - ((val || 0) / max) * (height - 2 * padding);
@@ -5317,13 +5095,13 @@ const handleFileSelect = (e) => {
       // Cria o caminho da linha (path d)
       const pathDataMain = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d[valKey], isTvFullRoundsView ? 'time' : isGeneral ? 'score' : 'time')}`).join(' ');
       
-      // Linha secundária (Tempo) apenas se for Geral
+      // Linha secundÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ria (Tempo) apenas se for Geral
       const pathDataTime = isGeneral && !isTvFullRoundsView ? data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d.time || 0, 'time')}`).join(' ') : "";
 
       // Cria o caminho para o preenchimento (area fill)
       const fillPathData = `${pathDataMain} L ${width - padding} ${height} L ${padding} ${height} Z`;
 
-      // Cálculos de Média
+      // CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡lculos de MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia
       const avgScore = data.length > 0 ? (data.reduce((sum, d) => sum + (d.score || 0), 0) / data.length).toFixed(1) : 0;
       const avgTime = data.length > 0 ? (data.reduce((sum, d) => sum + (d.time || 0), 0) / data.length).toFixed(1) : 0;
       const recentGeneralAttempts = isGeneral
@@ -5355,7 +5133,7 @@ const handleFileSelect = (e) => {
       const roundsToday = roundsByDay[buildLocalDateKey(new Date())] || 0;
       const averageRoundsPerDay = roundDays.length > 0 ? (data.length / roundDays.length) : 0;
 
-      // Coordenadas da Média para o Gradiente
+      // Coordenadas da MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia para o Gradiente
       const currentAvg = isTvFullRoundsView ? parseFloat(avgTime) : isGeneral ? parseFloat(avgScore) : parseFloat(avgTime);
       const avgY = getY(currentAvg, isTvFullRoundsView ? 'time' : isGeneral ? 'score' : 'time');
       const avgPercent = Math.max(0, Math.min(100, (avgY / height) * 100));
@@ -5365,34 +5143,34 @@ const handleFileSelect = (e) => {
           <>
               <div className={`${isTvMode ? 'mb-0 hidden' : 'mb-6 flex items-center justify-between'}`}>
                   <h3 className={`text-white font-bold flex items-center gap-2 ${isFullscreen ? 'text-2xl' : ''}`}>
-                      <TrendingUp style={{ color }}/> {isGeneral ? 'Evolução (Pontos vs Tempo)' : 'Melhoria de Tempo (Segundos)'}
+                      <TrendingUp style={{ color }}/> {isGeneral ? 'EvoluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (Pontos vs Tempo)' : 'Melhoria de Tempo (Segundos)'}
                   </h3>
                   
                   <div className="flex items-center gap-2">
-                  {/* Botão de Limpar Histórico */}
+                  {/* BotÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de Limpar HistÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico */}
                   {!isTvMode && data.length > 0 && (
-                      <button onClick={handleClearChart} className="p-2 text-gray-500 hover:text-red-500 hover:bg-white/5 rounded-lg transition-colors" title="Zerar este gráfico">
+                      <button onClick={handleClearChart} className="p-2 text-gray-500 hover:text-red-500 hover:bg-white/5 rounded-lg transition-colors" title="Zerar este grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico">
                           <Trash2 size={16}/>
                       </button>
                   )}
 
-                  {/* BOTÃO TELA CHEIA */}
+                  {/* BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O TELA CHEIA */}
                   {!isTvMode && (
                       <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-2 text-gray-500 hover:text-white hover:bg-white/5 rounded-lg transition-colors" title={isFullscreen ? "Minimizar" : "Tela Cheia"}>
                           {isFullscreen ? <Minimize size={16}/> : <Maximize size={16}/>}
                       </button>
                   )}
 
-                  {/* SELETOR DE GRÁFICO */}
+                  {/* SELETOR DE GRÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂFICO */}
                   {!isTvMode && (
                   <select 
                     className="bg-black/40 border border-white/20 text-xs text-white rounded-lg p-2 outline-none focus:border-blue-500"
                     value={chartFilter}
                     onChange={(e) => setChartFilter(e.target.value)}
                   >
-                      <option value="score_total">📊 Pontuação Geral</option>
+                      <option value="score_total">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  PontuaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o Geral</option>
                       {rounds.map(r => (
-                          <option key={r.id} value={r.id}>⏱️ Tempo: {r.name}</option>
+                          <option key={r.id} value={r.id}>ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â±ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Tempo: {r.name}</option>
                       ))}
                   </select>
                   )}
@@ -5401,7 +5179,7 @@ const handleFileSelect = (e) => {
 
               {data.length === 0 ? (
                   <div className={`flex items-center justify-center text-gray-500 text-xs italic border border-dashed border-white/10 rounded-xl ${isFullscreen ? 'flex-1 min-h-[400px]' : isTvMode ? 'h-28' : 'h-32'}`}>
-                      Sem dados registrados para este gráfico ainda.
+                      Sem dados registrados para este grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico ainda.
                   </div>
               ) : (
               <div className="w-full overflow-hidden relative flex-1 flex flex-col justify-center">
@@ -5446,7 +5224,7 @@ const handleFileSelect = (e) => {
                           return <line key={p} x1={padding} y1={y} x2={width-padding} y2={y} stroke={chartPalette.grid} strokeDasharray="4 4" strokeWidth="1"/>
                       })}
 
-                      {/* Linha da Média */}
+                      {/* Linha da MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia */}
                       {isTvFullRoundsView ? (
                         <>
                             <line x1={padding} y1={tvTargetY} x2={width-padding} y2={tvTargetY} stroke={chartPalette.avg} strokeDasharray="5 5" strokeWidth="1" opacity="0.75"/>
@@ -5455,14 +5233,14 @@ const handleFileSelect = (e) => {
                       ) : (
                         <>
                             <line x1={padding} y1={avgY} x2={width-padding} y2={avgY} stroke={chartPalette.avg} strokeDasharray="5 5" strokeWidth="1" opacity="0.6"/>
-                            <text x={padding + 5} y={avgY - 5} fill={chartPalette.avg} fontSize="10" fontWeight="bold" opacity="0.8">MÉDIA: {currentAvg}</text>
+                            <text x={padding + 5} y={avgY - 5} fill={chartPalette.avg} fontSize="10" fontWeight="bold" opacity="0.8">MÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°DIA: {currentAvg}</text>
                         </>
                       )}
 
-                      {/* Área Preenchida (Apenas Principal) */}
+                      {/* ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Ârea Preenchida (Apenas Principal) */}
                       <path d={fillPathData} fill={isGeneral && !isTvFullRoundsView ? "url(#trendFillGradient)" : "none"} />
 
-                      {/* SEGUNDA LINHA: TEMPO (AZUL) - Só no Geral */}
+                      {/* SEGUNDA LINHA: TEMPO (AZUL) - SÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ no Geral */}
                       {isGeneral && !isTvFullRoundsView && (
                         <>
                             <path d={pathDataTime} fill="none" stroke={chartPalette.secondary} strokeWidth="2" strokeDasharray="5 5" strokeLinecap="round" strokeLinejoin="round" opacity="0.7"/>
@@ -5488,7 +5266,7 @@ const handleFileSelect = (e) => {
                                 <g key={d.id} className="group">
                                     <circle cx={getX(i)} cy={yPos} r="4" fill="#151520" stroke={ptColor} strokeWidth="2" />
                                     
-                                    {/* Textos fixos (Sempre visíveis, alternando altura para não encavalar) */}
+                                    {/* Textos fixos (Sempre visÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­veis, alternando altura para nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o encavalar) */}
                                     <text x={getX(i)} y={yPos - (i % 2 === 0 ? 12 : -18)} textAnchor="middle" fill={ptColor} fontSize="10" fontWeight="bold">
                                         {d[valKey]}
                                     </text>
@@ -5541,18 +5319,18 @@ const handleFileSelect = (e) => {
               </div>
               )}
 
-              {/* HISTÓRICO COMPLETO ABAIXO DO GRÁFICO (SÓ FORA DO MODO TV E NÃO EM TELA CHEIA) */}
+              {/* HISTÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œRICO COMPLETO ABAIXO DO GRÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂFICO (SÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ FORA DO MODO TV E NÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O EM TELA CHEIA) */}
               {!isTvMode && !isFullscreen && data.length > 0 && (
                   <div className="mt-8 pt-6 border-t border-white/10">
                       <div className="flex justify-between items-center mb-4">
-                          <h4 className="text-gray-400 font-bold uppercase text-xs flex items-center gap-2"><ListTodo size={14}/> Histórico Detalhado</h4>
+                          <h4 className="text-gray-400 font-bold uppercase text-xs flex items-center gap-2"><ListTodo size={14}/> HistÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico Detalhado</h4>
                           <div className="flex gap-4">
                               <div className="text-right bg-white/5 px-3 py-1 rounded-lg">
-                                  <span className="text-[10px] text-gray-500 uppercase font-bold block">Média Pontos</span>
+                                  <span className="text-[10px] text-gray-500 uppercase font-bold block">MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia Pontos</span>
                                   <span className="text-green-500 font-bold">{avgScore} pts</span>
                               </div>
                               <div className="text-right bg-white/5 px-3 py-1 rounded-lg">
-                                  <span className="text-[10px] text-gray-500 uppercase font-bold block">Média Tempo</span>
+                                  <span className="text-[10px] text-gray-500 uppercase font-bold block">MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia Tempo</span>
                                   <span className="text-blue-500 font-bold">{avgTime} s</span>
                               </div>
                               {isGeneral && (
@@ -5570,7 +5348,7 @@ const handleFileSelect = (e) => {
                                   <div className="flex items-center gap-3">
                                       <span className="text-gray-500 text-xs font-mono font-bold w-6">#{data.length - i}</span>
                                       <div className="flex flex-col">
-                                          <span className="text-gray-200 text-xs font-bold">{new Date(d.date).toLocaleDateString('pt-BR')} às {new Date(d.date).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</span>
+                                          <span className="text-gray-200 text-xs font-bold">{new Date(d.date).toLocaleDateString('pt-BR')} ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â s {new Date(d.date).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</span>
                                           {d.author && <span className="text-[10px] text-gray-500 flex items-center gap-1 mt-0.5"><UserCircle size={10}/> {d.author}</span>}
                                       </div>
                                   </div>
@@ -5603,9 +5381,10 @@ const handleFileSelect = (e) => {
               {renderChartContent()}
           </div>
       );
-  };
+      };
+  }, []);
 
-  // Função para salvar pontuação no histórico
+  // FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o para salvar pontuaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o no histÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico
   const handleSavePracticeScore = async (totalPoints, totalTime) => {
       if (!window.confirm(`Registrar treino oficial?\nPontos: ${totalPoints}\nTempo: ${totalTime}s`)) return;
       
@@ -5614,11 +5393,11 @@ const handleFileSelect = (e) => {
               score: totalPoints,
               time: totalTime, // Salva o tempo junto!
               date: new Date().toISOString(),
-              author: isAdmin ? 'Técnico' : viewAsStudent?.name || 'Equipe'
+              author: isAdmin ? 'TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico' : viewAsStudent?.name || 'Equipe'
           });
-          showNotification("Pontuação registrada no gráfico! 📈");
+          showNotification("PontuaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o registrada no grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico! ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¹Ã¢â‚¬Â ");
       } catch (error) {
-          console.error("Erro ao salvar histórico:", error);
+          console.error("Erro ao salvar histÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico:", error);
           showNotification("Erro ao salvar.", "error");
       }
   };
@@ -5676,17 +5455,17 @@ const handleFileSelect = (e) => {
       }
   };
 
-  // --- NOVA FUNÇÃO: SALVAR EXECUÇÃO DE UM ROUND ESPECÍFICO ---
+  // --- NOVA FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O: SALVAR EXECUÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DE UM ROUND ESPECÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂFICO ---
   const handleSaveRoundRun = async (e, round) => {
     e.preventDefault();
     const timeVal = parseInt(e.target.time.value);
     if(!timeVal || isNaN(timeVal)) return;
 
-    // --- CÁLCULO DE TENDÊNCIA VS MÉDIA DOS ÚLTIMOS 3 TREINOS ---
+    // --- CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂLCULO DE TENDÃƒÆ’Ã†â€™Ãƒâ€¦Ã‚Â NCIA VS MÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°DIA DOS ÃƒÆ’Ã†â€™Ãƒâ€¦Ã‚Â¡LTIMOS 3 TREINOS ---
     const previousRuns = scoreHistory
         .filter(h => h.roundId === round.id && h.time)
         .sort((a,b) => new Date(b.date) - new Date(a.date)) // Ordena do mais recente
-        .slice(0, 3); // Pega os 3 últimos
+        .slice(0, 3); // Pega os 3 ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºltimos
 
     let trendMsg = "";
     if (previousRuns.length > 0) {
@@ -5695,20 +5474,20 @@ const handleFileSelect = (e) => {
 
         // Tempo menor = Melhor (Verde)
         if (diff < 0) {
-            trendMsg = ` 🟢 ⬇️ ${(Math.abs(diff)).toFixed(1)}s mais rápido que a média!`;
+            trendMsg = ` ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã‚Â¸Ãƒâ€šÃ‚Â¢ ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â ${(Math.abs(diff)).toFixed(1)}s mais rÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡pido que a mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia!`;
         } else if (diff > 0) {
-            trendMsg = ` 🔴 ⬆️ ${(Math.abs(diff)).toFixed(1)}s mais lento que a média.`;
+            trendMsg = ` ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â´ ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â ${(Math.abs(diff)).toFixed(1)}s mais lento que a mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia.`;
         }
     }
 
     try {
-        // 1. Salva no histórico para o gráfico
+        // 1. Salva no histÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico para o grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico
         await addDoc(collection(db, "score_history"), {
             roundId: round.id,
             roundName: round.name,
             time: timeVal, // O tempo que levou
             date: new Date().toISOString(),
-            author: viewAsStudent?.name || "Técnico"
+            author: viewAsStudent?.name || "TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico"
         });
 
         // 2. Atualiza o tempo estimado do round (para ficar real)
@@ -5718,7 +5497,7 @@ const handleFileSelect = (e) => {
 
         showNotification(`Treino de "${round.name}" registrado: ${timeVal}s ${trendMsg}`);
         
-        // Limpa o valor do formulário local (estado controlado)
+        // Limpa o valor do formulÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio local (estado controlado)
         setRoundFormValues(prev => {
             const next = { ...prev };
             delete next[round.id];
@@ -5732,1892 +5511,155 @@ const handleFileSelect = (e) => {
   };
 
 
-  // --- COMPONENTE DE ROUNDS ---
-
-  const RoundsView = ({ readonly = false }) => (
-      <Suspense fallback={<LazyPanelFallback label="Carregando central de rounds..." minHeightClass="min-h-[420px]" />}>
-        <RobotRoundsPanel
-            rounds={rounds}
-            missionsList={missionsList}
-            attachments={attachments}
-            activeCommandCode={activeCommandCode}
-            scoreHistory={scoreHistory}
-            robotSubTab={robotSubTab}
-            onChangeRobotSubTab={setRobotSubTab}
-            activeTimer={activeTimer}
-            timerDisplay={timerDisplay}
-            roundFormValues={roundFormValues}
-            fullRoundTimeValue={roundFormValues[FULL_ROUND_TIME_KEY] ?? ''}
-            fullRoundScoreValue={roundFormValues[FULL_ROUND_SCORE_KEY] ?? ''}
-            fullRoundTimerActive={activeTimer?.roundId === FULL_ROUND_TIMER_ID}
-          onRoundFormValueChange={(roundId, value) => setRoundFormValues(prev => ({ ...prev, [roundId]: value }))}
-          onFullRoundFieldChange={(field, value) => setRoundFormValues(prev => ({ ...prev, [field]: value }))}
-          onToggleTimer={toggleTimer}
-          onToggleFullRoundTimer={() => toggleTimer({ id: FULL_ROUND_TIMER_ID, name: 'Round completo' })}
-          onOpenNewRound={openNewRoundModal}
-          onOpenRoundEdit={openEditRoundModal}
-          onOpenMissionForm={() => openMissionForm()}
-          onOpenPitStop={openPitStopModal}
-            onSavePracticeScore={handleSavePracticeScore}
-            onDeleteRound={handleDeleteRound}
-            onSaveFullRoundRun={handleSaveFullRoundRun}
-            onSaveRoundRun={handleSaveRoundRun}
-            scoreChart={<ScoreEvolutionChart />}
-            readonly={readonly}
-        />
-      </Suspense>
-  );
-
-  // --- COMPONENTE KANBAN (REUTILIZÁVEL) ---
-  const KanbanView = () => {
-      const [searchTerm, setSearchTerm] = useState("");
-      const deferredSearchTerm = useDeferredValue(searchTerm);
-      const normalizedSearchTerm = deferredSearchTerm.trim().toLowerCase();
-      const kanbanLayout = 'swimlanes';
-      const activeTagFilter = 'all';
-      const activeOwnerFilter = 'all';
-      const focusFilter = 'all';
-      const [showAllTodo, setShowAllTodo] = useState(false);
-      const [showAllDoing, setShowAllDoing] = useState(false);
-      const [showAllReview, setShowAllReview] = useState(false);
-      const [showAllDone, setShowAllDone] = useState(false);
-      const [editingTaskId, setEditingTaskId] = useState(null);
-      const [editingTaskText, setEditingTaskText] = useState("");
-      const [draggedOverCol, setDraggedOverCol] = useState(null);
-      const [kanbanTaskDraft, setKanbanTaskDraft] = useState(() =>
-          buildInitialKanbanTaskDraft(isAdmin ? null : viewAsStudent?.station, localTodayStr)
-      );
-
-      useEffect(() => {
-          const nextTag = isAdmin ? 'geral' : resolveTaskTagFromStation(viewAsStudent?.station);
-
-          setKanbanTaskDraft((prev) => {
-              const nextDraft = {
-                  ...prev,
-                  dueDate: prev.dueDate || localTodayStr
-              };
-
-              if (!prev.text.trim()) {
-                  nextDraft.tag = nextTag;
-              }
-
-              if (prev.tag === nextDraft.tag && prev.dueDate === nextDraft.dueDate) {
-                  return prev;
-              }
-
-              return nextDraft;
-          });
-      }, [isAdmin, viewAsStudent?.station, localTodayStr]);
-
-      const updateKanbanTaskDraft = (field, value) => {
-          setKanbanTaskDraft((prev) => ({ ...prev, [field]: value }));
-      };
-
-      const stopKanbanInputKeyDown = (event) => {
-          event.stopPropagation();
-      };
-
-      const handleAddTaskSubmit = async (event) => {
-          event.preventDefault();
-
-          const created = await handleAddTask(kanbanTaskDraft);
-          if (!created) return;
-
-          setKanbanTaskDraft(buildInitialKanbanTaskDraft(isAdmin ? null : viewAsStudent?.station, localTodayStr));
-      };
-
-      const handleSaveTaskEdit = async (taskId) => {
-          if (!editingTaskText.trim()) return;
-          try {
-              await updateDoc(doc(db, "tasks", taskId), { text: editingTaskText });
-              setEditingTaskId(null);
-              setEditingTaskText("");
-          } catch (error) {
-              console.error("Erro ao editar tarefa:", error);
-          }
-      };
-      
-      const handleDragStart = (e, taskId) => {
-          e.dataTransfer.setData("taskId", taskId);
-          e.target.style.opacity = "0.5";
-      };
-
-      const handleDragEnd = (e) => {
-          e.target.style.opacity = "1";
-      };
-
-      const handleDragOver = (e, colId) => {
-          e.preventDefault();
-          e.dataTransfer.dropEffect = "move";
-          setDraggedOverCol(colId);
-      };
-
-      const handleDragLeave = () => {
-          setDraggedOverCol(null);
-      };
-
-      const handleDrop = async (e, targetStatus) => {
-          e.preventDefault();
-          setDraggedOverCol(null);
-          const taskId = e.dataTransfer.getData("taskId");
-          if (taskId) {
-              await moveTask(taskId, targetStatus);
-          }
-      };
-
-      const KANBAN_TAGS = [
-          { id: 'engenharia', label: 'Engenharia', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
-          { id: 'inovacao', label: 'Inovação', color: 'bg-pink-500/10 text-pink-400 border-pink-500/20' },
-          { id: 'gestao', label: 'Gestão', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
-          { id: 'geral', label: 'Geral', color: 'bg-gray-500/10 text-gray-400 border-gray-500/20' }
-      ];
-
-      const focusOptions = isAdmin
-          ? [
-              { id: 'all', label: 'Tudo', icon: <BarChart3 size={12} /> },
-              { id: 'priority', label: 'Prioritarias', icon: <Zap size={12} /> },
-              { id: 'overdue', label: 'Atrasadas', icon: <AlertTriangle size={12} /> },
-              { id: 'unassigned', label: 'Sem dono', icon: <Users size={12} /> }
-          ]
-          : [
-              { id: 'all', label: 'Tudo', icon: <BarChart3 size={12} /> },
-              { id: 'mine', label: 'Minhas', icon: <Target size={12} /> },
-              { id: 'priority', label: 'Prioritarias', icon: <Zap size={12} /> },
-              { id: 'overdue', label: 'Atrasadas', icon: <AlertTriangle size={12} /> }
-          ];
-
-      const priorityRank = { urgente: 4, alta: 3, normal: 2, baixa: 1 };
-
-      const getDeadlineStatus = (date) => {
-          if (!date) return null;
-          const due = parseLocalDateValue(date, true);
-          if (!due) return null;
-          const diffTime = due.getTime() - localTodayStart.getTime();
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          
-          const parts = date.split('-');
-          const dateStr = parts.length === 3 ? `${parts[2]}/${parts[1]}` : date;
-
-          if (diffDays < 0) return { color: 'text-red-500', border: 'border-red-500', icon: <AlertTriangle size={12}/>, text: `Atrasado (${dateStr})`, isOverdue: true };
-          if (diffDays <= 2) return { color: 'text-yellow-500', border: 'border-yellow-500', icon: <Timer size={12}/>, text: `Prazo Curto (${dateStr})` };
-          return { color: 'text-gray-500', border: 'border-white/5', icon: <Calendar size={12}/>, text: dateStr };
-      };
-
-      // --- LÓGICA DE CÁLCULO DE TEMPO ---
-      const getTaskDuration = (createdAt, completedAt) => {
-          if (!createdAt || !completedAt) return null;
-          const start = new Date(createdAt);
-          const end = new Date(completedAt);
-          const diffMs = end.getTime() - start.getTime();
-          if (diffMs < 0) return '0 min';
-          
-          const diffMins = Math.floor(diffMs / 60000);
-          if (diffMins < 60) return `${diffMins} min`;
-          
-          const diffHours = Math.floor(diffMins / 60);
-          if (diffHours < 24) return `${diffHours}h ${diffMins % 60}m`;
-          
-          const diffDays = Math.floor(diffHours / 24);
-          return `${diffDays}d ${diffHours % 24}h`;
-      };
-
-      const getTaskAgeLabel = (createdAt) => {
-          if (!createdAt) return 'agora';
-
-          const createdTime = new Date(createdAt).getTime();
-          const diffMs = Date.now() - createdTime;
-          const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
-
-          if (diffMinutes < 60) return `${diffMinutes} min`;
-
-          const diffHours = Math.floor(diffMinutes / 60);
-          if (diffHours < 24) return `${diffHours}h`;
-
-          const diffDays = Math.floor(diffHours / 24);
-          return `${diffDays}d`;
-      };
-
-      const isTaskOverdue = (task) => task.status !== 'done' && task.dueDate && task.dueDate < localTodayStr;
-      const isTaskPriority = (task) => task.status !== 'done' && ['urgente', 'alta'].includes(task.priority);
-
-      const getStageProgress = (status) => {
-          if (status === 'todo') return 22;
-          if (status === 'doing') return 56;
-          if (status === 'review') return 82;
-          if (status === 'done') return 100;
-          return 0;
-      };
-
-      const sortOpenTasks = (a, b) => {
-          const overdueDiff = Number(isTaskOverdue(b)) - Number(isTaskOverdue(a));
-          if (overdueDiff !== 0) return overdueDiff;
-
-          const priorityDiff = (priorityRank[b.priority] || 0) - (priorityRank[a.priority] || 0);
-          if (priorityDiff !== 0) return priorityDiff;
-
-          const aDue = a.dueDate ? (parseLocalDateValue(a.dueDate)?.getTime() ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
-          const bDue = b.dueDate ? (parseLocalDateValue(b.dueDate)?.getTime() ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
-          if (aDue !== bDue) return aDue - bDue;
-
-          return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
-      };
-
-      const ownerOptions = [
-          { value: 'all', label: 'Todos os responsaveis' },
-          { value: 'unassigned', label: 'Equipe (livre)' },
-          { value: 'Técnico', label: 'Tecnico' },
-          ...[...students]
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map((student) => ({ value: student.name, label: student.name }))
-      ].filter((option, index, arr) => arr.findIndex((item) => item.value === option.value) === index);
-
-      const TaskCard = ({ t, showMoveRight, showMoveLeft, showDelete, cardIndex = 0, laneIndex = 0, columnIndex = 0 }) => {
-          const status = getDeadlineStatus(t.dueDate);
-          const tagObj = KANBAN_TAGS.find(tag => tag.id === (t.tag || 'geral')) || KANBAN_TAGS[3];
-
-          // Só pisca se estiver atrasado e ainda não foi concluída
-          const isPulsing = status?.isOverdue && t.status !== 'done';
-          const duration = t.status === 'done' ? getTaskDuration(t.createdAt, t.completedAt) : null;
-          const ageLabel = getTaskAgeLabel(t.createdAt);
-          const stageProgress = getStageProgress(t.status);
-          const cardEntranceClass = isPulsing ? '' : 'animate-in fade-in slide-in-from-bottom-2';
-
-          // Lógica de exibição de autores
-          const authors = t.author ? t.author.split(',').map(a => a.trim()) : [];
-          const isMultiAuthor = authors.length > 1;
-          let displayAuthor = t.author || "Equipe";
-          if (isMultiAuthor) {
-              displayAuthor = `${authors[0]}, ${authors[1]}...`;
-          }
-
-          // Busca os dados completos dos autores para poder exibir a foto
-          const authorStudents = authors.map(authorName => students.find(s => s.name === authorName)).filter(Boolean);
-
-          // Renderiza os avatares dos responsáveis (com sobreposição se houver mais de um)
-          const renderAvatars = () => {
-              if (authorStudents.length === 0) return <UserCircle size={12} className={isAdmin ? "text-blue-400 shrink-0" : "text-gray-400 shrink-0"} />;
-              
-              return (
-                  <div className="flex -space-x-1.5 shrink-0 mr-1">
-                      {authorStudents.map((s, idx) => (
-                          s.avatarImage ? (
-                              <img key={idx} src={s.avatarImage} alt={s.name} className="w-4 h-4 rounded-full object-cover border border-[#151520] relative z-10 hover:z-20 hover:scale-125 transition-transform" title={s.name} />
-                          ) : (
-                              <div key={idx} className="w-4 h-4 rounded-full bg-gray-800 border border-[#151520] flex items-center justify-center relative z-10 hover:z-20" title={s.name}>
-                                  <span className="text-[6px] font-bold text-gray-300">{s.name.charAt(0)}</span>
-                              </div>
-                          )
-                      ))}
-                  </div>
-              );
-          };
-
-          const entranceDelay = Math.min((columnIndex * 110) + (laneIndex * 70) + (cardIndex * 45), 420);
-
-          return (
-              <div 
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, t.id)}
-                  onDragEnd={handleDragEnd}
-                  className={`bg-black/40 p-3 rounded-xl border flex flex-col gap-2 group cursor-grab active:cursor-grabbing ${cardEntranceClass} transition-[transform,box-shadow,border-color,background-color,opacity] duration-500 ease-out will-change-transform motion-reduce:animate-none motion-reduce:transition-none hover:-translate-y-1 hover:shadow-[0_16px_32px_rgba(15,23,42,0.28)] ${status && t.status !== 'done' ? status.border : 'border-white/5'} ${isPulsing ? 'animate-pulse hover:animate-none shadow-[0_0_15px_rgba(239,68,68,0.15)]' : 'hover:border-white/20'}`}
-                  style={cardEntranceClass ? { animationDelay: `${entranceDelay}ms`, animationFillMode: 'both' } : undefined}
-              >
-                  <div className="flex justify-between items-start gap-2">
-                      <div className="flex flex-wrap gap-1.5">
-                          {isAdmin ? (
-                              <div className="relative flex items-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 transition-colors px-2 py-0.5 rounded border border-blue-500/30 group focus-within:border-blue-500/50">
-                                  {renderAvatars()}
-                                  <select
-                                      value={authors.length === 1 ? authors[0] : ''} // Só pré-seleciona se for um único autor
-                                      onChange={(e) => assignTaskToStudent(t.id, e.target.value)}
-                                      className="text-[10px] font-bold uppercase bg-transparent border-none text-blue-100 focus:ring-0 outline-none appearance-none cursor-pointer pr-3"
-                                      title={t.author || "Atribuir tarefa"}
-                                  >
-                                      <option value="" className="bg-zinc-900 text-gray-400">Equipe (Livre)</option>
-                                      {[...students].sort((a,b) => a.name.localeCompare(b.name)).map(s => (
-                                          <option key={s.id} value={s.name} className="bg-zinc-900 text-white">{s.name}</option>
-                                      ))}
-                                  </select>
-                                  <ChevronDown size={10} className="text-blue-400 absolute right-1 pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity"/>
-                                  {isMultiAuthor && <span className="text-[10px] text-blue-300 ml-1" title={t.author}>+{authors.length - 1}</span>}
-                              </div>
-                          ) : (
-                              <span className="text-[10px] font-bold uppercase bg-white/10 px-2 py-0.5 rounded text-gray-300 flex items-center gap-1" title={t.author || "Equipe"}>
-                                  {renderAvatars()} {displayAuthor}
-                              </span>
-                          )}
-                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border flex items-center gap-1 ${tagObj.color}`}>
-                              <Tag size={8}/> {tagObj.label}
-                          </span>
-                          {t.priority === 'urgente' && <span className="text-[9px] bg-red-500/20 text-red-500 border border-red-500/30 px-1.5 py-0.5 rounded font-black uppercase flex items-center gap-1" title="Prioridade Urgente"><AlertTriangle size={8}/> Urgente</span>}
-                          {t.priority === 'alta' && <span className="text-[9px] bg-orange-500/20 text-orange-500 border border-orange-500/30 px-1.5 py-0.5 rounded font-bold uppercase" title="Prioridade Alta">Alta</span>}
-                          {t.priority === 'baixa' && <span className="text-[9px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-1.5 py-0.5 rounded font-bold uppercase" title="Prioridade Baixa">Baixa</span>}
-                      </div>
-                      {status && t.status !== 'done' && <span className={`text-[10px] font-bold flex items-center gap-1 whitespace-nowrap mt-0.5 ${status.color}`}>{status.icon} {status.text}</span>}
-                      {duration && <span className="text-[10px] font-bold text-green-500 flex items-center gap-1 mt-0.5 bg-green-500/10 px-1.5 py-0.5 rounded border border-green-500/20" title="Tempo total levado"><Clock size={10}/> {duration}</span>}
-                  </div>
-                  {editingTaskId === t.id ? (
-                      <div className="flex flex-col gap-2 mt-1">
-                          <textarea 
-                              value={editingTaskText} 
-                              onChange={(e) => setEditingTaskText(e.target.value)} 
-                              className="w-full bg-black/60 border border-blue-500/50 rounded-lg p-2 text-xs text-white outline-none resize-none focus:border-blue-400" 
-                              rows={3}
-                              autoFocus 
-                          />
-                          <div className="flex justify-end gap-2">
-                              <button onClick={() => setEditingTaskId(null)} className="text-[10px] text-gray-400 hover:text-white px-2 py-1">Cancelar</button>
-                              <button onClick={() => handleSaveTaskEdit(t.id)} className="text-[10px] bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded font-bold">Salvar</button>
-                          </div>
-                      </div>
-                  ) : (
-                      <>
-                          <p className="text-sm text-gray-200 leading-relaxed">{t.text}</p>
-                          <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500">
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/5">
-                                  <Clock size={10}/> criada ha {ageLabel}
-                              </span>
-                              {!t.dueDate && t.status !== 'done' && (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/5">
-                                      <Calendar size={10}/> sem prazo
-                                  </span>
-                              )}
-                              {authors.length > 1 && (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/5">
-                                      <Users size={10}/> {authors.length} pessoas
-                                  </span>
-                              )}
-                          </div>
-                          <div className="w-full h-1.5 rounded-full bg-white/5 overflow-hidden">
-                              <div
-                                  className={`h-full rounded-full transition-all duration-500 ${t.status === 'done' ? 'bg-green-500' : t.status === 'review' ? 'bg-purple-500' : t.status === 'doing' ? 'bg-blue-500' : 'bg-gray-500'}`}
-                                  style={{ width: `${stageProgress}%` }}
-                              ></div>
-                          </div>
-                      </>
-                  )}
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-between pt-2 border-t border-white/5 mt-1">
-                      <div className="flex gap-1 flex-wrap">
-                          {isAdmin && editingTaskId !== t.id && (
-                              <button onClick={() => { setEditingTaskId(t.id); setEditingTaskText(t.text); }} className="text-blue-400 hover:bg-blue-500/20 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition-colors" title="Editar Tarefa">
-                                  <Pencil size={14}/> Editar
-                              </button>
-                          )}
-                          {viewAsStudent && (!t.author || !t.author.includes(viewAsStudent.name)) && t.status !== 'done' && (
-                              <>
-                                  <button onClick={() => joinTask(t.id)} className="text-green-500 hover:bg-green-500/20 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition-colors" title="Participar junto na tarefa">
-                                      <UserPlus size={14}/> Participar
-                                  </button>
-                                  <button onClick={() => takeoverTask(t.id)} className="text-orange-500 hover:bg-orange-500/20 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition-colors" title="Assumir sozinho (Substituir atuais)">
-                                      <UserCheck size={14}/> Assumir
-                                  </button>
-                              </>
-                          )}
-                          {viewAsStudent && t.author && t.author.includes(viewAsStudent.name) && t.status !== 'done' && (
-                              <button onClick={() => leaveTask(t.id)} className="text-red-500 hover:bg-red-500/20 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition-colors" title="Sair desta tarefa">
-                                  <UserX size={14}/> Sair
-                              </button>
-                          )}
-                      </div>
-                      <div className="flex gap-1 shrink-0">
-                          {showMoveLeft && <button onClick={() => moveTask(t.id, showMoveLeft)} className="text-orange-500 hover:bg-orange-500/20 p-1.5 rounded" title="Devolver tarefa (Incompleta)"><ChevronLeft size={16}/></button>}
-                          {showMoveRight && <button onClick={() => moveTask(t.id, showMoveRight)} className="text-blue-500 hover:bg-blue-500/20 p-1.5 rounded" title="Avançar"><ChevronRight size={16}/></button>}
-                          {showDelete && <button onClick={() => removeTask(t.id)} className="text-red-500 hover:bg-red-500/20 p-1.5 rounded" title="Excluir"><Trash2 size={16}/></button>}
-                      </div>
-                  </div>
-              </div>
-          );
-      };
-
-      // Lógica de Filtro e Ordenação
-      const filteredTasks = tasks.filter((task) => {
-          const matchesSearch = !normalizedSearchTerm ||
-              task.text.toLowerCase().includes(normalizedSearchTerm) ||
-              (task.author && task.author.toLowerCase().includes(normalizedSearchTerm)) ||
-              (task.tag && task.tag.toLowerCase().includes(normalizedSearchTerm));
-
-          const matchesTag = activeTagFilter === 'all' || (task.tag || 'geral') === activeTagFilter;
-
-          const authors = task.author ? task.author.split(',').map((author) => author.trim()) : [];
-          const matchesOwner = activeOwnerFilter === 'all'
-              || (activeOwnerFilter === 'unassigned' && authors.length === 0)
-              || authors.includes(activeOwnerFilter);
-
-          const matchesFocus = focusFilter === 'all'
-              || (focusFilter === 'mine' && viewAsStudent?.name && authors.includes(viewAsStudent.name))
-              || (focusFilter === 'priority' && isTaskPriority(task))
-              || (focusFilter === 'overdue' && isTaskOverdue(task))
-              || (focusFilter === 'unassigned' && authors.length === 0);
-
-          return matchesSearch && matchesTag && matchesOwner && matchesFocus;
-      });
-
-      const todoTasks = filteredTasks.filter(t => t.status === 'todo')
-          .sort(sortOpenTasks);
-      const doingTasks = filteredTasks.filter(t => t.status === 'doing')
-          .sort(sortOpenTasks);
-      const reviewTasks = filteredTasks.filter(t => t.status === 'review')
-          .sort(sortOpenTasks);
-      
-      // Ordena Feitos: Mais recentes primeiro
-      const doneTasks = filteredTasks.filter(t => t.status === 'done')
-          .sort((a, b) => new Date(b.completedAt || b.createdAt) - new Date(a.completedAt || a.createdAt));
-
-      const hasActiveFilters = Boolean(normalizedSearchTerm);
-
-      const displayedTodoTasks = (showAllTodo || hasActiveFilters) ? todoTasks : todoTasks.slice(0, 10);
-      const displayedDoingTasks = (showAllDoing || hasActiveFilters) ? doingTasks : doingTasks.slice(0, 10);
-      const displayedReviewTasks = (showAllReview || hasActiveFilters) ? reviewTasks : reviewTasks.slice(0, 10);
-      const displayedDoneTasks = (showAllDone || hasActiveFilters) ? doneTasks : doneTasks.slice(0, 10);
-
-      const activeTasksCount = filteredTasks.filter((task) => task.status !== 'done').length;
-      const overdueFilteredCount = filteredTasks.filter((task) => isTaskOverdue(task)).length;
-      const priorityFilteredCount = filteredTasks.filter((task) => isTaskPriority(task)).length;
-      const doneLast7Days = tasks.filter((task) => {
-          if (task.status !== 'done' || !task.completedAt) return false;
-          const completedTime = new Date(task.completedAt).getTime();
-          return Date.now() - completedTime <= (7 * 24 * 60 * 60 * 1000);
-      }).length;
-
-      const boardMessage = overdueFilteredCount > 0
-          ? 'Hoje o foco deve ser limpar atrasos antes de puxar novas frentes.'
-          : reviewTasks.length > 0
-              ? 'Ha entregas aguardando validacao tecnica em Em Revisao.'
-              : activeTasksCount === 0
-                  ? 'Quadro limpo. Hora de criar a proxima meta da equipe.'
-                  : 'Fluxo saudavel: mantenham as tarefas pequenas, claras e com dono definido.';
-
-      const boardStats = [
-          { label: 'Abertas', value: activeTasksCount, helper: 'tarefas ativas na visao atual', icon: <ListTodo size={16} />, tone: 'text-white border-white/10 bg-white/5' },
-          { label: 'Atrasadas', value: overdueFilteredCount, helper: 'pedem acao imediata', icon: <AlertTriangle size={16} />, tone: 'text-red-400 border-red-500/20 bg-red-500/10' },
-          { label: 'Em Revisao', value: reviewTasks.length, helper: 'esperando aprovacao', icon: <Target size={16} />, tone: 'text-purple-400 border-purple-500/20 bg-purple-500/10' },
-          { label: 'Entregues 7d', value: doneLast7Days, helper: 'ritmo recente da equipe', icon: <CheckCircle size={16} />, tone: 'text-green-400 border-green-500/20 bg-green-500/10' }
-      ];
-
-      const defaultWeekStart = new Date(localTodayObj);
-      defaultWeekStart.setDate(defaultWeekStart.getDate() - 6);
-      const currentWeekStart = currentWeekData?.startDate || getLocalYYYYMMDD(defaultWeekStart);
-      const currentWeekEnd = currentWeekData?.endDate || localTodayStr;
-      const tasksThisWeek = tasks.filter((task) => {
-          const referenceDate = task.dueDate || getLocalYYYYMMDD(new Date(task.createdAt || Date.now()));
-          return referenceDate >= currentWeekStart && referenceDate <= currentWeekEnd;
-      });
-      const completedThisWeek = tasksThisWeek.filter((task) => task.status === 'done').length;
-      const weeklyGoalProgress = tasksThisWeek.length > 0 ? Math.round((completedThisWeek / tasksThisWeek.length) * 100) : 0;
-      const avgThroughput = tasksThisWeek.length > 0 ? (completedThisWeek / Math.max(1, 7)).toFixed(1) : '0.0';
-      const weeklyUnassignedCount = tasksThisWeek.filter((task) => !task.author).length;
-      const weeklyReviewCount = tasksThisWeek.filter((task) => task.status === 'review').length;
-      const weeklyBacklogCount = tasksThisWeek.filter((task) => task.status !== 'done').length;
-
-      const tacticalAlerts = [
-          overdueFilteredCount > 0 && {
-              title: `${overdueFilteredCount} tarefas atrasadas`,
-              detail: 'Priorize o que ja passou do prazo antes de abrir novas frentes.',
-              tone: 'border-red-500/20 bg-red-500/10 text-red-400',
-              icon: <AlertTriangle size={16} />
-          },
-          reviewTasks.length > 0 && {
-              title: `${reviewTasks.length} tarefas em revisao`,
-              detail: 'Ha entregas esperando aprovacao tecnica para virar resultado.',
-              tone: 'border-purple-500/20 bg-purple-500/10 text-purple-300',
-              icon: <Search size={16} />
-          },
-          filteredTasks.filter((task) => !task.author && task.status !== 'done').length > 0 && {
-              title: `${filteredTasks.filter((task) => !task.author && task.status !== 'done').length} tarefas sem dono`,
-              detail: 'Distribuam responsabilidades para evitar tarefa esquecida.',
-              tone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-300',
-              icon: <Users size={16} />
-          },
-          doingTasks.length >= 6 && {
-              title: 'Execucao muito espalhada',
-              detail: 'Reduzam o WIP para acelerar entrega e aprovacao.',
-              tone: 'border-orange-500/20 bg-orange-500/10 text-orange-300',
-              icon: <Zap size={16} />
-          }
-      ].filter(Boolean).slice(0, 3);
-
-      const studentTasksThisWeek = !isAdmin && viewAsStudent?.name
-          ? tasksThisWeek
-              .filter((task) => task.author && task.author.includes(viewAsStudent.name))
-              .sort((a, b) => {
-                  if (a.status === 'done' && b.status !== 'done') return 1;
-                  if (a.status !== 'done' && b.status === 'done') return -1;
-                  return sortOpenTasks(a, b);
-              })
-          : [];
-
-      const studentTaskSummary = {
-          total: studentTasksThisWeek.length,
-          done: studentTasksThisWeek.filter((task) => task.status === 'done').length,
-          review: studentTasksThisWeek.filter((task) => task.status === 'review').length,
-          overdue: studentTasksThisWeek.filter((task) => isTaskOverdue(task)).length
-      };
-
-      const getColumnSignal = (columnId, total) => {
-          if (columnId === 'todo' && total >= 10) return { label: 'Backlog alto', tone: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20' };
-          if (columnId === 'doing' && total >= 6) return { label: 'WIP alto', tone: 'text-orange-400 bg-orange-500/10 border-orange-500/20' };
-          if (columnId === 'review' && total >= 3) return { label: 'Aprovar', tone: 'text-purple-300 bg-purple-500/10 border-purple-500/20' };
-          if (columnId === 'done' && total >= 6) return { label: 'Bom ritmo', tone: 'text-green-400 bg-green-500/10 border-green-500/20' };
-          return null;
-      };
-
-      const buildLaneGroups = (taskList) => {
-          if (activeTagFilter !== 'all') {
-              const selectedTag = KANBAN_TAGS.find((tag) => tag.id === activeTagFilter) || KANBAN_TAGS[3];
-              return [{ ...selectedTag, tasks: taskList, compact: false }];
-          }
-
-          if (kanbanLayout === 'compact') {
-              return [{ id: 'all', label: 'Quadro compacto', color: 'bg-white/5 text-gray-300 border-white/10', tasks: taskList, compact: true }];
-          }
-
-          return KANBAN_TAGS.map((tag) => ({
-              ...tag,
-              tasks: taskList.filter((task) => (task.tag || 'geral') === tag.id),
-              compact: false
-          })).filter((lane) => lane.tasks.length > 0);
-      };
-
-      const columnConfigs = [
-          {
-              id: 'todo',
-              title: 'A Fazer',
-              subtitle: 'planejamento e prioridade',
-              icon: <ListTodo size={16} />,
-              total: todoTasks.length,
-              tasks: displayedTodoTasks,
-              showAll: showAllTodo,
-              setShowAll: setShowAllTodo,
-              moveLeft: null,
-              moveRight: 'doing',
-              accent: draggedOverCol === 'todo'
-                  ? 'bg-[#1a1a2a] border-white/40 shadow-lg'
-                  : 'bg-[#151520] border-white/10',
-              heading: 'text-gray-300 border-white/5',
-              moreTone: 'bg-white/5 hover:bg-white/10 text-gray-300 border-white/10',
-              emptyText: 'Crie ou priorize a proxima entrega da equipe.'
-          },
-          {
-              id: 'doing',
-              title: 'Fazendo',
-              subtitle: 'execucao em andamento',
-              icon: <Loader2 size={16} className="animate-spin" />,
-              total: doingTasks.length,
-              tasks: displayedDoingTasks,
-              showAll: showAllDoing,
-              setShowAll: setShowAllDoing,
-              moveLeft: null,
-              moveRight: 'review',
-              accent: draggedOverCol === 'doing'
-                  ? 'bg-blue-500/10 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.2)]'
-                  : 'bg-blue-500/5 border-blue-500/20',
-              heading: 'text-blue-400 border-blue-500/10',
-              moreTone: 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/20',
-              emptyText: 'Nenhuma tarefa em execucao agora.'
-          },
-          {
-              id: 'review',
-              title: 'Em Revisao',
-              subtitle: 'validacao antes de concluir',
-              icon: <Search size={16} />,
-              total: reviewTasks.length,
-              tasks: displayedReviewTasks,
-              showAll: showAllReview,
-              setShowAll: setShowAllReview,
-              moveLeft: isAdmin ? 'doing' : null,
-              moveRight: isAdmin ? 'done' : null,
-              accent: draggedOverCol === 'review'
-                  ? 'bg-purple-500/10 border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.2)]'
-                  : 'bg-purple-500/5 border-purple-500/20',
-              heading: 'text-purple-400 border-purple-500/10',
-              moreTone: 'bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border-purple-500/20',
-              emptyText: 'Quando uma entrega estiver pronta, ela aparece aqui.'
-          },
-          {
-              id: 'done',
-              title: 'Feito',
-              subtitle: 'entregas aprovadas e registradas',
-              icon: <CheckCircle size={16} />,
-              total: doneTasks.length,
-              tasks: displayedDoneTasks,
-              showAll: showAllDone,
-              setShowAll: setShowAllDone,
-              moveLeft: null,
-              moveRight: null,
-              accent: draggedOverCol === 'done'
-                  ? 'bg-green-500/10 border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.2)]'
-                  : 'bg-green-500/5 border-green-500/20',
-              heading: 'text-green-500 border-green-500/10',
-              moreTone: 'bg-green-500/10 hover:bg-green-500/20 text-green-500 border-green-500/20',
-              emptyText: 'As entregas concluidas aparecerao aqui.'
-          }
-      ];
-
-      return (
-      <div className="animate-in fade-in duration-500 flex flex-col h-full">
-          <div className="mb-6">
-              <div className="self-start rounded-[28px] border border-white/10 bg-[#151520] p-6 shadow-2xl">
-                  <div>
-                      <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Quadro de tarefas</p>
-                      <h2 className="text-2xl md:text-3xl font-black text-white mt-2 leading-tight">Busca e leitura rapida do kanban</h2>
-                      <p className="text-sm text-gray-300 mt-3 max-w-3xl">{boardMessage}</p>
-
-                      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-6">
-                          {boardStats.map((stat) => (
-                              <div key={stat.label} className={`rounded-2xl border p-4 ${stat.tone}`}>
-                                  <div className="flex items-center justify-between">
-                                      <span className="text-[10px] uppercase tracking-[0.18em] font-bold text-gray-300">{stat.label}</span>
-                                      <span>{stat.icon}</span>
-                                  </div>
-                                  <div className="text-2xl font-black text-white mt-3">{stat.value}</div>
-                                  <p className="text-xs text-gray-300 mt-1">{stat.helper}</p>
-                              </div>
-                          ))}
-                      </div>
-
-                      <div className="mt-6 relative">
-                          <Search size={18} className="absolute left-4 top-3.5 text-gray-500" />
-                          <input
-                              type="text"
-                              placeholder="Buscar tarefas por nome, tag ou responsavel..."
-                              value={searchTerm}
-                              onChange={(e) => setSearchTerm(e.target.value)}
-                              onKeyDown={stopKanbanInputKeyDown}
-                              className="w-full bg-black/30 border border-white/10 rounded-xl p-3 pl-12 pr-28 text-white focus:border-orange-500 outline-none transition-all"
-                          />
-                          {hasActiveFilters && (
-                              <button
-                                  type="button"
-                                  onClick={() => setSearchTerm('')}
-                                  className="absolute right-3 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-white/10"
-                              >
-                                  <X size={12} /> Limpar
-                              </button>
-                          )}
-                      </div>
-                  </div>
-              </div>
-          </div>
-          {tacticalAlerts.length > 0 && (
-              <div className="grid lg:grid-cols-3 gap-4 mb-6">
-                  {tacticalAlerts.map((alert) => (
-                      <div key={alert.title} className={`rounded-2xl border p-4 ${alert.tone}`}>
-                          <div className="flex items-center gap-2 text-sm font-bold">
-                              {alert.icon} {alert.title}
-                          </div>
-                          <p className="text-xs text-gray-200 mt-2 leading-relaxed">{alert.detail}</p>
-                      </div>
-                  ))}
-              </div>
-          )}
-
-          {!isAdmin && viewAsStudent && (
-              <div className="mb-6 rounded-[28px] border border-white/10 bg-[#151520] p-6 shadow-2xl">
-                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                      <div>
-                          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-blue-500/20 bg-blue-500/10 text-blue-400 text-[10px] font-bold uppercase tracking-[0.24em]">
-                              <Target size={12} /> Minhas Entregas da Semana
-                          </div>
-                          <h3 className="text-2xl font-black text-white mt-3">Foco pessoal de {viewAsStudent.name}</h3>
-                          <p className="text-sm text-gray-400 mt-1">Acompanhe suas tarefas da semana atual e saiba o que precisa andar primeiro.</p>
-                      </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                          <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-center">
-                              <p className="text-2xl font-black text-white">{studentTaskSummary.total}</p>
-                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 mt-1">tarefas</p>
-                          </div>
-                          <div className="rounded-2xl border border-green-500/20 bg-green-500/10 p-4 text-center">
-                              <p className="text-2xl font-black text-white">{studentTaskSummary.done}</p>
-                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 mt-1">concluidas</p>
-                          </div>
-                          <div className="rounded-2xl border border-purple-500/20 bg-purple-500/10 p-4 text-center">
-                              <p className="text-2xl font-black text-white">{studentTaskSummary.review}</p>
-                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 mt-1">em revisao</p>
-                          </div>
-                          <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-center">
-                              <p className="text-2xl font-black text-white">{studentTaskSummary.overdue}</p>
-                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 mt-1">atrasadas</p>
-                          </div>
-                      </div>
-                  </div>
-
-                  <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3 mt-6">
-                      {studentTasksThisWeek.slice(0, 4).map((task) => {
-                          const taskStatus = getDeadlineStatus(task.dueDate);
-                          return (
-                              <div key={task.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                                  <div className="flex items-center justify-between gap-2">
-                                      <span className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">{task.tag || 'geral'}</span>
-                                      <span className={`text-[10px] font-bold ${taskStatus?.color || 'text-gray-500'}`}>{taskStatus?.text || 'Sem prazo'}</span>
-                                  </div>
-                                  <p className="text-sm text-white font-bold mt-3 leading-relaxed">{task.text}</p>
-                                  <div className="mt-3 text-[11px] text-gray-400">
-                                      {task.status === 'done' ? 'Concluida' : task.status === 'review' ? 'Aguardando validacao' : task.status === 'doing' ? 'Em execucao' : 'A iniciar'}
-                                  </div>
-                              </div>
-                          );
-                      })}
-                      {studentTasksThisWeek.length === 0 && (
-                          <div className="md:col-span-2 xl:col-span-4 rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-center">
-                              <p className="text-sm font-bold text-white">Voce ainda nao tem entregas ligadas a esta semana.</p>
-                              <p className="text-xs text-gray-500 mt-2">Use Tarefas para assumir uma tarefa e deixar seu plano visivel.</p>
-                          </div>
-                      )}
-                  </div>
-              </div>
-          )}
-
-          <div className="flex overflow-x-auto snap-x md:grid md:grid-cols-4 gap-6 flex-1 min-h-[600px] pb-4 custom-scrollbar">
-              {columnConfigs.map((column, columnIndex) => {
-                  const columnSignal = getColumnSignal(column.id, column.total);
-                  const laneGroups = buildLaneGroups(column.tasks);
-
-                  return (
-                      <div
-                          key={column.id}
-                          className={`shrink-0 w-[85vw] md:w-auto snap-center rounded-2xl p-4 flex flex-col border animate-in fade-in slide-in-from-bottom-4 transition-all duration-500 ease-out motion-reduce:animate-none motion-reduce:transition-none ${column.accent}`}
-                          onDragOver={(e) => handleDragOver(e, column.id)}
-                          onDragLeave={handleDragLeave}
-                          onDrop={(e) => handleDrop(e, column.id)}
-                          style={{ animationDelay: `${columnIndex * 90}ms`, animationFillMode: 'both' }}
-                      >
-                          <div className={`border-b pb-3 mb-4 ${column.heading}`}>
-                              <div className="flex items-center justify-between gap-2">
-                                  <h3 className="font-bold uppercase flex items-center gap-2">
-                                      {column.icon} {column.title} ({column.total})
-                                  </h3>
-                                  {columnSignal && (
-                                      <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded-full border ${columnSignal.tone}`}>
-                                          {columnSignal.label}
-                                      </span>
-                                  )}
-                              </div>
-                              <p className="text-[11px] text-gray-500 mt-2">{column.subtitle}</p>
-                          </div>
-
-                          {column.id === 'todo' && (
-                              <form onSubmit={handleAddTaskSubmit} onKeyDown={stopKanbanInputKeyDown} className="mb-4 space-y-2">
-                                  <input
-                                      name="taskText"
-                                      value={kanbanTaskDraft.text}
-                                      onChange={(e) => updateKanbanTaskDraft('text', e.target.value)}
-                                      onKeyDown={stopKanbanInputKeyDown}
-                                      autoComplete="off"
-                                      placeholder="+ Nova Tarefa..."
-                                      className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-orange-500 outline-none transition-all"
-                                  />
-                                  <div className="flex flex-col gap-2 md:flex-row">
-                                      <select
-                                          name="taskTag"
-                                          value={kanbanTaskDraft.tag}
-                                          onChange={(e) => updateKanbanTaskDraft('tag', e.target.value)}
-                                          onKeyDown={stopKanbanInputKeyDown}
-                                          className="w-full bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-300 focus:border-orange-500 outline-none md:w-1/4"
-                                      >
-                                          <option value="engenharia">Engenharia</option>
-                                          <option value="inovacao">Inovacao</option>
-                                          <option value="gestao">Gestao</option>
-                                          <option value="geral">Geral</option>
-                                      </select>
-                                      <select
-                                          name="taskPriority"
-                                          value={kanbanTaskDraft.priority}
-                                          onChange={(e) => updateKanbanTaskDraft('priority', e.target.value)}
-                                          onKeyDown={stopKanbanInputKeyDown}
-                                          className="w-full bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-300 focus:border-orange-500 outline-none md:w-1/4"
-                                          title="Prioridade"
-                                      >
-                                          <option value="normal">Normal</option>
-                                          <option value="baixa">Baixa</option>
-                                          <option value="alta">Alta</option>
-                                          <option value="urgente">Urgente</option>
-                                      </select>
-                                      <input
-                                          type="date"
-                                          name="taskDate"
-                                          value={kanbanTaskDraft.dueDate}
-                                          onChange={(e) => updateKanbanTaskDraft('dueDate', e.target.value)}
-                                          onKeyDown={stopKanbanInputKeyDown}
-                                          min={isAdmin ? undefined : localTodayStr}
-                                          className="w-full bg-black/30 border border-white/10 rounded-lg p-2 text-xs text-gray-300 focus:border-orange-500 outline-none md:w-1/4"
-                                          title="Prazo"
-                                      />
-                                      <button
-                                          type="submit"
-                                          disabled={!kanbanTaskDraft.text.trim()}
-                                          className="flex-1 bg-orange-600 hover:bg-orange-500 disabled:bg-orange-900/40 disabled:text-white/50 disabled:cursor-not-allowed text-white rounded-lg text-xs font-bold uppercase"
-                                      >
-                                          Criar
-                                      </button>
-                                  </div>
-                              </form>
-                          )}
-
-                          <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                              {column.tasks.length === 0 && (
-                                  <div className="border border-dashed border-white/10 rounded-2xl p-6 text-center bg-black/20">
-                                      <p className="text-sm font-bold text-white">{hasActiveFilters ? 'Nada encontrado nessa coluna' : 'Coluna organizada'}</p>
-                                      <p className="text-xs text-gray-500 mt-2">{hasActiveFilters ? 'Ajuste a busca para ampliar a visao do quadro.' : column.emptyText}</p>
-                                  </div>
-                              )}
-
-                              {column.tasks.length > 0 && laneGroups.map((lane, laneIndex) => (
-                                  <div
-                                      key={`${column.id}-${lane.id}`}
-                                      className={`${lane.compact ? '' : 'rounded-2xl border border-white/5 bg-black/20 p-3'} animate-in fade-in slide-in-from-bottom-2 transition-all duration-500 ease-out motion-reduce:animate-none motion-reduce:transition-none`}
-                                      style={{ animationDelay: `${Math.min((columnIndex * 90) + (laneIndex * 70), 360)}ms`, animationFillMode: 'both' }}
-                                  >
-                                      {!lane.compact && (
-                                          <div className="flex items-center justify-between gap-2 mb-3">
-                                              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-bold uppercase ${lane.color}`}>
-                                                  <Tag size={8}/> {lane.label}
-                                              </span>
-                                              <span className="text-[10px] text-gray-500 font-bold">{lane.tasks.length} tarefa(s)</span>
-                                          </div>
-                                      )}
-
-                                      <div className="space-y-2">
-                                          {lane.tasks.map((task, taskIndex) => (
-                                              <TaskCard
-                                                  key={task.id}
-                                                  t={task}
-                                                  showMoveLeft={column.moveLeft}
-                                                  showMoveRight={column.moveRight}
-                                                  showDelete={true}
-                                                  cardIndex={taskIndex}
-                                                  laneIndex={laneIndex}
-                                                  columnIndex={columnIndex}
-                                              />
-                                          ))}
-                                      </div>
-                                  </div>
-                              ))}
-
-                              {!column.showAll && !hasActiveFilters && column.total > 10 && (
-                                  <button onClick={() => column.setShowAll(true)} className={`w-full py-2 mt-2 border rounded-xl text-xs font-bold transition-colors ${column.moreTone}`}>
-                                      Ver mais {column.total - 10} {column.id === 'done' ? 'antigas...' : 'tarefas...'}
-                                  </button>
-                              )}
-
-                              {column.showAll && !hasActiveFilters && column.total > 10 && (
-                                  <button onClick={() => column.setShowAll(false)} className="w-full py-2 mt-2 bg-black/40 hover:bg-white/5 text-gray-500 border border-white/5 rounded-xl text-xs font-bold transition-colors">
-                                      Ocultar {column.id === 'done' ? 'antigas' : 'tarefas'}
-                                  </button>
-                              )}
-                          </div>
-                      </div>
-                  );
-              })}
-          </div>
-      </div>
-      );
+  const strategyViewProps = {
+      strategySubTab,
+      setStrategySubTab,
+      projectSummary,
+      projectImpactNarrative,
+      decisionMatrix,
+      experts,
+      outreachEvents,
+      totalImpactPeople,
+      isAdmin,
+      viewAsStudent,
+      InnovationStrategyPanel,
+      RobotDesignStrategyPanel,
+      LazyPanelFallback,
+      openMatrixForm,
+      handleDeleteMatrix,
+      openExpertModal,
+      openExpertView,
+      handleDeleteExpert,
+      openOutreachForm,
+      handleDeleteOutreach,
+      setModal,
+      robotVersions,
+      attachments,
+      codeSnippets,
+      rounds,
+      activeCommandCode,
+      iterationRecords,
+      openRobotModal,
+      openRobotView,
+      handleDeleteRobotVersion,
+      openAttachmentModal,
+      openAttachmentView,
+      handleDeleteAttachment,
+      openCodeModal,
+      openCodeView,
+      handleApplyCodeSnippet,
+      handleDeleteCode
   };
 
-  // --- COMPONENTE DIÁRIO DE BORDO ---
-  const DiaryWorkspaceView = () => {
-      const currentWeekValue = String(currentWeekData?.id || 'current');
-      const prompts = ['Hoje eu testei...', 'O principal aprendizado foi...', 'O que deu errado foi...', 'Na proxima semana quero melhorar...'];
-      const formatDiaryDate = (entry, includeTime = false) => getLogbookEntryDate(entry).toLocaleDateString(
-          'pt-BR',
-          includeTime ? { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' } : { day: '2-digit', month: 'long', year: 'numeric' }
-      );
-      const renderTags = (tags) => tags.length ? (
-          <div className="mt-4 flex flex-wrap gap-2">
-              {tags.map((tag) => <span key={tag} className="rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-yellow-100">{tag}</span>)}
-          </div>
-      ) : null;
-      const renderEntries = (entries, emptyTitle, emptyDetail, options = {}) => {
-          const groups = groupLogbookEntriesByWeek(entries);
-          if (!groups.length) {
-              return (
-                  <div className="rounded-[30px] border border-dashed border-white/10 bg-[#151520] p-10 text-center">
-                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[20px] border border-white/10 bg-white/5"><BookOpen size={28} className="text-yellow-300" /></div>
-                      <h3 className="mt-5 text-2xl font-black text-white">{emptyTitle}</h3>
-                      <p className="mt-3 text-sm leading-relaxed text-gray-400">{emptyDetail}</p>
-                  </div>
-              );
-          }
-
-          return (
-              <div className="space-y-8">
-                  {groups.map((group) => (
-                      <section key={group.key} className="space-y-4">
-                          <div className="flex items-end justify-between gap-4">
-                              <div>
-                                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Bloco semanal</p>
-                                  <h3 className="mt-2 text-xl font-black text-white">{group.weekName}</h3>
-                              </div>
-                              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">{group.entries.length} registro(s)</span>
-                          </div>
-                          <div className="grid gap-4 xl:grid-cols-2">
-                              {group.entries.map((entry) => {
-                                  const tags = getLogbookEntryTags(entry);
-                                  const wordCount = getLogbookEntryWordCount(entry);
-                                  const readMinutes = Math.max(1, Math.ceil(wordCount / 120));
-                                  const timeLabel = formatDiaryDate(entry, true).split(',').slice(-1)[0]?.trim() || 'Horario';
-                                  return (
-                                      <article key={entry.id} className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[#151520] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
-                                          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,0.08),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.08),transparent_26%)]"></div>
-                                          <div className="relative z-10">
-                                              <div className="flex items-start justify-between gap-4">
-                                                  <div className="min-w-0">
-                                                      <div className="flex flex-wrap items-center gap-2">
-                                                          <span className="rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-yellow-100">{entry.weekName || `Semana ${entry.weekId || 'Geral'}`}</span>
-                                                          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">{wordCount} palavras</span>
-                                                          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400">{readMinutes} min leitura</span>
-                                                      </div>
-                                                      <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-gray-400">
-                                                          {options.showStudentName && <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-gray-200"><UserCircle size={12} /> {entry.studentName}</span>}
-                                                          <span className="inline-flex items-center gap-2"><Calendar size={12} className="text-yellow-400" /> {formatDiaryDate(entry)}</span>
-                                                          <span className="inline-flex items-center gap-2"><Clock size={12} className="text-cyan-400" /> {timeLabel}</span>
-                                                      </div>
-                                                  </div>
-                                                  <button onClick={() => handleDeleteLogbookEntry(entry)} className="rounded-2xl border border-white/10 bg-black/20 p-3 text-gray-400 transition-all hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300" title="Excluir Registro"><Trash2 size={15} /></button>
-                                              </div>
-                                              <p className="mt-5 whitespace-pre-wrap text-sm leading-relaxed text-gray-200">{entry.text}</p>
-                                              {renderTags(tags)}
-                                          </div>
-                                      </article>
-                                  );
-                              })}
-                          </div>
-                      </section>
-                  ))}
-              </div>
-          );
-      };
-
-      if (isAdmin) {
-          const normalizedStudentQuery = adminLogbookStudentQuery.trim().toLowerCase();
-          const normalizedEntryQuery = adminLogbookSearchQuery.trim().toLowerCase();
-          const teamEntries = sortLogbookEntries(logbookEntries);
-          const selectedStudent = students.find((student) => student.id === adminLogbookStudentId) || null;
-          const selectedEntries = adminLogbookStudentId ? teamEntries.filter((entry) => getLogbookStudentId(entry) === adminLogbookStudentId) : [];
-          const filteredEntries = selectedEntries.filter((entry) => (!normalizedEntryQuery || [entry.text, entry.weekName, ...getLogbookEntryTags(entry)].filter(Boolean).join(' ').toLowerCase().includes(normalizedEntryQuery)) && (adminLogbookWeekFilter === 'all' || String(entry.weekId ?? 'general') === adminLogbookWeekFilter));
-          const studentCards = students.map((student) => {
-              const entries = teamEntries.filter((entry) => getLogbookStudentId(entry) === student.id);
-              return { ...student, totalEntries: entries.length, currentWeekEntries: currentWeekData ? entries.filter((entry) => String(entry.weekId) === currentWeekValue).length : 0, lastEntry: entries[0] || null };
-          }).filter((student) => !normalizedStudentQuery || [student.name, student.role].filter(Boolean).join(' ').toLowerCase().includes(normalizedStudentQuery)).sort((left, right) => right.totalEntries - left.totalEntries || (left.name || '').localeCompare(right.name || '', 'pt-BR'));
-          const avgWords = selectedEntries.length ? Math.round(selectedEntries.reduce((total, entry) => total + getLogbookEntryWordCount(entry), 0) / selectedEntries.length) : 0;
-          const activeWriterCount = new Set(teamEntries.map((entry) => getLogbookStudentId(entry)).filter(Boolean)).size;
-          const hasAdminFilters = Boolean(normalizedEntryQuery) || adminLogbookWeekFilter !== 'all';
-
-          return (
-              <div className="animate-in fade-in duration-500 space-y-6 max-w-7xl mx-auto">
-                  <section className="rounded-[32px] border border-white/10 bg-gradient-to-br from-[#2c180f] via-[#151520] to-[#0f1726] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
-                      <div className="grid gap-4 lg:grid-cols-4">
-                          <div className="lg:col-span-2">
-                              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-yellow-200">Radar do diario</p>
-                              <h3 className="mt-3 text-3xl font-black text-white">Leitura rapida da memoria da equipe.</h3>
-                              <p className="mt-3 text-sm leading-relaxed text-gray-300">Veja quem esta registrando com frequencia e mergulhe no historico de cada aluno com busca e filtro por semana.</p>
-                          </div>
-                          <div className="rounded-[24px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Registros totais</p><p className="mt-4 text-3xl font-black text-white">{teamEntries.length}</p><p className="mt-2 text-xs text-gray-400">memoria consolidada</p></div>
-                          <div className="rounded-[24px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Alunos ativos</p><p className="mt-4 text-3xl font-black text-white">{activeWriterCount}</p><p className="mt-2 text-xs text-gray-400">{selectedEntries.length} no diario atual</p></div>
-                      </div>
-                  </section>
-                  <div className="grid gap-6 lg:grid-cols-4">
-                      <aside className="lg:col-span-1 rounded-[30px] border border-white/10 bg-[#151520] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.2)]">
-                          <div className="flex items-center justify-between border-b border-white/10 pb-4"><div><h3 className="text-base font-bold text-white">Diarios da equipe</h3><p className="mt-1 text-xs text-gray-400">Escolha um aluno para abrir o historico.</p></div><Users size={16} className="text-gray-300" /></div>
-                          <div className="relative mt-4"><Search size={16} className="absolute left-4 top-3.5 text-gray-500" /><input type="text" value={adminLogbookStudentQuery} onChange={(e) => setAdminLogbookStudentQuery(e.target.value)} placeholder="Buscar aluno..." className="w-full rounded-2xl border border-white/10 bg-black/20 p-3 pl-11 text-sm text-white outline-none focus:border-yellow-500" /></div>
-                          <div className="mt-4 max-h-[700px] space-y-2 overflow-y-auto pr-1 custom-scrollbar">
-                              {studentCards.length === 0 && <div className="rounded-[24px] border border-dashed border-white/10 bg-black/20 p-5 text-sm text-gray-400">Nenhum aluno encontrado para esse filtro.</div>}
-                              {studentCards.map((student) => <button key={student.id} onClick={() => setAdminLogbookStudentId(student.id)} className={`w-full rounded-[24px] border p-4 text-left transition-all ${adminLogbookStudentId === student.id ? 'border-yellow-500/30 bg-yellow-500/10 shadow-[0_14px_36px_rgba(234,179,8,0.12)]' : 'border-white/5 bg-black/30 hover:border-white/15 hover:bg-white/5'}`}><div className="flex items-start gap-3"><div className={`flex h-11 w-11 items-center justify-center rounded-2xl border ${student.avatarType === 'mech2' ? 'border-fuchsia-500/50 bg-fuchsia-500/10' : 'border-orange-500/40 bg-orange-500/10'}`}>{student.avatarImage ? <img src={student.avatarImage} alt="Avatar" className="h-9 w-9 rounded-xl object-cover" /> : <UserCircle size={24} className="text-gray-400" />}</div><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2"><p className="truncate font-bold text-white">{student.name}</p><span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">{student.totalEntries}</span></div><p className="mt-2 text-[11px] leading-relaxed text-gray-400">{student.currentWeekEntries > 0 ? `${student.currentWeekEntries} registro(s) nesta semana` : 'Sem registro nesta semana'}</p><p className="mt-2 text-[10px] uppercase tracking-[0.16em] text-gray-500">{student.lastEntry ? `Ultimo em ${formatDiaryDate(student.lastEntry)}` : 'Ainda sem historico'}</p></div></div></button>)}
-                          </div>
-                      </aside>
-                      <div className="lg:col-span-3 space-y-6">
-                          {selectedStudent ? (
-                              <>
-                                  <section className="rounded-[30px] border border-white/10 bg-[#151520] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
-                                      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                                          <div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-yellow-200">Painel individual</p><h3 className="mt-3 text-3xl font-black text-white">{selectedStudent.name}</h3><p className="mt-3 text-sm leading-relaxed text-gray-300">{selectedEntries[0] ? getLogbookEntryPreview(selectedEntries[0], 180) : 'Ainda nao ha registros salvos para este aluno.'}</p></div>
-                                          <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-[22px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Registros</p><p className="mt-3 text-3xl font-black text-white">{selectedEntries.length}</p></div><div className="rounded-[22px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Semana atual</p><p className="mt-3 text-3xl font-black text-white">{currentWeekData ? selectedEntries.filter((entry) => String(entry.weekId) === currentWeekValue).length : 0}</p></div><div className="rounded-[22px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Media</p><p className="mt-3 text-3xl font-black text-white">{avgWords}</p></div></div>
-                                      </div>
-                                  </section>
-                                  <section className="rounded-[30px] border border-white/10 bg-[#151520] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.2)]">
-                                      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Filtros do diario</p><h3 className="mt-2 text-xl font-black text-white">Encontre registros por texto ou semana</h3></div>{hasAdminFilters && <button type="button" onClick={() => { setAdminLogbookSearchQuery(''); setAdminLogbookWeekFilter('all'); }} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-gray-200 transition-all hover:border-white/20 hover:bg-white/10">Limpar filtros</button>}</div>
-                                      <div className="mt-5 grid gap-4 xl:grid-cols-[1.6fr_0.9fr]"><div className="relative"><Search size={18} className="absolute left-4 top-3.5 text-gray-500" /><input type="text" placeholder={`Buscar em ${selectedStudent.name}...`} value={adminLogbookSearchQuery} onChange={(e) => setAdminLogbookSearchQuery(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black/20 p-3 pl-12 text-white outline-none focus:border-yellow-500" /></div><select value={adminLogbookWeekFilter} onChange={(e) => setAdminLogbookWeekFilter(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-yellow-500">{buildLogbookWeekOptions(selectedEntries).map((option) => <option key={option.value} value={option.value} className="bg-[#0f0f17]">{option.label}</option>)}</select></div>
-                                  </section>
-                                  {renderEntries(filteredEntries, 'Nenhum registro encontrado', hasAdminFilters ? 'Esse aluno nao possui entradas com os filtros atuais.' : 'Esse aluno ainda nao registrou aprendizados no diario.')}
-                              </>
-                          ) : (
-                              <div className="flex min-h-[420px] items-center justify-center rounded-[30px] border-2 border-dashed border-white/10 bg-[#151520] p-8 text-center"><div><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[22px] border border-white/10 bg-white/5"><BookOpen size={30} className="text-yellow-300" /></div><h3 className="mt-5 text-2xl font-black text-white">Escolha um diario para analisar</h3><p className="mt-3 text-sm leading-relaxed text-gray-400">Selecione um aluno no painel lateral para abrir o historico e localizar registros especificos.</p></div></div>
-                          )}
-                      </div>
-                  </div>
-              </div>
-          );
-      }
-
-      const normalizedStudentQuery = studentLogbookSearchQuery.trim().toLowerCase();
-      const studentEntries = sortLogbookEntries(logbookEntries);
-      const filteredEntries = studentEntries.filter((entry) => (!normalizedStudentQuery || [entry.text, entry.weekName, ...getLogbookEntryTags(entry)].filter(Boolean).join(' ').toLowerCase().includes(normalizedStudentQuery)) && (studentLogbookWeekFilter === 'all' || String(entry.weekId ?? 'general') === studentLogbookWeekFilter));
-      const draftWordCount = studentLogbookDraft.trim().split(/\s+/).filter(Boolean).length;
-      const draftTags = Array.from(new Set((studentLogbookDraft.match(/#[^\s#]+/g) || []).map((tag) => tag.toLowerCase())));
-      const latestEntry = studentEntries[0] || null;
-      const entriesThisWeek = currentWeekData ? studentEntries.filter((entry) => String(entry.weekId) === currentWeekValue).length : 0;
-      const weeksCovered = new Set(studentEntries.map((entry) => String(entry.weekId ?? 'general'))).size;
-      const averageStudentWords = studentEntries.length ? Math.round(studentEntries.reduce((total, entry) => total + getLogbookEntryWordCount(entry), 0) / studentEntries.length) : 0;
-      const hasStudentFilters = Boolean(normalizedStudentQuery) || studentLogbookWeekFilter !== 'all';
-
-      return (
-          <div className="animate-in fade-in duration-500 space-y-6 max-w-6xl mx-auto">
-              <section className="rounded-[32px] border border-white/10 bg-gradient-to-br from-[#102036] via-[#151520] to-[#22140f] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
-                  <div className="grid gap-4 lg:grid-cols-4">
-                      <div className="lg:col-span-2">
-                          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">Diario de bordo</p>
-                          <h3 className="mt-3 text-3xl font-black text-white">Transforme cada semana em memoria util.</h3>
-                          <p className="mt-3 text-sm leading-relaxed text-gray-300">Seu diario agora salva rascunho, organiza por semana e deixa o historico muito mais facil de consultar.</p>
-                      </div>
-                      <div className="rounded-[24px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Registros</p><p className="mt-4 text-3xl font-black text-white">{studentEntries.length}</p><p className="mt-2 text-xs text-gray-400">historico pessoal</p></div>
-                      <div className="rounded-[24px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Semana atual</p><p className="mt-4 text-3xl font-black text-white">{entriesThisWeek}</p><p className="mt-2 text-xs text-gray-400">{currentWeekData?.weekName || 'semana ativa'}</p></div>
-                      <div className="rounded-[24px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Semanas cobertas</p><p className="mt-4 text-3xl font-black text-white">{weeksCovered}</p><p className="mt-2 text-xs text-gray-400">com registros salvos</p></div>
-                      <div className="rounded-[24px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Media</p><p className="mt-4 text-3xl font-black text-white">{averageStudentWords}</p><p className="mt-2 text-xs text-gray-400">palavras por registro</p></div>
-                  </div>
-              </section>
-              <div className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
-                  <section className="rounded-[30px] border border-white/10 bg-[#151520] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-yellow-200">Novo registro</p><h3 className="mt-2 text-2xl font-black text-white">Escreva o que vale lembrar</h3><p className="mt-3 text-sm leading-relaxed text-gray-400">Registre testes, falhas, aprendizados e proximos passos para a equipe retomar rapido depois.</p></div><div className="inline-flex items-center gap-2 self-start rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-200"><CheckCircle size={14} /> Rascunho salvo automaticamente</div></div>
-                      <form onSubmit={handleLogbookSubmit} className="mt-6 space-y-5">
-                          <div className="rounded-[28px] border border-white/10 bg-black/20 p-4">
-                              <div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-yellow-100">{currentWeekData?.weekName || 'Semana atual'}</span><span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">{draftWordCount} palavras</span><span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">{draftTags.length} hashtag(s)</span></div>
-                              <textarea name="entry" value={studentLogbookDraft} onChange={(e) => setStudentLogbookDraft(e.target.value)} className="mt-4 h-40 w-full resize-none rounded-[24px] border border-white/10 bg-[#0d0d14] p-4 text-white outline-none transition-all placeholder:text-gray-500 focus:border-yellow-500" placeholder="O que aprendemos nesta semana? O que deu errado, como resolvemos e o que precisa acontecer depois?" />
-                              {renderTags(draftTags)}
-                          </div>
-                          <div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Atalhos para destravar a escrita</p><div className="mt-3 flex flex-wrap gap-2">{prompts.map((prompt) => <button key={prompt} type="button" onClick={() => setStudentLogbookDraft((current) => current.trim() ? `${current}\n${prompt}` : prompt)} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-gray-200 transition-all hover:border-yellow-500/30 hover:bg-yellow-500/10 hover:text-yellow-100">{prompt}</button>)}</div></div>
-                          <div className="flex flex-col gap-4 rounded-[26px] border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="text-sm text-gray-400">Dica: use hashtags como <span className="font-semibold text-yellow-200">#teste</span>, <span className="font-semibold text-yellow-200">#erro</span> e <span className="font-semibold text-yellow-200">#ideia</span> para achar temas depois.</div><button type="submit" disabled={!studentLogbookDraft.trim()} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-yellow-500 px-5 py-3 text-sm font-black text-black transition-all hover:bg-yellow-400 disabled:cursor-not-allowed disabled:bg-yellow-500/40 disabled:text-black/60"><Plus size={18} /> Salvar registro</button></div>
-                      </form>
-                  </section>
-                  <aside className="space-y-6"><section className="rounded-[30px] border border-white/10 bg-[#151520] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.2)]"><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">Painel rapido</p><h3 className="mt-2 text-xl font-black text-white">Seu ultimo destaque</h3><p className="mt-3 text-sm leading-relaxed text-gray-400">{latestEntry ? getLogbookEntryPreview(latestEntry, 180) : 'Ainda nao existe nenhum registro salvo. O primeiro texto que voce gravar aparece aqui como destaque.'}</p><div className="mt-5 space-y-3"><div className="rounded-[22px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Ultima atualizacao</p><p className="mt-3 text-lg font-black text-white">{latestEntry ? formatDiaryDate(latestEntry) : 'Sem registros'}</p><p className="mt-2 text-xs text-gray-400">{latestEntry?.weekName || 'Esperando primeiro diario'}</p></div><div className="rounded-[22px] border border-white/10 bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Escreva melhor</p><p className="mt-3 text-sm leading-relaxed text-gray-400">Contexto, decisao e proximo passo costumam gerar registros mais fortes e uteis para revisao.</p></div></div></section></aside>
-              </div>
-              <section className="rounded-[30px] border border-white/10 bg-[#151520] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.2)]">
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-gray-500">Historico filtrado</p><h3 className="mt-2 text-xl font-black text-white">Busque e releia seus registros</h3></div>{hasStudentFilters && <button type="button" onClick={() => { setStudentLogbookSearchQuery(''); setStudentLogbookWeekFilter('all'); }} className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-gray-200 transition-all hover:border-white/20 hover:bg-white/10">Limpar filtros</button>}</div>
-                  <div className="mt-5 grid gap-4 xl:grid-cols-[1.6fr_0.9fr]"><div className="relative"><Search size={18} className="absolute left-4 top-3.5 text-gray-500" /><input type="text" placeholder="Buscar por texto, semana ou hashtag..." value={studentLogbookSearchQuery} onChange={(e) => setStudentLogbookSearchQuery(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black/20 p-3 pl-12 text-white outline-none focus:border-yellow-500" /></div><select value={studentLogbookWeekFilter} onChange={(e) => setStudentLogbookWeekFilter(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none focus:border-yellow-500">{buildLogbookWeekOptions(studentEntries).map((option) => <option key={option.value} value={option.value} className="bg-[#0f0f17]">{option.label}</option>)}</select></div>
-              </section>
-              {renderEntries(filteredEntries, 'Nenhum registro encontrado', hasStudentFilters ? 'Nenhum item combinou com os filtros atuais. Ajuste a busca ou volte para todas as semanas.' : 'Nenhum registro ainda. Comece escrevendo o que aconteceu nesta semana.')}
-          </div>
-      );
+  const roundsViewProps = {
+      rounds,
+      missionsList,
+      attachments,
+      activeCommandCode,
+      scoreHistory,
+      robotSubTab,
+      setRobotSubTab,
+      activeTimer,
+      timerDisplay,
+      roundFormValues,
+      FULL_ROUND_TIME_KEY,
+      FULL_ROUND_SCORE_KEY,
+      FULL_ROUND_TIMER_ID,
+      setRoundFormValues,
+      toggleTimer,
+      openNewRoundModal,
+      openEditRoundModal,
+      openMissionForm,
+      openPitStopModal,
+      handleSavePracticeScore,
+      handleDeleteRound,
+      handleSaveFullRoundRun,
+      handleSaveRoundRun,
+      ScoreEvolutionChart,
+      RobotRoundsPanel,
+      LazyPanelFallback
   };
 
-  const LogbookView = () => {
-      return <DiaryWorkspaceView />;
-/*
-
-      const currentWeekValue = String(currentWeekData?.id || 'current');
-      const promptSuggestions = [
-          'Hoje eu testei...',
-          'O principal aprendizado foi...',
-          'O que deu errado foi...',
-          'Na proxima semana quero melhorar...',
-          'Evidencia importante: ...'
-      ];
-
-      const formatDiaryDate = (entry, includeTime = false) => getLogbookEntryDate(entry).toLocaleDateString(
-          'pt-BR',
-          includeTime
-              ? { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }
-              : { day: '2-digit', month: 'long', year: 'numeric' }
-      );
-
-      const renderTagRow = (tags) => {
-          if (!tags.length) return null;
-
-          return (
-              <div className="mt-4 flex flex-wrap gap-2">
-                  {tags.map((tag) => (
-                      <span key={tag} className="rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-yellow-100">
-                          {tag}
-                      </span>
-                  ))}
-              </div>
-          );
-      };
-
-      const renderDiaryEntryCard = (entry, { showStudentName = false } = {}) => {
-          const tags = getLogbookEntryTags(entry);
-          const wordCount = getLogbookEntryWordCount(entry);
-          const readMinutes = Math.max(1, Math.ceil(wordCount / 120));
-          const timeLabel = formatDiaryDate(entry, true).split(',').slice(-1)[0]?.trim() || 'Horario';
-
-          return (
-              <article key={entry.id} className="group relative overflow-hidden rounded-[28px] border border-white/10 bg-[#151520] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.22)] transition-all hover:border-white/20 hover:bg-[#181825]">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,0.08),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.08),transparent_26%)] pointer-events-none"></div>
-                  <div className="relative z-10">
-                      <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                  <span className="rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-yellow-100">
-                                      {entry.weekName || `Semana ${entry.weekId || 'Geral'}`}
-                                  </span>
-                                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">
-                                      {wordCount} palavras
-                                  </span>
-                                  <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400">
-                                      {readMinutes} min leitura
-                                  </span>
-                              </div>
-
-                              <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-gray-400">
-                                  {showStudentName && (
-                                      <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-gray-200">
-                                          <UserCircle size={12} /> {entry.studentName}
-                                      </span>
-                                  )}
-                                  <span className="inline-flex items-center gap-2">
-                                      <Calendar size={12} className="text-yellow-400" /> {formatDiaryDate(entry)}
-                                  </span>
-                                  <span className="inline-flex items-center gap-2">
-                                      <Clock size={12} className="text-cyan-400" /> {timeLabel}
-                                  </span>
-                              </div>
-                          </div>
-
-                          <button onClick={() => handleDeleteLogbookEntry(entry)} className="rounded-2xl border border-white/10 bg-black/20 p-3 text-gray-400 transition-all hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300" title="Excluir Registro">
-                              <Trash2 size={15} />
-                          </button>
-                      </div>
-
-                      <p className="mt-5 whitespace-pre-wrap text-sm leading-relaxed text-gray-200">{entry.text}</p>
-                      {renderTagRow(tags)}
-                  </div>
-              </article>
-          );
-      };
-
-      const renderDiaryGroups = (groups, emptyTitle, emptyDetail, options = {}) => {
-          if (groups.length === 0) {
-              return (
-                  <div className="rounded-[30px] border border-dashed border-white/10 bg-[#151520] p-10 text-center">
-                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[20px] border border-white/10 bg-white/5">
-                          <BookOpen size={28} className="text-yellow-300" />
-                      </div>
-                      <h3 className="mt-5 text-2xl font-black text-white">{emptyTitle}</h3>
-                      <p className="mt-3 text-sm leading-relaxed text-gray-400">{emptyDetail}</p>
-                  </div>
-              );
-          }
-
-          return (
-              <div className="space-y-8">
-                  {groups.map((group) => (
-                      <section key={group.key} className="space-y-4">
-                          <div className="flex items-end justify-between gap-4">
-                              <div>
-                                  <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Bloco semanal</p>
-                                  <h3 className="mt-2 text-xl font-black text-white">{group.weekName}</h3>
-                              </div>
-                              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">
-                                  {group.entries.length} registro(s)
-                              </span>
-                          </div>
-
-                          <div className="grid gap-4 xl:grid-cols-2">
-                              {group.entries.map((entry) => renderDiaryEntryCard(entry, options))}
-                          </div>
-                      </section>
-                  ))}
-              </div>
-          );
-      };
-
-      // --- VISÃO DO TÉCNICO ---
-      if (isAdmin) {
-          const entriesForSelectedStudent = adminLogbookStudentId
-              ? logbookEntries.filter(entry => {
-                  const pathParts = entry.refPath.split('/');
-                  // O caminho é students/STUDENT_ID/logbook/ENTRY_ID
-                  return pathParts.length > 1 && pathParts[1] === adminLogbookStudentId;
-              })
-              : [];
-          
-          const filteredEntries = adminLogbookSearchQuery
-              ? entriesForSelectedStudent.filter(entry => 
-                  [entry.text, entry.weekName].filter(Boolean).join(' ').toLowerCase().includes(adminLogbookSearchQuery.toLowerCase())
-                )
-              : entriesForSelectedStudent;
-          
-          const selectedStudent = students.find(s => s.id === adminLogbookStudentId);
-          const teamEntries = sortLogbookEntries(logbookEntries);
-          const teamCurrentWeekEntries = currentWeekData ? teamEntries.filter((entry) => String(entry.weekId) === currentWeekValue).length : 0;
-          const studentCards = students.map((student) => {
-              const totalEntries = teamEntries.filter((entry) => getLogbookStudentId(entry) === student.id).length;
-              const lastEntry = teamEntries.find((entry) => getLogbookStudentId(entry) === student.id) || null;
-              return { ...student, totalEntries, lastEntry };
-          });
-          const weekFilteredEntries = adminLogbookWeekFilter === 'all'
-              ? filteredEntries
-              : filteredEntries.filter((entry) => String(entry.weekId) === adminLogbookWeekFilter);
-          const groupedEntries = groupLogbookEntriesByWeek(weekFilteredEntries);
-          const adminWeekOptions = buildLogbookWeekOptions(entriesForSelectedStudent);
-
-          return (
-              <div className="animate-in fade-in duration-500 space-y-6 max-w-7xl mx-auto">
-                  <div className="relative overflow-hidden rounded-[30px] border border-white/10 bg-gradient-to-br from-[#2b1d13] via-[#151520] to-[#101018] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
-                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,0.16),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.12),transparent_24%)] pointer-events-none"></div>
-                      <div className="relative z-10 grid gap-4 md:grid-cols-4">
-                          <div className="md:col-span-2">
-                              <p className="text-[10px] uppercase tracking-[0.2em] text-yellow-200 font-bold">Leitura do tecnico</p>
-                              <h3 className="mt-3 text-2xl font-black text-white">Diario da equipe com foco em volume, frequencia e historico.</h3>
-                              <p className="mt-3 text-sm text-gray-300">Selecione um aluno para ver a memoria dele e acompanhe quem esta registrando a temporada com consistencia.</p>
-                          </div>
-                          <div className="rounded-[22px] border border-white/10 bg-black/20 p-4">
-                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Registros totais</p>
-                              <p className="mt-4 text-3xl font-black text-white">{teamEntries.length}</p>
-                              <p className="mt-2 text-xs text-gray-400">memoria consolidada</p>
-                          </div>
-                          <div className="rounded-[22px] border border-white/10 bg-black/20 p-4">
-                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Semana atual</p>
-                              <p className="mt-4 text-3xl font-black text-white">{teamCurrentWeekEntries}</p>
-                              <p className="mt-2 text-xs text-gray-400">{currentWeekData?.weekName || 'semana ativa'}</p>
-                          </div>
-                      </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                  <div className="lg:col-span-1 bg-[#151520] border border-white/10 rounded-[28px] p-4 h-fit shadow-[0_18px_50px_rgba(0,0,0,0.2)]">
-                      <h3 className="text-base font-bold text-white flex items-center gap-2 mb-4 border-b border-white/10 pb-3">
-                          <Users size={16}/> Diários da Equipe
-                      </h3>
-                      <div className="relative mb-4">
-                          <Search size={16} className="absolute left-4 top-3.5 text-gray-500" />
-                          <input
-                              type="text"
-                              value={adminLogbookStudentQuery}
-                              onChange={(e) => setAdminLogbookStudentQuery(e.target.value)}
-                              placeholder="Buscar aluno..."
-                              className="w-full bg-black/20 border border-white/10 rounded-2xl p-3 pl-11 text-sm text-white focus:border-yellow-500 outline-none"
-                          />
-                      </div>
-                      <div className="space-y-2 max-h-[680px] overflow-y-auto custom-scrollbar pr-1">
-                          {studentCards.map(student => (
-                              <button 
-                                  key={student.id} 
-                                  onClick={() => setAdminLogbookStudentId(student.id)}
-                                  className={`w-full text-left p-3 rounded-2xl transition-colors text-sm ${adminLogbookStudentId === student.id ? 'bg-yellow-500/15 border border-yellow-500/30 text-white shadow-[0_10px_30px_rgba(234,179,8,0.12)]' : 'bg-black/30 border border-white/5 hover:bg-white/10 text-white'}`}
-                              >
-                                  <div className="flex items-center gap-3">
-                                      <div className={`p-1 rounded-full border ${student.avatarType === 'mech2' ? 'border-fuchsia-500' : 'border-orange-500'}`}>
-                                          {student.avatarImage ? (
-                                             <img src={student.avatarImage} alt="Avatar" className="w-6 h-6 rounded-full object-cover" />
-                                         ) : (
-                                             <UserCircle size={20} className="text-gray-500" />
-                                         )}
-                                      </div>
-                                      <div className="min-w-0">
-                                          <p className="font-bold truncate">{student.name}</p>
-                                          <p className="text-[10px] text-gray-400 mt-1">{student.totalEntries} registro(s){student.lastEntry ? ` • ${formatDiaryDate(student.lastEntry)}` : ''}</p>
-                                      </div>
-                                  </div>
-                              </button>
-                          ))}
-                      </div>
-                  </div>
-
-                  <div className="lg:col-span-3">
-                      {adminLogbookStudentId && (
-                          <div className="relative mb-6">
-                              <Search size={18} className="absolute left-4 top-3.5 text-gray-500" />
-                              <input 
-                                  type="text"
-                                  placeholder={`Buscar no diário de ${selectedStudent?.name}...`}
-                                  value={adminLogbookSearchQuery}
-                                  onChange={(e) => setAdminLogbookSearchQuery(e.target.value)}
-                                  className="w-full bg-[#151520] border border-white/10 rounded-xl p-3 pl-12 text-white focus:border-yellow-500 outline-none"
-                              />
-                          </div>
-                      )}
-                      {!adminLogbookStudentId ? (
-                          <div className="h-full min-h-[400px] flex items-center justify-center bg-[#151520] border-2 border-dashed border-white/10 rounded-2xl p-6 text-center">
-                              <div>
-                                  <BookOpen size={48} className="text-gray-600 mx-auto mb-4"/>
-                                  <p className="text-gray-400 font-bold">Selecione um aluno à esquerda</p>
-                                  <p className="text-sm text-gray-500">para visualizar seu diário de bordo individual.</p>
-                              </div>
-                          </div>
-                      ) : (
-                          <div className="relative border-l border-white/10 ml-4 space-y-8 pl-8">
-                              {filteredEntries.length === 0 && (
-                                  <div className="text-gray-500 italic">
-                                      Nenhum registro para <span className="font-bold">{selectedStudent?.name}</span> ainda.
-                                  </div>
-                              )}
-                              {filteredEntries.map(entry => (
-                                  <div key={entry.id} className="relative group">
-                                      <div className="absolute -left-[39px] top-0 w-5 h-5 rounded-full bg-[#151520] border-2 border-yellow-500 flex items-center justify-center"><div className="w-2 h-2 bg-yellow-500 rounded-full"></div></div>
-                                      <div className="bg-black/40 border border-white/5 p-6 rounded-xl hover:bg-white/5 transition-all">
-                                          <div className="flex justify-between items-start mb-3">
-                                              <div className="flex items-center gap-3">
-                                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm bg-blue-600 text-white`}>{entry.studentName.charAt(0)}</div>
-                                                  <div>
-                                                      <span className="text-white font-bold text-sm block">{entry.studentName}</span>
-                                                      <span className="text-xs text-gray-500 flex items-center gap-1"><Calendar size={10}/> {entry.weekName || "Semana Geral"}<span className="mx-1">•</span><Timer size={10}/> {new Date(entry.date).toLocaleDateString()}</span>
-                                                  </div>
-                                              </div>
-                                          </div>
-                                          <button onClick={() => handleDeleteLogbookEntry(entry)} className="absolute top-4 right-4 text-gray-600 hover:text-red-500 p-2 transition-colors" title="Excluir Registro"><Trash2 size={16} /></button>
-                                          <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">{entry.text}</p>
-                                      </div>
-                                  </div>
-                              ))}
-                          </div>
-                      )}
-                  </div>
-              </div>
-          );
-      }
-
-      // --- Lógica de filtro para o aluno ---
-      const filteredEntries = searchTerm
-          ? logbookEntries.filter(entry => 
-              entry.text.toLowerCase().includes(searchTerm.toLowerCase())
-            )
-          : logbookEntries;
-
-      // --- VISÃO DO ALUNO (Permanece a mesma) ---
-      return (
-          <div className="animate-in fade-in duration-500 max-w-4xl mx-auto">
-              <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 mb-8">
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2 mb-4"><Book className="text-yellow-500"/> Diário de Bordo Semanal</h3>
-                  <p className="text-gray-400 text-sm mb-4">Registrando aprendizados da <strong className="text-yellow-500">{currentWeekData?.weekName || "Semana Atual"}</strong></p>
-                  <form onSubmit={handleLogbookSubmit}>
-                      <textarea name="entry" className="w-full bg-black/50 border border-white/20 rounded-xl p-4 text-white focus:border-yellow-500 outline-none h-32 resize-none mb-4" placeholder="O que aprendemos nesta semana? O que deu errado e como resolvemos?"></textarea>
-                      <button className="bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-3 px-6 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-yellow-900/20"><Plus size={18}/> Salvar Registro da Semana</button>
-                  </form>
-              </div>
-              <div className="relative mb-6">
-                  <Search size={18} className="absolute left-4 top-3.5 text-gray-500" />
-                  <input 
-                      type="text"
-                      placeholder="Buscar nos meus registros..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full bg-[#151520] border border-white/10 rounded-xl p-3 pl-12 text-white focus:border-yellow-500 outline-none"
-                  />
-              </div>
-              <div className="relative border-l border-white/10 ml-4 space-y-8 pl-8">
-                  {filteredEntries.length === 0 && <p className="text-gray-500 italic">{searchTerm ? 'Nenhum registro encontrado.' : 'Nenhum registro ainda. Comece o diário!'}</p>}
-                  {filteredEntries.map(entry => (
-                      <div key={entry.id} className="relative group">
-                          <div className="absolute -left-[39px] top-0 w-5 h-5 rounded-full bg-[#151520] border-2 border-yellow-500 flex items-center justify-center"><div className="w-2 h-2 bg-yellow-500 rounded-full"></div></div>
-                          <div className="bg-black/40 border border-white/5 p-6 rounded-xl hover:bg-white/5 transition-all">
-                              <div className="flex justify-between items-start mb-3">
-                                  <div className="flex items-center gap-3">
-                                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm bg-blue-600 text-white`}>{entry.studentName.charAt(0)}</div>
-                                      <div>
-                                          <span className="text-white font-bold text-sm block">{entry.studentName}</span>
-                                          <span className="text-xs text-gray-500 flex items-center gap-1"><Calendar size={10}/> {entry.weekName || "Semana Geral"}<span className="mx-1">•</span><Timer size={10}/> {new Date(entry.date).toLocaleDateString()}</span>
-                                      </div>
-                                  </div>
-                              </div>
-                              <button onClick={() => handleDeleteLogbookEntry(entry)} className="absolute top-4 right-4 text-gray-600 hover:text-red-500 p-2 transition-colors" title="Excluir Registro"><Trash2 size={16} /></button>
-                              <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">{entry.text}</p>
-                          </div>
-                      </div>
-                  ))}
-              </div>
-          </div>
-      );
-*/
-  }
-
-  // --- COMPONENTE DE AGENDA ---
-  const AgendaWorkspaceView = () => {
-      const normalizedQuery = agendaSearchQuery.trim().toLowerCase();
-      const matchesTextAndType = (event) => {
-          const matchesType = agendaTypeFilter === 'all' || (event.type || 'Outro') === agendaTypeFilter;
-          const haystack = [event.title, event.description, event.location, event.author]
-              .filter(Boolean)
-              .join(' ')
-              .toLowerCase();
-
-          return matchesType && (!normalizedQuery || haystack.includes(normalizedQuery));
-      };
-
-      const baseAgendaEvents = [...events]
-          .filter(matchesTextAndType)
-          .sort(compareEventsByDate);
-
-      const filteredAgendaEvents = baseAgendaEvents.filter((event) => matchesAgendaScope(event, agendaScopeFilter));
-      const filteredUpcomingEvents = filteredAgendaEvents.filter((event) => getAgendaDayOffset(event.date) >= 0);
-      const filteredPastEvents = filteredAgendaEvents
-          .filter((event) => getAgendaDayOffset(event.date) < 0)
-          .sort((left, right) => compareEventsByDate(right, left));
-
-      const immediateEvents = filteredUpcomingEvents.filter((event) => getAgendaDayOffset(event.date) <= 1);
-      const weekEvents = filteredUpcomingEvents.filter((event) => {
-          const dayOffset = getAgendaDayOffset(event.date);
-          return dayOffset >= 2 && dayOffset <= 7;
-      });
-      const laterEvents = filteredUpcomingEvents.filter((event) => getAgendaDayOffset(event.date) > 7);
-
-      const upcomingMatches = baseAgendaEvents.filter((event) => getAgendaDayOffset(event.date) >= 0);
-      const pastMatches = baseAgendaEvents
-          .filter((event) => getAgendaDayOffset(event.date) < 0)
-          .sort((left, right) => compareEventsByDate(right, left));
-
-      const agendaScopeOptions = [
-          { id: 'all', label: 'Visao completa', count: baseAgendaEvents.length },
-          { id: 'urgent', label: 'Hoje e amanha', count: upcomingMatches.filter((event) => getAgendaDayOffset(event.date) <= 1).length },
-          { id: 'week', label: '7 dias', count: upcomingMatches.filter((event) => getAgendaDayOffset(event.date) <= 7).length },
-          { id: 'upcoming', label: 'Proximos marcos', count: upcomingMatches.length },
-          { id: 'past', label: 'Historico', count: pastMatches.length }
-      ];
-
-      const nextAgendaEvent = filteredUpcomingEvents[0] || upcomingMatches[0] || null;
-      const spotlightHistoryEvent = filteredPastEvents[0] || pastMatches[0] || null;
-      const spotlightEvent = nextAgendaEvent || spotlightHistoryEvent;
-      const spotlightLabel = nextAgendaEvent ? 'Proximo compromisso' : spotlightHistoryEvent ? 'Ultimo registro' : 'Sem compromissos ativos';
-      const highlightedPriorityCount = upcomingMatches.filter((event) => ['alta', 'critica'].includes(getEventPriorityValue(event))).length;
-      const confirmedCount = upcomingMatches.filter((event) => getEventStatusValue(event) === 'confirmado').length;
-      const hasActiveFilters = Boolean(normalizedQuery) || agendaTypeFilter !== 'all' || agendaScopeFilter !== 'all';
-
-      const clearAgendaFilters = () => {
-          setAgendaSearchQuery('');
-          setAgendaTypeFilter('all');
-          setAgendaScopeFilter('all');
-      };
-
-      const renderAgendaCard = (event, { spotlight = false, muted = false } = {}) => {
-          const typeMeta = getEventTypeMeta(event.type);
-          const priorityMeta = getEventPriorityMeta(getEventPriorityValue(event));
-          const statusValue = getEventStatusValue(event);
-          const statusMeta = getEventStatusMeta(statusValue);
-          const canManageEvent = isAdmin || event.author === viewAsStudent?.name;
-          const nextStatusLabel = statusValue === 'planejado'
-              ? 'Confirmar'
-              : statusValue === 'confirmado'
-                  ? 'Concluir'
-                  : 'Reabrir';
-
-          return (
-              <article
-                  key={event.id}
-                  className={`group relative overflow-hidden rounded-[30px] border bg-[#13131d] p-5 md:p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)] transition-all ${spotlight ? 'border-indigo-400/35 shadow-[0_25px_70px_rgba(79,70,229,0.18)]' : 'border-white/10 hover:border-white/20'} ${muted ? 'opacity-80' : ''}`}
-              >
-                  <div className={`absolute inset-0 bg-gradient-to-br ${typeMeta.accent} pointer-events-none opacity-80`}></div>
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_32%)] pointer-events-none"></div>
-
-                  {spotlight && (
-                      <div className="absolute -top-3 left-5 rounded-full border border-yellow-400/30 bg-yellow-400 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-black shadow-lg">
-                          Radar imediato
-                      </div>
-                  )}
-
-                  <div className="relative z-10 flex h-full flex-col gap-5">
-                      <div className="flex items-start justify-between gap-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                              <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${typeMeta.tone}`}>
-                                  {typeMeta.label}
-                              </span>
-                              <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${priorityMeta.tone}`}>
-                                  {priorityMeta.label}
-                              </span>
-                              <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${statusMeta.tone}`}>
-                                  {statusMeta.label}
-                              </span>
-                          </div>
-
-                          {canManageEvent && (
-                              <div className="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                                  <button type="button" onClick={() => setModal({type: 'eventForm', data: event})} className="rounded-xl border border-white/10 bg-black/35 p-2 text-gray-300 hover:bg-white/10 hover:text-white">
-                                      <Pencil size={14}/>
-                                  </button>
-                                  <button type="button" onClick={() => handleDeleteEvent(event.id)} className="rounded-xl border border-white/10 bg-black/35 p-2 text-gray-300 hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300">
-                                      <Trash2 size={14}/>
-                                  </button>
-                              </div>
-                          )}
-                      </div>
-
-                      <div>
-                          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">{getAgendaRelativeLabel(event.date)}</p>
-                          <h3 className="mt-3 text-xl font-black leading-tight text-white">{event.title}</h3>
-                          {event.description && (
-                              <p className="mt-3 text-sm leading-relaxed text-gray-300">{event.description}</p>
-                          )}
-                      </div>
-
-                      <div className="grid gap-3 sm:grid-cols-2">
-                          <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
-                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Data</p>
-                              <div className="mt-2 flex items-center gap-2 text-sm text-white">
-                                  <CalendarDays size={14} className="text-blue-400" />
-                                  {formatAgendaDate(event.date, { weekday: 'short', day: '2-digit', month: 'long' })}
-                              </div>
-                          </div>
-                          <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
-                              <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Horario</p>
-                              <div className="mt-2 flex items-center gap-2 text-sm text-white">
-                                  <Clock size={14} className="text-yellow-400" />
-                                  {event.time || 'A definir'}
-                              </div>
-                          </div>
-                          {event.location && (
-                              <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
-                                  <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Local / Link</p>
-                                  <div className="mt-2 flex items-center gap-2 text-sm text-white">
-                                      <MapPin size={14} className="text-emerald-400" />
-                                      {event.location}
-                                  </div>
-                              </div>
-                          )}
-                          {event.author && (
-                              <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
-                                  <p className="text-[10px] uppercase tracking-[0.16em] text-gray-500 font-bold">Responsavel pelo registro</p>
-                                  <div className="mt-2 flex items-center gap-2 text-sm text-white">
-                                      <UserCircle size={14} className="text-gray-400" />
-                                      {event.author}
-                                  </div>
-                              </div>
-                          )}
-                      </div>
-
-                      {canManageEvent && (
-                          <div className="flex flex-wrap gap-2 border-t border-white/10 pt-4">
-                              <button
-                                  type="button"
-                                  onClick={() => handleCycleEventStatus(event)}
-                                  className="inline-flex items-center gap-2 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-xs font-bold text-cyan-100 transition-all hover:bg-cyan-500 hover:text-white"
-                              >
-                                  <CheckCircle size={14} />
-                                  {nextStatusLabel}
-                              </button>
-                          </div>
-                      )}
-                  </div>
-              </article>
-          );
-      };
-
-      const renderAgendaSection = (title, helper, items, options = {}) => {
-          if (items.length === 0) return null;
-
-          return (
-              <section className="space-y-4">
-                  <div className="flex items-end justify-between gap-4">
-                      <div>
-                          <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">{title}</p>
-                          <h3 className="mt-2 text-xl font-black text-white">{helper}</h3>
-                      </div>
-                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">
-                          {items.length} evento(s)
-                      </span>
-                  </div>
-
-                  <div className="grid gap-4 xl:grid-cols-2">
-                      {items.map((event, index) => renderAgendaCard(event, { spotlight: options.highlightFirst && index === 0, muted: options.muted }))}
-                  </div>
-              </section>
-          );
-      };
-
-      return (
-          <div className="animate-in fade-in duration-500 space-y-8">
-              <section className="relative overflow-hidden rounded-[32px] border border-white/10 bg-gradient-to-br from-[#161b33] via-[#151520] to-[#101018] p-6 md:p-8 shadow-[0_25px_80px_rgba(0,0,0,0.28)]">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.20),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(34,197,94,0.12),transparent_28%)] pointer-events-none"></div>
-                  <div className="relative z-10 grid gap-6 xl:grid-cols-[1.15fr,0.85fr]">
-                      <div>
-                          <span className="inline-flex items-center gap-2 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-200">
-                              <CalendarDays size={12} /> Radar da equipe
-                          </span>
-                          <h2 className="mt-4 text-3xl font-black leading-tight text-white">Agenda da equipe em modo radar: o que vem agora, o que merece preparo e o que ja virou historia.</h2>
-                          <p className="mt-4 max-w-3xl text-sm leading-relaxed text-gray-300">
-                              Use esta visao para bater o olho e entender o que pede acao rapida, o que ja esta perto e o que pode ser organizado com mais calma pela equipe.
-                          </p>
-
-                          <div className="mt-6 flex flex-wrap gap-3">
-                              <button onClick={() => setModal({type: 'eventForm'})} className="inline-flex items-center gap-2 rounded-2xl border border-indigo-500/20 bg-indigo-500/10 px-4 py-3 text-xs font-bold text-indigo-100 transition-all hover:bg-indigo-500 hover:text-white">
-                                  <Plus size={16}/> Novo evento
-                              </button>
-                              <button onClick={() => setAgendaScopeFilter('urgent')} className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs font-bold text-gray-200 transition-all hover:bg-white/10 hover:text-white">
-                                  <AlertTriangle size={16}/> So urgentes
-                              </button>
-                          </div>
-
-                          <div className="mt-6 rounded-[24px] border border-white/10 bg-black/20 p-4">
-                              <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">{spotlightLabel}</p>
-                              {spotlightEvent ? (
-                                  <div className="mt-3">
-                                      <p className="text-lg font-black text-white">{spotlightEvent.title}</p>
-                                      <p className="mt-2 text-sm text-gray-300">
-                                          {getAgendaRelativeLabel(spotlightEvent.date)} • {formatAgendaDate(spotlightEvent.date, { day: '2-digit', month: 'long' })} • {spotlightEvent.time || 'Horario a definir'}
-                                      </p>
-                                  </div>
-                              ) : (
-                                  <p className="mt-3 text-sm text-gray-400">Cadastre o proximo evento para transformar a agenda num radar real da equipe.</p>
-                              )}
-                          </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                          {[
-                              { label: 'Missao relampago', value: immediateEvents.length, helper: 'hoje e amanha', tone: 'border-red-500/20 bg-red-500/10 text-red-100', icon: <AlertTriangle size={14} /> },
-                              { label: 'Semana em foco', value: upcomingMatches.filter((event) => getAgendaDayOffset(event.date) <= 7).length, helper: 'janela curta', tone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-100', icon: <CalendarDays size={14} /> },
-                              { label: 'Alertas quentes', value: highlightedPriorityCount, helper: 'pedem preparo', tone: 'border-orange-500/20 bg-orange-500/10 text-orange-100', icon: <Flag size={14} /> },
-                              { label: 'Ja confirmados', value: confirmedCount, helper: 'prontos para acontecer', tone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100', icon: <CheckCircle size={14} /> }
-                          ].map((metric) => (
-                              <div key={metric.label} className="rounded-[24px] border border-white/10 bg-black/25 p-4">
-                                  <div className="flex items-center justify-between gap-3">
-                                      <span className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">{metric.label}</span>
-                                      <span className={`rounded-xl border px-2 py-1 ${metric.tone}`}>{metric.icon}</span>
-                                  </div>
-                                  <p className="mt-4 text-3xl font-black text-white">{metric.value}</p>
-                                  <p className="mt-2 text-xs text-gray-400">{metric.helper}</p>
-                              </div>
-                          ))}
-                      </div>
-                  </div>
-              </section>
-
-              <section className="rounded-[30px] border border-white/10 bg-[#151520] p-5 md:p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
-                  <div className="grid gap-4 xl:grid-cols-[1fr,260px]">
-                      <div className="relative">
-                          <Search size={18} className="absolute left-4 top-3.5 text-gray-500" />
-                          <input
-                              type="text"
-                              value={agendaSearchQuery}
-                              onChange={(e) => setAgendaSearchQuery(e.target.value)}
-                              placeholder="Buscar por titulo, local, descricao ou autor..."
-                              className="w-full rounded-2xl border border-white/10 bg-black/20 p-3 pl-12 text-sm text-white outline-none transition-all focus:border-indigo-400"
-                          />
-                      </div>
-
-                      <select
-                          value={agendaTypeFilter}
-                          onChange={(e) => setAgendaTypeFilter(e.target.value)}
-                          className="w-full rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-white outline-none transition-all focus:border-indigo-400"
-                      >
-                          <option value="all">Todos os tipos</option>
-                          {EVENT_TYPE_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>{option.label}</option>
-                          ))}
-                      </select>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                      {agendaScopeOptions.map((option) => (
-                          <button
-                              key={option.id}
-                              type="button"
-                              onClick={() => setAgendaScopeFilter(option.id)}
-                              className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-xs font-bold transition-all ${agendaScopeFilter === option.id ? 'border-indigo-500/30 bg-indigo-500 text-white shadow-lg shadow-indigo-900/20' : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white'}`}
-                          >
-                              {option.label}
-                              <span className="inline-flex min-w-[22px] items-center justify-center rounded-full bg-black/20 px-2 py-0.5 text-[10px] font-black">
-                                  {option.count}
-                              </span>
-                          </button>
-                      ))}
-
-                      {hasActiveFilters && (
-                          <button
-                              type="button"
-                              onClick={clearAgendaFilters}
-                              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs font-bold text-gray-300 transition-all hover:bg-white/10 hover:text-white"
-                          >
-                              <XCircle size={14} /> Limpar filtros
-                          </button>
-                      )}
-                  </div>
-              </section>
-
-              {filteredUpcomingEvents.length === 0 && filteredPastEvents.length === 0 ? (
-                  <div className="rounded-[30px] border border-dashed border-white/10 bg-[#151520] p-10 text-center shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
-                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[20px] border border-white/10 bg-white/5">
-                          <CalendarDays size={26} className="text-indigo-300" />
-                      </div>
-                      <h3 className="mt-5 text-2xl font-black text-white">Nenhum compromisso encontrado.</h3>
-                      <p className="mt-3 text-sm leading-relaxed text-gray-400">
-                          {hasActiveFilters ? 'Os filtros atuais nao encontraram eventos. Limpe a busca ou troque o recorte.' : 'Cadastre o primeiro evento para transformar a agenda num painel vivo da equipe.'}
-                      </p>
-                  </div>
-              ) : (
-                  <div className="space-y-8">
-                      {renderAgendaSection('Agora ou proximo', 'Eventos que pedem reacao rapida', immediateEvents, { highlightFirst: true })}
-                      {renderAgendaSection('Esta semana', 'Janela curta para preparar sem correria', weekEvents)}
-                      {renderAgendaSection('Mais pra frente', 'Marcos que podem ser organizados com calma', laterEvents)}
-
-                      {(agendaScopeFilter === 'all' || agendaScopeFilter === 'past') && filteredPastEvents.length > 0 && (
-                          <section className="space-y-4 border-t border-white/10 pt-8">
-                              <div className="flex items-end justify-between gap-4">
-                                  <div>
-                                      <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Memoria da equipe</p>
-                                      <h3 className="mt-2 text-xl font-black text-white">Eventos que ja passaram e viraram historico</h3>
-                                  </div>
-                                  <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">
-                                      {filteredPastEvents.length} registro(s)
-                                  </span>
-                              </div>
-
-                              <div className="grid gap-4 xl:grid-cols-2">
-                                  {filteredPastEvents.map((event) => renderAgendaCard(event, { muted: true }))}
-                              </div>
-                          </section>
-                      )}
-                  </div>
-              )}
-          </div>
-      );
+  const kanbanViewProps = {
+      assignTaskToStudent,
+      currentWeekData,
+      db,
+      handleAddTask,
+      isAdmin,
+      joinTask,
+      leaveTask,
+      localTodayObj,
+      localTodayStart,
+      localTodayStr,
+      moveTask,
+      removeTask,
+      students,
+      takeoverTask,
+      tasks,
+      viewAsStudent,
+      parseLocalDateValue,
+      getLocalYYYYMMDD
   };
 
-  const AgendaView = () => {
-      return <AgendaWorkspaceView />;
-      const todayDate = new Date().toISOString().split('T')[0];
-      
-      // Separa entre próximos eventos e eventos que já passaram
-      const upcomingEvents = events.filter(e => e.date >= todayDate).sort((a,b) => new Date(a.date) - new Date(b.date));
-      const pastEvents = events.filter(e => e.date < todayDate).sort((a,b) => new Date(b.date) - new Date(a.date));
+  const logbookViewProps = {
+      currentWeekData,
+      isAdmin,
+      adminLogbookStudentQuery,
+      setAdminLogbookStudentQuery,
+      adminLogbookSearchQuery,
+      setAdminLogbookSearchQuery,
+      adminLogbookWeekFilter,
+      setAdminLogbookWeekFilter,
+      adminLogbookStudentId,
+      setAdminLogbookStudentId,
+      studentLogbookSearchQuery,
+      setStudentLogbookSearchQuery,
+      studentLogbookWeekFilter,
+      setStudentLogbookWeekFilter,
+      studentLogbookDraft,
+      setStudentLogbookDraft,
+      logbookEntries,
+      students,
+      groupLogbookEntriesByWeek,
+      getLogbookEntryDate,
+      getLogbookEntryTags,
+      getLogbookEntryWordCount,
+      getLogbookStudentId,
+      getLogbookEntryPreview,
+      sortLogbookEntries,
+      buildLogbookWeekOptions,
+      handleDeleteLogbookEntry,
+      handleLogbookSubmit
+  };
 
-      const getTypeColor = (type) => {
-          if(type === 'Especialista') return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
-          if(type === 'Visita') return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
-          if(type === 'Reunião') return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
-          return 'bg-gray-500/10 text-gray-400 border-gray-500/20';
-      }
+  const agendaViewProps = {
+      events,
+      agendaSearchQuery,
+      setAgendaSearchQuery,
+      agendaTypeFilter,
+      setAgendaTypeFilter,
+      agendaScopeFilter,
+      setAgendaScopeFilter,
+      compareEventsByDate,
+      matchesAgendaScope,
+      getAgendaDayOffset,
+      getEventPriorityValue,
+      getEventPriorityMeta,
+      getEventStatusValue,
+      getEventStatusMeta,
+      getEventTypeMeta,
+      getAgendaRelativeLabel,
+      formatAgendaDate,
+      isAdmin,
+      viewAsStudent,
+      setModal,
+      handleDeleteEvent,
+      handleCycleEventStatus,
+      EVENT_TYPE_OPTIONS
+  };
 
-      return (
-          <div className="animate-in fade-in duration-500 space-y-8">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-[#151520] p-6 rounded-2xl border border-white/10 gap-4">
-                  <div>
-                      <h2 className="text-2xl font-bold text-white flex items-center gap-2"><CalendarDays className="text-blue-500"/> Agenda da Equipe</h2>
-                      <p className="text-gray-400 text-sm mt-1">Acompanhe visitas, encontros com especialistas e eventos importantes.</p>
-                  </div>
-                  <button onClick={() => setModal({type: 'eventForm'})} className="shrink-0 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg shadow-blue-900/20 transition-all">
-                      <Plus size={16}/> Novo Evento
-                  </button>
-              </div>
-
-              <div className="space-y-4">
-                  <h3 className="text-gray-400 font-bold uppercase text-xs flex items-center gap-2 ml-2">Próximos Eventos</h3>
-                  {upcomingEvents.length === 0 ? (
-                      <div className="bg-[#151520] border border-dashed border-white/10 p-8 rounded-xl text-center text-gray-500 italic">Nenhum evento agendado para o futuro.</div>
-                  ) : (
-                      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {upcomingEvents.map((ev, index) => (
-                              <div key={ev.id} className={`bg-[#151520] border ${index === 0 ? 'border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.15)] md:scale-[1.02] z-10' : 'border-white/10'} p-5 rounded-xl hover:border-white/30 transition-all group relative`}>
-                                  {index === 0 && (
-                                      <div className="absolute -top-3 left-4 bg-yellow-500 text-black text-[10px] font-black uppercase px-2 py-0.5 rounded shadow-md flex items-center gap-1">
-                                          <AlertTriangle size={10}/> Próximo
-                                      </div>
-                                  )}
-                                  {(isAdmin || ev.author === viewAsStudent?.name) && (
-                                      <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <button onClick={() => setModal({type: 'eventForm', data: ev})} className="text-gray-400 hover:text-white p-1.5 bg-black/50 rounded-lg backdrop-blur-sm"><Pencil size={14}/></button>
-                                          <button onClick={() => handleDeleteEvent(ev.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/50 rounded-lg backdrop-blur-sm"><Trash2 size={14}/></button>
-                                      </div>
-                                  )}
-                                  <div className="flex items-center gap-2 mb-3 flex-wrap">
-                                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${getTypeColor(ev.type)}`}>{ev.type}</span>
-                                      <span className="text-xs text-gray-300 flex items-center gap-1 font-mono"><Calendar size={12} className="text-blue-500"/> {ev.date.split('-').reverse().join('/')}</span>
-                                      {ev.author && <span className="text-[10px] text-gray-500 flex items-center gap-1 ml-1 border-l border-white/10 pl-2"><UserCircle size={10}/> {ev.author}</span>}
-                                  </div>
-                                  <h4 className="text-white font-bold text-lg mb-2 leading-tight pr-12">{ev.title}</h4>
-                                  {ev.description && <p className="text-sm text-gray-400 mb-4 line-clamp-2">{ev.description}</p>}
-                                  <div className="flex flex-col gap-1.5 pt-3 border-t border-white/5 mt-auto">
-                                      <div className="flex items-center gap-2 text-xs text-gray-300"><Clock size={14} className="text-yellow-500"/> {ev.time}</div>
-                                      {ev.location && <div className="flex items-center gap-2 text-xs text-gray-300"><MapPin size={14} className="text-green-500"/> {ev.location}</div>}
-                                  </div>
-                              </div>
-                          ))}
-                      </div>
-                  )}
-              </div>
-
-              {pastEvents.length > 0 && (
-                  <div className="space-y-4 pt-8 border-t border-white/10 opacity-70">
-                      <h3 className="text-gray-500 font-bold uppercase text-xs flex items-center gap-2 ml-2">Eventos Passados</h3>
-                      <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-4">
-                           {pastEvents.map(ev => (
-                              <div key={ev.id} className="bg-black/40 border border-white/5 p-4 rounded-xl relative group">
-                                      {(isAdmin || ev.author === viewAsStudent?.name) && (
-                                      <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <button onClick={() => handleDeleteEvent(ev.id)} className="text-gray-500 hover:text-red-500 p-1 bg-black/80 rounded"><Trash2 size={12}/></button>
-                                      </div>
-                                  )}
-                                  <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-gray-500 text-xs flex items-center gap-1"><Calendar size={10}/> {ev.date.split('-').reverse().join('/')}</span>
-                                  </div>
-                                  <h4 className="text-gray-400 font-bold text-sm mb-1">{ev.title}</h4>
-                                      <span className="text-[10px] text-gray-600">{ev.type} {ev.location && `• ${ev.location}`} {ev.author && `• Por: ${ev.author}`}</span>
-                              </div>
-                           ))}
-                      </div>
-                  </div>
-              )}
-          </div>
-      )
-  }
-
-
-// --- TELA DE LOGIN (Se não tiver usuário logado) ---
-  if (!currentUser) {
-      return (
-          <div className="newgears-login-shell min-h-screen text-white flex items-center justify-center p-4 relative overflow-hidden">
-              {/* Fundo decorativo */}
-              <div className="newgears-orb newgears-orb--cyan"></div>
-              <div className="newgears-orb newgears-orb--pink"></div>
-              <div className="newgears-orb newgears-orb--yellow"></div>
-
-              <div className="newgears-login-card p-8 w-full max-w-md shadow-2xl relative z-10 animate-in zoom-in-95 duration-500">
-                  <div className="text-center mb-8 mt-2">
- <div className="w-24 h-24 mx-auto mb-6 flex items-center justify-center rounded-[28px] border border-white/12 bg-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.2)]">
-    <LogoNewGears />
-</div>
-                      <span className="inline-flex items-center gap-2 rounded-full border border-yellow-300/20 bg-yellow-300/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-yellow-100">Equipe FLL em missao</span>
-                      <h1 className="text-3xl font-black tracking-tight mt-4">Base da Equipe New Gears</h1>
-                      <p className="text-slate-300/75 text-sm mt-3 leading-relaxed">Entre para acompanhar desafios, evoluir no XP e viver a temporada com cara de jogo, robo e torneio.</p>
-                  </div>
-
-                  <form onSubmit={handleLogin} className="space-y-5">
-                      <div>
-                          <label className="text-[10px] text-slate-300/60 uppercase font-black mb-1.5 block tracking-wider">Seu usuario</label>
-                          <div className="relative">
-                              <UserCircle className="absolute left-3 top-3.5 text-slate-400" size={18}/>
-                              <input 
-                                  type="text" 
-                                  value={loginUser} 
-                                  onChange={(e) => setLoginUser(e.target.value)} 
-                                  className="newgears-login-input w-full p-3 pl-10 text-white outline-none transition-all placeholder:text-slate-500 font-medium" 
-                                  placeholder="Ex: tecnico ou ana.fll" 
-                                  autoFocus 
-                              />
-                          </div>
-                      </div>
-                      <div>
-                          <label className="text-[10px] text-slate-300/60 uppercase font-black mb-1.5 block tracking-wider">Senha secreta</label>
-                          <div className="relative">
-                              <Lock className="absolute left-3 top-3.5 text-slate-400" size={18}/>
-                              <input 
-                                  type="password" 
-                                  value={loginPass} 
-                                  onChange={(e) => setLoginPass(e.target.value)} 
-                                  className="newgears-login-input w-full p-3 pl-10 text-white outline-none transition-all placeholder:text-slate-500 font-medium" 
-                                  placeholder="••••••" 
-                              />
-                          </div>
-                      </div>
-
-                      {loginError && (
-                          <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg flex items-center gap-2 animate-in slide-in-from-top-2">
-                              <AlertCircle size={16} className="text-red-500 shrink-0"/>
-                              <p className="text-red-400 text-xs font-bold">{loginError}</p>
-                          </div>
-                      )}
-
-                      <button className="newgears-login-button w-full text-white font-black py-4 mt-2 text-sm uppercase tracking-widest flex items-center justify-center gap-2">
-                          <LogOut size={18} className="rotate-180"/> Entrar na Base
-                      </button>
-                  </form>
-                  
-                  <div className="mt-8 pt-6 border-t border-white/5 text-center">
-                      <p className="text-[11px] text-slate-400/70">Plataforma da equipe para aprender, jogar junto e crescer na temporada.</p>
-                  </div>
-              </div>
-          </div>
-      )
-  }
-
-  // --- PROTEÇÃO DE CARREGAMENTO (LOADING) ---
-  // Só aparece DEPOIS que logou, enquanto baixa os dados
+  // --- PROTEÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DE CARREGAMENTO (LOADING) ---
+  // SÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ aparece DEPOIS que logou, enquanto baixa os dados
   if (currentUser && !currentWeekData) {
       return (
           <div className="newgears-loading-shell min-h-screen flex flex-col items-center justify-center text-white gap-4 px-6 text-center">
@@ -7649,10 +5691,10 @@ const handleFileSelect = (e) => {
       );
   }
 
-  // --- RENDER PRINCIPAL (SÓ CHEGA AQUI SE ESTIVER LOGADO) ---
+  // --- RENDER PRINCIPAL (SÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ CHEGA AQUI SE ESTIVER LOGADO) ---
   return (
     <div className={`newgears-shell min-h-screen text-white selection:bg-yellow-300 selection:text-slate-950 pb-20 relative overflow-hidden ${isLiteMode ? 'newgears-lite-mode' : ''}`}>
-      {/* Estilo da Animação de Fundo */}
+      {/* Estilo da AnimaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de Fundo */}
       <div className="newgears-floating-layer">
         <div className="newgears-orb newgears-orb--cyan"></div>
         <div className="newgears-orb newgears-orb--yellow"></div>
@@ -7662,7 +5704,7 @@ const handleFileSelect = (e) => {
 
       {/* Fundo com o Logo */}
 
-      {/* Conteúdo fica por cima */}
+      {/* ConteÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºdo fica por cima */}
       <div className="newgears-content">
         
         {/* EFEITO DE CONFETES (Fica no topo de tudo, z-index gigante) */}
@@ -7685,7 +5727,7 @@ const handleFileSelect = (e) => {
             </div>
             <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-red-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in slide-in-from-top-4 border-2 border-red-400">
                 <AlertTriangle className="animate-pulse" size={20} />
-                <span className="font-bold text-sm">Sua sessão vai expirar em {logoutCountdown}s</span>
+                <span className="font-bold text-sm">Sua sessÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o vai expirar em {logoutCountdown}s</span>
                 <button className="ml-2 bg-white text-red-600 px-3 py-1 rounded-full text-xs font-black hover:bg-red-100 transition-colors">
                     Continuar Logado
                 </button>
@@ -7751,12 +5793,12 @@ const handleFileSelect = (e) => {
           </Suspense>
         )}
 
-{/* --- MODAL DO TÉCNICO: ENTREGAR BADGES --- */}
+{/* --- MODAL DO TÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°CNICO: ENTREGAR BADGES --- */}
       {isAdmin && badgeStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
           <div className="bg-[#1a1a24] rounded-2xl border border-white/10 p-6 w-full max-w-2xl shadow-2xl relative">
             
-            {/* Botão Fechar */}
+            {/* BotÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o Fechar */}
             <button 
               onClick={() => setBadgeStudent(null)}
               className="absolute top-4 right-4 p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors"
@@ -7764,12 +5806,12 @@ const handleFileSelect = (e) => {
               <X size={20} className="text-white" />
             </button>
 
-            {/* Cabeçalho */}
+            {/* CabeÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§alho */}
             <div className="text-center mb-8">
               <div className="w-16 h-16 bg-yellow-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-yellow-500/20">
                 <Trophy size={32} className="text-yellow-500" />
               </div>
-              <h2 className="text-2xl font-bold text-white">Sala de Troféus</h2>
+              <h2 className="text-2xl font-bold text-white">Sala de TrofÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©us</h2>
               <p className="text-gray-400">Gerenciando conquistas de <span className="text-white font-bold">{badgeStudent.name}</span></p>
             </div>
 
@@ -7781,7 +5823,7 @@ const handleFileSelect = (e) => {
                   <button
                     key={badge.id}
                     onClick={() => toggleBadge(badgeStudent, badge.id)}
-                    /* 👇 MUDANÇA 1: Adicionei a palavra 'group' no começo desta linha 👇 */
+                    /* ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ MUDANÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡A 1: Adicionei a palavra 'group' no comeÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§o desta linha ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ */
                     className={`group relative flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all duration-300 ${
                       hasBadge 
                       ? 'bg-yellow-500/10 border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.2)] scale-105' 
@@ -7800,13 +5842,13 @@ const handleFileSelect = (e) => {
                        </div>
                     )}
 
-                    {/* 👇 MUDANÇA 2: Balãozinho de descrição (Tooltip) 👇 */}
+                    {/* ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ MUDANÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡A 2: BalÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ozinho de descriÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (Tooltip) ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ */}
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-40 bg-gray-900/95 text-gray-200 text-xs text-center p-2 rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none border border-gray-700 shadow-xl backdrop-blur-md">
                         {badge.desc}
-                        {/* Triângulo (setinha) apontando para baixo */}
+                        {/* TriÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ngulo (setinha) apontando para baixo */}
                         <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-700"></div>
                     </div>
-                    {/* ☝️ FIM DO BALÃOZINHO ☝️ */}
+                    {/* ÃƒÆ’Ã‚Â¢Ãƒâ€¹Ã…â€œÃƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â FIM DO BALÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢OZINHO ÃƒÆ’Ã‚Â¢Ãƒâ€¹Ã…â€œÃƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â */}
                   </button>
                 );
               })}
@@ -7815,144 +5857,6 @@ const handleFileSelect = (e) => {
         </div>
       )}
       {/* --- MODAL DE BATERIA DA EQUIPE --- */}
-      {false && showBatteryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 animate-in fade-in backdrop-blur-sm">
-            <div className="bg-[#151520] border border-white/10 rounded-2xl w-full max-w-md p-6 relative shadow-2xl">
-                
-                <button onClick={() => setShowBatteryModal(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white">
-                    <X size={24}/>
-                </button>
-
-                <div className="text-center mb-8">
-                    <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-[0_0_20px_rgba(34,197,94,0.3)]">
-                        <BatteryCharging size={32} className="text-white animate-pulse"/>
-                    </div>
-                    <h3 className="text-2xl font-black text-white italic">COMO ESTÁ SUA BATERIA?</h3>
-                    <p className="text-gray-400 text-sm mt-2">Sua honestidade ajuda a equipe a treinar melhor. <br/>(Vale +2 XP!)</p>
-                </div>
-
-                {/* LÓGICA DE EXIBIÇÃO: TRAVAS DA BATERIA */}
-                {(() => {
-                    const dayOfWeek = new Date().getDay();
-                    const isTrainingDay = dayOfWeek === 1 || dayOfWeek === 3; // 1 = Seg, 3 = Qua
-                    const hasVotedToday = viewAsStudent && teamMoods.some(mood => mood.studentId === viewAsStudent.id);
-
-                    if (viewAsStudent && !isTrainingDay) {
-                        return (
-                            <div className="text-center bg-yellow-500/10 border border-yellow-500/20 p-6 rounded-xl mb-6">
-                                <p className="font-bold text-yellow-500 text-lg">Fora de Treino 🛑</p>
-                                <p className="text-xs text-gray-400 mt-2">A carga da bateria da equipe só pode ser checada nas <strong className="text-gray-300">Segundas</strong> e <strong className="text-gray-300">Quartas</strong>.</p>
-                            </div>
-                        );
-                    }
-
-                    if (viewAsStudent && hasVotedToday) {
-                        return (
-                            <div className="text-center bg-green-500/10 border border-green-500/20 p-6 rounded-xl mb-6 flex flex-col items-center">
-                                <CheckCircle size={32} className="text-green-500 mb-2"/>
-                                <p className="font-bold text-green-500 text-lg">Check-in Concluído!</p>
-                                <p className="text-xs text-gray-400 mt-2">Seus +2 XP já foram creditados. Foco na missão de hoje!</p>
-                            </div>
-                        );
-                    }
-
-                    if (!viewAsStudent) {
-                        return (
-                            <div className="bg-white/5 border border-white/10 p-4 rounded-xl mb-6">
-                                <p className="text-xs text-gray-400 uppercase font-bold tracking-wider mb-3 text-center">Legenda da Bateria (Modo Técnico)</p>
-                                <div className="grid grid-cols-1 gap-2">
-                                    <div className="flex items-center gap-3 p-2 rounded-lg bg-green-500/10 border border-green-500/20">
-                                        <div className="p-1.5 bg-green-500/20 rounded-full"><BatteryFull size={18} className="text-green-500"/></div>
-                                        <div>
-                                            <span className="block font-bold text-green-500 text-xs">100% - Turbo Mode</span>
-                                            <span className="text-[10px] text-gray-400">Tô pronto pra tudo!</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-3 p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                                        <div className="p-1.5 bg-blue-500/20 rounded-full"><BatteryMedium size={18} className="text-blue-500"/></div>
-                                        <div>
-                                            <span className="block font-bold text-blue-500 text-xs">75% - Focado</span>
-                                            <span className="text-[10px] text-gray-400">Estou bem, vamos nessa.</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-3 p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                                        <div className="p-1.5 bg-yellow-500/20 rounded-full"><BatteryLow size={18} className="text-yellow-500"/></div>
-                                        <div>
-                                            <span className="block font-bold text-yellow-500 text-xs">50% - Economia de Energia</span>
-                                            <span className="text-[10px] text-gray-400">Cansado, mas aguento.</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-3 p-2 rounded-lg bg-red-500/10 border border-red-500/20">
-                                        <div className="p-1.5 bg-red-500/20 rounded-full"><BatteryWarning size={18} className="text-red-500"/></div>
-                                        <div>
-                                            <span className="block font-bold text-red-500 text-xs">25% - Bateria Arriada</span>
-                                            <span className="text-[10px] text-gray-400">Preciso de ajuda ou pausa.</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    }
-
-                    return (
-                        <div className="grid grid-cols-1 gap-3">
-                            {/* Opção 100% */}
-                            <button onClick={() => handleMoodSubmit(100)} className="flex items-center gap-4 p-4 rounded-xl bg-green-500/10 border border-green-500/20 hover:bg-green-500 hover:text-black transition-all group text-left">
-                                <div className="p-2 bg-green-500/20 rounded-full group-hover:bg-black/20"><BatteryFull size={24} className="text-green-500 group-hover:text-black"/></div>
-                                <div>
-                                    <span className="block font-bold text-green-500 group-hover:text-black">100% - Turbo Mode</span>
-                                    <span className="text-xs text-gray-400 group-hover:text-black/70">Tô pronto pra tudo!</span>
-                                </div>
-                            </button>
-
-                            {/* Opção 75% */}
-                            <button onClick={() => handleMoodSubmit(75)} className="flex items-center gap-4 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500 hover:text-white transition-all group text-left">
-                                <div className="p-2 bg-blue-500/20 rounded-full group-hover:bg-white/20"><BatteryMedium size={24} className="text-blue-500 group-hover:text-white"/></div>
-                                <div>
-                                    <span className="block font-bold text-blue-500 group-hover:text-white">75% - Focado</span>
-                                    <span className="text-xs text-gray-400 group-hover:text-white/80">Estou bem, vamos nessa.</span>
-                                </div>
-                            </button>
-
-                            {/* Opção 50% */}
-                            <button onClick={() => handleMoodSubmit(50)} className="flex items-center gap-4 p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 hover:bg-yellow-500 hover:text-black transition-all group text-left">
-                                <div className="p-2 bg-yellow-500/20 rounded-full group-hover:bg-black/20"><BatteryLow size={24} className="text-yellow-500 group-hover:text-black"/></div>
-                                <div>
-                                    <span className="block font-bold text-yellow-500 group-hover:text-black">50% - Economia de Energia</span>
-                                    <span className="text-xs text-gray-400 group-hover:text-black/70">Cansado, mas aguento.</span>
-                                </div>
-                            </button>
-
-                            {/* Opção 25% */}
-                            <button onClick={() => handleMoodSubmit(25)} className="flex items-center gap-4 p-4 rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all group text-left">
-                                <div className="p-2 bg-red-500/20 rounded-full group-hover:bg-white/20"><BatteryWarning size={24} className="text-red-500 group-hover:text-white"/></div>
-                                <div>
-                                    <span className="block font-bold text-red-500 group-hover:text-white">25% - Bateria Arriada</span>
-                                    <span className="text-xs text-gray-400 group-hover:text-white/80">Preciso de ajuda ou pausa.</span>
-                                </div>
-                            </button>
-                        </div>
-                    );
-                })()}
-                
-                {/* Quem já votou (Transparência) */}
-                <div className="mt-6 pt-6 border-t border-white/10">
-                    <p className="text-xs text-gray-500 font-bold uppercase mb-3">Quem já fez check-in hoje:</p>
-                    <div className="flex flex-wrap gap-2">
-                        {teamMoods.map((mood, idx) => (
-                            <div key={idx} className="flex items-center gap-1 bg-white/5 px-2 py-1 rounded text-[10px] text-gray-300 border border-white/5">
-                                <div className={`w-2 h-2 rounded-full ${mood.level > 75 ? 'bg-green-500' : mood.level > 50 ? 'bg-blue-500' : mood.level > 25 ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
-                                {mood.studentName.split(' ')[0]}
-                            </div>
-                        ))}
-                        {teamMoods.length === 0 && <span className="text-xs text-gray-600 italic">Ninguém ainda... seja o primeiro!</span>}
-                    </div>
-                </div>
-
-            </div>
-        </div>
-      )}
-
       {showBatteryModal && (
         <Suspense fallback={<LazyOverlayFallback label="Carregando check-in da equipe..." />}>
           <TeamCheckInModal
@@ -7990,12 +5894,12 @@ const handleFileSelect = (e) => {
                   compact={true} 
               />
 
-              {/* 1. BOTÃO CRONOGRAMA (VOLTOU!) */}
-              {/* Só aparece se o modal de cronograma não estiver aberto */}
+              {/* 1. BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O CRONOGRAMA (VOLTOU!) */}
+              {/* SÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ aparece se o modal de cronograma nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o estiver aberto */}
               <button onClick={() => setShowFullSchedule(true)} className="bg-white/5 border border-white/10 text-white p-2 rounded-full hover:bg-white/10 transition-colors md:px-4 md:py-2 md:rounded-lg flex items-center gap-2">
                   <CalendarDays size={18} /> <span className="hidden md:inline text-xs font-bold">Cronograma</span>
               </button>
-              {/* 👇 COLE O BOTÃO DO RANKING AQUI 👇 */}
+              {/* ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ COLE O BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DO RANKING AQUI ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ */}
               {!viewAsStudent && (
                 <button 
                   onClick={() => setActiveTab('ranking')} 
@@ -8004,25 +5908,25 @@ const handleFileSelect = (e) => {
                   <Trophy size={18} /> <span className="hidden md:inline text-xs font-bold">Ranking XP</span>
                 </button>
               )}
-              {/* ☝️ FIM DO BOTÃO DO RANKING ☝️ */}
-{/* --- BOTÃO DA BATERIA (NOVO) --- */}
+              {/* ÃƒÆ’Ã‚Â¢Ãƒâ€¹Ã…â€œÃƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â FIM DO BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DO RANKING ÃƒÆ’Ã‚Â¢Ãƒâ€¹Ã…â€œÃƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â */}
+{/* --- BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DA BATERIA (NOVO) --- */}
               <button 
                 onClick={() => setShowBatteryModal(true)} 
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all border ${
-                    // Muda a cor dependendo da média da equipe
+                    // Muda a cor dependendo da mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia da equipe
                     teamAverage > 75 ? 'bg-green-500/10 border-green-500/20 text-green-500' :
                     teamAverage > 50 ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-500' :
                     teamAverage > 0  ? 'bg-red-500/10 border-red-500/20 text-red-500' :
                     'bg-white/5 border-white/10 text-gray-400'
                 }`}
-                title="Como está a energia da equipe?"
+                title="Como estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ a energia da equipe?"
               >
-                  {/* Ícone muda conforme a carga */}
+                  {/* ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âcone muda conforme a carga */}
                   {teamAverage > 90 ? <BatteryFull size={18}/> : 
                    teamAverage > 50 ? <BatteryMedium size={18}/> : 
                    <BatteryWarning size={18}/>}
                   
-                  {/* Mostra a porcentagem média para o Técnico */}
+                  {/* Mostra a porcentagem mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia para o TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico */}
                   <span className="font-bold text-xs">
                       {teamMoods.length > 0 ? `${teamAverage}%` : 'Check-in'}
                   </span>
@@ -8089,7 +5993,7 @@ const handleFileSelect = (e) => {
               >
                   <Gavel size={18} /> <span className="hidden md:inline text-xs font-bold uppercase tracking-wider">Modo Juizes</span>
               </button>
-              {/* --- BOTÃO MODO TV (TODOS PODEM ACESSAR) --- */}
+              {/* --- BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O MODO TV (TODOS PODEM ACESSAR) --- */}
               <button 
                 onClick={openTvMode} 
                 className="bg-fuchsia-500/10 border border-fuchsia-500/20 text-fuchsia-400 p-2 rounded-full hover:bg-fuchsia-500 hover:text-white transition-all md:px-4 md:py-2 md:rounded-lg flex items-center gap-2 shadow-[0_0_15px_rgba(217,70,239,0.15)]"
@@ -8097,28 +6001,28 @@ const handleFileSelect = (e) => {
                   <MonitorPlay size={18} /> <span className="hidden md:inline text-xs font-bold uppercase tracking-wider">Modo TV</span>
               </button>
 
-              {/* 2. BOTÃO MÁGICO DAS CAPITÃS (Sofia e Heloise) */}
+              {/* 2. BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂGICO DAS CAPITÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢S (Sofia e Heloise) */}
               {viewAsStudent && (viewAsStudent.name === 'Sofia' || viewAsStudent.name === 'Heloise') && (
                   <button 
                     onClick={() => setIsAdmin(!isAdmin)} 
                     className={`px-3 py-2 rounded-lg font-bold text-[10px] md:text-xs uppercase transition-all flex items-center gap-2 ${isAdmin ? 'bg-yellow-500 text-black shadow-[0_0_15px_rgba(234,179,8,0.5)]' : 'bg-white/10 text-white border border-white/20'}`}
                   >
-                      {isAdmin ? '👤 Voltar pro XP' : '👑 Modo Capitã'}
+                      {isAdmin ? 'ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“Ãƒâ€šÃ‚Â¤ Voltar pro XP' : 'ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ Modo CapitÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£'}
                   </button>
                   
               )}
-{/* ÁREA DO DESAFIO DE INGLÊS (Visão do Aluno) */}
+{/* ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂREA DO DESAFIO DE INGLÃƒÆ’Ã†â€™Ãƒâ€¦Ã‚Â S (VisÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o do Aluno) */}
 {viewAsStudent && (
     <div className="bg-[#151520] border border-white/10 rounded-2xl p-4 mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-            <div className="text-3xl">🇺🇸</div>
+            <div className="text-3xl">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡Ãƒâ€šÃ‚ÂºÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡Ãƒâ€šÃ‚Â¸</div>
             <div>
                 <h3 className="text-white font-bold text-sm">English Challenge</h3>
-                <p className="text-gray-400 text-xs">Fale 10 min em inglês.</p>
+                <p className="text-gray-400 text-xs">Fale 10 min em inglÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªs.</p>
             </div>
         </div>
 
-        {/* 👇 O PULO DO GATO ESTÁ AQUI: viewAsStudent?.englishChallengeUnlocked 👇 */}
+        {/* ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ O PULO DO GATO ESTÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â AQUI: viewAsStudent?.englishChallengeUnlocked ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ */}
         {viewAsStudent?.englishChallengeUnlocked ? (
             <button 
                 onClick={claimEnglishXP}
@@ -8131,20 +6035,20 @@ const handleFileSelect = (e) => {
                 disabled
                 className="bg-gray-800 text-gray-500 font-bold py-2 px-4 rounded-xl border border-gray-700 cursor-not-allowed"
             >
-                Aguardando Técnico...
+                Aguardando TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico...
             </button>
         )}
     </div>
 )}
 
-              {/* 3. BOTÃO DE SAIR */}
+              {/* 3. BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DE SAIR */}
               <button onClick={handleLogout} className="bg-red-500/10 border border-red-500/20 text-red-500 p-2 rounded-full hover:bg-red-500 hover:text-white transition-all" title="Sair">
                   <LogOut size={18} />
               </button>
           </div>
       </header>
 
-      {/* --- ÁREA DO TÉCNICO (ADMIN) --- */}
+      {/* --- ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂREA DO TÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°CNICO (ADMIN) --- */}
       {isAdmin && (
         <main className={`newgears-stage max-w-[1600px] mx-auto animate-in fade-in duration-500 ${adminPanelState.compact ? 'p-4 md:p-6' : 'p-4 md:p-8'}`}>
           {!adminPanelState.compact && <UrgentEventsBanner />}
@@ -8225,7 +6129,7 @@ const handleFileSelect = (e) => {
           </WorkspaceCollapsible>
           )}
 
-            {/* Dentro do seu <main> ou área de conteúdo central, junto com os outros 'ifs' de abas */}
+            {/* Dentro do seu <main> ou ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rea de conteÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºdo central, junto com os outros 'ifs' de abas */}
 {activeTab === 'ranking' && (
   <Suspense fallback={<LazyPanelFallback label="Carregando ranking da equipe..." minHeightClass="min-h-[340px]" />}>
     <RankingPanel students={students} setActiveTab={setActiveTab} />
@@ -8239,7 +6143,7 @@ const handleFileSelect = (e) => {
                   <WorkspaceTabs eyebrow="Centro de Navegacao" tabs={adminWorkspaceTabs} activeId={adminTab} onChange={setAdminTab} />
                 </div>
 
-                {/* CONTEÚDO DA ABA SELECIONADA */}
+                {/* CONTEÃƒÆ’Ã†â€™Ãƒâ€¦Ã‚Â¡DO DA ABA SELECIONADA */}
                 <div className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(adminTab)}`}>
                   <WorkspaceScene sceneId={`admin-${adminTab}`}>
                     {adminTab === 'rotation' && (
@@ -8273,8 +6177,8 @@ const handleFileSelect = (e) => {
                       </Suspense>
                     )}
 
-                    {adminTab === 'strategy' && <StrategyView />}
-                    {adminTab === 'rounds' && <RoundsView />} {/* StrategyBoard agora mora dentro de RoundsView */}
+                    {adminTab === 'strategy' && <StrategyView {...strategyViewProps} />}
+                    {adminTab === 'rounds' && <RoundsView {...roundsViewProps} />} {/* StrategyBoard agora mora dentro de RoundsView */}
                     {adminTab === 'rubrics' && (
                       <Suspense fallback={<LazyPanelFallback label="Carregando rubricas..." minHeightClass="min-h-[320px]" />}>
                         <RubricViewPanel
@@ -8285,10 +6189,10 @@ const handleFileSelect = (e) => {
                       </Suspense>
                     )}
                     
-                    {/* --- VISUALIZAÇÃO KANBAN --- */}
-                    {adminTab === 'kanban' && <KanbanView />}
-                    {adminTab === 'logbook' && <LogbookView />}
-                    {adminTab === 'agenda' && <AgendaView />}
+                    {/* --- VISUALIZAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O KANBAN --- */}
+                    {adminTab === 'kanban' && <KanbanView {...kanbanViewProps} />}
+                    {adminTab === 'logbook' && <LogbookView {...logbookViewProps} />}
+                    {adminTab === 'agenda' && <AgendaView {...agendaViewProps} />}
                   </WorkspaceScene>
                 </div>
             </div>
@@ -8296,7 +6200,7 @@ const handleFileSelect = (e) => {
         </main>
       )}
 
-      {/* --- ÁREA DO ALUNO --- */}
+      {/* --- ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂREA DO ALUNO --- */}
       {!isAdmin && viewAsStudent && (
         <main className="newgears-stage p-4 md:p-8 w-full max-w-[1800px] mx-auto animate-in slide-in-from-bottom-8">
           <UrgentEventsBanner />
@@ -8385,8 +6289,8 @@ const handleFileSelect = (e) => {
                           <AlertTriangle size={24} className="text-red-500" />
                       </div>
                       <div>
-                          <h3 className="text-red-400 font-bold text-xs uppercase tracking-widest mb-1">Ação Necessária</h3>
-                          <p className="text-white font-bold md:text-lg leading-tight">Você possui tarefas atrasadas no quadro de tarefas!</p>
+                          <h3 className="text-red-400 font-bold text-xs uppercase tracking-widest mb-1">AÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o NecessÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ria</h3>
+                          <p className="text-white font-bold md:text-lg leading-tight">VocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª possui tarefas atrasadas no quadro de tarefas!</p>
                       </div>
                   </div>
                   <button onClick={() => setStudentTab('kanban')} className="hidden md:block bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-lg shadow-red-900/20 transition-colors whitespace-nowrap">
@@ -8395,16 +6299,16 @@ const handleFileSelect = (e) => {
               </div>
           )}
 
-    {/* ALERTA DE LÍDER DE GESTÃO */}
-    {currentWeekData?.assignments?.Gestão?.some(s => s.id === viewAsStudent.id) && !["Heloise", "Sofia"].includes(viewAsStudent.name) && (
+    {/* ALERTA DE LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂDER DE GESTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O */}
+    {currentWeekData?.assignments?.[STATION_KEYS.MANAGEMENT]?.some(s => s.id === viewAsStudent.id) && !["Heloise", "Sofia"].includes(viewAsStudent.name) && (
         <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-4 rounded-xl border border-purple-400/30 shadow-lg mb-6 animate-pulse flex items-center justify-between">
             <div className="flex items-center gap-3">
                 <div className="bg-white/20 p-2 rounded-full">
                     <Crown size={24} className="text-yellow-300" />
                 </div>
                 <div>
-                    <h3 className="text-white font-bold text-lg leading-tight">Você é o Líder de Gestão esta semana!</h3>
-                    <p className="text-purple-100 text-xs">Sua missão: Cobrar tarefas e manter a equipe focada.</p>
+                    <h3 className="text-white font-bold text-lg leading-tight">VocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© o LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­der de GestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o esta semana!</h3>
+                    <p className="text-purple-100 text-xs">Sua missÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: Cobrar tarefas e manter a equipe focada.</p>
                 </div>
             </div>
         </div>
@@ -8418,7 +6322,7 @@ const handleFileSelect = (e) => {
                   <WorkspaceTabs eyebrow="Mapa do Aluno" tabs={studentWorkspaceTabs} activeId={studentTab} onChange={setStudentTab} />
                 </div>
 
-                {/* CONTEÚDO DA ABA SELECIONADA */}
+                {/* CONTEÃƒÆ’Ã†â€™Ãƒâ€¦Ã‚Â¡DO DA ABA SELECIONADA */}
                 <div className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(studentTab)}`}>
                   <WorkspaceScene sceneId={`student-${studentTab}`}>
                     {studentTab === 'mission' && (
@@ -8650,8 +6554,8 @@ const handleFileSelect = (e) => {
                         </>
                     )}
 
-                    {studentTab === 'strategy' && <div className="text-left"><StrategyView /></div>}
-                    {studentTab === 'rounds' && <div className="text-left"><RoundsView /></div>}
+                    {studentTab === 'strategy' && <div className="text-left"><StrategyView {...strategyViewProps} /></div>}
+                    {studentTab === 'rounds' && <div className="text-left"><RoundsView {...roundsViewProps} /></div>}
                     {studentTab === 'rubrics' && (
                       <div className="text-left">
                         <Suspense fallback={<LazyPanelFallback label="Carregando rubricas..." minHeightClass="min-h-[320px]" />}>
@@ -8663,9 +6567,9 @@ const handleFileSelect = (e) => {
                         </Suspense>
                       </div>
                     )}
-                    {studentTab === 'kanban' && <div className="text-left"><KanbanView /></div>}
-                    {studentTab === 'logbook' && <div className="text-left"><LogbookView /></div>}
-                    {studentTab === 'agenda' && <div className="text-left"><AgendaView /></div>}
+                    {studentTab === 'kanban' && <div className="text-left"><KanbanView {...kanbanViewProps} /></div>}
+                    {studentTab === 'logbook' && <div className="text-left"><LogbookView {...logbookViewProps} /></div>}
+                    {studentTab === 'agenda' && <div className="text-left"><AgendaView {...agendaViewProps} /></div>}
                   </WorkspaceScene>
                 </div>
             </div>
