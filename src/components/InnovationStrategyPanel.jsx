@@ -24,7 +24,7 @@ const formatDate = (value) => {
 
 const getImpactTone = (impact) => {
   if (impact === 'Alto') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100';
-  if (impact === 'MÃ©dio' || impact === 'Medio') return 'border-yellow-400/20 bg-yellow-400/10 text-yellow-100';
+  if (impact === 'Medio') return 'border-yellow-400/20 bg-yellow-400/10 text-yellow-100';
   return 'border-white/10 bg-white/5 text-gray-200';
 };
 
@@ -541,7 +541,7 @@ const InnovationStrategyPanel = ({
                   </div>
 
                   <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/40">
-                    <div className={`${expert.impact === 'Alto' ? 'w-full bg-gradient-to-r from-emerald-300 to-green-400' : expert.impact === 'MÃ©dio' || expert.impact === 'Medio' ? 'w-2/3 bg-gradient-to-r from-yellow-300 to-orange-300' : 'w-1/3 bg-gradient-to-r from-slate-300 to-slate-400'} h-full rounded-full`} />
+                    <div className={`${expert.impact === 'Alto' ? 'w-full bg-gradient-to-r from-emerald-300 to-green-400' : expert.impact === 'Medio' ? 'w-2/3 bg-gradient-to-r from-yellow-300 to-orange-300' : 'w-1/3 bg-gradient-to-r from-slate-300 to-slate-400'} h-full rounded-full`} />
                   </div>
                 </div>
               </div>

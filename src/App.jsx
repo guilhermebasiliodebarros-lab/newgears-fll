@@ -1,6 +1,6 @@
 import { Suspense, lazy, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy, limit } from "firebase/firestore";
-import { db } from './firebase'; // Importa a instÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ncia jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ inicializada
+import { db } from './firebase'; // Importa a instância já inicializada
 import Countdown from './components/Countdown';
 import LogoNewGears from './components/LogoNewGears';
 import { WorkspaceHero, WorkspaceTabs, WorkspaceScene, WorkspaceCollapsible, WorkspacePanelToolbar } from './components/WorkspaceChrome';
@@ -26,7 +26,7 @@ import {
   Cpu, 
   Trophy, 
   Medal, 
-  Briefcase, // <--- ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âcone que faltava para o modal de especialista
+  Briefcase, // <--- Ícone que faltava para o modal de especialista
   Star, 
   Shield, 
   Target, 
@@ -37,7 +37,7 @@ import {
   Image as ImageIcon, 
   ListTodo, 
   Calculator, 
-  Timer, // <--- Agora sÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ tem um aqui!
+  Timer, // <--- Agora só tem um aqui!
   ThumbsUp, 
   AlertTriangle, 
   GraduationCap, 
@@ -67,51 +67,51 @@ import {
   Brain,          
   LayoutDashboard, 
   Settings,
-  Microscope,  // <--- O Culpado de agora (InovaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o)
+  Microscope,  // <--- O Culpado de agora (Inovação)
   Gamepad2,    // <--- Provavelmente vai pedir em seguida (Robot Game)
   Megaphone,   // <--- Provavelmente vai pedir em seguida (Marketing/Social)
-  Laptop,      // <--- Provavelmente vai pedir em seguida (ProgramaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o)
+  Laptop,      // <--- Provavelmente vai pedir em seguida (Programação)
   Code,
   BarChart3,   // <--- O Culpado de agora
-  PieChart,    // <--- Provavelmente vai pedir em seguida (GrÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico de Pizza)
-  TrendingUp,  // <--- Provavelmente vai pedir em seguida (TendÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia de alta)
+  PieChart,    // <--- Provavelmente vai pedir em seguida (Gráfico de Pizza)
+  TrendingUp,  // <--- Provavelmente vai pedir em seguida (Tendência de alta)
   Flag,
   Tag,
-  MessageSquare, // <--- O Culpado de agora (ComentÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rios)
-  Share2,        // <--- Provavelmente usado para compartilhar estratÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©gia
+  MessageSquare, // <--- O Culpado de agora (Comentários)
+  Share2,        // <--- Provavelmente usado para compartilhar estratégia
   Download,      // <--- Provavelmente usado para baixar PDF
-  Plus,          // <--- BotÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de "Nova EstratÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©gia" (+)
-  Trash2,        // <--- BotÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de Lixeira (Apagar estratÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©gia)
+  Plus,          // <--- Botão de "Nova Estratégia" (+)
+  Trash2,        // <--- Botão de Lixeira (Apagar estratégia)
   Edit3,
   GitCommit,     // <--- O Culpado de agora
-  GitBranch,     // <--- Provavelmente vai pedir em seguida (VersÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes/Ramos)
-  GitPullRequest,// <--- Provavelmente vai pedir em seguida (SolicitaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de MudanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a)
+  GitBranch,     // <--- Provavelmente vai pedir em seguida (Versões/Ramos)
+  GitPullRequest,// <--- Provavelmente vai pedir em seguida (Solicitação de Mudança)
   GitMerge,
   Users,       // <--- O Culpado de agora (Lista da Equipe)
   UserPlus,    // <--- Provavelmente vai pedir em seguida (Adicionar Aluno)
-  UserCheck,   // <--- Provavelmente vai pedir em seguida (PresenÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a/Status)
+  UserCheck,   // <--- Provavelmente vai pedir em seguida (Presença/Status)
   UserX,       // <--- Provavelmente vai pedir em seguida (Remover Aluno)
   ClipboardList,
   AlertCircle,   // <--- O Culpado de agora (Erro/Aviso)
   Check,         // <--- Provavelmente vai pedir em seguida (Sucesso/Visto)
-  Info,          // <--- Provavelmente vai pedir em seguida (InformaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o)
+  Info,          // <--- Provavelmente vai pedir em seguida (Informação)
   HelpCircle,    // <--- Provavelmente vai pedir em seguida (Ajuda)
   XCircle,
   CheckSquare, // <--- O Culpado de agora (Checkbox marcado)
   Square,
   Loader2,
-  Scale,         // <--- O Culpado de agora (AvaliaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o)
-  Crop,          // <--- ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âcone de Corte
+  Scale,         // <--- O Culpado de agora (Avaliação)
+  Crop,          // <--- Ícone de Corte
   CheckCheck,    // <--- Provavelmente vai pedir em seguida (Aprovado Duplo)
   ExternalLink,  // <--- Provavelmente vai pedir em seguida (Abrir Arquivo em outra aba)
   FileWarning,
-  Book,          // <--- ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âcone do DiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio
-  Play,          // <--- NOVO: ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âcone de Play para o CronÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´metro
-  Clock,         // <--- NOVO: ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âcone de RelÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³gio (Agenda)
-  MapPin,        // <--- NOVO: ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âcone de LocalizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (Agenda)
-  MonitorPlay,   // <--- NOVO: ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âcone do Modo TV
-  Maximize,      // <--- NOVO: Expandir grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico
-  Minimize,      // <--- NOVO: Minimizar grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico
+  Book,          // <--- Ícone do Diário
+  Play,          // <--- NOVO: Ícone de Play para o Cronômetro
+  Clock,         // <--- NOVO: Ícone de Relógio (Agenda)
+  MapPin,        // <--- NOVO: Ícone de Localização (Agenda)
+  MonitorPlay,   // <--- NOVO: Ícone do Modo TV
+  Maximize,      // <--- NOVO: Expandir gráfico
+  Minimize,      // <--- NOVO: Minimizar gráfico
   Sparkles,
 } from 'lucide-react';
 
@@ -156,7 +156,7 @@ const LazyOverlayFallback = ({ label = 'Carregando modo...' }) => (
 );
 
 
-// --- CONFIGURAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DE NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂVEIS ---
+// --- CONFIGURAÇÃO DE NÍVEIS ---
 
 const LEVELS = [
 
@@ -169,7 +169,7 @@ const LEVELS = [
     { name: "Mestre FLL", min: 2400, max: 10000, color: "text-yellow-400" }
 
 ];
-// --- LISTA DE TÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°CNICOS (ADMINISTRADORES) ---
+// --- LISTA DE TÉCNICOS (ADMINISTRADORES) ---
 const ADMIN_USERS = [
   { user: "Guilherme", pass: "dti2@15!!" },
   { user: "Felipe", pass: "dti2@15!!" },
@@ -275,10 +275,10 @@ const getSchoolStageRecord = (studentOrGrades, stageId) => {
 const EVENT_TYPE_OPTIONS = [
   { value: 'Visita', label: 'Visita Tecnica' },
   { value: 'Especialista', label: 'Mentoria / Especialista' },
-  { value: 'ReuniÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o', label: 'Reuniao Extra' },
+  { value: 'Reunião', label: 'Reuniao Extra' },
   { value: 'Treino', label: 'Treino' },
   { value: 'Prazo', label: 'Prazo / Entrega' },
-  { value: 'CompetiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o', label: 'Competicao' },
+  { value: 'Competição', label: 'Competicao' },
   { value: 'Outro', label: 'Outro' }
 ];
 
@@ -311,6 +311,77 @@ const readStoredPrefs = (storageKey, defaults) => {
     return { ...defaults, ...parsed };
   } catch {
     return defaults;
+  }
+};
+
+const readStoredUser = () => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = localStorage.getItem("roboquest_user");
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const getStoredStudentSnapshot = (user) => {
+  if (!user || user.type !== 'student') return null;
+
+  if (user.data && typeof user.data === 'object') return user.data;
+  if (user.student && typeof user.student === 'object') return user.student;
+
+  return null;
+};
+
+const normalizeLookupValue = (value) => {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+};
+
+const resolveStudentFromStoredUser = (user, students) => {
+  if (!user || user.type !== 'student' || !Array.isArray(students) || students.length === 0) {
+    return null;
+  }
+
+  const snapshot = getStoredStudentSnapshot(user);
+  const studentId = snapshot?.id || user.studentId || user.id || null;
+
+  if (studentId) {
+    const matchById = students.find((student) => student.id === studentId);
+    if (matchById) return matchById;
+  }
+
+  const username = normalizeLookupValue(snapshot?.username || user.username);
+  if (username) {
+    const matchByUsername = students.find((student) => normalizeLookupValue(student.username) === username);
+    if (matchByUsername) return matchByUsername;
+  }
+
+  const studentName = normalizeLookupValue(snapshot?.name || user.name);
+  if (studentName) {
+    const matchByName = students.find((student) => normalizeLookupValue(student.name) === studentName);
+    if (matchByName) return matchByName;
+  }
+
+  return null;
+};
+
+const persistStoredUser = (user) => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    if (!user) {
+      localStorage.removeItem("roboquest_user");
+      return;
+    }
+
+    localStorage.setItem("roboquest_user", JSON.stringify(user));
+  } catch {
+    // Ignore storage errors so the interface keeps working.
   }
 };
 
@@ -357,24 +428,14 @@ const Header = ({ title, userType, onLogout }) => (
 
 function App() {
   // === TODOS OS ESTADOS (HOOKS) ===
-  const [currentUser, setCurrentUser] = useState(() => {
-    const saved = localStorage.getItem("roboquest_user");
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [currentUser, setCurrentUser] = useState(() => readStoredUser());
   const [loginUser, setLoginUser] = useState("");
   const [loginPass, setLoginPass] = useState("");
   const [loginError, setLoginError] = useState("");
 
-  const [isAdmin, setIsAdmin] = useState(() => {
-    const saved = localStorage.getItem("roboquest_user");
-    return saved ? JSON.parse(saved).type === 'admin' : false;
-  });
+  const [isAdmin, setIsAdmin] = useState(() => readStoredUser()?.type === 'admin');
 
-  const [viewAsStudent, setViewAsStudent] = useState(() => {
-    const saved = localStorage.getItem("roboquest_user");
-    const parsed = saved ? JSON.parse(saved) : null;
-    return parsed?.type === 'student' ? parsed.data : null;
-  });
+  const [viewAsStudent, setViewAsStudent] = useState(() => getStoredStudentSnapshot(readStoredUser()));
 
   const [logoutCountdown, setLogoutCountdown] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -610,19 +671,19 @@ function App() {
       }
   };
 
-// --- LISTA DE BADGES (VERSÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O FINAL) ---
+// --- LISTA DE BADGES (VERSÃƒÆ’O FINAL) ---
   const BADGES_LIST = [
     { id: 'pitstop', name: 'Pit Stop F1', icon: <Timer size={20}/>, color: 'text-red-500', desc: 'Troca de anexo em menos de 3s.' },
-    { id: 'engineer', name: 'Engenheiro Minimalista', icon: <Wrench size={20}/>, color: 'text-gray-400', desc: 'SoluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o mecÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢nica simples e genial.' },
-    { id: 'ice_blood', name: 'Sangue Frio', icon: <ThermometerSnowflake size={20}/>, color: 'text-blue-400', desc: 'Manteve a calma no erro crÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­tico.' },
-    { id: 'repetition', name: 'Rei da RepetiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o', icon: <RotateCcw size={20}/>, color: 'text-green-500', desc: '10 acertos seguidos na mesa.' },
-    { id: 'helper', name: 'BraÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§o Direito', icon: <HeartHandshake size={20}/>, color: 'text-pink-500', desc: 'Ajudou o time em qualquer situaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o.' },
-    { id: 'data_keeper', name: 'GuardiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o dos Dados', icon: <BarChart size={20}/>, color: 'text-blue-500', desc: 'Trouxe estatÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­sticas reais pro Projeto.' },
+    { id: 'engineer', name: 'Engenheiro Minimalista', icon: <Wrench size={20}/>, color: 'text-gray-400', desc: 'Solução mecânica simples e genial.' },
+    { id: 'ice_blood', name: 'Sangue Frio', icon: <ThermometerSnowflake size={20}/>, color: 'text-blue-400', desc: 'Manteve a calma no erro crítico.' },
+    { id: 'repetition', name: 'Rei da Repetição', icon: <RotateCcw size={20}/>, color: 'text-green-500', desc: '10 acertos seguidos na mesa.' },
+    { id: 'helper', name: 'Braço Direito', icon: <HeartHandshake size={20}/>, color: 'text-pink-500', desc: 'Ajudou o time em qualquer situação.' },
+    { id: 'data_keeper', name: 'Guardião dos Dados', icon: <BarChart size={20}/>, color: 'text-blue-500', desc: 'Trouxe estatísticas reais pro Projeto.' },
     { id: 'legend', name: 'Lenda do XP', icon: <Zap size={20}/>, color: 'text-yellow-400', desc: 'Destaque absoluto no Ranking de XP.' },
     { id: 'ambassador', name: 'Embaixador', icon: <Crown size={20}/>, color: 'text-purple-500', desc: 'Liderou pelo exemplo e uniu a equipe.' },
   ];
 
-  // --- DESAFIO DE INGLÃƒÆ’Ã†â€™Ãƒâ€¦Ã‚Â S: FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o do TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico ---
+  // --- DESAFIO DE INGLÊS: Função do Técnico ---
   const toggleEnglishChallenge = async (student) => {
       if (!isAdmin) return;
       try {
@@ -638,21 +699,21 @@ function App() {
               s.id === student.id ? { ...s, englishChallengeUnlocked: newState } : s
           ));
       } catch (error) {
-          console.error("Erro ao liberar desafio de inglÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªs:", error);
+          console.error("Erro ao liberar desafio de inglês:", error);
       }
   };
 
-  // --- DESAFIO DE INGLÃƒÆ’Ã†â€™Ãƒâ€¦Ã‚Â S: FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o do Aluno ---
+  // --- DESAFIO DE INGLÊS: Função do Aluno ---
   const claimEnglishXP = async () => {
       if (!viewAsStudent || !viewAsStudent.englishChallengeUnlocked) return;
 
       try {
           const studentRef = doc(db, "students", viewAsStudent.id);
-          const xpBonus = 20; // Quanto de XP ele ganha por falar inglÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªs
+          const xpBonus = 20; // Quanto de XP ele ganha por falar inglês
 
           await updateDoc(studentRef, {
               xp: (viewAsStudent.xp || 0) + xpBonus,
-              englishChallengeUnlocked: false // Bloqueia o botÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de novo automaticamente!
+              englishChallengeUnlocked: false // Bloqueia o botão de novo automaticamente!
           });
 
           // Atualiza a tela do aluno
@@ -662,12 +723,12 @@ function App() {
               englishChallengeUnlocked: false 
           }));
           
-          alert("Great job! Mandou bem no inglÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªs! +20 XP ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡Ãƒâ€šÃ‚ÂºÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“Ãƒâ€šÃ‚Â¨");
+          alert("Great job! Mandou bem no inglês! +20 XP 🇺🇸✨");
       } catch (error) {
-          console.error("Erro ao resgatar XP de inglÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªs:", error);
+          console.error("Erro ao resgatar XP de inglês:", error);
       }
   };
- // FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o atualizada para o TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico dar Badges
+ // Função atualizada para o Técnico dar Badges
   const toggleBadge = async (student, badgeId) => {
       if (!isAdmin) return;
       
@@ -675,13 +736,13 @@ function App() {
       let newBadges;
       let xpBonus = 0;
 
-      // LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³gica de Adicionar/Remover
+      // Lógica de Adicionar/Remover
       if (currentBadges.includes(badgeId)) {
           newBadges = currentBadges.filter(b => b !== badgeId);
-          // Opcional: Remover XP se tirar a badge? Melhor nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o, deixa o XP ganho.
+          // Opcional: Remover XP se tirar a badge? Melhor não, deixa o XP ganho.
       } else {
           newBadges = [...currentBadges, badgeId];
-          xpBonus = 100; // BÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´nus de XP ao ganhar
+          xpBonus = 100; // Bônus de XP ao ganhar
       }
 
       // 1. Atualiza no Firebase
@@ -691,7 +752,7 @@ function App() {
          xp: (student.xp || 0) + xpBonus
       });
 
-      // 2. Atualiza o estado local para ver a mudanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a na hora (sem recarregar)
+      // 2. Atualiza o estado local para ver a mudança na hora (sem recarregar)
       const updatedStudent = { ...student, badges: newBadges, xp: (student.xp || 0) + xpBonus };
       
       // Atualiza o aluno selecionado no modal
@@ -702,7 +763,7 @@ function App() {
         prevStudents.map(s => s.id === student.id ? updatedStudent : s)
       );
       };
-  // --- LÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œGICA DA CHUVA DE CONFETES (LEVEL UP E GRANDES GANHOS DE XP) ---
+  // --- LÓGICA DA CHUVA DE CONFETES (LEVEL UP E GRANDES GANHOS DE XP) ---
 
   useEffect(() => {
       return () => {
@@ -722,32 +783,32 @@ function App() {
       if (viewAsStudent) {
           const currentXp = viewAsStudent.xp || 0;
 
-          // 1. Descobre o nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel atual baseado no XP do aluno
+          // 1. Descobre o nível atual baseado no XP do aluno
           const currentLevelObj = getCurrentLevel(currentXp);
-          // Encontra a posiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o numÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©rica desse nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel (0 = Novato, 1 = Aprendiz, etc)
+          // Encontra a posição numérica desse nível (0 = Novato, 1 = Aprendiz, etc)
           const currentLevelIndex = LEVELS.findIndex(l => l.name === currentLevelObj.name);
           
-          // 2. Busca na memÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ria qual foi o ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºltimo nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel que esse aluno assistiu
+          // 2. Busca na memória qual foi o último nível que esse aluno assistiu
           const storageKey = `last_seen_level_${viewAsStudent.id}`;
           const lastSeenLevel = localStorage.getItem(storageKey);
 
           let triggerConfetti = false;
           let msg = "";
 
-          // 3. Se nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o for o primeiro carregamento da tela, verifica as vitÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rias
+          // 3. Se não for o primeiro carregamento da tela, verifica as vitórias
           if (prevXpRef.current !== null) {
               const prevXp = prevXpRef.current;
               const gainedXp = currentXp - prevXp;
 
-              // CondiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o A: Subiu de nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel!
+              // Condição A: Subiu de nível!
               if (lastSeenLevel !== null && currentLevelIndex > parseInt(lastSeenLevel)) {
                   triggerConfetti = true;
-                  msg = `ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã‚Â½ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â° PARABÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°NS! VocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª alcanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ou o nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel ${currentLevelObj.name.toUpperCase()}!`;
+                  msg = `🎉 PARABÉNS! Você alcançou o nível ${currentLevelObj.name.toUpperCase()}!`;
               } 
-              // CondiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o B: Recebeu recompensa de Fechamento de Semana (35 ou 50 XP) ou outra bonificaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o alta
+              // Condição B: Recebeu recompensa de Fechamento de Semana (35 ou 50 XP) ou outra bonificação alta
               else if (gainedXp >= 35) {
                   triggerConfetti = true;
-                  msg = `ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã‚Â½ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â° RECOMPENSA COLETADA! VocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª ganhou +${gainedXp} XP!`;
+                  msg = `🎉 RECOMPENSA COLETADA! Você ganhou +${gainedXp} XP!`;
               }
           }
 
@@ -766,13 +827,13 @@ function App() {
               }
           }
 
-          // 4. Salva o nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel atual para nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o repetir a animaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o toda hora
+          // 4. Salva o nível atual para não repetir a animação toda hora
           localStorage.setItem(storageKey, currentLevelIndex.toString());
           
-          // Atualiza o valor anterior para a prÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³xima renderizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
+          // Atualiza o valor anterior para a próxima renderização
           prevXpRef.current = currentXp;
       } else {
-          // Se deslogar, limpa a memÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ria temporÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ria do XP
+          // Se deslogar, limpa a memória temporária do XP
           prevXpRef.current = null;
       }
   }, [isLiteMode, viewAsStudent?.xp, viewAsStudent?.id]);
@@ -786,7 +847,7 @@ function App() {
       return `${year}-${month}-${day}`;
   };
 
-  // FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o para carregar a bateria de hoje do banco
+  // Função para carregar a bateria de hoje do banco
   useEffect(() => {
       if (!db) return;
       const today = getTodayMoodDate();
@@ -800,21 +861,21 @@ function App() {
       return () => unsubscribe();
   }, [db]);
 
-  // FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o para Salvar o Humor
+  // Função para Salvar o Humor
   const handleMoodSubmit = async (level) => {
       if (!viewAsStudent) return;
 
       // Trava 1: Apenas dias de treino (Segunda=1, Quarta=3)
       const dayOfWeek = new Date().getDay();
       if (dayOfWeek !== 1 && dayOfWeek !== 3) {
-          alert("Check-in bloqueado. VotaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o permitida apenas ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â s segundas e quartas.");
+          alert("Check-in bloqueado. Votação permitida apenas às segundas e quartas.");
           return;
       }
 
       // Trava 2: Impedir Farm de XP (apenas um voto por dia)
       const hasVotedToday = teamMoods.some(mood => mood.studentId === viewAsStudent.id);
       if (hasVotedToday) {
-          alert("VocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ respondeu hoje! Foco no treino.");
+          alert("Você já respondeu hoje! Foco no treino.");
           return;
       }
 
@@ -831,19 +892,19 @@ function App() {
           });
           
           // Ganha 5 XP por participar (Incentivo!)
-          // (Aqui reaproveitamos sua funÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de dar XP se ela existir, ou fazemos direto)
+          // (Aqui reaproveitamos sua função de dar XP se ela existir, ou fazemos direto)
           await updateDoc(doc(db, "students", viewAsStudent.id), {
               xp: (viewAsStudent.xp || 0) + 2
           });
 
           setShowBatteryModal(false);
-          alert(`Obrigado por compartilhar! +5 XP ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â¡`);
+          alert(`Obrigado por compartilhar! +5 XP ⚡`);
       } catch (error) {
           console.error("Erro ao salvar bateria:", error);
       }
   };
 
-  // CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡lculo da MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia da Equipe (Para vocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª ver)
+  // Cálculo da Média da Equipe (Para você ver)
   const teamAverage = teamMoods.length > 0 
       ? Math.round(teamMoods.reduce((acc, curr) => acc + curr.level, 0) / teamMoods.length) 
       : 0;
@@ -852,17 +913,17 @@ function App() {
     e.preventDefault();
     setLoginError("");
     
-    // Normaliza (remove espaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§os e deixa minÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºsculo) para evitar erros de digitaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
+    // Normaliza (remove espaços e deixa minúsculo) para evitar erros de digitação
     const userClean = loginUser.trim().toLowerCase();
     const passClean = loginPass.trim();
 
-    // 1. LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³gica de login de Admin (SIMPLIFICADA)
-    // TODO: Substituir por Firebase Auth. Por enquanto, uma verificaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o simples.
+    // 1. Lógica de login de Admin (SIMPLIFICADA)
+    // TODO: Substituir por Firebase Auth. Por enquanto, uma verificação simples.
     let adminFound = ADMIN_USERS.find(a => a.user.toLowerCase() === userClean && a.pass === passClean);
 
     // Verifica se tem senha personalizada no Firebase
     if (!adminFound && adminProfile?.password) {
-        // Pode logar usando "admin", "tecnico" ou o prÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³prio nome configurado no perfil
+        // Pode logar usando "admin", "tecnico" ou o próprio nome configurado no perfil
         const allowedUsers = ['admin', 'tecnico', (adminProfile?.name || '').toLowerCase().trim()];
         if (allowedUsers.includes(userClean) && passClean === adminProfile.password) {
             adminFound = { user: adminProfile.name || 'Tecnico' };
@@ -875,14 +936,14 @@ function App() {
         setCurrentUser(userObj);
         setIsAdmin(true);
         setViewAsStudent(null);
-        localStorage.setItem("roboquest_user", JSON.stringify(userObj)); // Salva na memÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ria
+        localStorage.setItem("roboquest_user", JSON.stringify(userObj)); // Salva na memória
         return;
     }
 
     console.log("Tentando logar aluno:", userClean);
     console.log("Alunos carregados no sistema:", students.length);
 
-    // 2. Tenta logar como Aluno (busca no array 'students' que jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ existe no seu cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo)
+    // 2. Tenta logar como Aluno (busca no array 'students' que já existe no seu código)
     // Nota: Certifique-se de que o cadastro de aluno salva 'username' e 'password'
     const studentFound = students.find(s => 
         s.username && s.username.toLowerCase().trim() === userClean && s.password === passClean
@@ -892,12 +953,12 @@ function App() {
         const userObj = { type: 'student', data: studentFound };
         setCurrentUser(userObj);
         setIsAdmin(false); // Remove flag de admin
-        setViewAsStudent(studentFound); // ForÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a a visÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o para este aluno
-        localStorage.setItem("roboquest_user", JSON.stringify(userObj)); // Salva na memÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ria
+        setViewAsStudent(studentFound); // Força a visão para este aluno
+        localStorage.setItem("roboquest_user", JSON.stringify(userObj)); // Salva na memória
     } else {
         // Log para ajudar a descobrir o erro (veja no F12)
-        console.log("Falha no login. UsuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rios disponÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­veis:", students.map(s => s.username));
-        setLoginError("UsuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio ou senha incorretos.");
+        console.log("Falha no login. Usuários disponíveis:", students.map(s => s.username));
+        setLoginError("Usuário ou senha incorretos.");
     }
   };
 
@@ -909,7 +970,7 @@ function App() {
       setViewAsStudent(null);
       setLoginUser("");
       setLoginPass("");
-      localStorage.removeItem("roboquest_user"); // Limpa a memÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ria
+      localStorage.removeItem("roboquest_user"); // Limpa a memória
         localStorage.removeItem("roboquest_last_activity"); // Limpa o controle de tempo
   };
   // ----------------------------------
@@ -920,11 +981,11 @@ function App() {
       let countdownIntervalId;
       let throttleTimer;
 
-      // O tÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico (admin) nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o deve ser deslogado por inatividade
+      // O técnico (admin) não deve ser deslogado por inatividade
       if (currentUser?.type === 'admin') return;
 
       const TIMEOUT_MINUTES = 30; // 30 minutos totais
-      const WARNING_SECONDS = 60; // Aviso nos ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºltimos 60 segundos
+      const WARNING_SECONDS = 60; // Aviso nos últimos 60 segundos
       
       const TIMEOUT_MS = TIMEOUT_MINUTES * 60 * 1000;
       const WARNING_MS = WARNING_SECONDS * 1000;
@@ -936,7 +997,7 @@ function App() {
         
         if (lastActivity) {
             const timeIdle = now - parseInt(lastActivity);
-            // Se houve atividade recente (outra aba), nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o mostra o aviso e reseta
+            // Se houve atividade recente (outra aba), não mostra o aviso e reseta
             if (timeIdle < IDLE_TIME_BEFORE_WARNING) {
                 resetTimer();
                 return;
@@ -963,7 +1024,7 @@ function App() {
                 clearInterval(countdownIntervalId);
                 setLogoutCountdown(null);
                 handleLogout();
-                alert("SessÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o encerrada por inatividade (30 minutos). Por favor, faÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a login novamente para sua seguranÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a.");
+                alert("Sessão encerrada por inatividade (30 minutos). Por favor, faça login novamente para sua segurança.");
             } else {
                 setLogoutCountdown(timeLeft);
             }
@@ -992,7 +1053,7 @@ function App() {
         const now = new Date().getTime();
         if (lastActivity && now - parseInt(lastActivity) > TIMEOUT_MS) {
           handleLogout();
-          alert("SessÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o encerrada por inatividade (30 minutos). Por favor, faÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a login novamente.");
+          alert("Sessão encerrada por inatividade (30 minutos). Por favor, faça login novamente.");
           return;
         }
         
@@ -1015,7 +1076,7 @@ function App() {
     }, [currentUser]);
 
 
-  // --- LÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œGICA DE NOTIFICAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES DA AGENDA EM TEMPO REAL ---
+  // --- LÓGICA DE NOTIFICAÇÕES DA AGENDA EM TEMPO REAL ---
   const getLocalYYYYMMDD = (dateObj) => {
       const year = dateObj.getFullYear();
       const month = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -1092,7 +1153,7 @@ function App() {
           };
       }
 
-      if (type === 'ReuniÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o') {
+      if (type === 'Reunião') {
           return {
               label: 'Reuniao',
               tone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-100',
@@ -1116,7 +1177,7 @@ function App() {
           };
       }
 
-      if (type === 'CompetiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o') {
+      if (type === 'Competição') {
           return {
               label: 'Competicao',
               tone: 'border-red-500/20 bg-red-500/10 text-red-100',
@@ -1255,7 +1316,7 @@ function App() {
   const eventsTomorrow = events.filter(e => e.date === localTomorrowStr);
   const urgentEventsCount = eventsToday.length + eventsTomorrow.length;
 
-  // --- LÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œGICA DE NOTIFICAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES DO KANBAN ---
+  // --- LÓGICA DE NOTIFICAÇÕES DO KANBAN ---
   const urgentTasks = tasks.filter(t => t.status !== 'done' && t.dueDate && t.dueDate <= localTodayStr);
   const urgentTasksCount = urgentTasks.length;
 
@@ -1268,7 +1329,7 @@ function App() {
                   <div key={ev.id} className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl flex items-center justify-between animate-in slide-in-from-top-4 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
                       <div className="flex items-center gap-4">
                           <div className="p-3 bg-red-500/20 rounded-full animate-pulse"><AlertTriangle className="text-red-500" size={24} /></div>
-                          <div><h4 className="text-red-400 font-bold text-xs uppercase tracking-widest mb-1 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500 animate-ping"></div> EVENTO HOJE</h4><p className="text-white font-bold md:text-lg leading-none">{ev.title} <span className="text-gray-300 font-normal text-xs md:text-sm ml-2">ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â s {ev.time}</span></p></div>
+                          <div><h4 className="text-red-400 font-bold text-xs uppercase tracking-widest mb-1 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500 animate-ping"></div> EVENTO HOJE</h4><p className="text-white font-bold md:text-lg leading-none">{ev.title} <span className="text-gray-300 font-normal text-xs md:text-sm ml-2">às {ev.time}</span></p></div>
                       </div>
                       <button onClick={() => { isAdmin ? setAdminTab('agenda') : setStudentTab('agenda') }} className="hidden md:block text-xs bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg font-bold transition-all shadow-lg shadow-red-900/20 whitespace-nowrap">Ver na Agenda</button>
                   </div>
@@ -1277,7 +1338,7 @@ function App() {
                   <div key={ev.id} className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-xl flex items-center justify-between animate-in slide-in-from-top-4 shadow-[0_0_15px_rgba(234,179,8,0.1)]">
                       <div className="flex items-center gap-4">
                           <div className="p-3 bg-yellow-500/20 rounded-full"><CalendarDays className="text-yellow-500" size={24} /></div>
-                          <div><h4 className="text-yellow-500 font-bold text-xs uppercase tracking-widest mb-1">EVENTO AMANHÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢</h4><p className="text-white font-bold md:text-lg leading-none">{ev.title} <span className="text-gray-300 font-normal text-xs md:text-sm ml-2">ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â s {ev.time}</span></p></div>
+                          <div><h4 className="text-yellow-500 font-bold text-xs uppercase tracking-widest mb-1">EVENTO AMANHÃ</h4><p className="text-white font-bold md:text-lg leading-none">{ev.title} <span className="text-gray-300 font-normal text-xs md:text-sm ml-2">às {ev.time}</span></p></div>
                       </div>
                       <button onClick={() => { isAdmin ? setAdminTab('agenda') : setStudentTab('agenda') }} className="hidden md:block text-xs bg-yellow-600 hover:bg-yellow-500 text-black px-4 py-2 rounded-lg font-bold transition-all shadow-lg shadow-yellow-900/20 whitespace-nowrap">Ver na Agenda</button>
                   </div>
@@ -1297,8 +1358,8 @@ function App() {
 
   // --- NOVO: Sincroniza dados do aluno logado com o Firebase em tempo real ---
   useEffect(() => {
-    if (currentUser?.type === 'student' && students.length > 0) {
-        // Procura a versÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o mais recente deste aluno na lista que veio do banco
+    if (currentUser?.type === 'student' && currentUser.data?.id && students.length > 0) {
+        // Procura a versão mais recente deste aluno na lista que veio do banco
         const freshStudent = students.find(s => s.id === currentUser.data.id);
         if (freshStudent) {
             setViewAsStudent(freshStudent);
@@ -1311,8 +1372,21 @@ function App() {
 
 
 
-// --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DE CRONOGRAMA OFICIAL (12 ALUNOS) ---
+// --- FUNÇÃO DE CRONOGRAMA OFICIAL (12 ALUNOS) ---
   // Usamos useMemo para reconectar os dados assim que os alunos carregarem do Firebase
+  useEffect(() => {
+    if (currentUser?.type !== 'student' || currentUser.data || students.length === 0) return;
+
+    const recoveredStudent = resolveStudentFromStoredUser(currentUser, students);
+    if (!recoveredStudent) return;
+
+    setViewAsStudent(recoveredStudent);
+
+    const normalizedUser = { type: 'student', data: recoveredStudent };
+    setCurrentUser(normalizedUser);
+    persistStoredUser(normalizedUser);
+  }, [students, currentUser]);
+
   const buildLocalDate = (year, monthIndex, day, hour = 12, minute = 0, second = 0, millisecond = 0) =>
       new Date(year, monthIndex, day, hour, minute, second, millisecond);
 
@@ -1345,59 +1419,59 @@ function App() {
       const totalScheduleWeeks = 36;
       let currentDate = buildLocalDate(2026, 2, 22);
 
-      // 1. CAPITÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢S (Sempre Fixas em GestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o - Tarde)
+      // 1. CAPITÃS (Sempre Fixas em Gestão - Tarde)
       const capitasNames = ["Heloise", "Sofia"];
 
-      // 2. APRENDIZES (Sexto Ano): AntÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´nio, Heloisa, Helena (RodÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­zio Simplificado)
+      // 2. APRENDIZES (Sexto Ano): Antônio, Heloisa, Helena (Rodízio Simplificado)
 
-      // 3. POOL DO RODÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂZIO (7 Alunos da ManhÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£)
-      // Estes rodam nas vagas: 3 Eng, 3 Inov, 1 GestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­der da ManhÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£)
+      // 3. POOL DO RODÍZIO (7 Alunos da Manhã)
+      // Estes rodam nas vagas: 3 Eng, 3 Inov, 1 Gestão (Líder da Manhã)
       // Ciclo de 7 semanas para dar a volta completa
       const morningPool = [
           "Enzo", "Mariana", 
-          "LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­via", "Arthur Silva", 
+          "Lívia", "Arthur Silva", 
           "Benjamim", "Davi Miguel", 
-          "AntÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´nio Yamaguchi" 
+          "Antônio Yamaguchi" 
       ];
 
-      // FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o auxiliar para criar objetos visuais (evita o "Vago")
+      // Função auxiliar para criar objetos visuais (evita o "Vago")
       const getStudentObjects = (namesList) => {
           return namesList.map(nameStr => {
-              // CorreÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: ComparaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o exata para diferenciar "AntÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´nio" de "AntÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´nio Yamaguchi"
+              // Correção: Comparação exata para diferenciar "Antônio" de "Antônio Yamaguchi"
               const found = students.find(s => s.name && s.name.trim().toLowerCase() === nameStr.trim().toLowerCase());
               if (found) return found; 
-              // Cria objeto temporÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio se nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o achar no banco
+              // Cria objeto temporário se não achar no banco
               return { id: `fake-${nameStr}-${Math.random()}`, name: nameStr, avatarType: 'robot' };
           });
       };
 
       for (let i = 1; i <= totalScheduleWeeks; i++) { 
           const endDate = new Date(currentDate); 
-          endDate.setDate(currentDate.getDate() + 6); // Agora a semana vai de Domingo a SÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡bado
+          endDate.setDate(currentDate.getDate() + 6); // Agora a semana vai de Domingo a Sábado
           
-          // --- LÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œGICA DE ROTAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O (CICLO DE 7) ---
-          // A cada semana, giramos a lista dos 7 alunos uma posiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
-          // Assim, todos passam por Eng -> Inov -> GestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
+          // --- LÓGICA DE ROTAÇÃO (CICLO DE 7) ---
+          // A cada semana, giramos a lista dos 7 alunos uma posição
+          // Assim, todos passam por Eng -> Inov -> Gestão
           const shift = (i - 1) % 7;
           const currentRotation = [...morningPool];
           
-          // Realiza a rotaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o do array
+          // Realiza a rotação do array
           for(let k = 0; k < shift; k++) {
               currentRotation.push(currentRotation.shift());
           }
 
-          // DISTRIBUIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O INTERCALADA (EVITA REPETIÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES SEGUIDAS)
-          // Para alternar e nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o ficar 3 semanas na mesma ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rea:
-          // Eng: Pega ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­ndices 0, 3, 5
-          // Inov: Pega ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­ndices 2, 4, 6
-          // GestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: Pega ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­ndice 1
+          // DISTRIBUIÇÃO INTERCALADA (EVITA REPETIÇÕES SEGUIDAS)
+          // Para alternar e não ficar 3 semanas na mesma área:
+          // Eng: Pega índices 0, 3, 5
+          // Inov: Pega índices 2, 4, 6
+          // Gestão: Pega índice 1
           const engTeam = [currentRotation[0], currentRotation[3], currentRotation[5]];
           const inovTeam = [currentRotation[2], currentRotation[4], currentRotation[6]];
           const morningLeader = [currentRotation[1]];
 
-          // ONDE ENTRAM OS TRAINEES (6ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âº ANO)?
-          // Ciclo de 6 semanas: Rotaciona as duplas e as ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡reas para misturar bem (Todos trabalham com todos)
-          const tList = ["AntÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´nio Echenique", "Helena", "Heloisa"];
+          // ONDE ENTRAM OS TRAINEES (6º ANO)?
+          // Ciclo de 6 semanas: Rotaciona as duplas e as áreas para misturar bem (Todos trabalham com todos)
+          const tList = ["Antônio Echenique", "Helena", "Heloisa"];
           const cycle = (i - 1) % 6; 
           
           let pair, solo;
@@ -1413,7 +1487,7 @@ function App() {
              engTeam.push(solo);
           }
 
-          // GESTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O FINAL = CapitÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£s (Tarde) + LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­der da ManhÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£
+          // GESTÃO FINAL = Capitãs (Tarde) + Líder da Manhã
           const gestaoFinal = [...capitasNames, ...morningLeader];
 
           schedule.push({ 
@@ -1424,17 +1498,17 @@ function App() {
               assignments: { 
                   [STATION_KEYS.ENGINEERING]: getStudentObjects(engTeam), 
                   [STATION_KEYS.INNOVATION]: getStudentObjects(inovTeam),
-                  [STATION_KEYS.MANAGEMENT]: getStudentObjects(gestaoFinal) // CapitÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£s + Alunos
+                  [STATION_KEYS.MANAGEMENT]: getStudentObjects(gestaoFinal) // Capitãs + Alunos
               } 
           }); 
           currentDate.setDate(currentDate.getDate() + 7); 
       } 
       return schedule;
-  }, [students]); // <--- A mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡gica acontece aqui: atualiza quando "students" muda
+  }, [students]); // <--- A mágica acontece aqui: atualiza quando "students" muda
 
-  // --- 1. CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂLCULO DA SEMANA ATUAL (CÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œDIGO NOVO) ---
+  // --- 1. CÁLCULO DA SEMANA ATUAL (CÓDIGO NOVO) ---
   useEffect(() => {
-    // Se nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o tiver cronograma, nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o faz nada
+    // Se não tiver cronograma, não faz nada
     if (!rotationSchedule || rotationSchedule.length === 0) return;
     
     const calculateCurrentWeek = () => {
@@ -1449,7 +1523,7 @@ function App() {
         });
 
         if (found) {
-            // Atualiza apenas se mudou de semana para nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o causar re-renders atoa
+            // Atualiza apenas se mudou de semana para não causar re-renders atoa
             setCurrentWeekData(prev => prev?.id !== found.id ? found : prev);
         } else {
             const firstWeek = rotationSchedule[0];
@@ -1466,7 +1540,7 @@ function App() {
     // 2. Configura um timer para checar a data a cada 1 minuto (60000 milissegundos)
     const intervalId = setInterval(calculateCurrentWeek, 60000);
 
-    // 3. Limpa o timer para nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o dar vazamento de memÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ria
+    // 3. Limpa o timer para não dar vazamento de memória
     return () => clearInterval(intervalId);
   }, [rotationSchedule]);
 
@@ -1482,19 +1556,19 @@ function App() {
 
 
 
- // 1. SincronizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o com Firebase (Carrega os dados)
+ // 1. Sincronização com Firebase (Carrega os dados)
   useEffect(() => {
     if (!db) return;
 
-    // FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o auxiliar para criar ouvintes seguros
+    // Função auxiliar para criar ouvintes seguros
     const createListener = (colName, setter) => {
         return onSnapshot(collection(db, colName), (snapshot) => {
             const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-            console.log(`ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã¢â‚¬Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ ${colName} carregados com sucesso:`, data.length);
+            console.log(`✅ ${colName} carregados com sucesso:`, data.length);
             setter(data);
         }, (error) => {
-            console.error(`ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€¦Ã¢â‚¬â„¢ ERRO CRÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂTICO em ${colName}:`, error);
-            showNotification(`Erro de conexÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: ${error.code}`, "error");
+            console.error(`❌ ERRO CRÍTICO em ${colName}:`, error);
+            showNotification(`Erro de conexão: ${error.code}`, "error");
         });
     };
 
@@ -1521,7 +1595,7 @@ function App() {
         }
     });
 
-    // ... e nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o esqueÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a de adicionar no return para limpar:
+    // ... e não esqueça de adicionar no return para limpar:
     // return () => { ... unsubProject(); };
     
     return () => {
@@ -1654,7 +1728,7 @@ function App() {
     };
   }, [isPitStopModalOpen]);
 
-  // --- LÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œGICA DO CRONÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂMETRO ---
+  // --- LÓGICA DO CRONÔMETRO ---
   useEffect(() => {
     let interval;
     if (activeTimer) {
@@ -1687,7 +1761,7 @@ function App() {
 
   // --- FIM DOS USE EFFECTS ---
 
-  // FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de notificaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (corrigida)
+  // Função de notificação (corrigida)
   const showNotification = (msg, type = 'success') => { 
       setNotification({ msg, type }); 
       setTimeout(() => setNotification(null), 3000); 
@@ -1744,7 +1818,7 @@ function App() {
 
  
 
-  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O ESPECÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂFICA PARA FOTO DE PERFIL (COM CROP) ---
+  // --- FUNÇÃO ESPECÍFICA PARA FOTO DE PERFIL (COM CROP) ---
   const handleProfilePicSelect = async (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -1760,7 +1834,7 @@ function App() {
   // --- SALVAR O RECORTE ---
   const handleCropSave = () => {
       const canvas = document.createElement('canvas');
-      const size = 200; // Tamanho padrÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o do avatar
+      const size = 200; // Tamanho padrão do avatar
       canvas.width = size;
       canvas.height = size;
       const ctx = canvas.getContext('2d');
@@ -1772,7 +1846,7 @@ function App() {
           ctx.fillStyle = '#111';
           ctx.fillRect(0, 0, size, size);
           
-          // Desenha a imagem com as transformaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes do usuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio
+          // Desenha a imagem com as transformações do usuário
           ctx.drawImage(img, cropPos.x, cropPos.y, img.naturalWidth * cropScale, img.naturalHeight * cropScale);
           
           const resultBase64 = canvas.toDataURL('image/jpeg', 0.9);
@@ -1793,7 +1867,7 @@ function App() {
 
   const deleteStudent = (id) => { setStudents(prev => prev.filter(s => s.id !== id)); }
 
-  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES DO KANBAN (TAREFAS) ---
+  // --- FUNÇÕES DO KANBAN (TAREFAS) ---
   const createKanbanTask = async ({ text, dueDate = '', tag = 'geral', priority = 'normal', author, ...extraData }) => {
       if (!text) return;
 
@@ -1829,7 +1903,7 @@ function App() {
       }
   }
 
-  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES DA GARRA / ANEXO ---
+  // --- FUNÇÕES DA GARRA / ANEXO ---
   const handleAttachmentSubmit = async (e) => { 
       e.preventDefault(); 
       const fd = new FormData(e.target); 
@@ -1863,11 +1937,11 @@ function App() {
   const handleDeleteAttachment = async (e, id) => {
       e.stopPropagation();
       if (window.confirm("Tem certeza que deseja excluir esta garra/anexo?")) {
-          try { await deleteDoc(doc(db, "attachments", id)); showNotification("Garra excluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da!"); } catch (error) {}
+          try { await deleteDoc(doc(db, "attachments", id)); showNotification("Garra excluída!"); } catch (error) {}
       }
   };
 
-  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES DO COFRE DE CÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œDIGOS ---
+  // --- FUNÇÕES DO COFRE DE CÓDIGOS ---
   const handleCodeSubmit = async (e) => { 
       e.preventDefault(); 
       const fd = new FormData(e.target); 
@@ -1918,12 +1992,12 @@ function App() {
 
   const handleDeleteCode = async (e, id) => {
       e.stopPropagation();
-      if (window.confirm("Tem certeza que deseja excluir este cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo?")) {
+      if (window.confirm("Tem certeza que deseja excluir este código?")) {
           try { 
               await deleteDoc(doc(db, "codeSnippets", id)); 
-              showNotification("CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo excluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­do!"); 
+              showNotification("Código excluído!"); 
           } catch (error) {
-              console.error("Erro ao excluir cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo:", error);
+              console.error("Erro ao excluir código:", error);
               showNotification("Erro ao excluir.", "error");
           }
       }
@@ -1949,13 +2023,13 @@ function App() {
   };
 
   const moveTask = async (id, newStatus) => {
-      // --- TRAVA PARA MOVER PARA FEITO (SÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ TÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°CNICO) ---
+      // --- TRAVA PARA MOVER PARA FEITO (SÓ TÉCNICO) ---
       if (newStatus === 'done' && !isAdmin) {
           alert("Acesso bloqueado!\n\nApenas o Tecnico pode mover tarefas para 'Feito' depois de aprova-las na coluna 'Em Revisao'.");
           return;
       }
 
-      // --- TRAVA DE 3 HORAS (SÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ PARA ALUNOS) ---
+      // --- TRAVA DE 3 HORAS (SÓ PARA ALUNOS) ---
       if (newStatus === 'review' && !isAdmin) {
           const task = tasks.find(t => t.id === id);
           if (task && task.createdAt) {
@@ -1965,8 +2039,8 @@ function App() {
               
               if (hoursDiff < 3) {
                   const hoursLeft = (3 - hoursDiff).toFixed(1);
-                  alert(`ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂºÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ Acesso Bloqueado!\n\nAs tarefas precisam de pelo menos 3 horas desde a criaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o para irem para "Em RevisÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o". Isso garante que vocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªs planejem ANTES de executar.\n\nAguarde mais ${hoursLeft} hora(s) para avanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ar.`);
-                  return; // Cancela a movimentaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
+                  alert(`🛑 Acesso Bloqueado!\n\nAs tarefas precisam de pelo menos 3 horas desde a criação para irem para "Em Revisão". Isso garante que vocês planejem ANTES de executar.\n\nAguarde mais ${hoursLeft} hora(s) para avançar.`);
+                  return; // Cancela a movimentação
               }
           }
       }
@@ -1994,7 +2068,7 @@ function App() {
           if (!viewAsStudent) return;
           try {
               await updateDoc(doc(db, "tasks", id), { author: viewAsStudent.name });
-              showNotification("VocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª assumiu a responsabilidade desta tarefa!");
+              showNotification("Você assumiu a responsabilidade desta tarefa!");
           } catch (error) {
               console.error("Erro ao assumir:", error);
           }
@@ -2012,7 +2086,7 @@ function App() {
                 
                 const authorsArray = task.author.split(',').map(a => a.trim());
                 if (authorsArray.length >= 3) {
-                    showNotification("Esta tarefa jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ atingiu o limite de 3 participantes.", "error");
+                    showNotification("Esta tarefa já atingiu o limite de 3 participantes.", "error");
                     return;
                 }
                 
@@ -2020,7 +2094,7 @@ function App() {
             }
             
             await updateDoc(doc(db, "tasks", id), { author: newAuthor });
-            showNotification("VocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª entrou na tarefa!");
+            showNotification("Você entrou na tarefa!");
         } catch (error) {
             console.error("Erro ao participar da tarefa:", error);
         }
@@ -2038,7 +2112,7 @@ function App() {
             const newAuthor = authorsArray.length > 0 ? authorsArray.join(', ') : null;
             
             await updateDoc(doc(db, "tasks", id), { author: newAuthor });
-            showNotification("VocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª saiu da tarefa!");
+            showNotification("Você saiu da tarefa!");
         } catch (error) {
             console.error("Erro ao sair da tarefa:", error);
         }
@@ -2047,15 +2121,15 @@ function App() {
     const assignTaskToStudent = async (taskId, studentName) => {
         if (!isAdmin) return;
         
-        // Se o valor for vazio, desatribui (author: null). SenÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o, atribui.
+        // Se o valor for vazio, desatribui (author: null). Senão, atribui.
         const newAuthor = studentName === "" ? null : studentName;
 
         try {
             await updateDoc(doc(db, "tasks", taskId), { author: newAuthor });
             if (newAuthor) {
-              showNotification(`Tarefa atribuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da para ${studentName}!`);
+              showNotification(`Tarefa atribuída para ${studentName}!`);
             } else {
-              showNotification(`Tarefa agora ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© da equipe.`);
+              showNotification(`Tarefa agora é da equipe.`);
             }
         } catch (error) {
             console.error("Erro ao atribuir tarefa:", error);
@@ -2063,29 +2137,29 @@ function App() {
         }
     };
 
-  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O PARA SALVAR DIÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂRIO DE BORDO ---
+  // --- FUNÇÃO PARA SALVAR DIÁRIO DE BORDO ---
   const handleLogbookSubmit = async (e) => {
       e.preventDefault();
       const text = studentLogbookDraft.trim();
-      // Se nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o tiver semana definida, pega a atual ou a 1
+      // Se não tiver semana definida, pega a atual ou a 1
       const weekId = currentWeekData?.id || 1;
       const weekName = currentWeekData?.weekName || "Semana Inicial";
 
       if (!text || !viewAsStudent?.id) return; // Apenas alunos podem escrever
 
       try {
-          // O caminho agora ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© uma subcoleÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o dentro do documento do aluno
+          // O caminho agora é uma subcoleção dentro do documento do aluno
           const logbookRef = collection(db, 'students', viewAsStudent.id, 'logbook');
           
-          // Usamos setDoc com um ID especÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­fico para evitar duplicatas na mesma semana?
-          // Ou addDoc para permitir vÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rios registros na semana?
-          // Vamos usar addDoc para permitir vÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rios insights na mesma semana.
+          // Usamos setDoc com um ID específico para evitar duplicatas na mesma semana?
+          // Ou addDoc para permitir vários registros na semana?
+          // Vamos usar addDoc para permitir vários insights na mesma semana.
           
           const tags = Array.from(new Set((text.match(/#[^\s#]+/g) || []).map((tag) => tag.toLowerCase())));
           const wordCount = text.split(/\s+/).filter(Boolean).length;
 
           const newEntry = {
-              // Ainda salvamos o nome para a visualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o consolidada do tÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico
+              // Ainda salvamos o nome para a visualização consolidada do técnico
               studentName: viewAsStudent.name, 
               text: text,
               weekId: weekId,       // Para ordenar
@@ -2098,20 +2172,20 @@ function App() {
           await addDoc(logbookRef, newEntry);
 
           setStudentLogbookDraft('');
-          showNotification("DiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio de Bordo atualizado! ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“");
+          showNotification("Diário de Bordo atualizado! 📖");
       } catch (error) {
-          console.error("Erro ao salvar diÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio:", error);
+          console.error("Erro ao salvar diário:", error);
           showNotification("Erro ao salvar.", "error");
       }
   }
 
-  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O PARA EXCLUIR REGISTRO DO DIÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂRIO ---
+  // --- FUNÇÃO PARA EXCLUIR REGISTRO DO DIÁRIO ---
   const handleDeleteLogbookEntry = async (entry) => {
       if (!window.confirm("Tem certeza que deseja apagar este registro?")) return;
 
       try {
           // Se temos o caminho completo (refPath), usamos ele. 
-          // SenÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (caso antigo), tentamos montar o caminho se soubermos o ID do aluno.
+          // Senão (caso antigo), tentamos montar o caminho se soubermos o ID do aluno.
           const path = entry.refPath || `students/${viewAsStudent?.id}/logbook/${entry.id}`;
           await deleteDoc(doc(db, path));
           showNotification("Registro apagado.");
@@ -2121,22 +2195,22 @@ function App() {
       }
   }
 
- // 2. A funÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de excluir:
+ // 2. A função de excluir:
 const handleDeleteStudent = async (studentId) => {
-    // ConfirmaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o para o tÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o excluir sem querer esbarrando no botÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
-    if (window.confirm("Tem certeza que deseja excluir este aluno do banco de dados? A aÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o pode ser desfeita.")) {
+    // Confirmação para o técnico não excluir sem querer esbarrando no botão
+    if (window.confirm("Tem certeza que deseja excluir este aluno do banco de dados? A ação não pode ser desfeita.")) {
         try {
-            // A. Deleta o documento lÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ no Firebase
+            // A. Deleta o documento lá no Firebase
             const studentRef = doc(db, "students", studentId);
             await deleteDoc(studentRef);
 
-            // B. Atualiza a tela (remove da lista local sem precisar atualizar a pÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡gina)
+            // B. Atualiza a tela (remove da lista local sem precisar atualizar a página)
             setStudents(prevStudents => prevStudents.filter(s => s.id !== studentId));
 
-            alert("Aluno excluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­do com sucesso! ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬ÂÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â");
+            alert("Aluno excluído com sucesso! 🗑️");
         } catch (error) {
             console.error("Erro ao excluir aluno no Firebase:", error);
-            alert("Erro ao excluir. Verifique sua conexÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o ou regras do Firebase.");
+            alert("Erro ao excluir. Verifique sua conexão ou regras do Firebase.");
         }
     }
 };
@@ -2158,8 +2232,8 @@ const handleDeleteRound = async (id) => {
         // Tenta apagar com o nome 'history'
         await deleteDoc(doc(db, "history", id));
         
-        // --- NOVO: Apaga tambÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©m o histÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico do grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico deste round ---
-        // Usamos o state 'scoreHistory' que jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ carregado para nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o precisar fazer outra busca
+        // --- NOVO: Apaga também o histórico do gráfico deste round ---
+        // Usamos o state 'scoreHistory' que já está carregado para não precisar fazer outra busca
         const historyToDelete = scoreHistory.filter(h => h.roundId === id);
         historyToDelete.forEach(async (h) => await deleteDoc(doc(db, "score_history", h.id)));
 
@@ -2171,12 +2245,12 @@ const handleDeleteRound = async (id) => {
     }
   };
   
-  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES DE EXCLUSÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O (MATRIZ, ESPECIALISTAS, ROBÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â) ---
+  // --- FUNÇÕES DE EXCLUSÃO (MATRIZ, ESPECIALISTAS, ROBÔ) ---
   const handleDeleteMatrix = async (id) => {
       if (window.confirm("Tem certeza que deseja excluir esta ideia da matriz?")) {
           try {
               await deleteDoc(doc(db, "decisionMatrix", id));
-              showNotification("Ideia excluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da com sucesso!");
+              showNotification("Ideia excluída com sucesso!");
           } catch (error) {
               console.error("Erro ao excluir ideia:", error);
               showNotification("Erro ao excluir.", "error");
@@ -2185,11 +2259,11 @@ const handleDeleteRound = async (id) => {
   };
 
   const handleDeleteExpert = async (e, id) => {
-      e.stopPropagation(); // Evita abrir o modal de visualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o ao clicar na lixeira
+      e.stopPropagation(); // Evita abrir o modal de visualização ao clicar na lixeira
       if (window.confirm("Tem certeza que deseja excluir este especialista?")) {
           try {
               await deleteDoc(doc(db, "experts", id));
-              showNotification("Especialista excluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­do!");
+              showNotification("Especialista excluído!");
           } catch (error) {
               console.error("Erro ao excluir especialista:", error);
               showNotification("Erro ao excluir.", "error");
@@ -2198,36 +2272,36 @@ const handleDeleteRound = async (id) => {
   };
 
   const handleDeleteRobotVersion = async (e, id) => {
-      e.stopPropagation(); // Evita abrir o modal de visualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
-      if (window.confirm("Tem certeza que deseja excluir esta versÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o do robÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´?")) {
+      e.stopPropagation(); // Evita abrir o modal de visualização
+      if (window.confirm("Tem certeza que deseja excluir esta versão do robô?")) {
           try {
               await deleteDoc(doc(db, "robotVersions", id));
-              showNotification("VersÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o do robÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´ excluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da!");
+              showNotification("Versão do robô excluída!");
           } catch (error) {
-              console.error("Erro ao excluir versÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o:", error);
+              console.error("Erro ao excluir versão:", error);
               showNotification("Erro ao excluir.", "error");
           }
       }
   };
 
   const handleDeleteMission = async (id) => {
-      if (window.confirm("Tem certeza que deseja excluir esta missÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o? Ela serÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ removida permanentemente do banco de dados.")) {
+      if (window.confirm("Tem certeza que deseja excluir esta missão? Ela será removida permanentemente do banco de dados.")) {
           try {
               await deleteDoc(doc(db, "missions", id));
-              showNotification("MissÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o excluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da com sucesso!");
-              // Se estava editando essa mesma missÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o, limpa o formulÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio
+              showNotification("Missão excluída com sucesso!");
+              // Se estava editando essa mesma missão, limpa o formulário
               if (modal.data?.id === id) {
                   setModal({ type: 'missionForm', data: null });
                   setSelectedFile(null);
               }
           } catch (error) {
-              console.error("Erro ao excluir missÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o:", error);
+              console.error("Erro ao excluir missão:", error);
               showNotification("Erro ao excluir.", "error");
           }
       }
   };
 
-  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O CORRIGIDA COM LOGS ---
+  // --- FUNÇÃO CORRIGIDA COM LOGS ---
   const handleRegisterSubmit = async (e) => { 
       e.preventDefault(); 
       const fd = new FormData(e.target); 
@@ -2235,7 +2309,7 @@ const handleDeleteRound = async (id) => {
       // Verifica se estamos editando ou criando
       const isEditing = modal.data?.id;
 
-      // A imagem agora jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ vem processada e redimensionada pelo Crop e estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ em modal.data.avatarImage
+      // A imagem agora já vem processada e redimensionada pelo Crop e está em modal.data.avatarImage
       const avatarImage = modal.data?.avatarImage || null;
 
       // Cria o objeto de dados do aluno
@@ -2246,7 +2320,7 @@ const handleDeleteRound = async (id) => {
           username: fd.get('username'), 
           password: fd.get('password'), 
           avatarImage: avatarImage, // Novo campo para a foto
-          // MantÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©m os outros campos se estiver editando
+          // Mantém os outros campos se estiver editando
           xp: modal.data?.xp ?? 0,
           totalClasses: modal.data?.totalClasses ?? 0,
           attendedClasses: modal.data?.attendedClasses ?? 0,
@@ -2275,7 +2349,7 @@ const handleDeleteRound = async (id) => {
       }
   }
 
-  // --- NOVO: SALVAR PROJETO DE INOVAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O ---
+  // --- NOVO: SALVAR PROJETO DE INOVAÇÃO ---
   const handleProjectSubmit = async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
@@ -2304,7 +2378,7 @@ const handleDeleteRound = async (id) => {
       }
   }
 
-  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES DE OUTREACH (IMPACTO) ---
+  // --- FUNÇÕES DE OUTREACH (IMPACTO) ---
   const handleOutreachSubmit = async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
@@ -2331,7 +2405,7 @@ const handleDeleteRound = async (id) => {
       if (window.confirm("Tem certeza que deseja excluir este registro de impacto?")) {
           try {
               await deleteDoc(doc(db, "outreach", id));
-              showNotification("Registro excluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­do com sucesso!");
+              showNotification("Registro excluído com sucesso!");
           } catch (error) {
               console.error("Erro ao excluir impacto:", error);
               showNotification("Erro ao excluir.", "error");
@@ -2343,7 +2417,7 @@ const handleDeleteRound = async (id) => {
       e.preventDefault();
       const fd = new FormData(e.target);
       
-      // Pega todos os IDs marcados no checkbox (agora sÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o strings do Firebase)
+      // Pega todos os IDs marcados no checkbox (agora são strings do Firebase)
       const presentIds = fd.getAll('present').map(id => String(id));
 
       try {
@@ -2367,10 +2441,10 @@ const handleDeleteRound = async (id) => {
           await Promise.all(updates);
           
           closeModal();
-          showNotification("FrequÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia registrada no Firebase!");
+          showNotification("Frequência registrada no Firebase!");
       } catch (error) {
           console.error("Erro na chamada:", error);
-          showNotification("Erro ao salvar frequÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia.", "error");
+          showNotification("Erro ao salvar frequência.", "error");
       }
   }
   const handleExpertSubmit = async (e) => { 
@@ -2393,10 +2467,10 @@ const handleDeleteRound = async (id) => {
 
       try {
           if (modal.data?.id) {
-              // Se jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ tem ID, atualiza (Editar)
+              // Se já tem ID, atualiza (Editar)
               await updateDoc(doc(db, "experts", modal.data.id), expertData);
           } else {
-              // Se nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o tem ID, cria novo (Salvar)
+              // Se não tem ID, cria novo (Salvar)
               await addDoc(collection(db, "experts"), expertData);
           }
           closeModal(); 
@@ -2429,9 +2503,9 @@ const handleDeleteRound = async (id) => {
               await addDoc(collection(db, "robotVersions"), robotData);
           }
           closeModal(); 
-          showNotification("VersÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o do robÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´ salva!");
+          showNotification("Versão do robô salva!");
       } catch (error) {
-          console.error("Erro ao salvar robÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´:", error);
+          console.error("Erro ao salvar robô:", error);
           showNotification("Erro ao salvar.", "error");
       }
   }
@@ -2445,7 +2519,7 @@ const handleDeleteRound = async (id) => {
       const selectedMissions = Array.from(fd.getAll('missions'));
       const estimatedTime = Number.parseInt(fd.get('time'), 10) || 0;
       
-      // Calcula pontos somando as missÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes selecionadas
+      // Calcula pontos somando as missões selecionadas
       const totalPoints = selectedMissions.reduce((acc, mid) => 
           acc + (missionsList.find(m => m.id === mid)?.points || 0), 0);
 
@@ -2478,7 +2552,7 @@ const handleDeleteRound = async (id) => {
       
       const complimentData = {
           from: viewAsStudent.name,
-          to: getStudentName(parseInt(fd.get('to'))), // Pega o nome do destinatÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio
+          to: getStudentName(parseInt(fd.get('to'))), // Pega o nome do destinatário
           msg: fd.get('msg'),
           date: new Date().toLocaleDateString().slice(0,5)
       };
@@ -2487,7 +2561,7 @@ const handleDeleteRound = async (id) => {
           // 1. Salva o elogio
           await addDoc(collection(db, "compliments"), complimentData);
 
-          // 2. DÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ XP para quem enviou (GamificaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o!)
+          // 2. Dá XP para quem enviou (Gamificação!)
           const senderRef = doc(db, "students", viewAsStudent.id);
           // Nota: Para atualizar XP de forma segura, o ideal seria ler o doc atual, 
           // mas para simplificar vamos assumir o dado local:
@@ -2523,12 +2597,12 @@ const handleDeleteRound = async (id) => {
           } else {
               await addDoc(collection(db, "missions"), missionData);
           }
-          // ApÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³s salvar, nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o fecha o modal: apenas limpa para que vocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª possa adicionar/ver outras
+          // Após salvar, não fecha o modal: apenas limpa para que você possa adicionar/ver outras
           setModal({ type: 'missionForm', data: null });
           setSelectedFile(null);
-          showNotification("MissÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o salva!");
+          showNotification("Missão salva!");
       } catch (error) {
-          console.error("Erro ao salvar missÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o:", error);
+          console.error("Erro ao salvar missão:", error);
           showNotification("Erro ao salvar.", "error");
       }
   }
@@ -2536,7 +2610,7 @@ const handleDeleteRound = async (id) => {
   const handleGradesSubmit = async (e) => {
       e.preventDefault();
       if (currentUser?.type !== 'admin') {
-          showNotification("Apenas tÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnicos podem lanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ar notas.", "error");
+          showNotification("Apenas técnicos podem lançar notas.", "error");
           closeModal();
           return;
       }
@@ -2588,7 +2662,7 @@ const handleDeleteRound = async (id) => {
           const xpChangeLabel = xpDelta > 0 ? `+${xpDelta}` : `${xpDelta}`;
           showNotification(`${stageMeta.label} salva! ${xpChangeLabel} XP ajustados.`, "success");
       } catch (error) {
-          console.error("Erro ao lanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ar notas:", error);
+          console.error("Erro ao lançar notas:", error);
           showNotification("Erro ao atualizar XP.", "error");
       }
   }
@@ -2618,7 +2692,7 @@ const handleDeleteRound = async (id) => {
       }
   }
 
-  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES DA AGENDA ---
+  // --- FUNÇÕES DA AGENDA ---
   const handleEventSubmit = async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
@@ -2631,7 +2705,7 @@ const handleDeleteRound = async (id) => {
           status: fd.get('status') || 'confirmado',
           location: fd.get('location'),
           description: fd.get('description'),
-          author: modal.data?.author || viewAsStudent?.name || "TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico"
+          author: modal.data?.author || viewAsStudent?.name || "Técnico"
       };
 
       try {
@@ -2652,7 +2726,7 @@ const handleDeleteRound = async (id) => {
       if(window.confirm("Deseja excluir este evento da agenda?")) {
           try {
               await deleteDoc(doc(db, "events", id));
-              showNotification("Evento excluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­do.");
+              showNotification("Evento excluído.");
           } catch(error) {
               console.error("Erro ao excluir evento:", error);
           }
@@ -2689,17 +2763,17 @@ const handleDeleteRound = async (id) => {
       const PARTIAL_TEAM_XP = 35;
 
       try {
-          // Cria uma lista de atualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes para enviar tudo de uma vez
+          // Cria uma lista de atualizações para enviar tudo de uma vez
           const updates = stationStudents.map(student => {
               const studentRef = doc(db, "students", student.id);
               
-              // LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³gica de XP
+              // Lógica de XP
               let xpGain = 0;
               if (student.submission?.status === 'approved') {
                   xpGain = isCompleteTeam ? FULL_TEAM_XP : PARTIAL_TEAM_XP;
               }
 
-              // Prepara a atualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: DÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ XP, remove a estaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o e limpa a entrega
+              // Prepara a atualização: Dá XP, remove a estação e limpa a entrega
               return updateDoc(studentRef, {
                   xp: (student.xp || 0) + xpGain,
                   station: null,
@@ -2707,7 +2781,7 @@ const handleDeleteRound = async (id) => {
               });
           });
 
-          // Executa todas as atualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes no banco
+          // Executa todas as atualizações no banco
           await Promise.all(updates);
 
           if(isCompleteTeam) showNotification(`Semana ${station} fechada! Sucesso Total!`, "success");
@@ -2719,17 +2793,17 @@ const handleDeleteRound = async (id) => {
       }
   }
 
-  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O PARA APLICAR O RODÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂZIO AUTOMATICAMENTE ---
+  // --- FUNÇÃO PARA APLICAR O RODÍZIO AUTOMATICAMENTE ---
   const handleApplyRotation = async () => {
       if (!currentWeekData) return;
-      if (!window.confirm(`Sincronizar a equipe com a ${currentWeekData.weekName}? Todos os alunos serÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o movidos para as suas estaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes.`)) return;
+      if (!window.confirm(`Sincronizar a equipe com a ${currentWeekData.weekName}? Todos os alunos serão movidos para as suas estações.`)) return;
       
       try {
-          // Cria uma lista de atualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes para enviar tudo de uma vez
+          // Cria uma lista de atualizações para enviar tudo de uma vez
           const updates = students.map(student => {
               let targetStation = null;
               
-              // Verifica em qual estaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o o aluno estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ escalado no cronograma
+              // Verifica em qual estação o aluno está escalado no cronograma
               if (currentWeekData.assignments[STATION_KEYS.ENGINEERING].some(s => s.name === student.name)) targetStation = STATION_KEYS.ENGINEERING;
               else if (currentWeekData.assignments[STATION_KEYS.INNOVATION].some(s => s.name === student.name)) targetStation = STATION_KEYS.INNOVATION;
               else if (currentWeekData.assignments[STATION_KEYS.MANAGEMENT].some(s => s.name === student.name)) targetStation = STATION_KEYS.MANAGEMENT;
@@ -2739,10 +2813,10 @@ const handleDeleteRound = async (id) => {
           });
 
           await Promise.all(updates);
-          showNotification("RodÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­zio automÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡tico aplicado com sucesso!", "success");
+          showNotification("Rodízio automático aplicado com sucesso!", "success");
       } catch (error) {
-          console.error("Erro ao aplicar rodÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­zio:", error);
-          showNotification("Erro ao aplicar rodÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­zio.", "error");
+          console.error("Erro ao aplicar rodízio:", error);
+          showNotification("Erro ao aplicar rodízio.", "error");
       }
   };
 
@@ -2766,9 +2840,9 @@ const handleDeleteRound = async (id) => {
       try {
           await setDoc(doc(db, "settings", "admin_profile"), dataToSave, { merge: true });
           closeModal();
-          showNotification("Perfil do tÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico atualizado com sucesso!");
+          showNotification("Perfil do técnico atualizado com sucesso!");
       } catch (error) {
-          console.error("Erro ao salvar perfil do tÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico:", error);
+          console.error("Erro ao salvar perfil do técnico:", error);
           showNotification("Erro ao salvar perfil.", "error");
       }
   };
@@ -3032,7 +3106,7 @@ const handleDeleteRound = async (id) => {
                           <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-gray-200">{viewAsStudent.turma || 'Turma nao definida'}</span>
                           <span className={`rounded-full border px-3 py-1 ${studentStationTone}`}>Estacao {viewAsStudent.station || 'Equipe'}</span>
                       </div>
-                      <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Selo fixo do aluno ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ estacao muda por semana</p>
+                      <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-500">Selo fixo do aluno • estacao muda por semana</p>
                   </div>
               </div>
 
@@ -3668,10 +3742,10 @@ const handleDeleteRound = async (id) => {
           : 'Qual feedback externo mais mudou o projeto ou o robo e como essa mudanca apareceu na pratica?';
 
 
-  // --- MODAL DE XP E APROVAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O (CONECTADO) ---
+  // --- MODAL DE XP E APROVAÇÃO (CONECTADO) ---
   const openXPModal = (student, context = "manual") => { 
       if (currentUser?.type !== 'admin') {
-          showNotification("Apenas tÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnicos podem gerenciar XP.", "error");
+          showNotification("Apenas técnicos podem gerenciar XP.", "error");
           return;
       }
 
@@ -3686,12 +3760,12 @@ const handleDeleteRound = async (id) => {
                   try {
                       const studentRef = doc(db, "students", student.id);
                       
-                      // Prepara a atualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o do XP
+                      // Prepara a atualização do XP
                       const updateData = { xp: (student.xp || 0) + val };
 
-                      // Se for contexto de aprovaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o, muda o status da entrega tambÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©m
+                      // Se for contexto de aprovação, muda o status da entrega também
                       if (context === 'approval') {
-                          // MantÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©m os dados da entrega, mas muda status para 'approved'
+                          // Mantém os dados da entrega, mas muda status para 'approved'
                           const newSubmission = { ...student.submission, status: 'approved' };
                           updateData.submission = newSubmission;
                       }
@@ -3712,7 +3786,7 @@ const handleDeleteRound = async (id) => {
       }) 
   }
 
-  const handleDeleteClick = (id) => { setModal({ type: 'confirm', data: { title: "Excluir?", msg: "IrreversÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel.", onConfirm: () => { deleteStudent(id); closeModal(); showNotification("Removido."); } } }) }
+  const handleDeleteClick = (id) => { setModal({ type: 'confirm', data: { title: "Excluir?", msg: "Irreversível.", onConfirm: () => { deleteStudent(id); closeModal(); showNotification("Removido."); } } }) }
 
   // --- RECUSAR ATIVIDADE (CONECTADO) ---
   const handleRejectClick = (student) => { 
@@ -3720,7 +3794,7 @@ const handleDeleteRound = async (id) => {
           type: 'confirm', 
           data: { 
               title: "Recusar Entrega?", 
-              msg: "O aluno receberÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ um aviso para refazer.", 
+              msg: "O aluno receberá um aviso para refazer.", 
               onConfirm: async () => { 
                   try {
                       const studentRef = doc(db, "students", student.id);
@@ -3741,14 +3815,14 @@ const handleDeleteRound = async (id) => {
       }) 
   }
 
-  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O CORRIGIDA: MOVER ALUNO (Salva no Firebase) ---
+  // --- FUNÇÃO CORRIGIDA: MOVER ALUNO (Salva no Firebase) ---
   const moveStudent = async (id, st) => {
       try {
-          // ReferÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia ao documento do aluno no banco
+          // Referência ao documento do aluno no banco
           const studentRef = doc(db, "students", id);
           
           // Atualiza o campo 'station' no Firebase
-          // TambÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©m limpamos a 'submission' anterior para ele comeÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ar zerado na nova estaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
+          // Também limpamos a 'submission' anterior para ele começar zerado na nova estação
           await updateDoc(studentRef, { 
               station: st,
               submission: null 
@@ -3760,7 +3834,7 @@ const handleDeleteRound = async (id) => {
 
       } catch (error) {
           console.error("Erro ao mover aluno:", error);
-          showNotification("Erro ao salvar mudanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a.", "error");
+          showNotification("Erro ao salvar mudança.", "error");
       }
   }
 
@@ -3792,7 +3866,7 @@ const handleDeleteRound = async (id) => {
       }
   };
 
-  // --- APROVAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O RÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂPIDA DE ATIVIDADES (EMAIL/EXTERNO) ---
+  // --- APROVAÇÃO RÁPIDA DE ATIVIDADES (EMAIL/EXTERNO) ---
   const toggleActivityStatus = async (student, newStatus) => {
       try {
           const studentRef = doc(db, "students", student.id);
@@ -3802,7 +3876,7 @@ const handleDeleteRound = async (id) => {
           } else {
               const newSubmission = { 
                   status: newStatus,
-                  text: "Avaliado manualmente pelo TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico (E-mail/Externo)",
+                  text: "Avaliado manualmente pelo Técnico (E-mail/Externo)",
                   date: new Date().toLocaleString(),
                   fileName: "Sem arquivo na plataforma"
               };
@@ -3815,9 +3889,9 @@ const handleDeleteRound = async (id) => {
       }
   };
 
-  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O PARA RESETAR TODAS AS ATIVIDADES ---
+  // --- FUNÇÃO PARA RESETAR TODAS AS ATIVIDADES ---
   async function handleResetAllActivities() {
-      if (!window.confirm("Tem certeza que deseja limpar as entregas de atividades de TODOS os alunos? Isso prepararÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ o sistema para a prÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³xima semana de treinos.")) return;
+      if (!window.confirm("Tem certeza que deseja limpar as entregas de atividades de TODOS os alunos? Isso preparará o sistema para a próxima semana de treinos.")) return;
       
       try {
           const updates = students.map(student => {
@@ -3835,7 +3909,7 @@ const handleDeleteRound = async (id) => {
       }
   }
 
-// --- CARREGAR AS METAS DO BANCO (MemÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ria Longa) ---
+// --- CARREGAR AS METAS DO BANCO (Memória Longa) ---
   useEffect(() => {
     const docRef = doc(db, "settings", "weekly_missions");
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
@@ -3852,7 +3926,7 @@ const handleDeleteRound = async (id) => {
     return () => unsubscribe();
   }, []);
 
-  // --- ATUALIZAR NA TELA ENQUANTO DIGITAM (MemÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ria Curta) ---
+  // --- ATUALIZAR NA TELA ENQUANTO DIGITAM (Memória Curta) ---
   const updateMission = (station, field, value) => {
     setMissions(prev => ({
       ...prev,
@@ -3860,7 +3934,7 @@ const handleDeleteRound = async (id) => {
     }));
   };
 
-  // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O PARA SALVAR A AUTO-AVALIAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DA RUBRICA ---
+  // --- FUNÇÃO PARA SALVAR A AUTO-AVALIAÇÃO DA RUBRICA ---
   const handleRubricUpdate = async (rubricType, category, value) => {
       const isInnovation = rubricType === 'innovation';
       const currentRubric = isInnovation ? innovationRubric : robotDesignRubric;
@@ -3871,11 +3945,11 @@ const handleDeleteRound = async (id) => {
       const newRubric = normalizeRubricValues({ ...currentRubric, [category]: value }, defaults);
       setRubricState(newRubric); // Atualiza na tela imediatamente
       try {
-          // Salva no banco de dados sem precisar de botÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o "Salvar"
+          // Salva no banco de dados sem precisar de botão "Salvar"
           await setDoc(doc(db, "settings", docId), newRubric);
       } catch (error) {
           console.error(`Erro ao salvar rubrica de ${rubricType}:`, error);
-          showNotification("Erro ao salvar auto-avaliaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o.", "error");
+          showNotification("Erro ao salvar auto-avaliação.", "error");
       }
   };
 
@@ -3899,7 +3973,7 @@ const handleDeleteRound = async (id) => {
 
   const closeModal = () => { setModal({ type: null, data: null }); setSelectedFile(null); }
 
-// --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O AUXILIAR PARA TRANSFORMAR O ARQUIVO EM TEXTO ---
+// --- FUNÇÃO AUXILIAR PARA TRANSFORMAR O ARQUIVO EM TEXTO ---
   const convertToBase64 = (file) => {
       return new Promise((resolve, reject) => {
           const reader = new FileReader();
@@ -3933,20 +4007,20 @@ const handleFileSelect = (e) => {
           });
 
           setSubmissionText(""); 
-          showNotification("Aviso de atividade enviado para validaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o pelo TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico!");
+          showNotification("Aviso de atividade enviado para validação pelo Técnico!");
       
       } catch (error) {
           console.error("Erro ao enviar:", error);
-          showNotification("Erro ao sinalizar o TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico.", "error");
+          showNotification("Erro ao sinalizar o Técnico.", "error");
       } finally {
           setIsSubmitting(false);
       }
   };
-// ATENÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O: COLOQUE ISSO NO SEU CÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œDIGO DO TÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°CNICO
-// --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DO BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O 'BAIXAR ARQUIVO' NO PAINEL DO TÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°CNICO ---
+// ATENÇÃO: COLOQUE ISSO NO SEU CÓDIGO DO TÉCNICO
+// --- FUNÇÃO DO BOTÃO 'BAIXAR ARQUIVO' NO PAINEL DO TÉCNICO ---
   const handleDownloadFile = (sub) => { 
       if (sub && sub.fileData) {
-          // O navegador recria o arquivo a partir do texto e forÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a o download
+          // O navegador recria o arquivo a partir do texto e força o download
           const link = document.createElement("a");
           link.href = sub.fileData;
           link.download = sub.fileName || "atividade_baixada.pdf";
@@ -3954,12 +4028,12 @@ const handleFileSelect = (e) => {
           link.click();
           document.body.removeChild(link);
       } else {
-          showNotification("NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o hÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ arquivo anexado ou o link estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ quebrado.", "error");
+          showNotification("Não há arquivo anexado ou o link está quebrado.", "error");
       }
   };
   // --- UI COMPONENTS ---
 
-  // --- COMPONENTE DE ESTATÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂSTICAS DA EQUIPE (VISÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DOS JUÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂZES) ---
+  // --- COMPONENTE DE ESTATÍSTICAS DA EQUIPE (VISÃO DOS JUÍZES) ---
   const TeamStatsPanel = () => {
       const totalXP = students.reduce((sum, s) => sum + (s.xp || 0), 0);
       const totalBadges = students.reduce((sum, s) => sum + (s.badges?.length || 0), 0);
@@ -3973,7 +4047,7 @@ const handleFileSelect = (e) => {
       const stats = [
           { label: 'Pessoas Impactadas', value: totalImpact, icon: <Megaphone size={16}/>, color: 'text-orange-500' },
           { label: 'Especialistas', value: totalExperts, icon: <Briefcase size={16}/>, color: 'text-purple-500' },
-          { label: 'VersÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes do RobÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´', value: totalRobotVersions, icon: <GitCommit size={16}/>, color: 'text-blue-500' },
+          { label: 'Versões do Robô', value: totalRobotVersions, icon: <GitCommit size={16}/>, color: 'text-blue-500' },
           { label: 'Recorde de Pontos', value: maxScore, icon: <Trophy size={16}/>, color: 'text-green-500' },
           { label: 'Tarefas Entregues', value: totalTasksDone, icon: <CheckCheck size={16}/>, color: 'text-pink-500' },
           { label: 'Badges Coletadas', value: totalBadges, icon: <Medal size={16}/>, color: 'text-cyan-500' },
@@ -3984,7 +4058,7 @@ const handleFileSelect = (e) => {
       return (
           <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 mb-4 shadow-xl relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none"><BarChart3 size={150} /></div>
-              <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2 relative z-10"><BarChart3 className="text-blue-500"/> Raio-X da Temporada (Dados para JuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­zes)</h3>
+              <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2 relative z-10"><BarChart3 className="text-blue-500"/> Raio-X da Temporada (Dados para Juízes)</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8 gap-4 relative z-10">
                   {stats.map((st, idx) => (
                       <div key={idx} className="bg-black/40 border border-white/5 p-4 rounded-xl flex flex-col items-center justify-center text-center hover:bg-white/5 transition-colors">
@@ -4006,9 +4080,9 @@ const handleFileSelect = (e) => {
       const totalExperts = experts.length;
 
       const achievements = [
-          { id: 'team_xp', name: 'PotÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡xima', icon: <Zap size={16}/>, color: 'text-yellow-400', bg: 'bg-yellow-500', desc: 'Atingir 6.000 XP somados por toda a equipe.', current: totalXP, target: 6000 },
-          { id: 'team_impact', name: 'Voz da MudanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a', icon: <Megaphone size={16}/>, color: 'text-orange-500', bg: 'bg-orange-500', desc: 'Impactar mais de 350 pessoas com o projeto.', current: totalImpact, target: 350 },
-          { id: 'team_tasks', name: 'MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡quina de Produtividade', icon: <CheckCheck size={16}/>, color: 'text-green-500', bg: 'bg-green-500', desc: 'Concluir 300 tarefas no Kanban da equipe.', current: totalTasksDone, target: 300 },
+          { id: 'team_xp', name: 'Potência Máxima', icon: <Zap size={16}/>, color: 'text-yellow-400', bg: 'bg-yellow-500', desc: 'Atingir 6.000 XP somados por toda a equipe.', current: totalXP, target: 6000 },
+          { id: 'team_impact', name: 'Voz da Mudança', icon: <Megaphone size={16}/>, color: 'text-orange-500', bg: 'bg-orange-500', desc: 'Impactar mais de 350 pessoas com o projeto.', current: totalImpact, target: 350 },
+          { id: 'team_tasks', name: 'Máquina de Produtividade', icon: <CheckCheck size={16}/>, color: 'text-green-500', bg: 'bg-green-500', desc: 'Concluir 300 tarefas no Kanban da equipe.', current: totalTasksDone, target: 300 },
           { id: 'team_experts', name: 'Mentes Conectadas', icon: <Briefcase size={16}/>, color: 'text-purple-500', bg: 'bg-purple-500', desc: 'Consultar 5 especialistas diferentes.', current: totalExperts, target: 5 }
       ];
 
@@ -4055,7 +4129,7 @@ const handleFileSelect = (e) => {
   const ScheduleModal = () => { 
     if(!showFullSchedule) return null; 
 
-    // FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o interna inteligente para resolver o nome
+    // Função interna inteligente para resolver o nome
     // Aceita: ID, Objeto {name: "Ana"} ou String "Ana"
     const resolveName = (item) => {
         if (!item) return "Vago";
@@ -4067,7 +4141,7 @@ const handleFileSelect = (e) => {
         const found = students.find(s => s.id === item);
         if (found) return found.name;
 
-        // 3. Se nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o achou ID, assume que o prÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³prio item ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© o nome (Texto)
+        // 3. Se não achou ID, assume que o próprio item é o nome (Texto)
         return item; 
     };
 
@@ -4075,7 +4149,7 @@ const handleFileSelect = (e) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4 animate-in fade-in backdrop-blur-sm"> 
             <div className="bg-[#151520] border border-white/10 rounded-2xl w-full max-w-5xl h-[80vh] flex flex-col relative shadow-2xl overflow-hidden"> 
                 
-                {/* CabeÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§alho */}
+                {/* Cabeçalho */}
                 <div className="p-6 border-b border-white/10 flex justify-between items-center bg-[#0a0a0f]">
                     <h3 className="text-2xl font-bold text-white flex items-center gap-3">
                         <CalendarDays className="text-blue-500"/> Cronograma Completo (36 Semanas)
@@ -4085,7 +4159,7 @@ const handleFileSelect = (e) => {
                     </button>
                 </div> 
 
-                {/* ConteÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºdo com Scroll */}
+                {/* Conteúdo com Scroll */}
                 <div className="flex-1 overflow-auto p-6 custom-scrollbar">
                     <div className="min-w-[800px]"> 
                         {rotationSchedule.map((week, idx) => (
@@ -4101,7 +4175,7 @@ const handleFileSelect = (e) => {
                                     <div className="flex-1 border-b border-white/5 ml-4"></div>
                                 </div>
 
-                                {/* Grid das EstaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes */}
+                                {/* Grid das Estações */}
                                 <div className="grid grid-cols-3 gap-4">
                                     
                                     {/* 1. Engenharia */}
@@ -4117,7 +4191,7 @@ const handleFileSelect = (e) => {
                                         </div>
                                     </div>
 
-                                    {/* 2. InovaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o */}
+                                    {/* 2. Inovação */}
                                     <div className="bg-pink-500/5 border border-pink-500/20 rounded-xl p-4">
                                         <h4 className="text-pink-500 font-bold text-xs uppercase mb-3 flex items-center gap-2"><Microscope size={14}/> {STATION_KEYS.INNOVATION}</h4>
                                         <div className="space-y-2">
@@ -4130,13 +4204,13 @@ const handleFileSelect = (e) => {
                                         </div>
                                     </div>
 
-                                    {/* 3. GestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (CORRIGIDO) */}
+                                    {/* 3. Gestão (CORRIGIDO) */}
                                     <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-4">
                                         <h4 className="text-purple-500 font-bold text-xs uppercase mb-3 flex items-center gap-2"><BookOpen size={14}/> {STATION_KEYS.MANAGEMENT}</h4>
                                         <div className="space-y-2">
                                             {(week.assignments[STATION_KEYS.MANAGEMENT] || []).map((item, i) => {
                                                 const studentName = resolveName(item);
-                                                // Verifica se ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© o aluno rotativo na gestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (que assume como lÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­der)
+                                                // Verifica se é o aluno rotativo na gestão (que assume como líder)
                                                 const isLeader = studentName !== 'Sofia' && studentName !== 'Heloise' && studentName !== 'Vago';
                                                 
                                                 return (
@@ -4151,7 +4225,7 @@ const handleFileSelect = (e) => {
                                                                 </span>
                                                                 {isLeader && (
                                                                     <span className="text-[8px] text-yellow-500 font-bold uppercase tracking-widest bg-yellow-500/10 px-1 py-0.5 rounded border border-yellow-500/20">
-                                                                        LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­der
+                                                                        Líder
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -4190,7 +4264,7 @@ const handleFileSelect = (e) => {
 
 
 
-          {modal.type === 'imageView' && <img src={modal.data} className="w-full h-auto rounded-lg" alt="EvidÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia" />}
+          {modal.type === 'imageView' && <img src={modal.data} className="w-full h-auto rounded-lg" alt="Evidência" />}
 
           {/* --- MODAL DE RECORTE (CROP) --- */}
           {isCropping && (
@@ -4198,7 +4272,7 @@ const handleFileSelect = (e) => {
                 <div className="bg-zinc-800 border border-white/10 rounded-2xl p-6 w-full max-w-sm flex flex-col items-center">
                     <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Crop size={20}/> Ajustar Foto</h3>
                     
-                    {/* ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Ârea de VisualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o e Arrastar */}
+                    {/* Área de Visualização e Arrastar */}
                     <div 
                         className="relative w-[200px] h-[200px] bg-black overflow-hidden rounded-full border-4 border-purple-500 shadow-2xl mb-6 cursor-move touch-none"
                         onMouseDown={(e) => { setIsDragging(true); setDragStart({ x: e.clientX - cropPos.x, y: e.clientY - cropPos.y }); }}
@@ -4262,7 +4336,7 @@ const handleFileSelect = (e) => {
      )}
  </div>
                         <h2 className="text-3xl font-black text-white uppercase tracking-wider">{modal.data.name}</h2>
-                        <p className="text-gray-400 font-mono text-sm bg-white/5 px-3 py-1 rounded-full mt-2 border border-white/10">{modal.data.turma} ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ {modal.data.station || "Membro da Equipe"}</p>
+                        <p className="text-gray-400 font-mono text-sm bg-white/5 px-3 py-1 rounded-full mt-2 border border-white/10">{modal.data.turma} • {modal.data.station || "Membro da Equipe"}</p>
                         {(modal.data.specialty || modal.data.station) && (
                             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                                 {modal.data.specialty && (
@@ -4284,13 +4358,13 @@ const handleFileSelect = (e) => {
                 <div className="grid grid-cols-2 gap-4 mb-8">
                     <div className="bg-[#151520] p-4 rounded-xl border border-white/10 flex flex-col items-center justify-center relative overflow-hidden">
                         <div className={`absolute top-0 left-0 w-1 h-full ${getCurrentLevel(modal.data.xp).color.replace('text-', 'bg-')}`}></div>
-                        <span className="text-gray-500 text-xs font-bold uppercase mb-1">NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel Atual</span>
+                        <span className="text-gray-500 text-xs font-bold uppercase mb-1">Nível Atual</span>
                         <span className={`text-xl font-black ${getCurrentLevel(modal.data.xp).color}`}>{getCurrentLevel(modal.data.xp).name}</span>
                         <span className="text-xs text-gray-400">{modal.data.xp} XP Totais</span>
                     </div>
                     <div className="bg-[#151520] p-4 rounded-xl border border-white/10 flex flex-col items-center justify-center relative overflow-hidden">
                         <div className={`absolute top-0 left-0 w-1 h-full ${getAttendanceStats(modal.data).percent > 75 ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                        <span className="text-gray-500 text-xs font-bold uppercase mb-1">FrequÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia</span>
+                        <span className="text-gray-500 text-xs font-bold uppercase mb-1">Frequência</span>
                         <span className={`text-xl font-black ${getAttendanceStats(modal.data).percent > 75 ? 'text-green-500' : 'text-red-500'}`}>{getAttendanceStats(modal.data).percent}%</span>
                         <span className="text-xs text-gray-400">{getAttendanceStats(modal.data).absences} Faltas</span>
                     </div>
@@ -4299,7 +4373,7 @@ const handleFileSelect = (e) => {
                 {/* Badges Collection */}
                 <div className="mb-8">
                     <h3 className="text-white font-bold mb-4 flex items-center gap-2 border-b border-white/10 pb-2">
-                        <Medal className="text-yellow-500"/> ColeÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de Badges
+                        <Medal className="text-yellow-500"/> Coleção de Badges
                     </h3>
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                         {BADGES_LIST.map(badge => {
@@ -4321,12 +4395,12 @@ const handleFileSelect = (e) => {
                 </div>
 
                 <div className="flex gap-4 mt-8">
-                    {/* BotÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de Editar (sÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ aparece para o prÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³prio aluno) */}
+                    {/* Botão de Editar (só aparece para o próprio aluno) */}
                     {viewAsStudent?.id === modal.data.id && (
                         <button 
                             onClick={() => {
                                 closeModal(); // Fecha o modal de perfil
-                                openNewStudentModal(modal.data); // Abre o modal de ediÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
+                                openNewStudentModal(modal.data); // Abre o modal de edição
                             }} 
                             className="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg transition-colors"
                         >
@@ -4352,7 +4426,7 @@ const handleFileSelect = (e) => {
       <UserPlus className="text-green-500"/> {modal.data ? 'Editar' : 'Novo'} Aluno
     </h3>
     
-    {/* DADOS BÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂSICOS */}
+    {/* DADOS BÁSICOS */}
     <div className="grid grid-cols-2 gap-4 mb-4">
         <div>
             <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome</label>
@@ -4360,7 +4434,7 @@ const handleFileSelect = (e) => {
         </div>
         <div>
             <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Turma</label>
-            <input name="turma" defaultValue={modal.data?.turma} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: 8ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âº A" />
+            <input name="turma" defaultValue={modal.data?.turma} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: 8º A" />
         </div>
     </div>
 
@@ -4378,7 +4452,7 @@ const handleFileSelect = (e) => {
         </div>
         <div className="grid grid-cols-2 gap-4">
             <div>
-                <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 block">UsuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio</label>
+                <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 block">Usuário</label>
                 <input name="username" defaultValue={modal.data?.username} required className="w-full bg-black/50 border border-white/20 rounded-lg p-2 text-white focus:border-yellow-500 outline-none" placeholder="ana.fll" />
             </div>
             <div>
@@ -4405,7 +4479,7 @@ const handleFileSelect = (e) => {
     </div>
     
     <button type="submit" className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-green-900/20 transition-all">
-        {modal.data ? 'Salvar AlteraÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes' : 'Cadastrar Aluno'}
+        {modal.data ? 'Salvar Alterações' : 'Cadastrar Aluno'}
     </button>
   </form>
 )}
@@ -4413,13 +4487,13 @@ const handleFileSelect = (e) => {
           {modal.type === 'editAdminProfile' && (
             <form onSubmit={handleAdminProfileSubmit}>
               <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white">
-                <Shield className="text-red-500"/> Editar Perfil do TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico
+                <Shield className="text-red-500"/> Editar Perfil do Técnico
               </h3>
               
               <div className="grid grid-cols-1 gap-4 mb-4 md:grid-cols-2">
                   <div>
-                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome de ExibiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</label>
-                      <input name="name" defaultValue={modal.data?.name} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-red-500 outline-none" placeholder="Ex: TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico Guilherme" />
+                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome de Exibição</label>
+                      <input name="name" defaultValue={modal.data?.name} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-red-500 outline-none" placeholder="Ex: Técnico Guilherme" />
                   </div>
                   <div>
                       <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Especialidade / assinatura</label>
@@ -4429,8 +4503,8 @@ const handleFileSelect = (e) => {
 
               <div className="mb-4">
                   <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nova Senha de Acesso (Opcional)</label>
-                  <input name="password" type="password" className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-red-500 outline-none" placeholder="Deixe em branco para nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o alterar" />
-                  <p className="text-[10px] text-gray-500 mt-1">VocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª poderÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ logar usando o usuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio <strong className="text-gray-400">admin</strong> ou o seu <strong className="text-gray-400">Nome de ExibiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</strong>.</p>
+                  <input name="password" type="password" className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-red-500 outline-none" placeholder="Deixe em branco para não alterar" />
+                  <p className="text-[10px] text-gray-500 mt-1">Você poderá logar usando o usuário <strong className="text-gray-400">admin</strong> ou o seu <strong className="text-gray-400">Nome de Exibição</strong>.</p>
               </div>
 
               {/* UPLOAD DE FOTO */}
@@ -4449,12 +4523,12 @@ const handleFileSelect = (e) => {
                   </div>
               </div>
               
-              <button type="submit" className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-red-900/20 transition-all">Salvar AlteraÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes</button>
+              <button type="submit" className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-red-900/20 transition-all">Salvar Alterações</button>
             </form>
           )}
-          {modal.type === 'expertForm' && (<form onSubmit={handleExpertSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Briefcase className="text-purple-500"/> {modal.data ? 'Editar' : 'Novo'} Especialista</h3><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome</label><input name="name" defaultValue={modal.data?.name} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div><div className="grid grid-cols-2 gap-4 mb-4"><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Cargo</label><input name="role" defaultValue={modal.data?.role} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data</label><input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">AnotaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes</label><textarea name="notes" defaultValue={modal.data?.notes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none h-20" /></div><div className="mb-4 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">EvidÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia (Foto)</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-purple-500/10 file:text-purple-500 hover:file:bg-purple-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ salva</div>}</div><div className="mb-6 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/10"><div><span className="text-sm font-bold text-white">Impactou?</span></div><select name="impact" defaultValue={modal.data?.impact} className="bg-black/50 border border-white/20 text-white p-2 rounded text-sm"><option value="Baixo">Baixo</option><option value="MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dio">MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dio</option><option value="Alto">Alto</option></select><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="applied" defaultChecked={modal.data?.applied} className="w-5 h-5 accent-green-500" /><span className="text-xs text-white">Aplicado</span></label></div><button className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg">Salvar Registro</button></form>)}
+          {modal.type === 'expertForm' && (<form onSubmit={handleExpertSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Briefcase className="text-purple-500"/> {modal.data ? 'Editar' : 'Novo'} Especialista</h3><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome</label><input name="name" defaultValue={modal.data?.name} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div><div className="grid grid-cols-2 gap-4 mb-4"><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Cargo</label><input name="role" defaultValue={modal.data?.role} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data</label><input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Anotações</label><textarea name="notes" defaultValue={modal.data?.notes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none h-20" /></div><div className="mb-4 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Evidência (Foto)</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-purple-500/10 file:text-purple-500 hover:file:bg-purple-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}</div><div className="mb-6 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/10"><div><span className="text-sm font-bold text-white">Impactou?</span></div><select name="impact" defaultValue={modal.data?.impact} className="bg-black/50 border border-white/20 text-white p-2 rounded text-sm"><option value="Baixo">Baixo</option><option value="Médio">Médio</option><option value="Alto">Alto</option></select><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="applied" defaultChecked={modal.data?.applied} className="w-5 h-5 accent-green-500" /><span className="text-xs text-white">Aplicado</span></label></div><button className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg">Salvar Registro</button></form>)}
 
-          {modal.type === 'robotForm' && (<form onSubmit={handleRobotSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><GitCommit className="text-blue-500"/> {modal.data ? 'Editar' : 'Novo'} VersÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</h3><div className="grid grid-cols-2 gap-4 mb-4"><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">VersÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</label><input name="version" defaultValue={modal.data?.version} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: V2.0" /></div><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data</label><input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Apelido</label><input name="name" defaultValue={modal.data?.name} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">O que mudou?</label><textarea name="changes" defaultValue={modal.data?.changes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none h-24" /></div><div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">EvidÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia (Foto)</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ salva</div>}</div><button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar VersÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</button></form>)}
+          {modal.type === 'robotForm' && (<form onSubmit={handleRobotSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><GitCommit className="text-blue-500"/> {modal.data ? 'Editar' : 'Novo'} Versão</h3><div className="grid grid-cols-2 gap-4 mb-4"><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Versão</label><input name="version" defaultValue={modal.data?.version} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: V2.0" /></div><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data</label><input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Apelido</label><input name="name" defaultValue={modal.data?.name} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">O que mudou?</label><textarea name="changes" defaultValue={modal.data?.changes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none h-24" /></div><div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Evidência (Foto)</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}</div><button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar Versão</button></form>)}
 
         
 
@@ -4514,7 +4588,7 @@ const handleFileSelect = (e) => {
     <div className="bg-black/50 p-4 rounded-xl mb-6 border border-white/5">
       <p className="text-gray-200 text-sm mb-4 leading-relaxed">"{modal.data.submission.text}"</p>
       
-      {/* --- BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DE DOWNLOAD (VERSÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O BASE64) --- */}
+      {/* --- BOTÃƒÆ’O DE DOWNLOAD (VERSÃƒÆ’O BASE64) --- */}
       <button 
         onClick={(e) => {
            e.stopPropagation();
@@ -4525,12 +4599,12 @@ const handleFileSelect = (e) => {
              // Truque para baixar arquivo Base64
              const link = document.createElement("a");
              link.href = fileData;
-             link.download = fileName; // O segredo estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ aqui: forÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a o download com o nome certo
+             link.download = fileName; // O segredo está aqui: força o download com o nome certo
              document.body.appendChild(link);
              link.click();
              document.body.removeChild(link);
            } else {
-             alert("ÃƒÆ’Ã‚Â¢Ãƒâ€¦Ã‚Â¡Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Erro: O conteÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºdo do arquivo nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o foi encontrado.");
+             alert("⚠️ Erro: O conteúdo do arquivo não foi encontrado.");
            }
         }} 
         className="text-xs bg-white/10 px-3 py-2 rounded text-white flex items-center gap-2 hover:bg-white/20 transition-colors w-full justify-center font-bold border border-white/10"
@@ -4552,9 +4626,9 @@ const handleFileSelect = (e) => {
     </div>
   </div>
 )}
-          {modal.type === 'expertView' && (<div><h3 className="text-xl font-bold text-white mb-1">{modal.data.name}</h3><p className="text-sm text-purple-400 mb-4">{modal.data.role} ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ {modal.data.date}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-4"><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">"{modal.data.notes}"</p></div><div className="flex gap-4 mb-6"><div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-lg border border-white/10"><span className="text-[10px] text-gray-400 uppercase font-bold">Impacto</span><span className={`text-xs font-bold ${modal.data.impact==='Alto'?'text-green-500':modal.data.impact==='MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dio'?'text-yellow-500':'text-gray-500'}`}>{modal.data.impact}</span></div>{modal.data.applied && <div className="flex items-center gap-2 bg-green-500/10 px-3 py-1.5 rounded-lg border border-green-500/20"><CheckCircle size={12} className="text-green-500"/><span className="text-xs font-bold text-green-500">SugestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o Aplicada</span></div>}</div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">EvidÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia Anexada</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10" alt="EvidÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia" /></div>)}</div>)}
+          {modal.type === 'expertView' && (<div><h3 className="text-xl font-bold text-white mb-1">{modal.data.name}</h3><p className="text-sm text-purple-400 mb-4">{modal.data.role} • {modal.data.date}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-4"><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">"{modal.data.notes}"</p></div><div className="flex gap-4 mb-6"><div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-lg border border-white/10"><span className="text-[10px] text-gray-400 uppercase font-bold">Impacto</span><span className={`text-xs font-bold ${modal.data.impact==='Alto'?'text-green-500':modal.data.impact==='Médio'?'text-yellow-500':'text-gray-500'}`}>{modal.data.impact}</span></div>{modal.data.applied && <div className="flex items-center gap-2 bg-green-500/10 px-3 py-1.5 rounded-lg border border-green-500/20"><CheckCircle size={12} className="text-green-500"/><span className="text-xs font-bold text-green-500">Sugestão Aplicada</span></div>}</div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Evidência Anexada</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10" alt="Evidência" /></div>)}</div>)}
 
-          {modal.type === 'robotView' && (<div><div className="flex justify-between items-start mb-2"><h3 className="text-xl font-bold text-white">{modal.data.name}</h3><span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-mono font-bold">{modal.data.version}</span></div><p className="text-xs text-gray-500 mb-6">{modal.data.date}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">MudanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§as e Testes</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.changes}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto do ProtÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³tipo</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10" alt="RobÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´" /></div>)}</div>)}
+          {modal.type === 'robotView' && (<div><div className="flex justify-between items-start mb-2"><h3 className="text-xl font-bold text-white">{modal.data.name}</h3><span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-mono font-bold">{modal.data.version}</span></div><p className="text-xs text-gray-500 mb-6">{modal.data.date}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Mudanças e Testes</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.changes}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto do Protótipo</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10" alt="Robô" /></div>)}</div>)}
 
           {modal.type === 'attachmentForm' && (
               <form onSubmit={handleAttachmentSubmit}>
@@ -4565,7 +4639,7 @@ const handleFileSelect = (e) => {
                           <input name="name" defaultValue={modal.data?.name} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Garra 1" />
                       </div>
                       <div>
-                          <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">SaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da Associada</label>
+                          <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Saída Associada</label>
                           <select name="roundId" defaultValue={modal.data?.roundId} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none">
                               <option value="">Selecione...</option>
                               {rounds.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
@@ -4573,23 +4647,23 @@ const handleFileSelect = (e) => {
                       </div>
                   </div>
                   <div className="mb-4">
-                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data da ModificaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</label>
+                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data da Modificação</label>
                       <input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" />
                   </div>
                   <div className="mb-4">
-                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">MudanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§as / Funcionalidade</label>
-                      <textarea name="changes" defaultValue={modal.data?.changes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none h-24" placeholder="Para quais missÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes serve e o que foi alterado?" />
+                      <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Mudanças / Funcionalidade</label>
+                      <textarea name="changes" defaultValue={modal.data?.changes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none h-24" placeholder="Para quais missões serve e o que foi alterado?" />
                   </div>
                   <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10">
                       <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Garra</label>
                       <input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />
-                      {selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ salva</div>}
+                      {selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}
                   </div>
                   <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar Garra</button>
               </form>
           )}
 
-          {modal.type === 'attachmentView' && (<div><div className="flex justify-between items-start mb-2"><h3 className="text-xl font-bold text-white">{modal.data.name}</h3>{(() => { const roundName = rounds.find(r => r.id === modal.data.roundId)?.name || 'SaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da Desconhecida'; return <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-mono font-bold">{roundName}</span> })()}</div><p className="text-xs text-gray-500 mb-6">{modal.data.date?.split('-').reverse().join('/')} {modal.data.author && `ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ Por ${modal.data.author}`}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">MudanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§as / Funcionalidade</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.changes}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Garra</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10 cursor-pointer hover:opacity-80 transition-opacity" alt="Garra" onClick={() => openImageModal(modal.data.image)} title="Clique para ampliar" /></div>)}</div>)}
+          {modal.type === 'attachmentView' && (<div><div className="flex justify-between items-start mb-2"><h3 className="text-xl font-bold text-white">{modal.data.name}</h3>{(() => { const roundName = rounds.find(r => r.id === modal.data.roundId)?.name || 'Saída Desconhecida'; return <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-mono font-bold">{roundName}</span> })()}</div><p className="text-xs text-gray-500 mb-6">{modal.data.date?.split('-').reverse().join('/')} {modal.data.author && `• Por ${modal.data.author}`}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Mudanças / Funcionalidade</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.changes}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Garra</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10 cursor-pointer hover:opacity-80 transition-opacity" alt="Garra" onClick={() => openImageModal(modal.data.image)} title="Clique para ampliar" /></div>)}</div>)}
 
           {modal.type === 'codeForm' && (
               <form onSubmit={handleCodeSubmit}>
@@ -4620,30 +4694,30 @@ const handleFileSelect = (e) => {
               </form>
           )}
 
-          {modal.type === 'codeView' && (<div><h3 className="text-xl font-bold text-white mb-2">{modal.data.title}</h3><p className="text-xs text-gray-500 mb-6 flex items-center gap-2"><Calendar size={12}/> {modal.data.date?.split('-').reverse().join('/')} {modal.data.author && <><UserCircle size={12} className="ml-2"/> Por {modal.data.author}</>}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block flex items-center gap-1"><Lightbulb size={12}/> LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³gica de Funcionamento</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.description}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block flex items-center gap-1"><ImageIcon size={12}/> Print do CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10 cursor-pointer hover:opacity-80 transition-opacity" alt="CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo" onClick={() => openImageModal(modal.data.image)} title="Clique para ampliar" /></div>)}</div>)}
+          {modal.type === 'codeView' && (<div><h3 className="text-xl font-bold text-white mb-2">{modal.data.title}</h3><p className="text-xs text-gray-500 mb-6 flex items-center gap-2"><Calendar size={12}/> {modal.data.date?.split('-').reverse().join('/')} {modal.data.author && <><UserCircle size={12} className="ml-2"/> Por {modal.data.author}</>}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block flex items-center gap-1"><Lightbulb size={12}/> Lógica de Funcionamento</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.description}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block flex items-center gap-1"><ImageIcon size={12}/> Print do Código</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10 cursor-pointer hover:opacity-80 transition-opacity" alt="Código" onClick={() => openImageModal(modal.data.image)} title="Clique para ampliar" /></div>)}</div>)}
 
           {modal.type === 'newRound' && (<form onSubmit={handleRoundSubmit}>
-              <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><ListTodo className="text-blue-500"/> {modal.data ? 'Editar SaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da' : 'Planejar SaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da'}</h3>
+              <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><ListTodo className="text-blue-500"/> {modal.data ? 'Editar Saída' : 'Planejar Saída'}</h3>
               
               <div className="grid grid-cols-2 gap-4 mb-4">
-                  <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome da SaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da</label><input name="name" defaultValue={modal.data?.name} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: SaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da 1" /></div>
+                  <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome da Saída</label><input name="name" defaultValue={modal.data?.name} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Saída 1" /></div>
                   <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Tempo Estimado (s)</label><input name="time" type="number" defaultValue={modal.data?.estimatedTime} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="30" /></div>
               </div>
 
-              {/* SELEÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DE BASE */}
+              {/* SELEÇÃO DE BASE */}
               <div className="mb-4">
-                  <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Base de SaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da</label>
+                  <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Base de Saída</label>
                   <div className="flex gap-4">
                       <label className="flex items-center gap-2 bg-black/50 p-3 rounded-lg border border-white/20 flex-1 cursor-pointer hover:border-blue-500 transition-colors"><input type="radio" name="startBase" value="Esquerda" defaultChecked={modal.data?.startBase ? modal.data.startBase === 'Esquerda' : true} className="accent-blue-500"/><span className="text-sm text-white">Esquerda (Vermelho)</span></label>
                       <label className="flex items-center gap-2 bg-black/50 p-3 rounded-lg border border-white/20 flex-1 cursor-pointer hover:border-red-500 transition-colors"><input type="radio" name="startBase" value="Direita" defaultChecked={modal.data?.startBase === 'Direita'} className="accent-red-500"/><span className="text-sm text-white">Direita (Azul)</span></label>
                   </div>
               </div>
 
-              <div className="mb-6 max-h-40 overflow-y-auto custom-scrollbar border border-white/10 rounded-lg p-2"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block sticky top-0 bg-[#151520] pb-2">MissÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes (Selecione)</label>{missionsList.map(m => (<label key={m.id} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded cursor-pointer"><input type="checkbox" name="missions" value={m.id} defaultChecked={modal.data?.missions?.includes(m.id)} className="accent-blue-500 w-4 h-4"/><div className="flex items-center gap-2 flex-1">{m.image && <img src={m.image} className="w-6 h-6 rounded object-cover" alt="M" />}<span className="text-sm text-gray-300">{m.code} - {m.name}</span></div><span className="text-xs font-bold text-blue-500">+{m.points}pts</span></label>))}</div><button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">{modal.data ? 'Salvar alteracoes' : 'Salvar SaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­da'}</button></form>)}
+              <div className="mb-6 max-h-40 overflow-y-auto custom-scrollbar border border-white/10 rounded-lg p-2"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block sticky top-0 bg-[#151520] pb-2">Missões (Selecione)</label>{missionsList.map(m => (<label key={m.id} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded cursor-pointer"><input type="checkbox" name="missions" value={m.id} defaultChecked={modal.data?.missions?.includes(m.id)} className="accent-blue-500 w-4 h-4"/><div className="flex items-center gap-2 flex-1">{m.image && <img src={m.image} className="w-6 h-6 rounded object-cover" alt="M" />}<span className="text-sm text-gray-300">{m.code} - {m.name}</span></div><span className="text-xs font-bold text-blue-500">+{m.points}pts</span></label>))}</div><button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">{modal.data ? 'Salvar alteracoes' : 'Salvar Saída'}</button></form>)}
 
     
 
-          {modal.type === 'attendance' && (<form onSubmit={handleAttendanceSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><ListTodo className="text-green-500"/> Chamada do Dia</h3><div className="mb-6 max-h-60 overflow-y-auto custom-scrollbar">{students.map(s => { const stats = getAttendanceStats(s); return ( <label key={s.id} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-lg border-b border-white/5 cursor-pointer"><input type="checkbox" name="present" value={s.id} defaultChecked className="accent-green-500 w-5 h-5"/><div className="flex-1"><span className="text-white font-bold block">{s.name}</span><span className="text-xs text-gray-500">{s.turma} ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ PresenÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a: <span className={stats.percent < 75 ? 'text-red-500' : 'text-green-500'}>{stats.percent}%</span> ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ Faltas: {stats.absences}</span></div></label>) })}</div><button className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg">Confirmar PresenÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a</button></form>)}
+          {modal.type === 'attendance' && (<form onSubmit={handleAttendanceSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><ListTodo className="text-green-500"/> Chamada do Dia</h3><div className="mb-6 max-h-60 overflow-y-auto custom-scrollbar">{students.map(s => { const stats = getAttendanceStats(s); return ( <label key={s.id} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-lg border-b border-white/5 cursor-pointer"><input type="checkbox" name="present" value={s.id} defaultChecked className="accent-green-500 w-5 h-5"/><div className="flex-1"><span className="text-white font-bold block">{s.name}</span><span className="text-xs text-gray-500">{s.turma} • Presença: <span className={stats.percent < 75 ? 'text-red-500' : 'text-green-500'}>{stats.percent}%</span> • Faltas: {stats.absences}</span></div></label>) })}</div><button className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg">Confirmar Presença</button></form>)}
 
           {modal.type === 'grades' && (() => {
               const stageId = modal.data.stageId || 'etapa1';
@@ -4653,15 +4727,15 @@ const handleFileSelect = (e) => {
 
               return (
                   <form onSubmit={handleGradesSubmit}>
-                      <h3 className="text-xl font-bold mb-2 flex items-center gap-2 text-white"><GraduationCap className="text-yellow-500"/> Boletim SESI ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ {stageMeta.label}</h3>
+                      <h3 className="text-xl font-bold mb-2 flex items-center gap-2 text-white"><GraduationCap className="text-yellow-500"/> Boletim SESI • {stageMeta.label}</h3>
                       <p className="text-xs text-gray-400 mb-4">Insira as notas do aluno(a) <strong className="text-white">{modal.data.student.name}</strong> para a <strong className="text-yellow-300">{stageMeta.label}</strong>.</p>
 
                       <div className={`mb-6 rounded-xl border p-3 text-xs ${stageHasGrades ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100' : 'border-yellow-500/20 bg-yellow-500/10 text-yellow-100'}`}>
                           <p className="font-bold uppercase tracking-[0.16em]">{stageMeta.periodLabel}</p>
                           <p className="mt-2 text-[11px] leading-relaxed text-white/80">
                               {stageHasGrades
-                                  ? 'Esta etapa jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ foi lanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ada. Se vocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª corrigir alguma nota, o sistema recalcula sÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ a diferenÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a de XP.'
-                                  : 'As notas desta etapa ficam separadas da outra para evitar lanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§amento duplicado.'}
+                                  ? 'Esta etapa já foi lançada. Se você corrigir alguma nota, o sistema recalcula só a diferença de XP.'
+                                  : 'As notas desta etapa ficam separadas da outra para evitar lançamento duplicado.'}
                           </p>
                       </div>
                       
@@ -4686,12 +4760,12 @@ const handleFileSelect = (e) => {
                       </div>
 
                       <div className="bg-white/5 p-4 rounded-xl text-xs text-gray-400 mb-6">
-                          <p className="font-bold text-white mb-2">BÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â´nus de XP por MatÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©ria:</p>
+                          <p className="font-bold text-white mb-2">Bônus de XP por Matéria:</p>
                           <div className="grid grid-cols-2 gap-2">
-                              <p>ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ Nota 10 = <span className="text-green-500 font-bold">+10 XP</span></p>
-                              <p>ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ Nota 9.0 a 9.9 = <span className="text-cyan-500 font-bold">+7 XP</span></p>
-                              <p>ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ Nota 8.0 a 8.9 = <span className="text-purple-500 font-bold">+5 XP</span></p>
-                              <p>ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¢ Nota 7.9 ou menos = <span className="text-red-400 font-bold">-2 XP</span></p>
+                              <p>• Nota 10 = <span className="text-green-500 font-bold">+10 XP</span></p>
+                              <p>• Nota 9.0 a 9.9 = <span className="text-cyan-500 font-bold">+7 XP</span></p>
+                              <p>• Nota 8.0 a 8.9 = <span className="text-purple-500 font-bold">+5 XP</span></p>
+                              <p>• Nota 7.9 ou menos = <span className="text-red-400 font-bold">-2 XP</span></p>
                           </div>
                       </div>
                       <button className="w-full bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-3 rounded-lg shadow-lg shadow-yellow-900/20">Salvar {stageMeta.label}</button>
@@ -4707,21 +4781,21 @@ const handleFileSelect = (e) => {
             </Suspense>
           )}
 
-          {/* NOVO MODAL: EDITOR DE MISSÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES */}
+          {/* NOVO MODAL: EDITOR DE MISSÕES */}
           {modal.type === 'missionForm' && (
              <div>
                  <form onSubmit={handleMissionSubmit} className="mb-8 pb-8 border-b border-white/10">
-                    <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Settings className="text-blue-500"/> {modal.data ? 'Editar' : 'Nova'} MissÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</h3>
+                    <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Settings className="text-blue-500"/> {modal.data ? 'Editar' : 'Nova'} Missão</h3>
                     <div className="grid grid-cols-3 gap-4 mb-4">
-                        <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³digo</label><input name="code" defaultValue={modal.data?.code} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: M01" /></div>
+                        <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Código</label><input name="code" defaultValue={modal.data?.code} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: M01" /></div>
                         <div className="col-span-2"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome</label><input name="name" defaultValue={modal.data?.name} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Coral Nursery" /></div>
                     </div>
                     <div className="mb-4">
-                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Pontos (MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡x)</label>
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Pontos (Máx)</label>
                         <input name="points" type="number" defaultValue={modal.data?.points} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" />
                     </div>
                     <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10">
-                        <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da MissÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</label>
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Missão</label>
                         <input id="missionFileInput" type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />
                         {selectedFile ? (
                             <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1">
@@ -4730,23 +4804,23 @@ const handleFileSelect = (e) => {
                             </span>
                         ) : modal.data?.image && (
                             <div className="mt-2 text-xs text-blue-500 flex items-center gap-1">
-                                <CheckCircle size={10}/> Imagem jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ salva
+                                <CheckCircle size={10}/> Imagem já salva
                                 <button type="button" onClick={() => setModal(prev => ({ ...prev, data: { ...prev.data, image: null } }))} className="text-red-500 hover:text-red-400 ml-2 font-bold">Remover</button>
                             </div>
                         )}
                     </div>
                     <div className="flex gap-2">
-                        <button className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-colors">Salvar MissÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</button>
+                        <button className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-colors">Salvar Missão</button>
                         {modal.data && <button type="button" onClick={() => { setModal({type: 'missionForm', data: null}); setSelectedFile(null); }} className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancelar</button>}
                     </div>
                  </form>
 
-                 {/* LISTA GERENCIADORA DE MISSÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ES */}
+                 {/* LISTA GERENCIADORA DE MISSÕES */}
                  <div>
-                    <h4 className="text-sm font-bold text-gray-400 uppercase mb-3 flex items-center gap-2"><ListTodo size={16}/> MissÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes Cadastradas</h4>
+                    <h4 className="text-sm font-bold text-gray-400 uppercase mb-3 flex items-center gap-2"><ListTodo size={16}/> Missões Cadastradas</h4>
                     <div className="max-h-60 overflow-y-auto custom-scrollbar space-y-2 pr-2">
                        {missionsList.length === 0 ? (
-                           <p className="text-xs text-gray-500 italic">Nenhuma missÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o cadastrada. Adicione no formulÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio acima.</p>
+                           <p className="text-xs text-gray-500 italic">Nenhuma missão cadastrada. Adicione no formulário acima.</p>
                        ) : (
                            [...missionsList].sort((a,b) => a.code.localeCompare(b.code)).map(m => (
                                <div key={m.id} className="flex items-center justify-between bg-black/40 p-3 rounded-lg border border-white/5 hover:bg-white/5 transition-colors group">
@@ -4777,7 +4851,7 @@ const handleFileSelect = (e) => {
 
 
 
-          {/* NOVO MODAL: MATRIZ DE DECISÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O */}
+          {/* NOVO MODAL: MATRIZ DE DECISÃƒÆ’O */}
 
           {modal.type === 'matrixForm' && (
 
@@ -4785,9 +4859,9 @@ const handleFileSelect = (e) => {
 
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><BarChart3 className="text-purple-500"/> Nova Ideia</h3>
 
-                <div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome da Ideia / SoluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</label><input name="name" required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" placeholder="Ex: Filtro de CarvÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o" /></div>
+                <div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome da Ideia / Solução</label><input name="name" required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" placeholder="Ex: Filtro de Carvão" /></div>
 
-                <p className="text-xs text-gray-400 font-bold mb-2 uppercase">PontuaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (1 = Ruim, 5 = Excelente)</p>
+                <p className="text-xs text-gray-400 font-bold mb-2 uppercase">Pontuação (1 = Ruim, 5 = Excelente)</p>
 
                 <div className="grid grid-cols-2 gap-4 mb-6">
 
@@ -4797,11 +4871,11 @@ const handleFileSelect = (e) => {
 
                     <div><label className="text-[10px] text-gray-500 block mb-1">Facilidade (Peso x1)</label><input name="feasibility" type="number" min="1" max="5" required className="w-full bg-black/50 border border-white/20 p-2 rounded text-white"/></div>
 
-                    <div><label className="text-[10px] text-gray-500 block mb-1">InovaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (Peso x2)</label><input name="innovation" type="number" min="1" max="5" required className="w-full bg-black/50 border border-white/20 p-2 rounded text-white"/></div>
+                    <div><label className="text-[10px] text-gray-500 block mb-1">Inovação (Peso x2)</label><input name="innovation" type="number" min="1" max="5" required className="w-full bg-black/50 border border-white/20 p-2 rounded text-white"/></div>
 
                 </div>
 
-                <button className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg">Adicionar ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â  Matriz</button>
+                <button className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg">Adicionar à Matriz</button>
 
              </form>
 
@@ -4811,32 +4885,32 @@ const handleFileSelect = (e) => {
           {modal.type === 'projectForm' && (
              <form onSubmit={handleProjectSubmit}>
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white">
-                    <Lightbulb className="text-yellow-500"/> Editar Projeto de InovaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
+                    <Lightbulb className="text-yellow-500"/> Editar Projeto de Inovação
                 </h3>
 
                 <div className="mb-4">
-                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome do Projeto / SoluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</label>
-                    <input name="title" defaultValue={projectSummary?.title} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-yellow-500 outline-none font-bold text-lg" placeholder="Ex: Filtro Bio-SintÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©tico" />
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome do Projeto / Solução</label>
+                    <input name="title" defaultValue={projectSummary?.title} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-yellow-500 outline-none font-bold text-lg" placeholder="Ex: Filtro Bio-Sintético" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
                         <label className="text-xs text-gray-400 uppercase font-bold mb-1 block text-red-400">O Problema</label>
-                        <textarea name="problem" defaultValue={projectSummary?.problem} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white h-32 focus:border-red-500 outline-none resize-none" placeholder="Qual problema vocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªs resolveram?" />
+                        <textarea name="problem" defaultValue={projectSummary?.problem} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white h-32 focus:border-red-500 outline-none resize-none" placeholder="Qual problema vocês resolveram?" />
                     </div>
                     <div>
-                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block text-green-400">A SoluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</label>
-                        <textarea name="solution" defaultValue={projectSummary?.solution} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white h-32 focus:border-green-500 outline-none resize-none" placeholder="Como funciona a invenÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o?" />
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block text-green-400">A Solução</label>
+                        <textarea name="solution" defaultValue={projectSummary?.solution} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white h-32 focus:border-green-500 outline-none resize-none" placeholder="Como funciona a invenção?" />
                     </div>
                 </div>
 
                 <div className="mb-4">
-                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block text-blue-400">Impacto (Para os JuÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­zes)</label>
-                    <textarea name="impact" defaultValue={projectSummary?.impact} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white h-20 focus:border-blue-500 outline-none" placeholder="Quem isso ajuda? Qual o benefÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­cio real?" />
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block text-blue-400">Impacto (Para os Juízes)</label>
+                    <textarea name="impact" defaultValue={projectSummary?.impact} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white h-20 focus:border-blue-500 outline-none" placeholder="Quem isso ajuda? Qual o benefício real?" />
                 </div>
 
                 <div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10">
-                    <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto do ProtÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³tipo / Desenho</label>
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto do Protótipo / Desenho</label>
                     <input id="projectFileInput" type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-yellow-500/10 file:text-yellow-500 hover:file:bg-yellow-500/20 cursor-pointer" />
                     {selectedFile ? (
                         <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1">
@@ -4845,7 +4919,7 @@ const handleFileSelect = (e) => {
                         </span>
                     ) : projectSummary?.image && (
                         <div className="mt-2 text-xs text-blue-500 flex items-center gap-1">
-                            <CheckCircle size={10}/> Imagem atual jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ salva
+                            <CheckCircle size={10}/> Imagem atual já salva
                             <button type="button" onClick={() => setProjectSummary(prev => ({ ...prev, image: null }))} className="text-red-500 hover:text-red-400 ml-2 font-bold">Remover</button>
                         </div>
                     )}
@@ -4861,13 +4935,13 @@ const handleFileSelect = (e) => {
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Megaphone className="text-orange-500"/> Registrar Impacto</h3>
                 
                 <div className="mb-4">
-                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome do Evento / AÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o</label>
-                    <input name="name" required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-orange-500 outline-none" placeholder="Ex: ApresentaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o para o 6ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âº Ano" />
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome do Evento / Ação</label>
+                    <input name="name" required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-orange-500 outline-none" placeholder="Ex: Apresentação para o 6º Ano" />
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
-                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">PÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºblico-Alvo</label>
+                        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Público-Alvo</label>
                         <select name="type" className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-orange-500 outline-none">
                             <option value="Escola">Escola / Alunos</option>
                             <option value="Especialistas">Especialistas</option>
@@ -4890,12 +4964,12 @@ const handleFileSelect = (e) => {
 
                 <div className="mb-6">
                     <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Feedback / Resultado (Opcional)</label>
-                    <textarea name="feedback" className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-orange-500 outline-none h-24 resize-none" placeholder="O que acharam? Deram alguma sugestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o?"></textarea>
+                    <textarea name="feedback" className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-orange-500 outline-none h-24 resize-none" placeholder="O que acharam? Deram alguma sugestão?"></textarea>
                 </div>
 
                 <div className="bg-orange-500/10 border border-orange-500/20 p-3 rounded-xl mb-6 text-xs text-orange-400 flex items-start gap-2">
                     <Info size={16} className="shrink-0 mt-0.5"/>
-                    <p>O Firebase nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o armazena fotos desta etapa para economizar espaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§o. Registre as fotos por conta prÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³pria no Drive da equipe e mostre aos juÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­zes!</p>
+                    <p>O Firebase não armazena fotos desta etapa para economizar espaço. Registre as fotos por conta própria no Drive da equipe e mostre aos juízes!</p>
                 </div>
 
                 <button type="submit" className="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-orange-900/20 transition-all">Salvar Registro</button>
@@ -4929,11 +5003,11 @@ const handleFileSelect = (e) => {
                         <select name="type" defaultValue={modal.data?.type || 'Visita'} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none">
                             <option value="Visita">Visita Tecnica</option>
                             <option value="Especialista">Mentoria / Especialista</option>
-                            <option value="ReuniÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o">Reuniao Extra</option>
+                            <option value="Reunião">Reuniao Extra</option>
                             <option value="Outro">Outro</option>
                             <option value="Treino">Treino</option>
                             <option value="Prazo">Prazo / Entrega</option>
-                            <option value="CompetiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o">Competicao</option>
+                            <option value="Competição">Competicao</option>
                         </select>
                     </div>
                     <div>
@@ -4962,8 +5036,8 @@ const handleFileSelect = (e) => {
                 </div>
 
                 <div className="mb-6">
-                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">DescriÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (Opcional)</label>
-                    <textarea name="description" defaultValue={modal.data?.description} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none h-24 resize-none" placeholder="Detalhes do encontro, materiais necessÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rios, etc..."></textarea>
+                    <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Descrição (Opcional)</label>
+                    <textarea name="description" defaultValue={modal.data?.description} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none h-24 resize-none" placeholder="Detalhes do encontro, materiais necessários, etc..."></textarea>
                 </div>
 
                 <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-blue-900/20">Salvar na Agenda</button>
@@ -4980,9 +5054,9 @@ const handleFileSelect = (e) => {
 
 
 
-  // --- COMPONENTE DE ESTRATÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°GIA ---
+  // --- COMPONENTE DE ESTRATÉGIA ---
 
-  // --- GRÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂFICO DE EVOLUÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O (SVG PURO) ---
+  // --- GRÁFICO DE EVOLUÇÃO (SVG PURO) ---
   const scoreEvolutionChartContextRef = useRef({});
   scoreEvolutionChartContextRef.current = {
       db,
@@ -4999,7 +5073,7 @@ const handleFileSelect = (e) => {
           scoreHistory,
           showNotification,
       } = scoreEvolutionChartContextRef.current;
-      // Estado local para filtrar o grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico
+      // Estado local para filtrar o gráfico
       const [chartFilter, setChartFilter] = useState('score_total'); // 'score_total' ou ID do round
       const [isFullscreen, setIsFullscreen] = useState(false);
       const isTvFullRoundsView = isTvMode && tvModeVariant === 'full_rounds';
@@ -5031,10 +5105,10 @@ const handleFileSelect = (e) => {
       let color = chartPalette.primary;
 
       if (isGeneral) {
-          // Pega apenas histÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ricos de pontuaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o total
+          // Pega apenas históricos de pontuação total
           rawData = scoreHistory.filter(h => !h.roundId);
       } else {
-          // Pega histÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico de TEMPO de um round especÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­fico
+          // Pega histórico de TEMPO de um round específico
           rawData = scoreHistory.filter(h => h.roundId === chartFilter);
           color = chartPalette.secondary;
       }
@@ -5044,21 +5118,21 @@ const handleFileSelect = (e) => {
           color = chartPalette.secondary;
       }
 
-      // --- FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O PARA LIMPAR O GRÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂFICO ATUAL ---
+      // --- FUNÇÃO PARA LIMPAR O GRÁFICO ATUAL ---
       const handleClearChart = async () => {
         const confirmMsg = isGeneral 
-            ? "ZERAR o grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico geral de Pontos/Tempo? Isso apaga todo o histÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico da equipe." 
-            : "Limpar o histÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico de tempos deste round?";
+            ? "ZERAR o gráfico geral de Pontos/Tempo? Isso apaga todo o histórico da equipe." 
+            : "Limpar o histórico de tempos deste round?";
             
         if (!window.confirm(confirmMsg)) return;
         
-        // Apaga apenas os documentos que estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o sendo mostrados no grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico agora
+        // Apaga apenas os documentos que estão sendo mostrados no gráfico agora
         try {
             const deletePromises = rawData.map(d => deleteDoc(doc(db, "score_history", d.id)));
             await Promise.all(deletePromises);
-            showNotification("HistÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico do grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico limpo!", "success");
+            showNotification("Histórico do gráfico limpo!", "success");
         } catch (error) {
-            console.error("Erro ao limpar grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico:", error);
+            console.error("Erro ao limpar gráfico:", error);
             showNotification("Erro ao limpar.", "error");
         }
       };
@@ -5076,17 +5150,17 @@ const handleFileSelect = (e) => {
       const height = isTvFullRoundsView ? 188 : isTvMode ? 146 : 200;
       const padding = isTvFullRoundsView ? 16 : isTvMode ? 14 : 20;
       
-      // Se for tempo, queremos ver cair (mas grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico svg padrÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o sobe valores, entÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o tratamos visualmente)
+      // Se for tempo, queremos ver cair (mas gráfico svg padrão sobe valores, então tratamos visualmente)
       const valKey = isTvFullRoundsView ? 'time' : chartFilter === 'score_total' ? 'score' : 'time';
       
-      // ESCALAS (MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ximos)
+      // ESCALAS (Máximos)
       const maxScore = Math.max(...data.map(d => d.score || 0), 100);
       const maxTime = Math.max(...data.map(d => d.time || 0), isGeneral ? 150 : 60); // 150s para geral, 60s para round
 
-      // FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o para converter dados em coordenadas X,Y
+      // Função para converter dados em coordenadas X,Y
       const getX = (index) => padding + (index / (data.length - 1)) * (width - 2 * padding);
       
-      // Y dinÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢mico (Pontos ou Tempo)
+      // Y dinÃ¢mico (Pontos ou Tempo)
       const getY = (val, type = 'score') => {
           const max = type === 'time' ? maxTime : maxScore;
           return height - padding - ((val || 0) / max) * (height - 2 * padding);
@@ -5095,13 +5169,13 @@ const handleFileSelect = (e) => {
       // Cria o caminho da linha (path d)
       const pathDataMain = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d[valKey], isTvFullRoundsView ? 'time' : isGeneral ? 'score' : 'time')}`).join(' ');
       
-      // Linha secundÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ria (Tempo) apenas se for Geral
+      // Linha secundária (Tempo) apenas se for Geral
       const pathDataTime = isGeneral && !isTvFullRoundsView ? data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d.time || 0, 'time')}`).join(' ') : "";
 
       // Cria o caminho para o preenchimento (area fill)
       const fillPathData = `${pathDataMain} L ${width - padding} ${height} L ${padding} ${height} Z`;
 
-      // CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡lculos de MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia
+      // Cálculos de Média
       const avgScore = data.length > 0 ? (data.reduce((sum, d) => sum + (d.score || 0), 0) / data.length).toFixed(1) : 0;
       const avgTime = data.length > 0 ? (data.reduce((sum, d) => sum + (d.time || 0), 0) / data.length).toFixed(1) : 0;
       const recentGeneralAttempts = isGeneral
@@ -5133,7 +5207,7 @@ const handleFileSelect = (e) => {
       const roundsToday = roundsByDay[buildLocalDateKey(new Date())] || 0;
       const averageRoundsPerDay = roundDays.length > 0 ? (data.length / roundDays.length) : 0;
 
-      // Coordenadas da MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia para o Gradiente
+      // Coordenadas da Média para o Gradiente
       const currentAvg = isTvFullRoundsView ? parseFloat(avgTime) : isGeneral ? parseFloat(avgScore) : parseFloat(avgTime);
       const avgY = getY(currentAvg, isTvFullRoundsView ? 'time' : isGeneral ? 'score' : 'time');
       const avgPercent = Math.max(0, Math.min(100, (avgY / height) * 100));
@@ -5143,34 +5217,34 @@ const handleFileSelect = (e) => {
           <>
               <div className={`${isTvMode ? 'mb-0 hidden' : 'mb-6 flex items-center justify-between'}`}>
                   <h3 className={`text-white font-bold flex items-center gap-2 ${isFullscreen ? 'text-2xl' : ''}`}>
-                      <TrendingUp style={{ color }}/> {isGeneral ? 'EvoluÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (Pontos vs Tempo)' : 'Melhoria de Tempo (Segundos)'}
+                      <TrendingUp style={{ color }}/> {isGeneral ? 'Evolução (Pontos vs Tempo)' : 'Melhoria de Tempo (Segundos)'}
                   </h3>
                   
                   <div className="flex items-center gap-2">
-                  {/* BotÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de Limpar HistÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico */}
+                  {/* Botão de Limpar Histórico */}
                   {!isTvMode && data.length > 0 && (
-                      <button onClick={handleClearChart} className="p-2 text-gray-500 hover:text-red-500 hover:bg-white/5 rounded-lg transition-colors" title="Zerar este grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico">
+                      <button onClick={handleClearChart} className="p-2 text-gray-500 hover:text-red-500 hover:bg-white/5 rounded-lg transition-colors" title="Zerar este gráfico">
                           <Trash2 size={16}/>
                       </button>
                   )}
 
-                  {/* BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O TELA CHEIA */}
+                  {/* BOTÃƒÆ’O TELA CHEIA */}
                   {!isTvMode && (
                       <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-2 text-gray-500 hover:text-white hover:bg-white/5 rounded-lg transition-colors" title={isFullscreen ? "Minimizar" : "Tela Cheia"}>
                           {isFullscreen ? <Minimize size={16}/> : <Maximize size={16}/>}
                       </button>
                   )}
 
-                  {/* SELETOR DE GRÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂFICO */}
+                  {/* SELETOR DE GRÁFICO */}
                   {!isTvMode && (
                   <select 
                     className="bg-black/40 border border-white/20 text-xs text-white rounded-lg p-2 outline-none focus:border-blue-500"
                     value={chartFilter}
                     onChange={(e) => setChartFilter(e.target.value)}
                   >
-                      <option value="score_total">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¦Ã‚Â  PontuaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o Geral</option>
+                      <option value="score_total">📊 Pontuação Geral</option>
                       {rounds.map(r => (
-                          <option key={r.id} value={r.id}>ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚ÂÃƒâ€šÃ‚Â±ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â Tempo: {r.name}</option>
+                          <option key={r.id} value={r.id}>⏱️ Tempo: {r.name}</option>
                       ))}
                   </select>
                   )}
@@ -5179,7 +5253,7 @@ const handleFileSelect = (e) => {
 
               {data.length === 0 ? (
                   <div className={`flex items-center justify-center text-gray-500 text-xs italic border border-dashed border-white/10 rounded-xl ${isFullscreen ? 'flex-1 min-h-[400px]' : isTvMode ? 'h-28' : 'h-32'}`}>
-                      Sem dados registrados para este grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico ainda.
+                      Sem dados registrados para este gráfico ainda.
                   </div>
               ) : (
               <div className="w-full overflow-hidden relative flex-1 flex flex-col justify-center">
@@ -5224,7 +5298,7 @@ const handleFileSelect = (e) => {
                           return <line key={p} x1={padding} y1={y} x2={width-padding} y2={y} stroke={chartPalette.grid} strokeDasharray="4 4" strokeWidth="1"/>
                       })}
 
-                      {/* Linha da MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia */}
+                      {/* Linha da Média */}
                       {isTvFullRoundsView ? (
                         <>
                             <line x1={padding} y1={tvTargetY} x2={width-padding} y2={tvTargetY} stroke={chartPalette.avg} strokeDasharray="5 5" strokeWidth="1" opacity="0.75"/>
@@ -5233,14 +5307,14 @@ const handleFileSelect = (e) => {
                       ) : (
                         <>
                             <line x1={padding} y1={avgY} x2={width-padding} y2={avgY} stroke={chartPalette.avg} strokeDasharray="5 5" strokeWidth="1" opacity="0.6"/>
-                            <text x={padding + 5} y={avgY - 5} fill={chartPalette.avg} fontSize="10" fontWeight="bold" opacity="0.8">MÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°DIA: {currentAvg}</text>
+                            <text x={padding + 5} y={avgY - 5} fill={chartPalette.avg} fontSize="10" fontWeight="bold" opacity="0.8">MÉDIA: {currentAvg}</text>
                         </>
                       )}
 
-                      {/* ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Ârea Preenchida (Apenas Principal) */}
+                      {/* Área Preenchida (Apenas Principal) */}
                       <path d={fillPathData} fill={isGeneral && !isTvFullRoundsView ? "url(#trendFillGradient)" : "none"} />
 
-                      {/* SEGUNDA LINHA: TEMPO (AZUL) - SÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ no Geral */}
+                      {/* SEGUNDA LINHA: TEMPO (AZUL) - Só no Geral */}
                       {isGeneral && !isTvFullRoundsView && (
                         <>
                             <path d={pathDataTime} fill="none" stroke={chartPalette.secondary} strokeWidth="2" strokeDasharray="5 5" strokeLinecap="round" strokeLinejoin="round" opacity="0.7"/>
@@ -5266,7 +5340,7 @@ const handleFileSelect = (e) => {
                                 <g key={d.id} className="group">
                                     <circle cx={getX(i)} cy={yPos} r="4" fill="#151520" stroke={ptColor} strokeWidth="2" />
                                     
-                                    {/* Textos fixos (Sempre visÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­veis, alternando altura para nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o encavalar) */}
+                                    {/* Textos fixos (Sempre visíveis, alternando altura para não encavalar) */}
                                     <text x={getX(i)} y={yPos - (i % 2 === 0 ? 12 : -18)} textAnchor="middle" fill={ptColor} fontSize="10" fontWeight="bold">
                                         {d[valKey]}
                                     </text>
@@ -5319,18 +5393,18 @@ const handleFileSelect = (e) => {
               </div>
               )}
 
-              {/* HISTÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œRICO COMPLETO ABAIXO DO GRÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂFICO (SÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ FORA DO MODO TV E NÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O EM TELA CHEIA) */}
+              {/* HISTÓRICO COMPLETO ABAIXO DO GRÁFICO (SÓ FORA DO MODO TV E NÃO EM TELA CHEIA) */}
               {!isTvMode && !isFullscreen && data.length > 0 && (
                   <div className="mt-8 pt-6 border-t border-white/10">
                       <div className="flex justify-between items-center mb-4">
-                          <h4 className="text-gray-400 font-bold uppercase text-xs flex items-center gap-2"><ListTodo size={14}/> HistÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico Detalhado</h4>
+                          <h4 className="text-gray-400 font-bold uppercase text-xs flex items-center gap-2"><ListTodo size={14}/> Histórico Detalhado</h4>
                           <div className="flex gap-4">
                               <div className="text-right bg-white/5 px-3 py-1 rounded-lg">
-                                  <span className="text-[10px] text-gray-500 uppercase font-bold block">MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia Pontos</span>
+                                  <span className="text-[10px] text-gray-500 uppercase font-bold block">Média Pontos</span>
                                   <span className="text-green-500 font-bold">{avgScore} pts</span>
                               </div>
                               <div className="text-right bg-white/5 px-3 py-1 rounded-lg">
-                                  <span className="text-[10px] text-gray-500 uppercase font-bold block">MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia Tempo</span>
+                                  <span className="text-[10px] text-gray-500 uppercase font-bold block">Média Tempo</span>
                                   <span className="text-blue-500 font-bold">{avgTime} s</span>
                               </div>
                               {isGeneral && (
@@ -5348,7 +5422,7 @@ const handleFileSelect = (e) => {
                                   <div className="flex items-center gap-3">
                                       <span className="text-gray-500 text-xs font-mono font-bold w-6">#{data.length - i}</span>
                                       <div className="flex flex-col">
-                                          <span className="text-gray-200 text-xs font-bold">{new Date(d.date).toLocaleDateString('pt-BR')} ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â s {new Date(d.date).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</span>
+                                          <span className="text-gray-200 text-xs font-bold">{new Date(d.date).toLocaleDateString('pt-BR')} às {new Date(d.date).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</span>
                                           {d.author && <span className="text-[10px] text-gray-500 flex items-center gap-1 mt-0.5"><UserCircle size={10}/> {d.author}</span>}
                                       </div>
                                   </div>
@@ -5384,7 +5458,7 @@ const handleFileSelect = (e) => {
       };
   }, []);
 
-  // FunÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o para salvar pontuaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o no histÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico
+  // Função para salvar pontuação no histórico
   const handleSavePracticeScore = async (totalPoints, totalTime) => {
       if (!window.confirm(`Registrar treino oficial?\nPontos: ${totalPoints}\nTempo: ${totalTime}s`)) return;
       
@@ -5393,11 +5467,11 @@ const handleFileSelect = (e) => {
               score: totalPoints,
               time: totalTime, // Salva o tempo junto!
               date: new Date().toISOString(),
-              author: isAdmin ? 'TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico' : viewAsStudent?.name || 'Equipe'
+              author: isAdmin ? 'Técnico' : viewAsStudent?.name || 'Equipe'
           });
-          showNotification("PontuaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o registrada no grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico! ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œÃƒâ€¹Ã¢â‚¬Â ");
+          showNotification("Pontuação registrada no gráfico! 📈");
       } catch (error) {
-          console.error("Erro ao salvar histÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico:", error);
+          console.error("Erro ao salvar histórico:", error);
           showNotification("Erro ao salvar.", "error");
       }
   };
@@ -5455,17 +5529,17 @@ const handleFileSelect = (e) => {
       }
   };
 
-  // --- NOVA FUNÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O: SALVAR EXECUÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DE UM ROUND ESPECÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂFICO ---
+  // --- NOVA FUNÇÃO: SALVAR EXECUÇÃO DE UM ROUND ESPECÍFICO ---
   const handleSaveRoundRun = async (e, round) => {
     e.preventDefault();
     const timeVal = parseInt(e.target.time.value);
     if(!timeVal || isNaN(timeVal)) return;
 
-    // --- CÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂLCULO DE TENDÃƒÆ’Ã†â€™Ãƒâ€¦Ã‚Â NCIA VS MÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°DIA DOS ÃƒÆ’Ã†â€™Ãƒâ€¦Ã‚Â¡LTIMOS 3 TREINOS ---
+    // --- CÁLCULO DE TENDÊNCIA VS MÉDIA DOS ÚLTIMOS 3 TREINOS ---
     const previousRuns = scoreHistory
         .filter(h => h.roundId === round.id && h.time)
         .sort((a,b) => new Date(b.date) - new Date(a.date)) // Ordena do mais recente
-        .slice(0, 3); // Pega os 3 ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºltimos
+        .slice(0, 3); // Pega os 3 últimos
 
     let trendMsg = "";
     if (previousRuns.length > 0) {
@@ -5474,20 +5548,20 @@ const handleFileSelect = (e) => {
 
         // Tempo menor = Melhor (Verde)
         if (diff < 0) {
-            trendMsg = ` ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸Ãƒâ€¦Ã‚Â¸Ãƒâ€šÃ‚Â¢ ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â ${(Math.abs(diff)).toFixed(1)}s mais rÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡pido que a mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia!`;
+            trendMsg = ` 🟢 ⬇️ ${(Math.abs(diff)).toFixed(1)}s mais rápido que a média!`;
         } else if (diff > 0) {
-            trendMsg = ` ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂÃƒâ€šÃ‚Â´ ÃƒÆ’Ã‚Â¢Ãƒâ€šÃ‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â ${(Math.abs(diff)).toFixed(1)}s mais lento que a mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia.`;
+            trendMsg = ` 🔴 ⬆️ ${(Math.abs(diff)).toFixed(1)}s mais lento que a média.`;
         }
     }
 
     try {
-        // 1. Salva no histÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico para o grÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡fico
+        // 1. Salva no histórico para o gráfico
         await addDoc(collection(db, "score_history"), {
             roundId: round.id,
             roundName: round.name,
             time: timeVal, // O tempo que levou
             date: new Date().toISOString(),
-            author: viewAsStudent?.name || "TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico"
+            author: viewAsStudent?.name || "Técnico"
         });
 
         // 2. Atualiza o tempo estimado do round (para ficar real)
@@ -5497,7 +5571,7 @@ const handleFileSelect = (e) => {
 
         showNotification(`Treino de "${round.name}" registrado: ${timeVal}s ${trendMsg}`);
         
-        // Limpa o valor do formulÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rio local (estado controlado)
+        // Limpa o valor do formulário local (estado controlado)
         setRoundFormValues(prev => {
             const next = { ...prev };
             delete next[round.id];
@@ -5658,8 +5732,79 @@ const handleFileSelect = (e) => {
       EVENT_TYPE_OPTIONS
   };
 
-  // --- PROTEÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DE CARREGAMENTO (LOADING) ---
-  // SÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ aparece DEPOIS que logou, enquanto baixa os dados
+  // --- PROTEÇÃO DE CARREGAMENTO (LOADING) ---
+  // Só aparece DEPOIS que logou, enquanto baixa os dados
+  if (!currentUser) {
+      return (
+          <div className="newgears-login-shell min-h-screen text-white flex items-center justify-center p-4 relative overflow-hidden">
+              <div className="newgears-orb newgears-orb--cyan"></div>
+              <div className="newgears-orb newgears-orb--pink"></div>
+              <div className="newgears-orb newgears-orb--yellow"></div>
+
+              <div className="newgears-login-card p-8 w-full max-w-md shadow-2xl relative z-10 animate-in zoom-in-95 duration-500">
+                  <div className="text-center mb-8 mt-2">
+                      <div className="w-24 h-24 mx-auto mb-6 flex items-center justify-center rounded-[28px] border border-white/12 bg-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.2)]">
+                          <LogoNewGears />
+                      </div>
+                      <span className="inline-flex items-center gap-2 rounded-full border border-yellow-300/20 bg-yellow-300/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-yellow-100">
+                          Equipe FLL em missao
+                      </span>
+                      <h1 className="text-3xl font-black tracking-tight mt-4">Base da Equipe New Gears</h1>
+                      <p className="text-slate-300/75 text-sm mt-3 leading-relaxed">
+                          Entre para acompanhar desafios, evoluir no XP e viver a temporada com cara de jogo, robo e torneio.
+                      </p>
+                  </div>
+
+                  <form onSubmit={handleLogin} className="space-y-5">
+                      <div>
+                          <label className="text-[10px] text-slate-300/60 uppercase font-black mb-1.5 block tracking-wider">Seu usuario</label>
+                          <div className="relative">
+                              <UserCircle className="absolute left-3 top-3.5 text-slate-400" size={18} />
+                              <input
+                                  type="text"
+                                  value={loginUser}
+                                  onChange={(e) => setLoginUser(e.target.value)}
+                                  className="newgears-login-input w-full p-3 pl-10 text-white outline-none transition-all placeholder:text-slate-500 font-medium"
+                                  placeholder="Ex: tecnico ou ana.fll"
+                                  autoFocus
+                              />
+                          </div>
+                      </div>
+
+                      <div>
+                          <label className="text-[10px] text-slate-300/60 uppercase font-black mb-1.5 block tracking-wider">Senha secreta</label>
+                          <div className="relative">
+                              <Lock className="absolute left-3 top-3.5 text-slate-400" size={18} />
+                              <input
+                                  type="password"
+                                  value={loginPass}
+                                  onChange={(e) => setLoginPass(e.target.value)}
+                                  className="newgears-login-input w-full p-3 pl-10 text-white outline-none transition-all placeholder:text-slate-500 font-medium"
+                                  placeholder="••••••"
+                              />
+                          </div>
+                      </div>
+
+                      {loginError && (
+                          <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg flex items-center gap-2 animate-in slide-in-from-top-2">
+                              <AlertCircle size={16} className="text-red-500 shrink-0" />
+                              <p className="text-red-400 text-xs font-bold">{loginError}</p>
+                          </div>
+                      )}
+
+                      <button className="newgears-login-button w-full text-white font-black py-4 mt-2 text-sm uppercase tracking-widest flex items-center justify-center gap-2">
+                          <LogOut size={18} className="rotate-180" /> Entrar na Base
+                      </button>
+                  </form>
+
+                  <div className="mt-8 pt-6 border-t border-white/5 text-center">
+                      <p className="text-[11px] text-slate-400/70">Plataforma da equipe para aprender, jogar junto e crescer na temporada.</p>
+                  </div>
+              </div>
+          </div>
+      )
+  }
+
   if (currentUser && !currentWeekData) {
       return (
           <div className="newgears-loading-shell min-h-screen flex flex-col items-center justify-center text-white gap-4 px-6 text-center">
@@ -5691,10 +5836,10 @@ const handleFileSelect = (e) => {
       );
   }
 
-  // --- RENDER PRINCIPAL (SÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ CHEGA AQUI SE ESTIVER LOGADO) ---
+  // --- RENDER PRINCIPAL (SÓ CHEGA AQUI SE ESTIVER LOGADO) ---
   return (
     <div className={`newgears-shell min-h-screen text-white selection:bg-yellow-300 selection:text-slate-950 pb-20 relative overflow-hidden ${isLiteMode ? 'newgears-lite-mode' : ''}`}>
-      {/* Estilo da AnimaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de Fundo */}
+      {/* Estilo da Animação de Fundo */}
       <div className="newgears-floating-layer">
         <div className="newgears-orb newgears-orb--cyan"></div>
         <div className="newgears-orb newgears-orb--yellow"></div>
@@ -5704,7 +5849,7 @@ const handleFileSelect = (e) => {
 
       {/* Fundo com o Logo */}
 
-      {/* ConteÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºdo fica por cima */}
+      {/* Conteúdo fica por cima */}
       <div className="newgears-content">
         
         {/* EFEITO DE CONFETES (Fica no topo de tudo, z-index gigante) */}
@@ -5727,7 +5872,7 @@ const handleFileSelect = (e) => {
             </div>
             <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-red-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in slide-in-from-top-4 border-2 border-red-400">
                 <AlertTriangle className="animate-pulse" size={20} />
-                <span className="font-bold text-sm">Sua sessÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o vai expirar em {logoutCountdown}s</span>
+                <span className="font-bold text-sm">Sua sessao vai expirar em {logoutCountdown}s</span>
                 <button className="ml-2 bg-white text-red-600 px-3 py-1 rounded-full text-xs font-black hover:bg-red-100 transition-colors">
                     Continuar Logado
                 </button>
@@ -5793,12 +5938,12 @@ const handleFileSelect = (e) => {
           </Suspense>
         )}
 
-{/* --- MODAL DO TÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°CNICO: ENTREGAR BADGES --- */}
+{/* --- MODAL DO TÉCNICO: ENTREGAR BADGES --- */}
       {isAdmin && badgeStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
           <div className="bg-[#1a1a24] rounded-2xl border border-white/10 p-6 w-full max-w-2xl shadow-2xl relative">
             
-            {/* BotÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o Fechar */}
+            {/* Botão Fechar */}
             <button 
               onClick={() => setBadgeStudent(null)}
               className="absolute top-4 right-4 p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors"
@@ -5806,12 +5951,12 @@ const handleFileSelect = (e) => {
               <X size={20} className="text-white" />
             </button>
 
-            {/* CabeÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§alho */}
+            {/* Cabeçalho */}
             <div className="text-center mb-8">
               <div className="w-16 h-16 bg-yellow-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-yellow-500/20">
                 <Trophy size={32} className="text-yellow-500" />
               </div>
-              <h2 className="text-2xl font-bold text-white">Sala de TrofÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©us</h2>
+              <h2 className="text-2xl font-bold text-white">Sala de Trofeus</h2>
               <p className="text-gray-400">Gerenciando conquistas de <span className="text-white font-bold">{badgeStudent.name}</span></p>
             </div>
 
@@ -5823,7 +5968,7 @@ const handleFileSelect = (e) => {
                   <button
                     key={badge.id}
                     onClick={() => toggleBadge(badgeStudent, badge.id)}
-                    /* ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ MUDANÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡A 1: Adicionei a palavra 'group' no comeÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§o desta linha ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ */
+                    /* 👇 MUDANÇA 1: Adicionei a palavra 'group' no começo desta linha 👇 */
                     className={`group relative flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all duration-300 ${
                       hasBadge 
                       ? 'bg-yellow-500/10 border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.2)] scale-105' 
@@ -5842,13 +5987,13 @@ const handleFileSelect = (e) => {
                        </div>
                     )}
 
-                    {/* ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ MUDANÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡A 2: BalÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£ozinho de descriÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o (Tooltip) ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ */}
+                    {/* 👇 MUDANÇA 2: Balãozinho de descrição (Tooltip) 👇 */}
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-40 bg-gray-900/95 text-gray-200 text-xs text-center p-2 rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none border border-gray-700 shadow-xl backdrop-blur-md">
                         {badge.desc}
-                        {/* TriÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ngulo (setinha) apontando para baixo */}
+                        {/* TriÃ¢ngulo (setinha) apontando para baixo */}
                         <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-700"></div>
                     </div>
-                    {/* ÃƒÆ’Ã‚Â¢Ãƒâ€¹Ã…â€œÃƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â FIM DO BALÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢OZINHO ÃƒÆ’Ã‚Â¢Ãƒâ€¹Ã…â€œÃƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â */}
+                    {/* ☝️ FIM DO BALÃOZINHO ☝️ */}
                   </button>
                 );
               })}
@@ -5894,12 +6039,12 @@ const handleFileSelect = (e) => {
                   compact={true} 
               />
 
-              {/* 1. BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O CRONOGRAMA (VOLTOU!) */}
-              {/* SÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ aparece se o modal de cronograma nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o estiver aberto */}
+              {/* 1. BOTÃƒÆ’O CRONOGRAMA (VOLTOU!) */}
+              {/* Só aparece se o modal de cronograma não estiver aberto */}
               <button onClick={() => setShowFullSchedule(true)} className="bg-white/5 border border-white/10 text-white p-2 rounded-full hover:bg-white/10 transition-colors md:px-4 md:py-2 md:rounded-lg flex items-center gap-2">
                   <CalendarDays size={18} /> <span className="hidden md:inline text-xs font-bold">Cronograma</span>
               </button>
-              {/* ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ COLE O BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DO RANKING AQUI ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ */}
+              {/* 👇 COLE O BOTÃO DO RANKING AQUI 👇 */}
               {!viewAsStudent && (
                 <button 
                   onClick={() => setActiveTab('ranking')} 
@@ -5908,25 +6053,25 @@ const handleFileSelect = (e) => {
                   <Trophy size={18} /> <span className="hidden md:inline text-xs font-bold">Ranking XP</span>
                 </button>
               )}
-              {/* ÃƒÆ’Ã‚Â¢Ãƒâ€¹Ã…â€œÃƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â FIM DO BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DO RANKING ÃƒÆ’Ã‚Â¢Ãƒâ€¹Ã…â€œÃƒâ€šÃ‚ÂÃƒÆ’Ã‚Â¯Ãƒâ€šÃ‚Â¸Ãƒâ€šÃ‚Â */}
-{/* --- BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DA BATERIA (NOVO) --- */}
+              {/* ☝️ FIM DO BOTÃO DO RANKING ☝️ */}
+{/* --- BOTÃƒÆ’O DA BATERIA (NOVO) --- */}
               <button 
                 onClick={() => setShowBatteryModal(true)} 
                 className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all border ${
-                    // Muda a cor dependendo da mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia da equipe
+                    // Muda a cor dependendo da média da equipe
                     teamAverage > 75 ? 'bg-green-500/10 border-green-500/20 text-green-500' :
                     teamAverage > 50 ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-500' :
                     teamAverage > 0  ? 'bg-red-500/10 border-red-500/20 text-red-500' :
                     'bg-white/5 border-white/10 text-gray-400'
                 }`}
-                title="Como estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ a energia da equipe?"
+                title="Como esta a energia da equipe?"
               >
-                  {/* ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âcone muda conforme a carga */}
+                  {/* Ícone muda conforme a carga */}
                   {teamAverage > 90 ? <BatteryFull size={18}/> : 
                    teamAverage > 50 ? <BatteryMedium size={18}/> : 
                    <BatteryWarning size={18}/>}
                   
-                  {/* Mostra a porcentagem mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©dia para o TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico */}
+                  {/* Mostra a porcentagem média para o Técnico */}
                   <span className="font-bold text-xs">
                       {teamMoods.length > 0 ? `${teamAverage}%` : 'Check-in'}
                   </span>
@@ -5993,7 +6138,7 @@ const handleFileSelect = (e) => {
               >
                   <Gavel size={18} /> <span className="hidden md:inline text-xs font-bold uppercase tracking-wider">Modo Juizes</span>
               </button>
-              {/* --- BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O MODO TV (TODOS PODEM ACESSAR) --- */}
+              {/* --- BOTÃƒÆ’O MODO TV (TODOS PODEM ACESSAR) --- */}
               <button 
                 onClick={openTvMode} 
                 className="bg-fuchsia-500/10 border border-fuchsia-500/20 text-fuchsia-400 p-2 rounded-full hover:bg-fuchsia-500 hover:text-white transition-all md:px-4 md:py-2 md:rounded-lg flex items-center gap-2 shadow-[0_0_15px_rgba(217,70,239,0.15)]"
@@ -6001,28 +6146,28 @@ const handleFileSelect = (e) => {
                   <MonitorPlay size={18} /> <span className="hidden md:inline text-xs font-bold uppercase tracking-wider">Modo TV</span>
               </button>
 
-              {/* 2. BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂGICO DAS CAPITÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢S (Sofia e Heloise) */}
+              {/* 2. BOTÃO MÁGICO DAS CAPITÃS (Sofia e Heloise) */}
               {viewAsStudent && (viewAsStudent.name === 'Sofia' || viewAsStudent.name === 'Heloise') && (
                   <button 
                     onClick={() => setIsAdmin(!isAdmin)} 
                     className={`px-3 py-2 rounded-lg font-bold text-[10px] md:text-xs uppercase transition-all flex items-center gap-2 ${isAdmin ? 'bg-yellow-500 text-black shadow-[0_0_15px_rgba(234,179,8,0.5)]' : 'bg-white/10 text-white border border-white/20'}`}
                   >
-                      {isAdmin ? 'ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“Ãƒâ€šÃ‚Â¤ Voltar pro XP' : 'ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ Modo CapitÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£'}
+                      {isAdmin ? '👤 Voltar pro XP' : '👑 Modo Capitã'}
                   </button>
                   
               )}
-{/* ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂREA DO DESAFIO DE INGLÃƒÆ’Ã†â€™Ãƒâ€¦Ã‚Â S (VisÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o do Aluno) */}
+{/* ÁREA DO DESAFIO DE INGLÊS (Visão do Aluno) */}
 {viewAsStudent && (
     <div className="bg-[#151520] border border-white/10 rounded-2xl p-4 mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
-            <div className="text-3xl">ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡Ãƒâ€šÃ‚ÂºÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡Ãƒâ€šÃ‚Â¸</div>
+            <div className="text-3xl">🇺🇸</div>
             <div>
                 <h3 className="text-white font-bold text-sm">English Challenge</h3>
-                <p className="text-gray-400 text-xs">Fale 10 min em inglÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªs.</p>
+                <p className="text-gray-400 text-xs">Fale 10 min em ingles.</p>
             </div>
         </div>
 
-        {/* ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ O PULO DO GATO ESTÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â AQUI: viewAsStudent?.englishChallengeUnlocked ÃƒÆ’Ã‚Â°Ãƒâ€¦Ã‚Â¸ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ */}
+        {/* 👇 O PULO DO GATO ESTÁ AQUI: viewAsStudent?.englishChallengeUnlocked 👇 */}
         {viewAsStudent?.englishChallengeUnlocked ? (
             <button 
                 onClick={claimEnglishXP}
@@ -6035,20 +6180,52 @@ const handleFileSelect = (e) => {
                 disabled
                 className="bg-gray-800 text-gray-500 font-bold py-2 px-4 rounded-xl border border-gray-700 cursor-not-allowed"
             >
-                Aguardando TÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©cnico...
+                Aguardando tecnico...
             </button>
         )}
     </div>
 )}
 
-              {/* 3. BOTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DE SAIR */}
+              {/* 3. BOTÃƒÆ’O DE SAIR */}
               <button onClick={handleLogout} className="bg-red-500/10 border border-red-500/20 text-red-500 p-2 rounded-full hover:bg-red-500 hover:text-white transition-all" title="Sair">
                   <LogOut size={18} />
               </button>
           </div>
       </header>
 
-      {/* --- ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂREA DO TÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â°CNICO (ADMIN) --- */}
+      {/* --- ÁREA DO TÉCNICO (ADMIN) --- */}
+      {!isAdmin && currentUser?.type === 'student' && !viewAsStudent && (
+        <main className="newgears-stage p-4 md:p-8 w-full max-w-[1200px] mx-auto animate-in fade-in duration-500">
+          <div className="newgears-major-panel rounded-[30px] border border-amber-400/20 bg-[#11131d]/92 p-6 md:p-8 shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
+            <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-[18px] border border-amber-400/20 bg-amber-400/10 text-amber-200">
+                  {students.length > 0 ? <AlertTriangle size={24} /> : <Loader2 size={24} className="animate-spin" />}
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-amber-200/70">Recuperando sessao</p>
+                  <h2 className="mt-2 text-xl font-black text-white">
+                    {students.length > 0 ? 'Reconstruindo o perfil do aluno.' : 'Sincronizando os dados da equipe.'}
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-300/80">
+                    {students.length > 0
+                      ? 'Encontramos uma sessao salva no navegador, mas o perfil do aluno veio incompleto. O app esta tentando localizar o cadastro correto automaticamente.'
+                      : 'A sessao do aluno foi encontrada, mas ainda estamos aguardando a lista de estudantes chegar do Firebase para montar o painel completo.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="inline-flex items-center gap-2 self-start rounded-[18px] border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-white transition-all hover:bg-white hover:text-black"
+              >
+                <LogOut size={14} />
+                Entrar Novamente
+              </button>
+            </div>
+          </div>
+        </main>
+      )}
+
       {isAdmin && (
         <main className={`newgears-stage max-w-[1600px] mx-auto animate-in fade-in duration-500 ${adminPanelState.compact ? 'p-4 md:p-6' : 'p-4 md:p-8'}`}>
           {!adminPanelState.compact && <UrgentEventsBanner />}
@@ -6129,7 +6306,7 @@ const handleFileSelect = (e) => {
           </WorkspaceCollapsible>
           )}
 
-            {/* Dentro do seu <main> ou ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rea de conteÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºdo central, junto com os outros 'ifs' de abas */}
+            {/* Dentro do seu <main> ou área de conteúdo central, junto com os outros 'ifs' de abas */}
 {activeTab === 'ranking' && (
   <Suspense fallback={<LazyPanelFallback label="Carregando ranking da equipe..." minHeightClass="min-h-[340px]" />}>
     <RankingPanel students={students} setActiveTab={setActiveTab} />
@@ -6143,7 +6320,7 @@ const handleFileSelect = (e) => {
                   <WorkspaceTabs eyebrow="Centro de Navegacao" tabs={adminWorkspaceTabs} activeId={adminTab} onChange={setAdminTab} />
                 </div>
 
-                {/* CONTEÃƒÆ’Ã†â€™Ãƒâ€¦Ã‚Â¡DO DA ABA SELECIONADA */}
+                {/* CONTEÃƒÅ¡DO DA ABA SELECIONADA */}
                 <div className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(adminTab)}`}>
                   <WorkspaceScene sceneId={`admin-${adminTab}`}>
                     {adminTab === 'rotation' && (
@@ -6189,7 +6366,7 @@ const handleFileSelect = (e) => {
                       </Suspense>
                     )}
                     
-                    {/* --- VISUALIZAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O KANBAN --- */}
+                    {/* --- VISUALIZAÇÃO KANBAN --- */}
                     {adminTab === 'kanban' && <KanbanView {...kanbanViewProps} />}
                     {adminTab === 'logbook' && <LogbookView {...logbookViewProps} />}
                     {adminTab === 'agenda' && <AgendaView {...agendaViewProps} />}
@@ -6200,7 +6377,7 @@ const handleFileSelect = (e) => {
         </main>
       )}
 
-      {/* --- ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂREA DO ALUNO --- */}
+      {/* --- ÁREA DO ALUNO --- */}
       {!isAdmin && viewAsStudent && (
         <main className="newgears-stage p-4 md:p-8 w-full max-w-[1800px] mx-auto animate-in slide-in-from-bottom-8">
           <UrgentEventsBanner />
@@ -6289,8 +6466,8 @@ const handleFileSelect = (e) => {
                           <AlertTriangle size={24} className="text-red-500" />
                       </div>
                       <div>
-                          <h3 className="text-red-400 font-bold text-xs uppercase tracking-widest mb-1">AÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o NecessÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ria</h3>
-                          <p className="text-white font-bold md:text-lg leading-tight">VocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª possui tarefas atrasadas no quadro de tarefas!</p>
+                          <h3 className="text-red-400 font-bold text-xs uppercase tracking-widest mb-1">Acao Necessaria</h3>
+                          <p className="text-white font-bold md:text-lg leading-tight">Voce possui tarefas atrasadas no quadro de tarefas!</p>
                       </div>
                   </div>
                   <button onClick={() => setStudentTab('kanban')} className="hidden md:block bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-lg shadow-red-900/20 transition-colors whitespace-nowrap">
@@ -6299,7 +6476,7 @@ const handleFileSelect = (e) => {
               </div>
           )}
 
-    {/* ALERTA DE LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂDER DE GESTÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O */}
+    {/* ALERTA DE LÍDER DE GESTÃO */}
     {currentWeekData?.assignments?.[STATION_KEYS.MANAGEMENT]?.some(s => s.id === viewAsStudent.id) && !["Heloise", "Sofia"].includes(viewAsStudent.name) && (
         <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-4 rounded-xl border border-purple-400/30 shadow-lg mb-6 animate-pulse flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -6307,8 +6484,8 @@ const handleFileSelect = (e) => {
                     <Crown size={24} className="text-yellow-300" />
                 </div>
                 <div>
-                    <h3 className="text-white font-bold text-lg leading-tight">VocÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âª ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© o LÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­der de GestÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o esta semana!</h3>
-                    <p className="text-purple-100 text-xs">Sua missÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o: Cobrar tarefas e manter a equipe focada.</p>
+                    <h3 className="text-white font-bold text-lg leading-tight">Voce e o Lider de Gestao esta semana!</h3>
+                    <p className="text-purple-100 text-xs">Sua missao: cobrar tarefas e manter a equipe focada.</p>
                 </div>
             </div>
         </div>
@@ -6322,7 +6499,7 @@ const handleFileSelect = (e) => {
                   <WorkspaceTabs eyebrow="Mapa do Aluno" tabs={studentWorkspaceTabs} activeId={studentTab} onChange={setStudentTab} />
                 </div>
 
-                {/* CONTEÃƒÆ’Ã†â€™Ãƒâ€¦Ã‚Â¡DO DA ABA SELECIONADA */}
+                {/* CONTEÃƒÅ¡DO DA ABA SELECIONADA */}
                 <div className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(studentTab)}`}>
                   <WorkspaceScene sceneId={`student-${studentTab}`}>
                     {studentTab === 'mission' && (
