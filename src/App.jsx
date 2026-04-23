@@ -328,18 +328,124 @@ const readStoredUser = () => {
   }
 };
 
+const normalizeLooseToken = (value) => {
+  if (typeof value !== 'string') return '';
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+};
+
+const BADGE_TOKEN_ALIASES = {
+  pitstop: 'pitstop',
+  pit_stop: 'pitstop',
+  pit_stop_f1: 'pitstop',
+  engineer: 'engineer',
+  engenheiro: 'engineer',
+  engenheiro_minimalista: 'engineer',
+  ice_blood: 'ice_blood',
+  sangue_frio: 'ice_blood',
+  repetition: 'repetition',
+  repeticao: 'repetition',
+  rei_da_repeticao: 'repetition',
+  helper: 'helper',
+  ajuda: 'helper',
+  braco_direito: 'helper',
+  data_keeper: 'data_keeper',
+  dados: 'data_keeper',
+  guardiao_dos_dados: 'data_keeper',
+  legend: 'legend',
+  lenda: 'legend',
+  lenda_do_xp: 'legend',
+  ambassador: 'ambassador',
+  embaixador: 'ambassador',
+};
+
+const normalizeBadgeToken = (value) => {
+  const token = normalizeLooseToken(value);
+  if (!token) return '';
+  return BADGE_TOKEN_ALIASES[token] || token;
+};
+
+const normalizeStudentBadges = (badges) => {
+  const unique = (items) => [...new Set(items.map(normalizeBadgeToken).filter(Boolean))];
+
+  if (Array.isArray(badges)) return unique(badges);
+  if (typeof badges === 'string') {
+    const looseToken = normalizeLooseToken(badges);
+    const separatorParts = badges.split(/[,;|]+/).map((item) => item.trim()).filter(Boolean);
+
+    if (BADGE_TOKEN_ALIASES[looseToken]) return unique([badges]);
+    if (separatorParts.length > 1) return unique(separatorParts.flatMap((item) => normalizeStudentBadges(item)));
+
+    return unique(badges.split(/\s+/));
+  }
+  if (!badges || typeof badges !== 'object') return [];
+
+  const mappedBadges = Object.entries(badges).flatMap(([key, value]) => {
+    const keyId = normalizeBadgeToken(key);
+
+    if (value === true) return keyId ? [keyId] : [];
+    if (typeof value === 'string' || Array.isArray(value)) return normalizeStudentBadges(value);
+
+    if (value && typeof value === 'object') {
+      const explicitId = normalizeBadgeToken(value.id);
+      const explicitEnabled = value.unlocked ?? value.active ?? value.awarded ?? value.enabled ?? true;
+
+      if (explicitId && explicitEnabled) return [explicitId];
+      if (keyId && (value.unlocked === true || value.active === true || value.awarded === true || value.enabled === true)) return [keyId];
+    }
+
+    return [];
+  });
+
+  return unique(mappedBadges);
+};
+
+const normalizeStudentRecord = (student) => {
+  if (!student || typeof student !== 'object') return student;
+  return { ...student, badges: normalizeStudentBadges(student.badges) };
+};
+
+const hasStudentBadge = (student, badgeId) => normalizeStudentBadges(student?.badges).includes(badgeId);
+
 const getStoredStudentSnapshot = (user) => {
   if (!user || user.type !== 'student') return null;
 
-  if (user.data && typeof user.data === 'object') return user.data;
-  if (user.student && typeof user.student === 'object') return user.student;
+  if (user.data && typeof user.data === 'object') return normalizeStudentRecord(user.data);
+  if (user.student && typeof user.student === 'object') return normalizeStudentRecord(user.student);
 
   return null;
 };
 
 const normalizeLookupValue = (value) => {
   if (typeof value !== 'string') return '';
-  return value.trim().toLowerCase();
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+};
+
+const STUDENT_NAME_LOOKUP_ALIASES = {
+  benjamin: 'benjamim',
+};
+
+const normalizeStudentNameLookupValue = (value) => {
+  const normalized = normalizeLookupValue(value).replace(/\s+/g, ' ');
+  return normalized
+    .split(' ')
+    .map((part) => STUDENT_NAME_LOOKUP_ALIASES[part] || part)
+    .join(' ');
+};
+
+const studentNamesMatch = (left, right) => {
+  const normalizedLeft = normalizeStudentNameLookupValue(left);
+  const normalizedRight = normalizeStudentNameLookupValue(right);
+  return Boolean(normalizedLeft && normalizedRight && normalizedLeft === normalizedRight);
 };
 
 const resolveStudentFromStoredUser = (user, students) => {
@@ -361,9 +467,9 @@ const resolveStudentFromStoredUser = (user, students) => {
     if (matchByUsername) return matchByUsername;
   }
 
-  const studentName = normalizeLookupValue(snapshot?.name || user.name);
+  const studentName = normalizeStudentNameLookupValue(snapshot?.name || user.name);
   if (studentName) {
-    const matchByName = students.find((student) => normalizeLookupValue(student.name) === studentName);
+    const matchByName = students.find((student) => normalizeStudentNameLookupValue(student.name) === studentName);
     if (matchByName) return matchByName;
   }
 
@@ -732,7 +838,7 @@ function App() {
   const toggleBadge = async (student, badgeId) => {
       if (!isAdmin) return;
       
-      const currentBadges = student.badges || [];
+      const currentBadges = normalizeStudentBadges(student.badges);
       let newBadges;
       let xpBonus = 0;
 
@@ -753,7 +859,7 @@ function App() {
       });
 
       // 2. Atualiza o estado local para ver a mudança na hora (sem recarregar)
-      const updatedStudent = { ...student, badges: newBadges, xp: (student.xp || 0) + xpBonus };
+      const updatedStudent = normalizeStudentRecord({ ...student, badges: newBadges, xp: (student.xp || 0) + xpBonus });
       
       // Atualiza o aluno selecionado no modal
       setBadgeStudent(updatedStudent);
@@ -1358,35 +1464,22 @@ function App() {
 
   // --- NOVO: Sincroniza dados do aluno logado com o Firebase em tempo real ---
   useEffect(() => {
-    if (currentUser?.type === 'student' && currentUser.data?.id && students.length > 0) {
-        // Procura a versão mais recente deste aluno na lista que veio do banco
-        const freshStudent = students.find(s => s.id === currentUser.data.id);
-        if (freshStudent) {
-            setViewAsStudent(freshStudent);
-        }
+    if (currentUser?.type !== 'student' || students.length === 0) return;
+    const freshStudent = resolveStudentFromStoredUser(currentUser, students);
+    if (!freshStudent) return;
+
+    setViewAsStudent(freshStudent);
+
+    const storedStudentId = currentUser.data?.id || currentUser.studentId || currentUser.id;
+    if (!currentUser.data || storedStudentId !== freshStudent.id) {
+      const normalizedUser = { ...currentUser, type: 'student', data: freshStudent, studentId: freshStudent.id };
+      setCurrentUser(normalizedUser);
+      persistStoredUser(normalizedUser);
     }
   }, [students, currentUser]);
 
-
-
-
-
-
 // --- FUNÇÃO DE CRONOGRAMA OFICIAL (12 ALUNOS) ---
   // Usamos useMemo para reconectar os dados assim que os alunos carregarem do Firebase
-  useEffect(() => {
-    if (currentUser?.type !== 'student' || currentUser.data || students.length === 0) return;
-
-    const recoveredStudent = resolveStudentFromStoredUser(currentUser, students);
-    if (!recoveredStudent) return;
-
-    setViewAsStudent(recoveredStudent);
-
-    const normalizedUser = { type: 'student', data: recoveredStudent };
-    setCurrentUser(normalizedUser);
-    persistStoredUser(normalizedUser);
-  }, [students, currentUser]);
-
   const buildLocalDate = (year, monthIndex, day, hour = 12, minute = 0, second = 0, millisecond = 0) =>
       new Date(year, monthIndex, day, hour, minute, second, millisecond);
 
@@ -1437,11 +1530,11 @@ function App() {
       // Função auxiliar para criar objetos visuais (evita o "Vago")
       const getStudentObjects = (namesList) => {
           return namesList.map(nameStr => {
-              // Correção: Comparação exata para diferenciar "Antônio" de "Antônio Yamaguchi"
-              const found = students.find(s => s.name && s.name.trim().toLowerCase() === nameStr.trim().toLowerCase());
+              // Compara sem acentos e com aliases de cadastro.
+              const found = students.find(s => studentNamesMatch(s.name, nameStr));
               if (found) return found; 
               // Cria objeto temporário se não achar no banco
-              return { id: `fake-${nameStr}-${Math.random()}`, name: nameStr, avatarType: 'robot' };
+              return { id: `fake-${normalizeStudentNameLookupValue(nameStr) || nameStr}`, name: nameStr, avatarType: 'robot' };
           });
       };
 
@@ -1561,9 +1654,9 @@ function App() {
     if (!db) return;
 
     // Função auxiliar para criar ouvintes seguros
-    const createListener = (colName, setter) => {
+    const createListener = (colName, setter, mapRecord = (record) => record) => {
         return onSnapshot(collection(db, colName), (snapshot) => {
-            const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            const data = snapshot.docs.map((docSnap) => mapRecord({ ...docSnap.data(), id: docSnap.id }));
             console.log(`✅ ${colName} carregados com sucesso:`, data.length);
             setter(data);
         }, (error) => {
@@ -1572,7 +1665,7 @@ function App() {
         });
     };
 
-    const unsubStudents = createListener("students", setStudents);
+    const unsubStudents = createListener("students", setStudents, normalizeStudentRecord);
     const unsubTasks = createListener("tasks", setTasks);
     const unsubEvents = createListener("events", setEvents);
     
@@ -2804,9 +2897,9 @@ const handleDeleteRound = async (id) => {
               let targetStation = null;
               
               // Verifica em qual estação o aluno está escalado no cronograma
-              if (currentWeekData.assignments[STATION_KEYS.ENGINEERING].some(s => s.name === student.name)) targetStation = STATION_KEYS.ENGINEERING;
-              else if (currentWeekData.assignments[STATION_KEYS.INNOVATION].some(s => s.name === student.name)) targetStation = STATION_KEYS.INNOVATION;
-              else if (currentWeekData.assignments[STATION_KEYS.MANAGEMENT].some(s => s.name === student.name)) targetStation = STATION_KEYS.MANAGEMENT;
+              if (currentWeekData.assignments[STATION_KEYS.ENGINEERING].some(s => studentNamesMatch(s.name, student.name))) targetStation = STATION_KEYS.ENGINEERING;
+              else if (currentWeekData.assignments[STATION_KEYS.INNOVATION].some(s => studentNamesMatch(s.name, student.name))) targetStation = STATION_KEYS.INNOVATION;
+              else if (currentWeekData.assignments[STATION_KEYS.MANAGEMENT].some(s => studentNamesMatch(s.name, student.name))) targetStation = STATION_KEYS.MANAGEMENT;
 
               // Atualiza o aluno no Firebase
               return updateDoc(doc(db, "students", student.id), { station: targetStation, submission: null });
@@ -2964,7 +3057,7 @@ const handleDeleteRound = async (id) => {
   const studentLevelProgress = viewAsStudent && studentCurrentLevel && studentNextLevel
       ? Math.min(100, ((viewAsStudent.xp - studentCurrentLevel.min) / (studentNextLevel.min - studentCurrentLevel.min)) * 100)
       : 100;
-  const unlockedStudentBadges = BADGES_LIST.filter((badge) => viewAsStudent?.badges?.includes(badge.id));
+  const unlockedStudentBadges = BADGES_LIST.filter((badge) => hasStudentBadge(viewAsStudent, badge.id));
   const featuredStudentBadge = unlockedStudentBadges[0];
   const studentSpecialtyText = (viewAsStudent?.specialty || '').trim();
   const normalizedStudentSpecialty = studentSpecialtyText
@@ -3149,9 +3242,20 @@ const handleDeleteRound = async (id) => {
               </div>
               <div className="flex flex-wrap gap-2 mt-4">
                   {unlockedStudentBadges.slice(0, 4).map((badge) => (
-                      <span key={badge.id} className={`inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-3 py-2 ${badge.color}`}>
+                      <button
+                          key={badge.id}
+                          type="button"
+                          title={`${badge.name}: ${badge.desc}`}
+                          aria-label={`${badge.name}: ${badge.desc}`}
+                          className={`group relative inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-3 py-2 transition-all hover:-translate-y-0.5 hover:border-yellow-400/30 hover:bg-yellow-400/10 focus:outline-none focus-visible:border-yellow-300/50 focus-visible:bg-yellow-400/10 ${badge.color}`}
+                      >
                           {badge.icon}
-                      </span>
+                          <span className="pointer-events-none invisible absolute bottom-full left-1/2 z-30 mb-2 w-48 -translate-x-1/2 rounded-xl border border-white/10 bg-gray-950/95 p-3 text-left opacity-0 shadow-2xl backdrop-blur-md transition-all duration-200 group-hover:visible group-hover:opacity-100 group-focus:visible group-focus:opacity-100">
+                              <span className="block text-[11px] font-black uppercase tracking-[0.14em] text-yellow-100">{badge.name}</span>
+                              <span className="mt-1 block text-xs font-semibold leading-relaxed text-gray-300">{badge.desc}</span>
+                              <span className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-white/10"></span>
+                          </span>
+                      </button>
                   ))}
                   {unlockedStudentBadges.length === 0 && (
                       <span className="text-xs text-gray-500">Nenhuma badge desbloqueada ainda.</span>
@@ -4377,7 +4481,7 @@ const handleFileSelect = (e) => {
                     </h3>
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                         {BADGES_LIST.map(badge => {
-                            const hasBadge = modal.data.badges?.includes(badge.id);
+                            const hasBadge = hasStudentBadge(modal.data, badge.id);
                             return (
                                 <div key={badge.id} className={`relative p-3 rounded-xl border flex flex-col items-center text-center transition-all group ${hasBadge ? 'bg-gradient-to-br from-white/5 to-transparent border-yellow-500/30' : 'bg-black/40 border-white/5 opacity-40 grayscale'}`}>
                                     <div className={`mb-2 ${hasBadge ? badge.color : 'text-gray-500'}`}>{badge.icon}</div>
@@ -5963,7 +6067,7 @@ const handleFileSelect = (e) => {
             {/* Grid de Badges */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {BADGES_LIST.map(badge => {
-                const hasBadge = badgeStudent.badges?.includes(badge.id);
+                const hasBadge = hasStudentBadge(badgeStudent, badge.id);
                 return (
                   <button
                     key={badge.id}
