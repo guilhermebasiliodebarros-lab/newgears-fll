@@ -3480,14 +3480,16 @@ const handleDeleteRound = async (id) => {
   ];
 
   const workspaceSceneTopPaddingMap = {
-      strategy: 'pt-7 md:pt-8',
-      rubrics: 'pt-6 md:pt-7',
-      kanban: 'pt-6 md:pt-7',
-      logbook: 'pt-6 md:pt-7',
-      agenda: 'pt-8 md:pt-10',
+      rotation: 'pt-10 md:pt-12',
+      strategy: 'pt-10 md:pt-12',
+      rounds: 'pt-10 md:pt-12',
+      rubrics: 'pt-10 md:pt-12',
+      kanban: 'pt-10 md:pt-12',
+      logbook: 'pt-10 md:pt-12',
+      agenda: 'pt-10 md:pt-12',
   };
 
-  const getWorkspaceSceneTopPadding = (tabId) => workspaceSceneTopPaddingMap[tabId] || 'pt-5 md:pt-6';
+  const getWorkspaceSceneTopPadding = (tabId) => workspaceSceneTopPaddingMap[tabId] || 'pt-10 md:pt-12';
 
   const isDashboardPanelVisible = isAdmin ? adminPanelState.dashboard : studentPanelState.dashboard;
 
