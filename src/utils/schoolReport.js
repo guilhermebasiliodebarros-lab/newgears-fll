@@ -24,16 +24,34 @@ export const SCHOOL_REPORT_STAGE_CONFIG = {
   }
 };
 
+export const parseSchoolGrade = (rawGrade) => {
+  const gradeText = `${rawGrade ?? ''}`.trim();
+  if (!gradeText) return null;
+  if (!/^(10([,.]0+)?|[0-9]([,.][0-9]+)?)$/.test(gradeText)) return null;
+
+  const normalizedGrade = gradeText.replace(',', '.');
+  const grade = Number(normalizedGrade);
+  if (!Number.isFinite(grade) || grade < 0 || grade > 10) return null;
+
+  return grade;
+};
+
+export const getSchoolGradeXp = (rawGrade) => {
+  const grade = parseSchoolGrade(rawGrade);
+
+  if (grade === null) return null;
+  if (grade === 10) return 10;
+  if (grade >= 9.0) return 7;
+  if (grade >= 8.0) return 5;
+
+  return -2;
+};
+
 export const calculateSchoolReportXp = (grades = {}) =>
   Object.values(grades).reduce((total, rawGrade) => {
-    const grade = parseFloat(rawGrade);
+    const gradeXp = getSchoolGradeXp(rawGrade);
 
-    if (Number.isNaN(grade)) return total;
-    if (grade === 10) return total + 10;
-    if (grade >= 9.0) return total + 7;
-    if (grade >= 8.0) return total + 5;
-
-    return total - 2;
+    return gradeXp === null ? total : total + gradeXp;
   }, 0);
 
 export const normalizeSchoolGrades = (schoolGrades) => {

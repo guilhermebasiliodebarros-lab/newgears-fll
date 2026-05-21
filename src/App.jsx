@@ -15,8 +15,10 @@ import {
   SCHOOL_REPORT_STAGE_CONFIG,
   SCHOOL_REPORT_SUBJECTS,
   calculateSchoolReportXp,
+  getSchoolGradeXp,
   getSchoolStageRecord,
-  normalizeSchoolGrades
+  normalizeSchoolGrades,
+  parseSchoolGrade
 } from './utils/schoolReport';
 import { 
   User, 
@@ -484,6 +486,150 @@ const Header = ({ title, userType, onLogout }) => (
     </div>
   </>
 );
+
+const formatSchoolXpChange = (xp) => (xp > 0 ? `+${xp}` : `${xp}`);
+
+const buildSchoolGradeDraft = (stageRecord) => Object.fromEntries(
+  SCHOOL_REPORT_SUBJECTS.map((subj) => [subj, stageRecord?.grades?.[subj] ?? ''])
+);
+
+const getSchoolGradeBadgeTone = (rawValue, gradeXp) => {
+  const hasValue = `${rawValue ?? ''}`.trim() !== '';
+
+  if (!hasValue) return 'border-white/10 bg-white/5 text-gray-500';
+  if (gradeXp === null) return 'border-red-500/20 bg-red-500/10 text-red-300';
+  if (gradeXp < 0) return 'border-red-500/20 bg-red-500/10 text-red-300';
+  if (gradeXp >= 10) return 'border-green-500/20 bg-green-500/10 text-green-300';
+  if (gradeXp >= 7) return 'border-cyan-500/20 bg-cyan-500/10 text-cyan-300';
+
+  return 'border-purple-500/20 bg-purple-500/10 text-purple-300';
+};
+
+const SchoolGradesForm = ({ data, onSubmit }) => {
+  const stageId = data.stageId || 'etapa1';
+  const stageMeta = SCHOOL_REPORT_STAGE_CONFIG[stageId] || SCHOOL_REPORT_STAGE_CONFIG.etapa1;
+  const stageRecord = getSchoolStageRecord(data.student, stageId);
+  const stageHasGrades = Boolean(stageRecord?.grades && Object.keys(stageRecord.grades).length > 0);
+  const previousStageXp = stageRecord?.xpApplied ?? calculateSchoolReportXp(stageRecord?.grades || {});
+  const [gradeDraft, setGradeDraft] = useState(() => buildSchoolGradeDraft(stageRecord));
+
+  const parsedGrades = useMemo(() => {
+    const nextGrades = {};
+
+    SCHOOL_REPORT_SUBJECTS.forEach((subj) => {
+      const rawValue = `${gradeDraft[subj] ?? ''}`.trim();
+      const grade = parseSchoolGrade(rawValue);
+
+      if (rawValue && grade !== null) {
+        nextGrades[subj] = grade;
+      }
+    });
+
+    return nextGrades;
+  }, [gradeDraft]);
+
+  const invalidSubjects = useMemo(() => SCHOOL_REPORT_SUBJECTS.filter((subj) => {
+    const rawValue = `${gradeDraft[subj] ?? ''}`.trim();
+    return rawValue && parseSchoolGrade(rawValue) === null;
+  }), [gradeDraft]);
+
+  const stageXp = calculateSchoolReportXp(parsedGrades);
+  const xpDelta = stageXp - previousStageXp;
+
+  const handleGradeChange = (subj, value) => {
+    setGradeDraft((prev) => ({ ...prev, [subj]: value }));
+  };
+
+  return (
+    <form onSubmit={onSubmit}>
+      <h3 className="text-xl font-bold mb-2 flex items-center gap-2 text-white"><GraduationCap className="text-yellow-500"/> Boletim SESI - {stageMeta.label}</h3>
+      <p className="text-xs text-gray-400 mb-4">Insira as notas do aluno(a) <strong className="text-white">{data.student.name}</strong> para a <strong className="text-yellow-300">{stageMeta.label}</strong>.</p>
+
+      <div className={`mb-4 rounded-xl border p-3 text-xs ${stageHasGrades ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100' : 'border-yellow-500/20 bg-yellow-500/10 text-yellow-100'}`}>
+        <p className="font-bold uppercase tracking-[0.16em]">{stageMeta.periodLabel}</p>
+        <p className="mt-2 text-[11px] leading-relaxed text-white/80">
+          {stageHasGrades
+            ? 'Esta etapa ja foi lancada. Se voce corrigir alguma nota, o sistema recalcula so a diferenca de XP.'
+            : 'As notas desta etapa ficam separadas da outra para evitar lancamento duplicado.'}
+        </p>
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-yellow-100/70">XP da etapa</p>
+          <p className="mt-1 text-2xl font-black text-yellow-200">{stageXp}</p>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400">Ja aplicado</p>
+          <p className="mt-1 text-2xl font-black text-white">{previousStageXp}</p>
+        </div>
+        <div className={`rounded-xl border p-3 ${xpDelta < 0 ? 'border-red-500/20 bg-red-500/10' : 'border-emerald-500/20 bg-emerald-500/10'}`}>
+          <p className={`text-[10px] font-bold uppercase tracking-[0.16em] ${xpDelta < 0 ? 'text-red-100/70' : 'text-emerald-100/70'}`}>Vai entrar agora</p>
+          <p className={`mt-1 text-2xl font-black ${xpDelta < 0 ? 'text-red-200' : 'text-emerald-200'}`}>{formatSchoolXpChange(xpDelta)}</p>
+        </div>
+      </div>
+
+      <div className="bg-black/50 border border-white/20 rounded-xl p-4 mb-6">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+          {SCHOOL_REPORT_SUBJECTS.map((subj) => {
+            const rawValue = gradeDraft[subj] ?? '';
+            const gradeXp = getSchoolGradeXp(rawValue);
+            const hasValue = `${rawValue}`.trim() !== '';
+            const badgeLabel = !hasValue
+              ? '--'
+              : gradeXp === null
+                ? 'invalida'
+                : `${formatSchoolXpChange(gradeXp)} XP`;
+
+            return (
+              <div key={subj} className="flex min-w-0 flex-col">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <label className="min-w-0 truncate text-[10px] text-gray-400 uppercase font-bold" title={subj}>{subj}</label>
+                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black ${getSchoolGradeBadgeTone(rawValue, gradeXp)}`}>
+                    {badgeLabel}
+                  </span>
+                </div>
+                <input
+                  name={`grade_${subj}`}
+                  type="text"
+                  inputMode="decimal"
+                  pattern="^(10([,.]0+)?|[0-9]([,.][0-9]+)?)$"
+                  value={rawValue}
+                  onChange={(event) => handleGradeChange(subj, event.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white focus:border-yellow-500 outline-none font-mono text-sm"
+                  placeholder="0,0"
+                  title="Use valores de 0 a 10. Ex: 8,5"
+                  autoComplete="off"
+                />
+              </div>
+            );
+          })}
+        </div>
+        {invalidSubjects.length > 0 && (
+          <p className="mt-3 text-[11px] font-bold text-red-300">
+            Confira: {invalidSubjects.join(', ')} deve usar valor de 0 a 10, com ponto ou virgula.
+          </p>
+        )}
+      </div>
+
+      <div className="bg-white/5 p-4 rounded-xl text-xs text-gray-400 mb-6">
+        <p className="font-bold text-white mb-2">Bonus de XP por Materia:</p>
+        <div className="grid grid-cols-2 gap-2">
+          <p>Nota 10 = <span className="text-green-500 font-bold">+10 XP</span></p>
+          <p>Nota 9.0 a 9.9 = <span className="text-cyan-500 font-bold">+7 XP</span></p>
+          <p>Nota 8.0 a 8.9 = <span className="text-purple-500 font-bold">+5 XP</span></p>
+          <p>Nota 7.9 ou menos = <span className="text-red-400 font-bold">-2 XP</span></p>
+        </div>
+      </div>
+      <button
+        disabled={invalidSubjects.length > 0}
+        className={`w-full font-bold py-3 rounded-lg shadow-lg shadow-yellow-900/20 ${invalidSubjects.length > 0 ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-yellow-600 hover:bg-yellow-500 text-black'}`}
+      >
+        Salvar {stageMeta.label}
+      </button>
+    </form>
+  );
+};
 
 function App() {
   // === TODOS OS ESTADOS (HOOKS) ===
@@ -2668,16 +2814,25 @@ const handleDeleteRound = async (id) => {
 
       let bonusXP = 0;
       const newGrades = {};
+      let hasInvalidGrade = false;
 
       SCHOOL_REPORT_SUBJECTS.forEach(subj => {
           const val = fd.get(`grade_${subj}`);
-          if (val && val.trim() !== '') {
-              const grade = parseFloat(val);
-              if (!isNaN(grade)) {
+          const rawValue = `${val ?? ''}`.trim();
+          if (rawValue !== '') {
+              const grade = parseSchoolGrade(rawValue);
+              if (grade === null) {
+                  hasInvalidGrade = true;
+              } else {
                   newGrades[subj] = grade;
               }
           }
       });
+
+      if (hasInvalidGrade) {
+          showNotification("Confira as notas: use valores de 0 a 10, com ponto ou virgula.", "error");
+          return;
+      }
 
       bonusXP = calculateSchoolReportXp(newGrades);
 
@@ -4777,59 +4932,13 @@ const handleFileSelect = (e) => {
 
           {modal.type === 'attendance' && (<form onSubmit={handleAttendanceSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><ListTodo className="text-green-500"/> Chamada do Dia</h3><div className="mb-6 max-h-60 overflow-y-auto custom-scrollbar">{students.map(s => { const stats = getAttendanceStats(s); return ( <label key={s.id} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-lg border-b border-white/5 cursor-pointer"><input type="checkbox" name="present" value={s.id} defaultChecked className="accent-green-500 w-5 h-5"/><div className="flex-1"><span className="text-white font-bold block">{s.name}</span><span className="text-xs text-gray-500">{s.turma} • Presença: <span className={stats.percent < 75 ? 'text-red-500' : 'text-green-500'}>{stats.percent}%</span> • Faltas: {stats.absences}</span></div></label>) })}</div><button className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg">Confirmar Presença</button></form>)}
 
-          {modal.type === 'grades' && (() => {
-              const stageId = modal.data.stageId || 'etapa1';
-              const stageMeta = SCHOOL_REPORT_STAGE_CONFIG[stageId] || SCHOOL_REPORT_STAGE_CONFIG.etapa1;
-              const stageRecord = getSchoolStageRecord(modal.data.student, stageId);
-              const stageHasGrades = Boolean(stageRecord?.grades && Object.keys(stageRecord.grades).length > 0);
-
-              return (
-                  <form onSubmit={handleGradesSubmit}>
-                      <h3 className="text-xl font-bold mb-2 flex items-center gap-2 text-white"><GraduationCap className="text-yellow-500"/> Boletim SESI • {stageMeta.label}</h3>
-                      <p className="text-xs text-gray-400 mb-4">Insira as notas do aluno(a) <strong className="text-white">{modal.data.student.name}</strong> para a <strong className="text-yellow-300">{stageMeta.label}</strong>.</p>
-
-                      <div className={`mb-6 rounded-xl border p-3 text-xs ${stageHasGrades ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100' : 'border-yellow-500/20 bg-yellow-500/10 text-yellow-100'}`}>
-                          <p className="font-bold uppercase tracking-[0.16em]">{stageMeta.periodLabel}</p>
-                          <p className="mt-2 text-[11px] leading-relaxed text-white/80">
-                              {stageHasGrades
-                                  ? 'Esta etapa já foi lançada. Se você corrigir alguma nota, o sistema recalcula só a diferença de XP.'
-                                  : 'As notas desta etapa ficam separadas da outra para evitar lançamento duplicado.'}
-                          </p>
-                      </div>
-                      
-                      <div className="bg-black/50 border border-white/20 rounded-xl p-4 mb-6">
-                          <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                              {SCHOOL_REPORT_SUBJECTS.map(subj => (
-                                  <div key={subj} className="flex flex-col">
-                                      <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 truncate" title={subj}>{subj}</label>
-                                      <input
-                                          name={`grade_${subj}`}
-                                          type="number"
-                                          step="0.1"
-                                          min="0"
-                                          max="10"
-                                          defaultValue={stageRecord?.grades?.[subj] ?? ''}
-                                          className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-white focus:border-yellow-500 outline-none font-mono text-sm"
-                                          placeholder="0.0"
-                                      />
-                                  </div>
-                              ))}
-                          </div>
-                      </div>
-
-                      <div className="bg-white/5 p-4 rounded-xl text-xs text-gray-400 mb-6">
-                          <p className="font-bold text-white mb-2">Bônus de XP por Matéria:</p>
-                          <div className="grid grid-cols-2 gap-2">
-                              <p>• Nota 10 = <span className="text-green-500 font-bold">+10 XP</span></p>
-                              <p>• Nota 9.0 a 9.9 = <span className="text-cyan-500 font-bold">+7 XP</span></p>
-                              <p>• Nota 8.0 a 8.9 = <span className="text-purple-500 font-bold">+5 XP</span></p>
-                              <p>• Nota 7.9 ou menos = <span className="text-red-400 font-bold">-2 XP</span></p>
-                          </div>
-                      </div>
-                      <button className="w-full bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-3 rounded-lg shadow-lg shadow-yellow-900/20">Salvar {stageMeta.label}</button>
-                  </form>
-              );
-          })()}
+          {modal.type === 'grades' && (
+              <SchoolGradesForm
+                  key={`${modal.data.student.id}-${modal.data.stageId || 'etapa1'}`}
+                  data={modal.data}
+                  onSubmit={handleGradesSubmit}
+              />
+          )}
 
           
           {/* --- NOVO MODAL: TREINO DE PIT STOP --- */}
