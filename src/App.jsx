@@ -317,6 +317,22 @@ const BADGE_TOKEN_ALIASES = {
   lenda_do_xp: 'legend',
   ambassador: 'ambassador',
   embaixador: 'ambassador',
+  mission_captain: 'mission_captain',
+  capitao_das_missoes: 'mission_captain',
+  robot_driver: 'robot_driver',
+  piloto_do_robo: 'robot_driver',
+  code_debugger: 'code_debugger',
+  cacador_de_bugs: 'code_debugger',
+  innovation_scout: 'innovation_scout',
+  explorador_de_inovacao: 'innovation_scout',
+  core_values: 'core_values',
+  valores_fll: 'core_values',
+  pit_presenter: 'pit_presenter',
+  voz_dos_juizes: 'pit_presenter',
+  logbook_keeper: 'logbook_keeper',
+  guardiao_do_diario: 'logbook_keeper',
+  strategy_builder: 'strategy_builder',
+  arquiteto_da_estrategia: 'strategy_builder',
 };
 
 const normalizeBadgeToken = (value) => {
@@ -886,6 +902,14 @@ function App() {
     { id: 'data_keeper', name: 'Guardião dos Dados', icon: <BarChart size={20}/>, color: 'text-blue-500', desc: 'Trouxe estatísticas reais pro Projeto.' },
     { id: 'legend', name: 'Lenda do XP', icon: <Zap size={20}/>, color: 'text-yellow-400', desc: 'Destaque absoluto no Ranking de XP.' },
     { id: 'ambassador', name: 'Embaixador', icon: <Crown size={20}/>, color: 'text-purple-500', desc: 'Liderou pelo exemplo e uniu a equipe.' },
+    { id: 'mission_captain', name: 'Capitao das Missoes', icon: <Target size={20}/>, color: 'text-emerald-400', desc: 'Organizou estrategia de missoes e ajudou o time a pontuar melhor.' },
+    { id: 'robot_driver', name: 'Piloto do Robo', icon: <Gamepad2 size={20}/>, color: 'text-cyan-400', desc: 'Conduziu treinos de mesa com foco, precisao e calma.' },
+    { id: 'code_debugger', name: 'Cacador de Bugs', icon: <Code size={20}/>, color: 'text-indigo-400', desc: 'Encontrou e corrigiu falhas importantes no codigo do robo.' },
+    { id: 'innovation_scout', name: 'Explorador de Inovacao', icon: <Microscope size={20}/>, color: 'text-fuchsia-400', desc: 'Pesquisou ideias, usuarios ou especialistas para fortalecer o projeto.' },
+    { id: 'core_values', name: 'Valores FLL', icon: <Shield size={20}/>, color: 'text-green-400', desc: 'Praticou descoberta, inclusao, impacto e trabalho em equipe.' },
+    { id: 'pit_presenter', name: 'Voz dos Juizes', icon: <MessageSquare size={20}/>, color: 'text-orange-400', desc: 'Explicou projeto, robo ou processo com clareza para a banca.' },
+    { id: 'logbook_keeper', name: 'Guardiao do Diario', icon: <Book size={20}/>, color: 'text-sky-400', desc: 'Registrou testes, decisoes e aprendizados no diario de engenharia.' },
+    { id: 'strategy_builder', name: 'Arquiteto da Estrategia', icon: <Lightbulb size={20}/>, color: 'text-amber-400', desc: 'Transformou uma ideia solta em plano real de execucao FLL.' },
   ];
 
   // --- DESAFIO DE INGLÊS: Função do Técnico ---
@@ -3256,9 +3280,7 @@ const handleDeleteRound = async (id) => {
   const totalTeamExperts = experts.length;
   const teamAchievementsSummary = [
       { id: 'team_xp', name: 'Potencia Maxima', current: totalTeamXP, target: 6000, icon: <Zap size={14} className="text-yellow-300" /> },
-      { id: 'team_impact', name: 'Voz da Mudanca', current: totalTeamImpact, target: 350, icon: <Megaphone size={14} className="text-orange-300" /> },
-      { id: 'team_tasks', name: 'Maquina de Produtividade', current: totalTeamTasksDone, target: 300, icon: <CheckCheck size={14} className="text-emerald-300" /> },
-      { id: 'team_experts', name: 'Mentes Conectadas', current: totalTeamExperts, target: 5, icon: <Briefcase size={14} className="text-violet-300" /> }
+      { id: 'team_impact', name: 'Voz da Mudanca', current: totalTeamImpact, target: 350, icon: <Megaphone size={14} className="text-orange-300" /> }
   ];
   const unlockedTeamAchievements = teamAchievementsSummary.filter((achievement) => achievement.current >= achievement.target);
   const nextTeamAchievement = teamAchievementsSummary
@@ -3383,7 +3405,7 @@ const handleDeleteRound = async (id) => {
                   </span>
               </div>
               <div className="space-y-2 mt-4">
-                  {teamAchievementsSummary.slice(0, 2).map((achievement) => {
+                  {unlockedTeamAchievements.map((achievement) => {
                       const progress = Math.min(100, (achievement.current / achievement.target) * 100);
 
                       return (
@@ -3401,9 +3423,14 @@ const handleDeleteRound = async (id) => {
                           </div>
                       );
                   })}
+                  {unlockedTeamAchievements.length === 0 && (
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                          <p className="text-xs font-bold text-gray-400">Nenhuma conquista coletiva desbloqueada ainda.</p>
+                      </div>
+                  )}
               </div>
               <p className="text-xs text-gray-400 mt-3">
-                  {nextTeamAchievement ? `Proxima meta: ${nextTeamAchievement.name}.` : 'Todas as conquistas coletivas foram desbloqueadas.'}
+                  {unlockedTeamAchievements.length > 0 ? 'Badges coletivas desbloqueadas pela equipe.' : 'Quando a equipe atingir uma meta coletiva, ela aparece aqui.'}
               </p>
           </div>
       </div>
@@ -4286,18 +4313,14 @@ const handleFileSelect = (e) => {
   };
 
   // --- COMPONENTE DE CONQUISTAS COLETIVAS (TEAM ACHIEVEMENTS) ---
-  const TeamAchievementsPanel = () => {
+  const TeamAchievementsPanel = ({ showLocked = true } = {}) => {
       const totalXP = students.reduce((sum, s) => sum + (s.xp || 0), 0);
       const totalImpact = outreachEvents.reduce((sum, ev) => sum + (ev.people || 0), 0);
-      const totalTasksDone = tasks.filter(t => t.status === 'done').length;
-      const totalExperts = experts.length;
-
       const achievements = [
           { id: 'team_xp', name: 'Potência Máxima', icon: <Zap size={16}/>, color: 'text-yellow-400', bg: 'bg-yellow-500', desc: 'Atingir 6.000 XP somados por toda a equipe.', current: totalXP, target: 6000 },
-          { id: 'team_impact', name: 'Voz da Mudança', icon: <Megaphone size={16}/>, color: 'text-orange-500', bg: 'bg-orange-500', desc: 'Impactar mais de 350 pessoas com o projeto.', current: totalImpact, target: 350 },
-          { id: 'team_tasks', name: 'Máquina de Produtividade', icon: <CheckCheck size={16}/>, color: 'text-green-500', bg: 'bg-green-500', desc: 'Concluir 300 tarefas no Kanban da equipe.', current: totalTasksDone, target: 300 },
-          { id: 'team_experts', name: 'Mentes Conectadas', icon: <Briefcase size={16}/>, color: 'text-purple-500', bg: 'bg-purple-500', desc: 'Consultar 5 especialistas diferentes.', current: totalExperts, target: 5 }
+          { id: 'team_impact', name: 'Voz da Mudança', icon: <Megaphone size={16}/>, color: 'text-orange-500', bg: 'bg-orange-500', desc: 'Impactar mais de 350 pessoas com o projeto.', current: totalImpact, target: 350 }
       ];
+      const visibleAchievements = showLocked ? achievements : achievements.filter((ach) => ach.current >= ach.target);
 
       return (
           <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 mb-8 relative overflow-hidden shadow-xl">
@@ -4307,8 +4330,8 @@ const handleFileSelect = (e) => {
               <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2 relative z-10">
                   <Crown className="text-yellow-500"/> Conquistas da Equipe
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10">
-                  {achievements.map(ach => {
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
+                  {visibleAchievements.map(ach => {
                       const isUnlocked = ach.current >= ach.target;
                       const progress = Math.min(100, (ach.current / ach.target) * 100);
                       
@@ -4329,6 +4352,11 @@ const handleFileSelect = (e) => {
                           </div>
                       )
                   })}
+                  {visibleAchievements.length === 0 && (
+                      <div className="md:col-span-2 rounded-xl border border-white/5 bg-black/40 p-4 text-sm font-bold text-gray-400">
+                          Nenhuma conquista coletiva desbloqueada ainda.
+                      </div>
+                  )}
               </div>
           </div>
       )
@@ -6108,7 +6136,7 @@ const handleFileSelect = (e) => {
 {/* --- MODAL DO TÉCNICO: ENTREGAR BADGES --- */}
       {isAdmin && badgeStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-[#1a1a24] rounded-2xl border border-white/10 p-6 w-full max-w-2xl shadow-2xl relative">
+          <div className="bg-[#1a1a24] rounded-2xl border border-white/10 p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl relative">
             
             {/* Botão Fechar */}
             <button 
@@ -6617,7 +6645,7 @@ const handleFileSelect = (e) => {
                   )}
                   {studentPanelState.achievements && (
                     <div className="[&>div]:mb-0 w-full">
-                      <TeamAchievementsPanel />
+                      <TeamAchievementsPanel showLocked={false} />
                     </div>
                   )}
                 </div>
