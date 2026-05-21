@@ -705,6 +705,7 @@ function App() {
   const [codeSnippets, setCodeSnippets] = useState([]);
   const [rounds, setRounds] = useState([]);
   const [scoreHistory, setScoreHistory] = useState([]);
+  const [teamSeasonStats, setTeamSeasonStats] = useState({ successfulWeekIds: [], successfulWeeks: 0 });
   const [activeTimer, setActiveTimer] = useState(null);
   const [timerDisplay, setTimerDisplay] = useState(0); 
   const [roundFormValues, setRoundFormValues] = useState({});
@@ -1811,6 +1812,22 @@ function App() {
         }
     });
 
+    const unsubTeamStats = onSnapshot(doc(db, "settings", "team_stats"), (docSnap) => {
+        if (!docSnap.exists()) {
+            setTeamSeasonStats({ successfulWeekIds: [], successfulWeeks: 0 });
+            return;
+        }
+
+        const data = docSnap.data();
+        const successfulWeekIds = Array.isArray(data.successfulWeekIds) ? data.successfulWeekIds.map(String) : [];
+
+        setTeamSeasonStats({
+            ...data,
+            successfulWeekIds,
+            successfulWeeks: Math.max(Number(data.successfulWeeks) || 0, successfulWeekIds.length)
+        });
+    });
+
     // ... e não esqueça de adicionar no return para limpar:
     // return () => { ... unsubProject(); };
     
@@ -1821,6 +1838,7 @@ function App() {
         unsubInnovationRubric();
         unsubRobotDesignRubric();
         unsubAdminProfile();
+        unsubTeamStats();
     };
   }, []);
 
@@ -2985,6 +3003,11 @@ const handleDeleteRound = async (id) => {
       const approvedCount = stationStudents.filter(s => s.submission?.status === 'approved').length;
       const totalInStation = stationStudents.length;
       const isCompleteTeam = approvedCount === totalInStation;
+      const successfulWeekIds = Array.isArray(teamSeasonStats.successfulWeekIds) ? teamSeasonStats.successfulWeekIds.map(String) : [];
+      const previousSuccessfulWeeks = Math.max(Number(teamSeasonStats.successfulWeeks) || 0, successfulWeekIds.length);
+      const currentWeekKey = String(currentWeekData?.id ?? currentWeekData?.weekName ?? localTodayStr);
+      const allStudentsApprovedForWeek = students.length > 0 && students.every((student) => student.submission?.status === 'approved');
+      const shouldRecordSuccessfulWeek = allStudentsApprovedForWeek && currentWeekKey && !successfulWeekIds.includes(currentWeekKey);
       const FULL_TEAM_XP = 50; 
       const PARTIAL_TEAM_XP = 35;
 
@@ -3010,7 +3033,18 @@ const handleDeleteRound = async (id) => {
           // Executa todas as atualizações no banco
           await Promise.all(updates);
 
-          if(isCompleteTeam) showNotification(`Semana ${station} fechada! Sucesso Total!`, "success");
+          if (shouldRecordSuccessfulWeek) {
+              const nextSuccessfulWeekIds = [...successfulWeekIds, currentWeekKey];
+
+              await setDoc(doc(db, "settings", "team_stats"), {
+                  successfulWeekIds: nextSuccessfulWeekIds,
+                  successfulWeeks: previousSuccessfulWeeks + 1,
+                  updatedAt: new Date().toISOString()
+              }, { merge: true });
+          }
+
+          if(shouldRecordSuccessfulWeek) showNotification(`Semana fechada com sucesso! ${previousSuccessfulWeeks + 1}/40 semanas perfeitas.`, "success");
+          else if(isCompleteTeam) showNotification(`Semana ${station} fechada! Sucesso Total!`, "success");
           else showNotification(`Semana ${station} fechada com penalidade.`, "error");
 
       } catch (error) {
@@ -3117,6 +3151,7 @@ const handleDeleteRound = async (id) => {
 
 
   const activeCommandCode = codeSnippets.find(code => code.applied);
+  const isOfficialProgramBadgeOpen = localTodayObj.getMonth() >= 7;
   const totalImpactPeople = outreachEvents.reduce((sum, ev) => sum + (ev.people || 0), 0);
   const totalRoundTime = rounds.reduce((sum, round) => sum + (round.estimatedTime || 0), 0);
   const appliedExpertsCount = experts.filter(exp => exp.applied).length;
@@ -3278,9 +3313,25 @@ const handleDeleteRound = async (id) => {
   const totalTeamImpact = outreachEvents.reduce((sum, event) => sum + (event.people || 0), 0);
   const totalTeamTasksDone = tasks.filter((task) => task.status === 'done').length;
   const totalTeamExperts = experts.length;
+  const totalTeamRounds = rounds.length;
+  const totalTeamLogbookEntries = logbookEntries.length;
+  const teamBestScore = scoreHistory.reduce((max, record) => Math.max(max, record.score || 0), 0);
+  const officialProgramReady = isOfficialProgramBadgeOpen && activeCommandCode ? 1 : 0;
+  const successfulTeamWeeksCount = Math.max(
+      Number(teamSeasonStats.successfulWeeks) || 0,
+      Array.isArray(teamSeasonStats.successfulWeekIds) ? teamSeasonStats.successfulWeekIds.length : 0
+  );
   const teamAchievementsSummary = [
       { id: 'team_xp', name: 'Potencia Maxima', current: totalTeamXP, target: 6000, icon: <Zap size={14} className="text-yellow-300" /> },
-      { id: 'team_impact', name: 'Voz da Mudanca', current: totalTeamImpact, target: 350, icon: <Megaphone size={14} className="text-orange-300" /> }
+      { id: 'team_impact', name: 'Voz da Mudanca', current: totalTeamImpact, target: 350, icon: <Megaphone size={14} className="text-orange-300" /> },
+      { id: 'team_tasks', name: 'Maquina de Produtividade', current: totalTeamTasksDone, target: 300, icon: <CheckCheck size={14} className="text-emerald-300" /> },
+      { id: 'team_experts', name: 'Mentes Conectadas', current: totalTeamExperts, target: 5, icon: <Briefcase size={14} className="text-violet-300" /> },
+      { id: 'team_official_code', name: 'Programacao Oficial', current: officialProgramReady, target: 1, icon: <Laptop size={14} className="text-cyan-300" /> },
+      { id: 'team_rounds', name: 'Estrategia de Mesa', current: totalTeamRounds, target: 6, icon: <Rocket size={14} className="text-blue-300" /> },
+      { id: 'team_score', name: 'Recorde Competitivo', current: teamBestScore, target: 300, icon: <Trophy size={14} className="text-green-300" /> },
+      { id: 'team_logbook', name: 'Diario Vivo', current: totalTeamLogbookEntries, target: 25, icon: <Book size={14} className="text-amber-300" /> },
+      { id: 'team_readiness', name: 'Prontidao FLL', current: commandCenterReadinessScore, target: 85, icon: <Crown size={14} className="text-yellow-200" /> },
+      { id: 'team_weekly_delivery', name: '40 Semanas Fechadas', current: successfulTeamWeeksCount, target: 40, icon: <CheckCircle size={14} className="text-lime-300" /> }
   ];
   const unlockedTeamAchievements = teamAchievementsSummary.filter((achievement) => achievement.current >= achievement.target);
   const nextTeamAchievement = teamAchievementsSummary
@@ -4313,9 +4364,27 @@ const handleFileSelect = (e) => {
   const TeamAchievementsPanel = ({ showLocked = true } = {}) => {
       const totalXP = students.reduce((sum, s) => sum + (s.xp || 0), 0);
       const totalImpact = outreachEvents.reduce((sum, ev) => sum + (ev.people || 0), 0);
+      const totalTasksDone = tasks.filter(t => t.status === 'done').length;
+      const totalExperts = experts.length;
+      const totalRounds = rounds.length;
+      const bestScore = scoreHistory.reduce((max, h) => Math.max(max, h.score || 0), 0);
+      const totalDiaryEntries = logbookEntries.length;
+      const officialProgramReady = isOfficialProgramBadgeOpen && activeCommandCode ? 1 : 0;
+      const successfulWeeksCount = Math.max(
+          Number(teamSeasonStats.successfulWeeks) || 0,
+          Array.isArray(teamSeasonStats.successfulWeekIds) ? teamSeasonStats.successfulWeekIds.length : 0
+      );
       const achievements = [
           { id: 'team_xp', name: 'Potência Máxima', icon: <Zap size={16}/>, color: 'text-yellow-400', bg: 'bg-yellow-500', desc: 'Atingir 6.000 XP somados por toda a equipe.', current: totalXP, target: 6000 },
-          { id: 'team_impact', name: 'Voz da Mudança', icon: <Megaphone size={16}/>, color: 'text-orange-500', bg: 'bg-orange-500', desc: 'Impactar mais de 350 pessoas com o projeto.', current: totalImpact, target: 350 }
+          { id: 'team_impact', name: 'Voz da Mudança', icon: <Megaphone size={16}/>, color: 'text-orange-500', bg: 'bg-orange-500', desc: 'Impactar mais de 350 pessoas com o projeto.', current: totalImpact, target: 350 },
+          { id: 'team_tasks', name: 'Maquina de Produtividade', icon: <CheckCheck size={16}/>, color: 'text-emerald-400', bg: 'bg-emerald-500', desc: 'Concluir 300 tarefas no Kanban da equipe.', current: totalTasksDone, target: 300 },
+          { id: 'team_experts', name: 'Mentes Conectadas', icon: <Briefcase size={16}/>, color: 'text-violet-400', bg: 'bg-violet-500', desc: 'Registrar 5 especialistas ou mentorias que ajudaram o time.', current: totalExperts, target: 5 },
+          { id: 'team_official_code', name: 'Programacao Oficial', icon: <Laptop size={16}/>, color: 'text-cyan-400', bg: 'bg-cyan-500', desc: isOfficialProgramBadgeOpen ? 'Definir uma programacao oficial do robo para treino e apresentacao.' : 'Liberada a partir de agosto, quando a temporada comeca oficialmente.', current: officialProgramReady, target: 1 },
+          { id: 'team_rounds', name: 'Estrategia de Mesa', icon: <Rocket size={16}/>, color: 'text-blue-400', bg: 'bg-blue-500', desc: 'Planejar 6 saidas de mesa com objetivo claro.', current: totalRounds, target: 6 },
+          { id: 'team_score', name: 'Recorde Competitivo', icon: <Trophy size={16}/>, color: 'text-green-400', bg: 'bg-green-500', desc: 'Bater 300 pontos em um treino ou round oficial.', current: bestScore, target: 300 },
+          { id: 'team_logbook', name: 'Diario Vivo', icon: <Book size={16}/>, color: 'text-amber-400', bg: 'bg-amber-500', desc: 'Salvar 25 registros no diario de engenharia.', current: totalDiaryEntries, target: 25 },
+          { id: 'team_readiness', name: 'Prontidao FLL', icon: <Crown size={16}/>, color: 'text-yellow-200', bg: 'bg-yellow-500', desc: 'Chegar a 85% de prontidao no mapa FLL.', current: commandCenterReadinessScore, target: 85 },
+          { id: 'team_weekly_delivery', name: '40 Semanas Fechadas', icon: <CheckCircle size={16}/>, color: 'text-lime-400', bg: 'bg-lime-500', desc: 'Fechar 40 semanas com todos os alunos aprovados e todas as atividades entregues.', current: successfulWeeksCount, target: 40 }
       ];
       const visibleAchievements = showLocked ? achievements : achievements.filter((ach) => ach.current >= ach.target);
 
@@ -4327,7 +4396,7 @@ const handleFileSelect = (e) => {
               <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2 relative z-10">
                   <Crown className="text-yellow-500"/> Conquistas da Equipe
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-4 relative z-10">
                   {visibleAchievements.map(ach => {
                       const isUnlocked = ach.current >= ach.target;
                       const progress = Math.min(100, (ach.current / ach.target) * 100);
