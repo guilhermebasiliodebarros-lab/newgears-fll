@@ -1,9 +1,11 @@
 import { runProjectSummaryTests } from './projectSummary.test.js';
 import { runAppStructureTests } from './appStructure.test.js';
+import { runSchoolReportTests } from './schoolReport.test.js';
 
 const suites = [
   { name: 'projectSummary', run: runProjectSummaryTests },
-  { name: 'appStructure', run: runAppStructureTests }
+  { name: 'appStructure', run: runAppStructureTests },
+  { name: 'schoolReport', run: runSchoolReportTests }
 ];
 
 let failures = 0;
