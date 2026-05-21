@@ -86,7 +86,7 @@ h6 {
   font-family: var(--ng-headline);
   letter-spacing: 0.035em;
   text-transform: uppercase;
-  line-height: 1;
+  line-height: 1.08;
 }
 
 button,

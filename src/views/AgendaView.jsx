@@ -95,18 +95,18 @@ export default function AgendaView({
           return (
               <article
                   key={event.id}
-                  className={`group relative overflow-hidden rounded-[30px] border bg-[#13131d] p-5 md:p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)] transition-all ${spotlight ? 'border-indigo-400/35 shadow-[0_25px_70px_rgba(79,70,229,0.18)]' : 'border-white/10 hover:border-white/20'} ${muted ? 'opacity-80' : ''}`}
+                  className={`group relative overflow-visible rounded-[30px] border bg-[#13131d] p-5 md:p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)] transition-all ${spotlight ? 'border-indigo-400/35 shadow-[0_25px_70px_rgba(79,70,229,0.18)]' : 'border-white/10 hover:border-white/20'} ${muted ? 'opacity-80' : ''}`}
               >
                   <div className={`absolute inset-0 bg-gradient-to-br ${typeMeta.accent} pointer-events-none opacity-80`}></div>
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_32%)] pointer-events-none"></div>
 
-                  {spotlight && (
-                      <div className="absolute -top-3 left-5 rounded-full border border-yellow-400/30 bg-yellow-400 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-black shadow-lg">
-                          Radar imediato
-                      </div>
-                  )}
-
                   <div className="relative z-10 flex h-full flex-col gap-5">
+                      {spotlight && (
+                          <div className="inline-flex w-fit rounded-full border border-yellow-400/30 bg-yellow-400 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-black shadow-lg">
+                              Radar imediato
+                          </div>
+                      )}
+
                       <div className="flex items-start justify-between gap-3">
                           <div className="flex flex-wrap items-center gap-2">
                               <span className={`rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${typeMeta.tone}`}>
@@ -216,14 +216,14 @@ export default function AgendaView({
 
       return (
           <div className="animate-in fade-in duration-500 space-y-8">
-              <section className="relative overflow-hidden rounded-[32px] border border-white/10 bg-gradient-to-br from-[#161b33] via-[#151520] to-[#101018] p-6 md:p-8 shadow-[0_25px_80px_rgba(0,0,0,0.28)]">
+              <section className="relative overflow-visible rounded-[32px] border border-white/10 bg-gradient-to-br from-[#161b33] via-[#151520] to-[#101018] p-6 md:p-8 shadow-[0_25px_80px_rgba(0,0,0,0.28)]">
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.20),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(34,197,94,0.12),transparent_28%)] pointer-events-none"></div>
                   <div className="relative z-10 grid gap-6 xl:grid-cols-[1.15fr,0.85fr]">
                       <div>
                           <span className="inline-flex items-center gap-2 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-indigo-200">
                               <CalendarDays size={12} /> Radar da equipe
                           </span>
-                          <h2 className="mt-4 text-3xl font-black leading-tight text-white">Agenda da equipe em modo radar: o que vem agora, o que merece preparo e o que ja virou historia.</h2>
+                          <h2 className="mt-4 text-3xl font-black leading-[1.12] text-white">Agenda da equipe em modo radar: o que vem agora, o que merece preparo e o que ja virou historia.</h2>
                           <p className="mt-4 max-w-3xl text-sm leading-relaxed text-gray-300">
                               Use esta visao para bater o olho e entender o que pede acao rapida, o que ja esta perto e o que pode ser organizado com mais calma pela equipe.
                           </p>

@@ -3381,11 +3381,6 @@ const handleDeleteRound = async (id) => {
                           className={`group relative inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-3 py-2 transition-all hover:-translate-y-0.5 hover:border-yellow-400/30 hover:bg-yellow-400/10 focus:outline-none focus-visible:border-yellow-300/50 focus-visible:bg-yellow-400/10 ${badge.color}`}
                       >
                           {badge.icon}
-                          <span className="pointer-events-none invisible absolute bottom-full left-1/2 z-30 mb-2 w-48 -translate-x-1/2 rounded-xl border border-white/10 bg-gray-950/95 p-3 text-left opacity-0 shadow-2xl backdrop-blur-md transition-all duration-200 group-hover:visible group-hover:opacity-100 group-focus:visible group-focus:opacity-100">
-                              <span className="block text-[11px] font-black uppercase tracking-[0.14em] text-yellow-100">{badge.name}</span>
-                              <span className="mt-1 block text-xs font-semibold leading-relaxed text-gray-300">{badge.desc}</span>
-                              <span className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-white/10"></span>
-                          </span>
                       </button>
                   ))}
                   {unlockedStudentBadges.length === 0 && (
@@ -3489,7 +3484,7 @@ const handleDeleteRound = async (id) => {
       rubrics: 'pt-6 md:pt-7',
       kanban: 'pt-6 md:pt-7',
       logbook: 'pt-6 md:pt-7',
-      agenda: 'pt-6 md:pt-7',
+      agenda: 'pt-8 md:pt-10',
   };
 
   const getWorkspaceSceneTopPadding = (tabId) => workspaceSceneTopPaddingMap[tabId] || 'pt-5 md:pt-6';
@@ -4620,15 +4615,11 @@ const handleFileSelect = (e) => {
                         {BADGES_LIST.map(badge => {
                             const hasBadge = hasStudentBadge(modal.data, badge.id);
                             return (
-                                <div key={badge.id} className={`relative p-3 rounded-xl border flex flex-col items-center text-center transition-all group ${hasBadge ? 'bg-gradient-to-br from-white/5 to-transparent border-yellow-500/30' : 'bg-black/40 border-white/5 opacity-40 grayscale'}`}>
+                                <div key={badge.id} className={`relative flex min-h-[132px] flex-col items-center rounded-xl border p-3 text-center transition-all ${hasBadge ? 'bg-gradient-to-br from-white/5 to-transparent border-yellow-500/30' : 'bg-black/40 border-white/5 opacity-55 grayscale'}`}>
                                     <div className={`mb-2 ${hasBadge ? badge.color : 'text-gray-500'}`}>{badge.icon}</div>
                                     <span className="text-[10px] font-bold text-white leading-tight">{badge.name}</span>
+                                    <p className={`mt-2 text-[10px] leading-snug ${hasBadge ? 'text-gray-300' : 'text-gray-500'}`}>{badge.desc}</p>
                                     {hasBadge && <div className="absolute top-2 right-2 w-1.5 h-1.5 bg-green-500 rounded-full shadow-[0_0_5px_rgba(34,197,94,1)]"></div>}
-                                    
-                                    {/* Tooltip Simples */}
-                                    <div className="absolute bottom-full mb-2 bg-black border border-white/20 p-2 rounded text-[10px] text-gray-300 w-32 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 hidden sm:block">
-                                        {badge.desc}
-                                    </div>
                                 </div>
                             )
                         })}
@@ -6156,15 +6147,14 @@ const handleFileSelect = (e) => {
             </div>
 
             {/* Grid de Badges */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {BADGES_LIST.map(badge => {
                 const hasBadge = hasStudentBadge(badgeStudent, badge.id);
                 return (
                   <button
                     key={badge.id}
                     onClick={() => toggleBadge(badgeStudent, badge.id)}
-                    /* 👇 MUDANÇA 1: Adicionei a palavra 'group' no começo desta linha 👇 */
-                    className={`group relative flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all duration-300 ${
+                    className={`relative flex min-h-[150px] flex-col items-center justify-start rounded-xl border-2 p-3 transition-all duration-300 ${
                       hasBadge 
                       ? 'bg-yellow-500/10 border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.2)] scale-105' 
                       : 'bg-black/40 border-white/5 hover:bg-white/5 hover:border-white/20 opacity-60 grayscale'
@@ -6176,19 +6166,15 @@ const handleFileSelect = (e) => {
                     <span className={`text-xs font-bold text-center leading-tight ${hasBadge ? 'text-white' : 'text-gray-500'}`}>
                       {badge.name}
                     </span>
+                    <p className={`mt-2 text-center text-[10px] leading-snug ${hasBadge ? 'text-gray-300' : 'text-gray-500'}`}>
+                      {badge.desc}
+                    </p>
                     {hasBadge && (
                        <div className="absolute top-2 right-2">
                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,1)]"></div>
                        </div>
                     )}
 
-                    {/* 👇 MUDANÇA 2: Balãozinho de descrição (Tooltip) 👇 */}
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-40 bg-gray-900/95 text-gray-200 text-xs text-center p-2 rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none border border-gray-700 shadow-xl backdrop-blur-md">
-                        {badge.desc}
-                        {/* TriÃ¢ngulo (setinha) apontando para baixo */}
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-700"></div>
-                    </div>
-                    {/* ☝️ FIM DO BALÃOZINHO ☝️ */}
                   </button>
                 );
               })}
