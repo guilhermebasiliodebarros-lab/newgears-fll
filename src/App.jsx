@@ -378,7 +378,72 @@ const normalizeStudentBadges = (badges) => {
 
 const normalizeStudentRecord = (student) => {
   if (!student || typeof student !== 'object') return student;
-  return { ...student, badges: normalizeStudentBadges(student.badges) };
+  return { ...student, badges: normalizeStudentBadges(student.badges), xpLossNotifications: normalizeXpLossNotifications(student.xpLossNotifications) };
+};
+
+const normalizeXpLossNotifications = (notifications) => {
+  if (!Array.isArray(notifications)) return [];
+
+  return notifications
+    .filter((item) => item && typeof item === 'object')
+    .map((item, index) => ({
+      id: item.id || `${item.date || 'xp'}-${item.amount || 0}-${index}`,
+      amount: Number(item.amount) || 0,
+      reason: typeof item.reason === 'string' ? item.reason : '',
+      date: item.date || '',
+      createdAt: item.createdAt || null,
+    }))
+    .filter((item) => item.amount < 0);
+};
+
+const formatXpLossDate = (dateValue) => {
+  if (!dateValue) return 'Data nao registrada';
+
+  const date = dateValue instanceof Date
+    ? dateValue
+    : typeof dateValue.toDate === 'function'
+      ? dateValue.toDate()
+      : new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return String(dateValue);
+
+  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+const XP_LOSS_ALERT_REPEAT_MS = 5 * 60 * 1000;
+const XP_LOSS_DELETE_WAIT_DAYS = 5;
+
+const getXpLossDate = (dateValue) => {
+  if (!dateValue) return null;
+
+  const date = dateValue instanceof Date
+    ? dateValue
+    : typeof dateValue.toDate === 'function'
+      ? dateValue.toDate()
+      : new Date(dateValue);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const getXpLossMood = (amount) => {
+  const xpLost = Math.abs(Number(amount) || 0);
+  if (xpLost <= 5) return { emoji: '😬', label: 'Leve', tone: 'border-yellow-400/25 bg-yellow-400/10 text-yellow-100', bar: 'from-yellow-300 to-amber-400' };
+  if (xpLost <= 10) return { emoji: '😕', label: 'Atencao', tone: 'border-orange-400/25 bg-orange-400/10 text-orange-100', bar: 'from-orange-300 to-orange-500' };
+  if (xpLost <= 20) return { emoji: '😟', label: 'Cuidado', tone: 'border-red-300/25 bg-red-400/10 text-red-100', bar: 'from-red-300 to-red-500' };
+  if (xpLost <= 35) return { emoji: '😰', label: 'Impacto alto', tone: 'border-rose-300/25 bg-rose-500/10 text-rose-100', bar: 'from-rose-300 to-fuchsia-500' };
+  return { emoji: '😱', label: 'Perda critica', tone: 'border-fuchsia-300/25 bg-fuchsia-500/10 text-fuchsia-100', bar: 'from-fuchsia-300 to-red-500' };
+};
+
+const getXpLossDeleteState = (notice, now = new Date()) => {
+  const lossDate = getXpLossDate(notice?.date);
+  if (!lossDate) return { canDelete: false, label: 'Aguarde 5 dias para apagar' };
+
+  const unlockDate = new Date(lossDate);
+  unlockDate.setDate(unlockDate.getDate() + XP_LOSS_DELETE_WAIT_DAYS);
+
+  if (now >= unlockDate) return { canDelete: true, label: 'Pode apagar' };
+
+  const remainingDays = Math.max(1, Math.ceil((unlockDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
+  return { canDelete: false, label: `Libera em ${remainingDays} dia(s)` };
 };
 
 const hasStudentBadge = (student, badgeId) => normalizeStudentBadges(student?.badges).includes(badgeId);
@@ -719,6 +784,9 @@ function App() {
   const [projectSummary, setProjectSummary] = useState(DEFAULT_PROJECT_SUMMARY);
   const [modal, setModal] = useState({ type: null, data: null });
   const [notification, setNotification] = useState(null);
+  const [xpPenaltyReason, setXpPenaltyReason] = useState('');
+  const [xpLossAlertNotice, setXpLossAlertNotice] = useState(null);
+  const xpLossLastAlertAtRef = useRef(new Map());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionText, setSubmissionText] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
@@ -1200,6 +1268,8 @@ function App() {
       setViewAsStudent(null);
       setLoginUser("");
       setLoginPass("");
+      xpLossLastAlertAtRef.current = new Map();
+      setXpLossAlertNotice(null);
       localStorage.removeItem("roboquest_user"); // Limpa a memória
         localStorage.removeItem("roboquest_last_activity"); // Limpa o controle de tempo
   };
@@ -1601,6 +1671,37 @@ function App() {
       persistStoredUser(normalizedUser);
     }
   }, [students, currentUser]);
+
+  useEffect(() => {
+    if (currentUser?.type !== 'student' || !viewAsStudent?.id) {
+      setXpLossAlertNotice(null);
+      return;
+    }
+
+    const notices = normalizeXpLossNotifications(viewAsStudent.xpLossNotifications);
+    if (notices.length === 0) {
+      setXpLossAlertNotice(null);
+      return;
+    }
+
+    const showDueNotice = () => {
+      const now = Date.now();
+      const latestNotice = [...notices].reverse().find((notice) => {
+        const noticeKey = `${viewAsStudent.id}:${notice.id}`;
+        const lastShownAt = xpLossLastAlertAtRef.current.get(noticeKey) || 0;
+        return now - lastShownAt >= XP_LOSS_ALERT_REPEAT_MS;
+      });
+
+      if (!latestNotice) return;
+
+      xpLossLastAlertAtRef.current.set(`${viewAsStudent.id}:${latestNotice.id}`, now);
+      setXpLossAlertNotice(latestNotice);
+    };
+
+    showDueNotice();
+    const intervalId = setInterval(showDueNotice, XP_LOSS_ALERT_REPEAT_MS);
+    return () => clearInterval(intervalId);
+  }, [currentUser?.type, viewAsStudent?.id, viewAsStudent?.xpLossNotifications]);
 
 // --- FUNÇÃO DE CRONOGRAMA OFICIAL (12 ALUNOS) ---
   // Usamos useMemo para reconectar os dados assim que os alunos carregarem do Firebase
@@ -3337,6 +3438,7 @@ const handleDeleteRound = async (id) => {
   const nextTeamAchievement = teamAchievementsSummary
       .filter((achievement) => achievement.current < achievement.target)
       .sort((left, right) => (right.current / right.target) - (left.current / left.target))[0];
+  const studentXpLossNotifications = viewAsStudent ? normalizeXpLossNotifications(viewAsStudent.xpLossNotifications) : [];
   const studentHeroFooter = viewAsStudent ? (
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr,0.95fr,0.95fr,1fr]">
           <button
@@ -3398,6 +3500,62 @@ const handleDeleteRound = async (id) => {
                   </div>
               </div>
           </button>
+
+          {studentXpLossNotifications.length > 0 && (
+              <div className="rounded-[24px] border border-red-500/25 bg-red-500/10 p-4 backdrop-blur-sm md:col-span-2 xl:col-span-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div>
+                          <span className="inline-flex items-center gap-2 rounded-full border border-red-400/25 bg-red-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-red-100">
+                              <AlertTriangle size={12} /> Notificacoes de XP
+                          </span>
+                          <h3 className="mt-3 text-lg font-black text-white">Voce perdeu XP</h3>
+                          <p className="mt-1 text-xs leading-relaxed text-red-100/80">Confira a data, quanto saiu e o motivo registrado pelo tecnico.</p>
+                      </div>
+                      <span className="rounded-full border border-red-400/25 bg-black/20 px-3 py-1 text-xs font-black text-red-100">
+                          {studentXpLossNotifications.length} aviso(s)
+                      </span>
+                  </div>
+
+                  <div className="mt-4 grid gap-2">
+                      {studentXpLossNotifications.map((notice) => {
+                          const mood = getXpLossMood(notice.amount);
+                          const deleteState = getXpLossDeleteState(notice);
+
+                          return (
+                              <div key={notice.id} className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-black/25 p-3 md:flex-row md:items-start md:justify-between">
+                                  <div className="min-w-0">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-black ${mood.tone}`}>
+                                              <span>{mood.emoji}</span> {notice.amount} XP
+                                          </span>
+                                          <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-gray-400">
+                                              {formatXpLossDate(notice.date)}
+                                          </span>
+                                          <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">
+                                              {deleteState.label}
+                                          </span>
+                                      </div>
+                                      <p className="mt-2 text-sm font-bold leading-relaxed text-white break-words">{notice.reason || 'Sem motivo informado.'}</p>
+                                  </div>
+                                  <button
+                                      type="button"
+                                      onClick={() => dismissXpLossNotification(notice.id)}
+                                      disabled={!deleteState.canDelete}
+                                      className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-[11px] font-black uppercase tracking-[0.12em] transition-all ${
+                                          deleteState.canDelete
+                                              ? 'border-white/10 bg-white/5 text-gray-300 hover:border-red-400/35 hover:bg-red-500/15 hover:text-red-100'
+                                              : 'cursor-not-allowed border-white/5 bg-white/[0.03] text-gray-600'
+                                      }`}
+                                      title={deleteState.canDelete ? 'Apagar notificacao' : deleteState.label}
+                                  >
+                                      <Trash2 size={13} /> Apagar
+                                  </button>
+                              </div>
+                          );
+                      })}
+                  </div>
+              </div>
+          )}
 
           <div className="rounded-[24px] border border-white/10 bg-black/25 p-4 backdrop-blur-sm">
               <div className="flex items-center justify-between gap-3">
@@ -4037,19 +4195,42 @@ const handleDeleteRound = async (id) => {
           return;
       }
 
+      setXpPenaltyReason('');
       setModal({ 
           type: 'xp', 
           data: { 
               student: student, 
-              onConfirm: async (amount) => { 
+              onConfirm: async (amount, reason = '') => { 
                   const val = parseInt(amount); 
                   if (isNaN(val)) return; 
+
+                  const cleanReason = reason.trim();
+                  if (val < 0 && !cleanReason) {
+                      showNotification("Escreva o motivo para retirar XP.", "error");
+                      return;
+                  }
                   
                   try {
                       const studentRef = doc(db, "students", student.id);
                       
                       // Prepara a atualização do XP
                       const updateData = { xp: (student.xp || 0) + val };
+
+                      if (val < 0) {
+                          const now = new Date();
+                          const xpLossNotice = {
+                              id: `xp-loss-${now.getTime()}`,
+                              amount: val,
+                              reason: cleanReason,
+                              date: now.toISOString(),
+                              createdAt: now.toISOString(),
+                          };
+
+                          updateData.xpLossNotifications = [
+                              ...normalizeXpLossNotifications(student.xpLossNotifications),
+                              xpLossNotice,
+                          ];
+                      }
 
                       // Se for contexto de aprovação, muda o status da entrega também
                       if (context === 'approval') {
@@ -4062,6 +4243,7 @@ const handleDeleteRound = async (id) => {
                       
                       closeModal(); 
                       let msg = `XP atualizado: ${val > 0 ? '+' : ''}${val}`;
+                      if (val < 0) msg = `XP retirado: ${val}. Aviso enviado ao aluno.`;
                       if (context === 'approval') msg = "Atividade Aprovada com Sucesso!";
                       showNotification(msg, "success");
 
@@ -4075,6 +4257,36 @@ const handleDeleteRound = async (id) => {
   }
 
   const handleDeleteClick = (id) => { setModal({ type: 'confirm', data: { title: "Excluir?", msg: "Irreversível.", onConfirm: () => { deleteStudent(id); closeModal(); showNotification("Removido."); } } }) }
+
+  const dismissXpLossNotification = async (notificationId) => {
+      if (!viewAsStudent?.id) return;
+
+      const currentNotices = normalizeXpLossNotifications(viewAsStudent.xpLossNotifications);
+      const targetNotice = currentNotices.find((notice) => notice.id === notificationId);
+      const deleteState = getXpLossDeleteState(targetNotice);
+
+      if (!deleteState.canDelete) {
+          showNotification(`Essa notificacao ainda nao pode ser apagada. ${deleteState.label}.`, "error");
+          return;
+      }
+
+      const nextNotices = currentNotices.filter((notice) => notice.id !== notificationId);
+
+      try {
+          await updateDoc(doc(db, "students", viewAsStudent.id), {
+              xpLossNotifications: nextNotices
+          });
+
+          setViewAsStudent(prev => prev ? { ...prev, xpLossNotifications: nextNotices } : prev);
+          setStudents(prevStudents => prevStudents.map(student =>
+              student.id === viewAsStudent.id ? { ...student, xpLossNotifications: nextNotices } : student
+          ));
+          showNotification("Notificacao apagada.", "success");
+      } catch (error) {
+          console.error("Erro ao apagar notificacao de XP:", error);
+          showNotification("Erro ao apagar notificacao.", "error");
+      }
+  }
 
   // --- RECUSAR ATIVIDADE (CONECTADO) ---
   const handleRejectClick = (student) => { 
@@ -4429,6 +4641,72 @@ const handleFileSelect = (e) => {
   };
 
   const Notification = () => { if (!notification) return null; const isError = notification.type === 'error'; const isDownload = notification.type === 'download'; return (<div className={`newgears-toast fixed top-6 right-6 z-[100] px-6 py-4 rounded-[22px] flex items-center gap-3 animate-in slide-in-from-right duration-300 border ${isError ? 'bg-red-500/12 border-red-400/40 text-red-200' : isDownload ? 'bg-cyan-500/12 border-cyan-400/40 text-cyan-100' : 'bg-emerald-500/12 border-emerald-400/40 text-emerald-100'}`}>{isError ? <AlertCircle size={24}/> : isDownload ? <Download size={24}/> : <CheckCircle size={24}/>}<span className="font-black text-sm">{notification.msg}</span></div>) }
+
+  const XpLossAlertModal = () => {
+      if (!xpLossAlertNotice) return null;
+
+      const mood = getXpLossMood(xpLossAlertNotice.amount);
+      const xpLost = Math.abs(xpLossAlertNotice.amount);
+      const deleteState = getXpLossDeleteState(xpLossAlertNotice);
+
+      return (
+          <div className="fixed inset-0 z-[230] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-in fade-in">
+              <div className="relative w-full max-w-lg overflow-hidden rounded-[32px] border border-white/10 bg-[#11121d] shadow-[0_36px_110px_rgba(0,0,0,0.55)]">
+                  <div className={`h-2 bg-gradient-to-r ${mood.bar}`} />
+                  <button
+                      type="button"
+                      onClick={() => setXpLossAlertNotice(null)}
+                      className="absolute right-4 top-4 rounded-2xl border border-white/10 bg-white/5 p-2 text-gray-300 transition-all hover:bg-white/10 hover:text-white"
+                      aria-label="Fechar alerta de XP"
+                  >
+                      <X size={18} />
+                  </button>
+
+                  <div className="p-6 md:p-8">
+                      <div className="flex items-start gap-4 pr-10">
+                          <div className={`flex h-20 w-20 shrink-0 items-center justify-center rounded-[26px] border text-5xl ${mood.tone}`}>
+                              {mood.emoji}
+                          </div>
+                          <div className="min-w-0">
+                              <span className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${mood.tone}`}>
+                                  {mood.label}
+                              </span>
+                              <h3 className="mt-3 text-2xl font-black leading-tight text-white">Voce perdeu {xpLost} XP</h3>
+                              <p className="mt-2 text-sm leading-relaxed text-gray-300">
+                                  Esse aviso vai voltar a cada 5 minutos enquanto a notificacao estiver ativa.
+                              </p>
+                          </div>
+                      </div>
+
+                      <div className="mt-6 rounded-[24px] border border-white/10 bg-black/25 p-4">
+                          <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-full border border-red-400/25 bg-red-500/10 px-3 py-1 text-xs font-black text-red-100">
+                                  -{xpLost} XP
+                              </span>
+                              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-gray-300">
+                                  {formatXpLossDate(xpLossAlertNotice.date)}
+                              </span>
+                          </div>
+                          <p className="mt-4 text-[10px] font-black uppercase tracking-[0.18em] text-gray-500">Motivo</p>
+                          <p className="mt-2 text-base font-bold leading-relaxed text-white break-words">{xpLossAlertNotice.reason || 'Sem motivo informado.'}</p>
+                      </div>
+
+                      <div className="mt-5 rounded-[20px] border border-white/10 bg-white/5 p-3 text-xs font-bold leading-relaxed text-gray-300">
+                          Voce so pode apagar essa notificacao depois de 5 dias da retirada. Status: <span className="text-white">{deleteState.label}</span>.
+                      </div>
+
+                      <button
+                          type="button"
+                          onClick={() => setXpLossAlertNotice(null)}
+                          className="mt-6 w-full rounded-2xl border border-red-400/20 bg-red-500/15 px-4 py-3 text-sm font-black uppercase tracking-[0.16em] text-red-100 transition-all hover:bg-red-500 hover:text-white"
+                      >
+                          Entendi
+                      </button>
+                  </div>
+              </div>
+          </div>
+      );
+  }
 
 
 
@@ -4867,15 +5145,21 @@ const handleFileSelect = (e) => {
                 {/* Remover XP */}
                 <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4 shadow-inner">
                   <p className="text-xs text-red-500 font-bold uppercase mb-3 flex items-center gap-1"><TrendingUp size={14} className="rotate-180"/> Penalizar (-)</p>
+                  <textarea
+                    value={xpPenaltyReason}
+                    onChange={(event) => setXpPenaltyReason(event.target.value)}
+                    placeholder="Motivo da retirada de XP..."
+                    className="mb-3 h-20 w-full resize-none rounded-xl border border-red-500/20 bg-black/50 p-3 text-sm text-white outline-none placeholder:text-red-100/35 focus:border-red-400"
+                  />
                   <div className="grid grid-cols-4 gap-2">
                     {[-5, -10, -20, -50].map(val => (
-                      <button key={val} type="button" onClick={() => modal.data.onConfirm(val)} className="bg-red-500/10 text-red-500 font-black py-3 rounded-lg border border-red-500/20 hover:bg-red-500 hover:text-white transition-colors shadow-sm">{val}</button>
+                      <button key={val} type="button" onClick={() => modal.data.onConfirm(val, xpPenaltyReason)} className="bg-red-500/10 text-red-500 font-black py-3 rounded-lg border border-red-500/20 hover:bg-red-500 hover:text-white transition-colors shadow-sm">{val}</button>
                     ))}
                   </div>
                 </div>
       
                 {/* Valor Personalizado */}
-                <form onSubmit={(e) => { e.preventDefault(); modal.data.onConfirm(e.target.customVal.value); }} className="flex gap-2 pt-2">
+                <form onSubmit={(e) => { e.preventDefault(); modal.data.onConfirm(e.target.customVal.value, xpPenaltyReason); }} className="flex gap-2 pt-2">
                   <input name="customVal" type="number" placeholder="Ou digite outro valor..." className="flex-1 bg-black/50 border border-white/20 rounded-xl p-3 text-white text-center font-mono focus:border-yellow-500 outline-none" required />
                   <button className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold px-6 rounded-xl transition-all shadow-lg shadow-yellow-900/20">Aplicar</button>
                 </form>
@@ -6119,6 +6403,7 @@ const handleFileSelect = (e) => {
         )}
 
         <Notification />
+        <XpLossAlertModal />
         {renderModal()}
 
         {/* --- ALERTA DE LOGOUT POR INATIVIDADE --- */}
