@@ -3639,10 +3639,31 @@ const handleDeleteRound = async (id) => {
       && currentWeekData?.assignments?.[STATION_KEYS.MANAGEMENT]?.some((student) => student.id === viewAsStudent.id || studentNamesMatch(student.name, viewAsStudent.name))
       && !isWeeklyCaptainName(viewAsStudent.name)
   );
-  const weeklyLeaderMissionReadyCount = WEEKLY_STATION_KEYS.filter((station) => Boolean(missions?.[station]?.text?.trim())).length;
+  const weeklyLeaderStationStatuses = WEEKLY_STATION_KEYS.map((station) => {
+      const mission = missions?.[station] || {};
+      const hasText = Boolean(mission.text?.trim());
+      const hasDeadline = Boolean(mission.deadline);
+
+      return {
+          station,
+          hasText,
+          hasDeadline,
+          ready: hasText && hasDeadline
+      };
+  });
+  const getWeeklyLeaderStationStatus = (station) => weeklyLeaderStationStatuses.find((item) => item.station === station) || { station, hasText: false, hasDeadline: false, ready: false };
+  const weeklyLeaderMissionReadyCount = weeklyLeaderStationStatuses.filter((item) => item.ready).length;
+  const weeklyLeaderMissingStations = weeklyLeaderStationStatuses.filter((item) => !item.ready);
   const weeklyLeaderTasks = isWeeklyLeader
       ? tasks.filter((task) => task.createdByLeaderId === viewAsStudent.id && task.leaderWeekId === String(currentWeekData?.id || ''))
       : [];
+  const weeklyLeaderKanbanReady = weeklyLeaderTasks.length > 0;
+  const weeklyLeaderPendingCount = weeklyLeaderMissingStations.length + (weeklyLeaderKanbanReady ? 0 : 1);
+  const hasWeeklyLeaderPendingWork = isWeeklyLeader && weeklyLeaderPendingCount > 0;
+  const weeklyLeaderPendingSummary = [
+      weeklyLeaderMissingStations.length > 0 ? `${weeklyLeaderMissingStations.length} estacao(oes) sem foco e prazo` : null,
+      weeklyLeaderKanbanReady ? null : 'criar pelo menos 1 tarefa no Kanban'
+  ].filter(Boolean).join(' + ');
   const studentHeroFooter = viewAsStudent ? (
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr,0.95fr,0.95fr,1fr]">
           <button
@@ -7512,14 +7533,45 @@ const handleFileSelect = (e) => {
 
     {/* ALERTA DE LÍDER DE GESTÃO */}
     {isWeeklyLeader && (
-        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-4 rounded-xl border border-purple-400/30 shadow-lg mb-6 animate-pulse flex items-center justify-between">
-            <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-full">
-                    <Crown size={24} className="text-yellow-300" />
+        <div className={`mb-6 overflow-hidden rounded-[24px] border p-4 shadow-[0_18px_46px_rgba(0,0,0,0.26)] ${hasWeeklyLeaderPendingWork ? 'border-amber-400/30 bg-[linear-gradient(135deg,rgba(245,158,11,0.18),rgba(124,58,237,0.18),rgba(15,23,42,0.78))]' : 'border-emerald-400/25 bg-[linear-gradient(135deg,rgba(16,185,129,0.16),rgba(34,211,238,0.12),rgba(15,23,42,0.78))]'}`}>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex items-start gap-4">
+                    <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border ${hasWeeklyLeaderPendingWork ? 'border-amber-300/30 bg-amber-300/15 text-amber-100' : 'border-emerald-300/30 bg-emerald-300/15 text-emerald-100'}`}>
+                        {hasWeeklyLeaderPendingWork ? <AlertTriangle size={22} /> : <CheckCircle size={22} />}
+                    </div>
+                    <div>
+                        <span className="inline-flex items-center gap-2 rounded-full border border-yellow-300/25 bg-yellow-300/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-yellow-100">
+                            <Crown size={12} /> Lider da semana
+                        </span>
+                        <h3 className="mt-2 text-xl font-black leading-tight text-white">
+                            {hasWeeklyLeaderPendingWork ? 'Ainda falta organizar a semana' : 'Obrigacoes da lideranca em dia'}
+                        </h3>
+                        <p className="mt-1 text-sm leading-relaxed text-slate-100/82">
+                            {hasWeeklyLeaderPendingWork
+                                ? `Falta ${weeklyLeaderPendingSummary}. Enquanto isso, o tecnico ainda ve a lideranca como pendente.`
+                                : 'Foco das estacoes e tarefa do Kanban ja estao registrados para o time acompanhar.'}
+                        </p>
+                    </div>
                 </div>
-                <div>
-                    <h3 className="text-white font-bold text-lg leading-tight">Voce e o Lider de Gestao esta semana!</h3>
-                    <p className="text-purple-100 text-xs">Sua missao: atualizar as estacoes e criar tarefas no Kanban.</p>
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <div className="grid grid-cols-2 gap-2 text-center">
+                        <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3">
+                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Estacoes</p>
+                            <p className="mt-1 text-lg font-black text-white">{weeklyLeaderMissionReadyCount}/3</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3">
+                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Kanban</p>
+                            <p className="mt-1 text-lg font-black text-white">{weeklyLeaderTasks.length}</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => setStudentTab('mission')}
+                        className={`inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-xs font-black uppercase tracking-[0.14em] transition-all ${hasWeeklyLeaderPendingWork ? 'border-amber-300/25 bg-amber-400/12 text-amber-50 hover:bg-amber-400 hover:text-black' : 'border-emerald-300/25 bg-emerald-400/12 text-emerald-50 hover:bg-emerald-400 hover:text-black'}`}
+                    >
+                        <ClipboardList size={15} />
+                        {hasWeeklyLeaderPendingWork ? 'Concluir agora' : 'Ver obrigacoes'}
+                    </button>
                 </div>
             </div>
         </div>
@@ -7602,13 +7654,37 @@ const handleFileSelect = (e) => {
                                     </div>
                                   </div>
 
+                                  {hasWeeklyLeaderPendingWork && (
+                                    <div className="mt-5 rounded-[24px] border border-amber-300/25 bg-amber-400/10 p-4">
+                                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                        <div className="flex items-start gap-3">
+                                          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-amber-300/25 bg-amber-300/10 text-amber-100">
+                                            <AlertTriangle size={17} />
+                                          </div>
+                                          <div>
+                                            <p className="text-sm font-black text-white">Pendencias obrigatorias</p>
+                                            <p className="mt-1 text-xs leading-relaxed text-amber-50/80">
+                                              Complete foco e prazo das 3 estacoes e crie ao menos 1 tarefa Kanban para a semana ficar registrada.
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <span className="rounded-full border border-amber-300/25 bg-black/20 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-amber-100">
+                                          {weeklyLeaderPendingCount} pendencia(s)
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
+
                                   <div className="mt-5 grid gap-4 xl:grid-cols-3">
-                                    {WEEKLY_STATION_KEYS.map((station) => (
-                                      <div key={station} className="rounded-[24px] border border-white/10 bg-black/25 p-4">
+                                    {WEEKLY_STATION_KEYS.map((station) => {
+                                      const stationStatus = getWeeklyLeaderStationStatus(station);
+
+                                      return (
+                                      <div key={station} className={`rounded-[24px] border p-4 ${stationStatus.ready ? 'border-white/10 bg-black/25' : 'border-amber-300/20 bg-amber-400/10'}`}>
                                         <div className="flex items-center justify-between gap-2">
                                           <p className="text-sm font-black text-white">{station}</p>
-                                          <span className={`rounded-full border px-2 py-1 text-[10px] font-bold ${missions?.[station]?.text?.trim() ? 'border-green-400/25 bg-green-500/10 text-green-100' : 'border-yellow-400/25 bg-yellow-500/10 text-yellow-100'}`}>
-                                            {missions?.[station]?.text?.trim() ? 'Pronta' : 'Pendente'}
+                                          <span className={`rounded-full border px-2 py-1 text-[10px] font-bold ${stationStatus.ready ? 'border-green-400/25 bg-green-500/10 text-green-100' : 'border-yellow-400/25 bg-yellow-500/10 text-yellow-100'}`}>
+                                            {stationStatus.ready ? 'Pronta' : 'Pendente'}
                                           </span>
                                         </div>
                                         <textarea
@@ -7623,6 +7699,14 @@ const handleFileSelect = (e) => {
                                           onChange={(event) => updateMission(station, 'deadline', event.target.value)}
                                           className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 p-3 text-sm text-white outline-none focus:border-purple-300"
                                         />
+                                        {!stationStatus.ready && (
+                                          <p className="mt-2 text-[11px] font-semibold text-amber-100/85">
+                                            Falta {[
+                                              !stationStatus.hasText ? 'foco escrito' : null,
+                                              !stationStatus.hasDeadline ? 'prazo' : null
+                                            ].filter(Boolean).join(' e ')}.
+                                          </p>
+                                        )}
                                         <button
                                           type="button"
                                           onClick={() => handleSaveStationMission(station)}
@@ -7631,10 +7715,20 @@ const handleFileSelect = (e) => {
                                           Salvar foco
                                         </button>
                                       </div>
-                                    ))}
+                                      );
+                                    })}
                                   </div>
 
-                                  <form onSubmit={handleWeeklyLeaderTaskSubmit} className="mt-5 rounded-[24px] border border-white/10 bg-black/25 p-4">
+                                  <form onSubmit={handleWeeklyLeaderTaskSubmit} className={`mt-5 rounded-[24px] border p-4 ${weeklyLeaderKanbanReady ? 'border-white/10 bg-black/25' : 'border-orange-300/25 bg-orange-400/10'}`}>
+                                    <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                      <div>
+                                        <p className="text-sm font-black text-white">Tarefa Kanban da lideranca</p>
+                                        <p className="mt-1 text-xs text-gray-400">A tarefa criada aqui fica marcada como tarefa aberta pelo lider da semana.</p>
+                                      </div>
+                                      <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${weeklyLeaderKanbanReady ? 'border-green-400/25 bg-green-500/10 text-green-100' : 'border-orange-300/25 bg-orange-400/10 text-orange-100'}`}>
+                                        {weeklyLeaderKanbanReady ? 'Registrada' : 'Obrigatoria'}
+                                      </span>
+                                    </div>
                                     <div className="grid gap-3 xl:grid-cols-[minmax(0,1.3fr),180px,190px,160px,auto]">
                                       <input
                                         value={leaderTaskDraft.text}
