@@ -409,8 +409,19 @@ const formatXpLossDate = (dateValue) => {
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 };
 
+const formatShortDateLabel = (dateValue) => {
+  if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+    const [year, month, day] = dateValue.split('-');
+    return `${day}/${month}/${year}`;
+  }
+
+  return formatXpLossDate(dateValue);
+};
+
 const XP_LOSS_ALERT_REPEAT_MS = 5 * 60 * 1000;
 const XP_LOSS_DELETE_WAIT_DAYS = 5;
+const WEEKLY_CAPTAIN_NAMES = ['Heloise', 'Sofia'];
+const WEEKLY_STATION_KEYS = [STATION_KEYS.ENGINEERING, STATION_KEYS.INNOVATION, STATION_KEYS.MANAGEMENT];
 
 const getXpLossDate = (dateValue) => {
   if (!dateValue) return null;
@@ -444,6 +455,63 @@ const getXpLossDeleteState = (notice, now = new Date()) => {
 
   const remainingDays = Math.max(1, Math.ceil((unlockDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
   return { canDelete: false, label: `Libera em ${remainingDays} dia(s)` };
+};
+
+const isWeeklyCaptainName = (name) => WEEKLY_CAPTAIN_NAMES.some((captainName) => studentNamesMatch(captainName, name));
+
+const getNoticeTime = (notice) => {
+  const date = getXpLossDate(notice?.date || notice?.createdAt);
+  return date ? date.getTime() : 0;
+};
+
+const isNoticeInsideRange = (notice, startDate, endDate) => {
+  const noticeDate = getXpLossDate(notice?.date || notice?.createdAt);
+  if (!noticeDate || !startDate || !endDate) return false;
+  return noticeDate >= startDate && noticeDate <= endDate;
+};
+
+const buildTeamXpLossEvents = (students = [], records = []) => {
+  const events = [];
+  const seen = new Set();
+
+  const addEvent = (event, key) => {
+    if (!event || event.amount >= 0 || !key || seen.has(key)) return;
+    seen.add(key);
+    events.push(event);
+  };
+
+  records.forEach((record) => {
+    const amount = Number(record?.amount) || 0;
+    addEvent({
+      id: record.id,
+      noticeId: record.noticeId || record.id,
+      studentId: record.studentId || '',
+      studentName: record.studentName || 'Aluno',
+      amount,
+      reason: record.reason || '',
+      date: record.date || record.createdAt || '',
+      createdAt: record.createdAt || record.date || '',
+    }, record.noticeId || record.id);
+  });
+
+  students.forEach((student) => {
+    normalizeXpLossNotifications(student?.xpLossNotifications).forEach((notice) => {
+      addEvent({
+        ...notice,
+        studentId: student.id,
+        studentName: student.name,
+      }, notice.id);
+    });
+  });
+
+  return events.sort((left, right) => getNoticeTime(right) - getNoticeTime(left));
+};
+
+const getStationKanbanTag = (station) => {
+  if (station === STATION_KEYS.ENGINEERING) return 'engenharia';
+  if (station === STATION_KEYS.INNOVATION) return 'inovacao';
+  if (station === STATION_KEYS.MANAGEMENT) return 'gestao';
+  return 'geral';
 };
 
 const hasStudentBadge = (student, badgeId) => normalizeStudentBadges(student?.badges).includes(badgeId);
@@ -770,6 +838,8 @@ function App() {
   const [codeSnippets, setCodeSnippets] = useState([]);
   const [rounds, setRounds] = useState([]);
   const [scoreHistory, setScoreHistory] = useState([]);
+  const [attendanceSessions, setAttendanceSessions] = useState([]);
+  const [xpLossRecords, setXpLossRecords] = useState([]);
   const [teamSeasonStats, setTeamSeasonStats] = useState({ successfulWeekIds: [], successfulWeeks: 0 });
   const [activeTimer, setActiveTimer] = useState(null);
   const [timerDisplay, setTimerDisplay] = useState(0); 
@@ -801,6 +871,7 @@ function App() {
   const [studentLogbookSearchQuery, setStudentLogbookSearchQuery] = useState('');
   const [studentLogbookWeekFilter, setStudentLogbookWeekFilter] = useState('all');
   const [studentLogbookDraft, setStudentLogbookDraft] = useState('');
+  const [leaderTaskDraft, setLeaderTaskDraft] = useState({ text: '', studentId: '', station: STATION_KEYS.MANAGEMENT, dueDate: '' });
   const isTvOnlyView = getStandaloneView() === 'tv';
   const today = new Date().toISOString().split('T')[0];
   const isLogbookViewActive = isAdmin ? adminTab === 'logbook' : studentTab === 'logbook';
@@ -1738,7 +1809,7 @@ function App() {
       let currentDate = buildLocalDate(2026, 2, 22);
 
       // 1. CAPITÃS (Sempre Fixas em Gestão - Tarde)
-      const capitasNames = ["Heloise", "Sofia"];
+      const capitasNames = WEEKLY_CAPTAIN_NAMES;
 
       // 2. APRENDIZES (Sexto Ano): Antônio, Heloisa, Helena (Rodízio Simplificado)
 
@@ -1893,6 +1964,8 @@ function App() {
     const unsubStudents = createListener("students", setStudents, normalizeStudentRecord);
     const unsubTasks = createListener("tasks", setTasks);
     const unsubEvents = createListener("events", setEvents);
+    const unsubAttendanceSessions = createListener("attendanceSessions", setAttendanceSessions);
+    const unsubXpLossRecords = createListener("xpLossRecords", setXpLossRecords);
     
 
     // Listeners para as Rubricas
@@ -1936,6 +2009,8 @@ function App() {
         unsubStudents();
         unsubTasks();
         unsubEvents();
+        unsubAttendanceSessions();
+        unsubXpLossRecords();
         unsubInnovationRubric();
         unsubRobotDesignRubric();
         unsubAdminProfile();
@@ -2238,10 +2313,45 @@ function App() {
       }
   }
 
+  const handleWeeklyLeaderTaskSubmit = async (event) => {
+      event.preventDefault();
+      if (!viewAsStudent?.id) return;
+
+      const text = leaderTaskDraft.text.trim();
+      if (!text) {
+          showNotification("Descreva a tarefa que o lider vai abrir.", "error");
+          return;
+      }
+
+      const assignedStudent = students.find((student) => student.id === leaderTaskDraft.studentId);
+      const station = leaderTaskDraft.station || STATION_KEYS.MANAGEMENT;
+
+      try {
+          await createKanbanTask({
+              text,
+              dueDate: leaderTaskDraft.dueDate || currentWeekData?.endDate || localTodayStr,
+              tag: getStationKanbanTag(station),
+              priority: 'alta',
+              author: assignedStudent?.name || "Equipe",
+              createdByLeaderId: viewAsStudent.id,
+              createdByLeaderName: viewAsStudent.name,
+              leaderWeekId: String(currentWeekData?.id || ''),
+              leaderWeekName: currentWeekData?.weekName || '',
+              station
+          });
+
+          setLeaderTaskDraft(prev => ({ ...prev, text: '', studentId: '' }));
+          showNotification("Tarefa criada pelo lider no Kanban!", "success");
+      } catch (error) {
+          console.error("Erro ao criar tarefa do lider:", error);
+          showNotification("Erro ao criar tarefa.", "error");
+      }
+  }
+
   // --- FUNÇÕES DA GARRA / ANEXO ---
   const handleAttachmentSubmit = async (e) => { 
-      e.preventDefault(); 
-      const fd = new FormData(e.target); 
+      e.preventDefault();
+      const fd = new FormData(e.target);
       
       let img = modal.data?.image || null; 
       if (selectedFile) img = await convertBase64(selectedFile); 
@@ -2753,30 +2863,55 @@ const handleDeleteRound = async (id) => {
       const fd = new FormData(e.target);
       
       // Pega todos os IDs marcados no checkbox (agora são strings do Firebase)
+      const attendanceDate = (fd.get('attendanceDate') || localTodayStr).toString();
       const presentIds = fd.getAll('present').map(id => String(id));
+      const existingSession = attendanceSessions.find((session) => session.date === attendanceDate || session.id === attendanceDate);
+      const previousPresentIds = new Set((existingSession?.presentIds || []).map(String));
+      const currentPresentIds = new Set(presentIds);
 
       try {
           // Cria uma lista de "promessas" para atualizar todos ao mesmo tempo
           const updates = students.map(student => {
               const studentRef = doc(db, "students", student.id);
               
-              const isPresent = presentIds.includes(String(student.id));
+              const studentId = String(student.id);
+              const isPresent = currentPresentIds.has(studentId);
+              const wasPresent = previousPresentIds.has(studentId);
               
               // Calcula os novos valores
               const currentTotal = student.totalClasses || 0;
               const currentAttended = student.attendedClasses || 0;
+              const manualTotalRaw = fd.get(`manualTotal-${student.id}`);
+              const manualAttendedRaw = fd.get(`manualAttended-${student.id}`);
+              const manualTotal = manualTotalRaw === null ? NaN : Number(manualTotalRaw);
+              const manualAttended = manualAttendedRaw === null ? NaN : Number(manualAttendedRaw);
+              const baseTotal = Number.isFinite(manualTotal) ? manualTotal : currentTotal;
+              const baseAttended = Number.isFinite(manualAttended) ? manualAttended : currentAttended;
+              const totalDelta = existingSession ? 0 : 1;
+              const attendedDelta = existingSession ? Number(isPresent) - Number(wasPresent) : Number(isPresent);
+              const nextTotal = Math.max(0, baseTotal + totalDelta);
+              const nextAttended = Math.min(nextTotal, Math.max(0, baseAttended + attendedDelta));
               
               return updateDoc(studentRef, {
-                  totalClasses: currentTotal + 1,
-                  attendedClasses: isPresent ? currentAttended + 1 : currentAttended
+                  totalClasses: nextTotal,
+                  attendedClasses: nextAttended
               });
           });
+
+          updates.push(setDoc(doc(db, "attendanceSessions", attendanceDate), {
+              date: attendanceDate,
+              presentIds,
+              absentIds: students.filter((student) => !currentPresentIds.has(String(student.id))).map((student) => student.id),
+              studentCount: students.length,
+              createdAt: existingSession?.createdAt || new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+          }));
 
           // Espera todos serem atualizados
           await Promise.all(updates);
           
           closeModal();
-          showNotification("Frequência registrada no Firebase!");
+          showNotification(existingSession ? "Chamada corrigida para esta data!" : "Frequencia registrada no Firebase!");
       } catch (error) {
           console.error("Erro na chamada:", error);
           showNotification("Erro ao salvar frequência.", "error");
@@ -3439,6 +3574,75 @@ const handleDeleteRound = async (id) => {
       .filter((achievement) => achievement.current < achievement.target)
       .sort((left, right) => (right.current / right.target) - (left.current / left.target))[0];
   const studentXpLossNotifications = viewAsStudent ? normalizeXpLossNotifications(viewAsStudent.xpLossNotifications) : [];
+  const bisCycleIndex = currentWeekData?.id ? Math.max(0, Math.floor((Number(currentWeekData.id) - 1) / 2)) : 0;
+  const bisCycleStartWeek = rotationSchedule[bisCycleIndex * 2] || currentWeekData;
+  const bisCycleEndWeek = rotationSchedule[(bisCycleIndex * 2) + 1] || bisCycleStartWeek;
+  const bisCycleStartDate = parseLocalDateValue(bisCycleStartWeek?.startDate || currentWeekData?.startDate);
+  const bisCycleEndDate = parseLocalDateValue(bisCycleEndWeek?.endDate || currentWeekData?.endDate, true);
+  const teamXpLossEvents = buildTeamXpLossEvents(students, xpLossRecords);
+  const bisRewardLosses = teamXpLossEvents.filter((event) => isNoticeInsideRange(event, bisCycleStartDate, bisCycleEndDate));
+  const isBisRewardAlive = bisRewardLosses.length === 0;
+  const bisCycleLabel = bisCycleStartWeek && bisCycleEndWeek
+      ? `${formatShortDateLabel(bisCycleStartWeek.startDate)} ate ${formatShortDateLabel(bisCycleEndWeek.endDate)}`
+      : 'Ciclo em sincronizacao';
+  const bisDaysRemaining = bisCycleEndDate
+      ? Math.max(0, Math.ceil((bisCycleEndDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+      : 0;
+  const currentWeekStartDate = parseLocalDateValue(currentWeekData?.startDate);
+  const currentWeekEndDate = parseLocalDateValue(currentWeekData?.endDate, true);
+  const getStudentXpLossEvents = (student) => teamXpLossEvents
+      .filter((event) => event.studentId === student?.id || studentNamesMatch(event.studentName, student?.name));
+  const getCurrentWeekXpLosses = (student) => getStudentXpLossEvents(student)
+      .filter((notice) => isNoticeInsideRange(notice, currentWeekStartDate, currentWeekEndDate));
+  const studentWeeklyXpLosses = viewAsStudent ? getCurrentWeekXpLosses(viewAsStudent) : [];
+  const hasStudentWeeklyRecurrence = studentWeeklyXpLosses.length >= 2;
+  const disciplineRows = students.map((student) => {
+      const xpLosses = getStudentXpLossEvents(student);
+      const weeklyLosses = getCurrentWeekXpLosses(student);
+      const totalLost = xpLosses.reduce((sum, notice) => sum + Math.abs(notice.amount || 0), 0);
+      const weeklyLost = weeklyLosses.reduce((sum, notice) => sum + Math.abs(notice.amount || 0), 0);
+      const latestNotice = [...xpLosses].sort((left, right) => getNoticeTime(right) - getNoticeTime(left))[0] || null;
+      const stats = getAttendanceStats(student);
+
+      return {
+          student,
+          xpLosses,
+          weeklyLosses,
+          totalLost,
+          weeklyLost,
+          latestNotice,
+          attendanceStats: stats,
+          recurrence: weeklyLosses.length >= 2,
+      };
+  });
+  const disciplineAlerts = disciplineRows.filter((row) => row.recurrence || row.weeklyLost >= 20);
+  const totalWeeklyXpLost = disciplineRows.reduce((sum, row) => sum + row.weeklyLost, 0);
+  const consistencyRanking = disciplineRows
+      .map((row) => {
+          const studentTasks = tasks.filter((task) => task.author && task.author.includes(row.student.name));
+          const doneTasks = studentTasks.filter((task) => task.status === 'done').length;
+          const overdueTasks = studentTasks.filter((task) => task.status !== 'done' && task.dueDate && task.dueDate < localTodayStr).length;
+          const score = Math.max(0, Math.min(120,
+              100
+              + doneTasks * 3
+              - row.weeklyLosses.length * 15
+              - row.weeklyLost
+              - overdueTasks * 8
+              - row.attendanceStats.absences * 5
+          ));
+
+          return { ...row, doneTasks, overdueTasks, consistencyScore: Math.round(score) };
+      })
+      .sort((left, right) => right.consistencyScore - left.consistencyScore || (right.student.xp || 0) - (left.student.xp || 0));
+  const isWeeklyLeader = Boolean(
+      viewAsStudent?.id
+      && currentWeekData?.assignments?.[STATION_KEYS.MANAGEMENT]?.some((student) => student.id === viewAsStudent.id || studentNamesMatch(student.name, viewAsStudent.name))
+      && !isWeeklyCaptainName(viewAsStudent.name)
+  );
+  const weeklyLeaderMissionReadyCount = WEEKLY_STATION_KEYS.filter((station) => Boolean(missions?.[station]?.text?.trim())).length;
+  const weeklyLeaderTasks = isWeeklyLeader
+      ? tasks.filter((task) => task.createdByLeaderId === viewAsStudent.id && task.leaderWeekId === String(currentWeekData?.id || ''))
+      : [];
   const studentHeroFooter = viewAsStudent ? (
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr,0.95fr,0.95fr,1fr]">
           <button
@@ -3500,6 +3704,46 @@ const handleDeleteRound = async (id) => {
                   </div>
               </div>
           </button>
+
+          <div className={`rounded-[24px] border p-4 backdrop-blur-sm md:col-span-2 xl:col-span-3 ${
+              isBisRewardAlive
+                  ? 'border-emerald-400/25 bg-emerald-500/10'
+                  : 'border-red-500/25 bg-red-500/10'
+          }`}>
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                      <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${
+                          isBisRewardAlive
+                              ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-100'
+                              : 'border-red-400/25 bg-red-500/10 text-red-100'
+                      }`}>
+                          <span>🍫</span> Recompensa coletiva
+                      </span>
+                      <h3 className="mt-3 text-xl font-black text-white">
+                          {isBisRewardAlive ? 'Caixa de Bis em jogo' : 'Caixa de Bis travada neste ciclo'}
+                      </h3>
+                      <p className="mt-2 text-sm leading-relaxed text-gray-300">
+                          {isBisRewardAlive
+                              ? `Se ninguem perder XP ate o fim do ciclo, a equipe ganha uma Caixa de Bis.`
+                              : `Alguem perdeu XP neste ciclo, entao a Caixa de Bis fica para a proxima janela de 2 semanas.`}
+                      </p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center lg:min-w-[420px]">
+                      <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-500">Ciclo</p>
+                          <p className="mt-2 text-[11px] font-black leading-tight text-white">{bisCycleLabel}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-500">Perdas</p>
+                          <p className={`mt-2 text-xl font-black ${isBisRewardAlive ? 'text-emerald-100' : 'text-red-100'}`}>{bisRewardLosses.length}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-gray-500">Faltam</p>
+                          <p className="mt-2 text-xl font-black text-white">{bisDaysRemaining}d</p>
+                      </div>
+                  </div>
+              </div>
+          </div>
 
           {studentXpLossNotifications.length > 0 && (
               <div className="rounded-[24px] border border-red-500/25 bg-red-500/10 p-4 backdrop-blur-sm md:col-span-2 xl:col-span-3">
@@ -3608,33 +3852,46 @@ const handleDeleteRound = async (id) => {
                       <Crown size={12} /> {unlockedTeamAchievements.length}/{teamAchievementsSummary.length}
                   </span>
               </div>
-              <div className="space-y-2 mt-4">
-                  {unlockedTeamAchievements.map((achievement) => {
+              <div className="space-y-2 mt-4 max-h-72 overflow-y-auto custom-scrollbar pr-1">
+                  {teamAchievementsSummary.map((achievement) => {
                       const progress = Math.min(100, (achievement.current / achievement.target) * 100);
+                      const isUnlocked = achievement.current >= achievement.target;
+                      const remaining = Math.max(0, achievement.target - achievement.current);
+                      const achievementHint = isUnlocked
+                          ? `${achievement.name}: desbloqueada pela equipe.`
+                          : `${achievement.name}: ${achievement.desc || 'Complete a meta coletiva.'} Progresso: ${achievement.current}/${achievement.target}. Falta ${remaining}.`;
 
                       return (
-                          <div key={achievement.id} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                          <div
+                              key={achievement.id}
+                              title={achievementHint}
+                              aria-label={achievementHint}
+                              className={`rounded-2xl border p-3 ${isUnlocked ? 'border-emerald-400/25 bg-emerald-500/10' : 'border-white/10 bg-white/5'}`}
+                          >
                               <div className="flex items-center justify-between gap-3">
-                                  <span className="inline-flex items-center gap-2 text-xs font-bold text-white">
+                                  <span className={`inline-flex items-center gap-2 text-xs font-bold ${isUnlocked ? 'text-emerald-100' : 'text-white'}`}>
                                       {achievement.icon}
                                       {achievement.name}
                                   </span>
-                                  <span className="text-[10px] text-gray-400 font-bold">{achievement.current}/{achievement.target}</span>
+                                  <span className={`text-[10px] font-bold ${isUnlocked ? 'text-emerald-200' : 'text-gray-400'}`}>
+                                      {isUnlocked ? 'Desbloqueada' : `${achievement.current}/${achievement.target}`}
+                                  </span>
                               </div>
+                              <p className="mt-2 text-[11px] leading-snug text-gray-400">
+                                  {isUnlocked ? 'Meta coletiva conquistada pela equipe.' : achievement.desc}
+                              </p>
                               <div className="w-full h-1.5 rounded-full bg-black/40 overflow-hidden mt-3">
-                                  <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400" style={{ width: `${progress}%` }}></div>
+                                  <div className={`h-full rounded-full ${isUnlocked ? 'bg-gradient-to-r from-emerald-400 to-cyan-400' : 'bg-gradient-to-r from-gray-500 to-slate-400'}`} style={{ width: `${progress}%` }}></div>
                               </div>
+                              {!isUnlocked && (
+                                  <p className="mt-1.5 text-[10px] font-bold text-gray-500">Falta {remaining} para desbloquear.</p>
+                              )}
                           </div>
                       );
                   })}
-                  {unlockedTeamAchievements.length === 0 && (
-                      <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                          <p className="text-xs font-bold text-gray-400">Nenhuma conquista coletiva desbloqueada ainda.</p>
-                      </div>
-                  )}
               </div>
               <p className="text-xs text-gray-400 mt-3">
-                  {unlockedTeamAchievements.length > 0 ? 'Badges coletivas desbloqueadas pela equipe.' : 'Quando a equipe atingir uma meta coletiva, ela aparece aqui.'}
+                  Badges coletivas ficam visiveis para acompanhar o quanto falta para desbloquear cada meta da equipe.
               </p>
           </div>
       </div>
@@ -3673,6 +3930,7 @@ const handleDeleteRound = async (id) => {
       { id: 'strategy', label: 'Estrategia', icon: <Lightbulb size={16} />, description: 'Projeto, impacto, ideias e narrativa que os juizes entendem rapido.', pillTone: 'border-purple-500/20 bg-purple-500/10 text-purple-200', activeClass: 'bg-purple-500 text-white shadow-lg shadow-purple-900/20', inactiveClass: 'text-gray-400 hover:text-purple-300 hover:bg-purple-500/10' },
       { id: 'rounds', label: 'Robo', icon: <ListTodo size={16} />, description: 'Saidas, anexos, codigo e evolucao do robo em linguagem de equipe.', pillTone: 'border-blue-500/20 bg-blue-500/10 text-blue-200', activeClass: 'bg-blue-600 text-white shadow-lg shadow-blue-900/20', inactiveClass: 'text-gray-400 hover:text-blue-300 hover:bg-blue-500/10' },
       { id: 'rubrics', label: 'Rubricas', icon: <Scale size={16} />, description: 'Placar oficial da equipe com leitura simples e proximo passo.', pill: `${overallRubricAverage}/4`, pillTone: 'border-gray-400/20 bg-gray-400/10 text-gray-100', activeClass: 'bg-gray-300 text-black shadow-lg shadow-gray-900/20', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
+      { id: 'discipline', label: 'Disciplina', icon: <Shield size={16} />, description: 'Perdas de XP, reincidencia e ranking de consistencia da equipe.', badge: disciplineAlerts.length > 0 ? disciplineAlerts.length : null, pillTone: disciplineAlerts.length > 0 ? 'border-red-500/20 bg-red-500/10 text-red-200' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200', activeClass: 'bg-red-500 text-white shadow-lg shadow-red-900/20', inactiveClass: 'text-gray-400 hover:text-red-300 hover:bg-red-500/10' },
       { id: 'kanban', label: 'Kanban', icon: <ClipboardList size={16} />, description: 'Fluxo da semana, prioridades e entregas sem cara de planilha.', badge: urgentTasksCount > 0 ? urgentTasksCount : null, pillTone: 'border-orange-500/20 bg-orange-500/10 text-orange-200', activeClass: 'bg-orange-500 text-white shadow-lg shadow-orange-900/20', inactiveClass: 'text-gray-400 hover:text-orange-300 hover:bg-orange-500/10' },
       { id: 'logbook', label: 'Diario', icon: <Book size={16} />, description: 'Memoria viva do time com testes, aprendizados e mini vitorias.', pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
       { id: 'agenda', label: 'Agenda', icon: <CalendarDays size={16} />, description: 'Prazos, encontros e checkpoints da equipe em modo missao.', badge: urgentEventsCount > 0 ? urgentEventsCount : null, pillTone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200', activeClass: 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20', inactiveClass: 'text-gray-400 hover:text-indigo-300 hover:bg-indigo-500/10' }
@@ -4212,13 +4470,14 @@ const handleDeleteRound = async (id) => {
                   
                   try {
                       const studentRef = doc(db, "students", student.id);
+                      let xpLossNotice = null;
                       
                       // Prepara a atualização do XP
                       const updateData = { xp: (student.xp || 0) + val };
 
                       if (val < 0) {
                           const now = new Date();
-                          const xpLossNotice = {
+                          xpLossNotice = {
                               id: `xp-loss-${now.getTime()}`,
                               amount: val,
                               reason: cleanReason,
@@ -4240,6 +4499,18 @@ const handleDeleteRound = async (id) => {
                       }
 
                       await updateDoc(studentRef, updateData);
+                      if (xpLossNotice) {
+                          await addDoc(collection(db, "xpLossRecords"), {
+                              noticeId: xpLossNotice.id,
+                              studentId: student.id,
+                              studentName: student.name,
+                              amount: val,
+                              reason: cleanReason,
+                              date: xpLossNotice.date,
+                              createdAt: xpLossNotice.createdAt,
+                              createdBy: currentUser?.name || 'Tecnico'
+                          });
+                      }
                       
                       closeModal(); 
                       let msg = `XP atualizado: ${val > 0 ? '+' : ''}${val}`;
@@ -4612,9 +4883,18 @@ const handleFileSelect = (e) => {
                   {visibleAchievements.map(ach => {
                       const isUnlocked = ach.current >= ach.target;
                       const progress = Math.min(100, (ach.current / ach.target) * 100);
+                      const remaining = Math.max(0, ach.target - ach.current);
+                      const achievementHint = isUnlocked
+                          ? `${ach.name}: desbloqueada pela equipe.`
+                          : `${ach.name}: ${ach.desc} Progresso: ${ach.current}/${ach.target}. Falta ${remaining}.`;
                       
                       return (
-                          <div key={ach.id} className={`p-4 rounded-xl border flex flex-col relative overflow-hidden transition-all duration-500 ${isUnlocked ? 'bg-gradient-to-br from-white/10 to-transparent border-yellow-500/50 shadow-[0_0_20px_rgba(234,179,8,0.15)] scale-[1.02]' : 'bg-black/40 border-white/5 opacity-80'}`}>
+                          <div
+                              key={ach.id}
+                              title={achievementHint}
+                              aria-label={achievementHint}
+                              className={`p-4 rounded-xl border flex flex-col relative overflow-hidden transition-all duration-500 ${isUnlocked ? 'bg-gradient-to-br from-white/10 to-transparent border-yellow-500/50 shadow-[0_0_20px_rgba(234,179,8,0.15)] scale-[1.02]' : 'bg-black/40 border-white/5 opacity-80'}`}
+                          >
                               <div className="flex items-start gap-1.5 mb-2">
                                   <div className={`p-1 rounded-lg shrink-0 ${isUnlocked ? ach.bg + '/20 ' + ach.color : 'bg-white/5 text-gray-500'}`}>
                                       {ach.icon}
@@ -4627,6 +4907,7 @@ const handleFileSelect = (e) => {
                               <p className="text-xs text-gray-400 mb-3 flex-1">{ach.desc}</p>
                               <div className="w-full bg-gray-800 rounded-full h-2 mb-1 overflow-hidden"><div className={`h-full transition-all duration-1000 ${isUnlocked ? ach.bg : 'bg-gray-500'}`} style={{width: `${progress}%`}}></div></div>
                               <div className="text-[10px] text-right font-mono text-gray-500 font-bold">{ach.current} / {ach.target}</div>
+                              {!isUnlocked && <div className="mt-1 text-[10px] font-bold text-gray-500">Falta {remaining} para desbloquear.</div>}
                           </div>
                       )
                   })}
@@ -4640,6 +4921,237 @@ const handleFileSelect = (e) => {
       )
   };
 
+  const AttendanceModalContent = () => {
+      const attendanceDate = modal.data?.date || localTodayStr;
+      const existingSession = attendanceSessions.find((session) => session.date === attendanceDate || session.id === attendanceDate);
+      const existingPresentIds = new Set((existingSession?.presentIds || []).map(String));
+      const totalAbsences = students.reduce((sum, student) => sum + Math.max(0, (student.totalClasses || 0) - (student.attendedClasses || 0)), 0);
+      const riskStudents = students.filter((student) => {
+          const stats = getAttendanceStats(student);
+          return stats.absences > 0 || stats.percent < 75;
+      });
+
+      return (
+          <form onSubmit={handleAttendanceSubmit} className="flex h-full min-h-0 flex-col animate-in fade-in">
+              <div className="shrink-0 border-b border-white/10 bg-[#11121d]/95 px-5 py-5 md:px-7">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                      <div className="max-w-3xl">
+                          <span className="inline-flex items-center gap-2 rounded-full border border-green-400/20 bg-green-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-green-100">
+                              <ListTodo size={12} /> Chamada da equipe
+                          </span>
+                          <h3 className="mt-3 text-2xl font-black text-white md:text-3xl">Chamada por data</h3>
+                          <p className="mt-2 text-sm leading-relaxed text-gray-400">Escolha o dia do treino. Se a data ja foi registrada, o sistema corrige a chamada sem somar outra aula.</p>
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-3 xl:min-w-[620px]">
+                          <label className="rounded-2xl border border-white/10 bg-black/30 p-3">
+                              <span className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-500">Data da chamada</span>
+                              <input name="attendanceDate" type="date" value={attendanceDate} onChange={(event) => setModal(prev => ({ ...prev, data: { ...(prev.data || {}), date: event.target.value } }))} className="mt-2 w-full rounded-xl border border-white/10 bg-black/50 p-3 text-white outline-none focus:border-green-400" />
+                          </label>
+                          <div className="rounded-2xl border border-white/10 bg-black/30 p-3">
+                              <span className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-500">Modo</span>
+                              <p className={`mt-3 text-sm font-black ${existingSession ? 'text-yellow-200' : 'text-green-200'}`}>{existingSession ? 'Corrigindo data existente' : 'Nova aula no historico'}</p>
+                          </div>
+                          <div className="rounded-2xl border border-white/10 bg-black/30 p-3">
+                              <span className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-500">Alertas</span>
+                              <p className="mt-3 text-sm font-black text-white">{totalAbsences} falta(s)</p>
+                          </div>
+                      </div>
+                  </div>
+
+                  {riskStudents.length > 0 && (
+                      <div className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 p-3">
+                          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-red-100">Alunos para revisar</p>
+                          <div className="mt-2 flex max-h-20 flex-wrap gap-2 overflow-y-auto custom-scrollbar pr-1">
+                              {riskStudents.map((student) => {
+                                  const stats = getAttendanceStats(student);
+                                  return <span key={student.id} className="rounded-full border border-red-400/20 bg-black/20 px-3 py-1 text-xs font-bold text-red-100">{student.name}: {stats.absences} falta(s), {stats.percent}%</span>;
+                              })}
+                          </div>
+                      </div>
+                  )}
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar px-4 py-4 md:px-7">
+                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                  {students.map(s => {
+                      const stats = getAttendanceStats(s);
+                      const defaultChecked = existingSession ? existingPresentIds.has(String(s.id)) : true;
+
+                      return (
+                          <label key={s.id} className="flex items-center gap-3 p-3 hover:bg-white/5 border-b border-white/5 cursor-pointer">
+                              <input type="checkbox" name="present" value={s.id} defaultChecked={defaultChecked} className="accent-green-500 w-5 h-5"/>
+                              <div className="flex-1 min-w-0">
+                                  <span className="text-white font-bold block truncate">{s.name}</span>
+                                  <span className="text-xs text-gray-500">{s.turma} | Presenca: <span className={stats.percent < 75 ? 'text-red-500' : 'text-green-500'}>{stats.percent}%</span> | Faltas: {stats.absences}</span>
+                              </div>
+                              <div className="hidden grid-cols-2 gap-2 md:grid">
+                                  <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-500">
+                                      Aulas
+                                      <input name={`manualTotal-${s.id}`} type="number" min="0" defaultValue={s.totalClasses || 0} className="mt-1 w-16 rounded-lg border border-white/10 bg-black/40 p-1.5 text-center text-xs text-white outline-none focus:border-green-400" />
+                                  </label>
+                                  <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-500">
+                                      Pres.
+                                      <input name={`manualAttended-${s.id}`} type="number" min="0" defaultValue={s.attendedClasses || 0} className="mt-1 w-16 rounded-lg border border-white/10 bg-black/40 p-1.5 text-center text-xs text-white outline-none focus:border-green-400" />
+                                  </label>
+                              </div>
+                              <span className={`rounded-full border px-2 py-1 text-[10px] font-black ${defaultChecked ? 'border-green-500/20 bg-green-500/10 text-green-200' : 'border-red-500/20 bg-red-500/10 text-red-200'}`}>{defaultChecked ? 'Presente' : 'Faltou'}</span>
+                          </label>
+                      );
+                  })}
+                  </div>
+              </div>
+
+              <div className="shrink-0 border-t border-white/10 bg-[#11121d]/95 px-5 py-4 md:px-7">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <p className="text-xs font-bold text-gray-400">A lista pode rolar livremente; o botao fica sempre visivel aqui embaixo.</p>
+                      <button className="rounded-2xl bg-green-600 px-6 py-3 text-sm font-black uppercase tracking-[0.14em] text-white shadow-lg shadow-green-950/20 transition-all hover:bg-green-500 md:min-w-[280px]">{existingSession ? 'Corrigir chamada desta data' : 'Confirmar chamada'}</button>
+                  </div>
+              </div>
+          </form>
+      );
+  }
+
+  const DisciplinePanel = () => {
+      const topConsistency = consistencyRanking.slice(0, 5);
+      const rowsWithLosses = consistencyRanking
+          .filter((row) => row.xpLosses.length > 0 || row.overdueTasks > 0 || row.attendanceStats.absences > 0)
+          .sort((left, right) => right.weeklyLosses.length - left.weeklyLosses.length || right.weeklyLost - left.weeklyLost || right.totalLost - left.totalLost);
+
+      return (
+          <div className="space-y-6">
+              <section className="newgears-major-panel rounded-[30px] border border-red-500/20 bg-red-500/10 p-5 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                      <div>
+                          <span className="inline-flex items-center gap-2 rounded-full border border-red-400/25 bg-red-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-red-100">
+                              <Shield size={12} /> Painel de disciplina
+                          </span>
+                          <h3 className="mt-3 text-2xl font-black text-white">Perdas de XP e reincidencia</h3>
+                          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-red-100/80">
+                              Aqui fica o historico de motivos, quem repetiu perda na semana e onde vale intervir antes que vire costume.
+                          </p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                          <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Alertas</p>
+                              <p className="mt-2 text-xl font-black text-white">{disciplineAlerts.length}</p>
+                          </div>
+                          <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">XP semana</p>
+                              <p className="mt-2 text-xl font-black text-white">-{totalWeeklyXpLost}</p>
+                          </div>
+                          <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Reinc.</p>
+                              <p className="mt-2 text-xl font-black text-white">{disciplineRows.filter((row) => row.recurrence).length}</p>
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className={`mt-5 rounded-[24px] border p-4 ${
+                      isBisRewardAlive
+                          ? 'border-emerald-400/25 bg-emerald-500/10'
+                          : 'border-red-400/25 bg-red-500/10'
+                  }`}>
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div>
+                              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white">
+                                  <span>🍫</span> Caixa de Bis
+                              </span>
+                              <h4 className="mt-3 text-lg font-black text-white">{isBisRewardAlive ? 'Recompensa coletiva ainda viva' : 'Recompensa bloqueada neste ciclo'}</h4>
+                              <p className="mt-1 text-sm leading-relaxed text-gray-300">
+                                  Ciclo {bisCycleLabel}. {isBisRewardAlive ? 'Nenhuma perda de XP registrada ate agora.' : `${bisRewardLosses.length} perda(s) de XP bloquearam a compra neste ciclo.`}
+                              </p>
+                          </div>
+                          {!isBisRewardAlive && (
+                              <div className="flex flex-wrap gap-2 lg:max-w-xl lg:justify-end">
+                                  {bisRewardLosses.slice(0, 4).map((event) => (
+                                      <span key={`${event.studentId}-${event.id}`} className="rounded-full border border-red-400/25 bg-black/20 px-3 py-1 text-xs font-bold text-red-100">
+                                          {event.studentName}: {event.amount} XP
+                                      </span>
+                                  ))}
+                              </div>
+                          )}
+                      </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-3">
+                      {rowsWithLosses.length > 0 ? rowsWithLosses.map((row) => {
+                          const mood = getXpLossMood(row.latestNotice?.amount || -5);
+                          return (
+                              <div key={row.student.id} className={`rounded-[24px] border p-4 ${row.recurrence ? 'border-red-400/30 bg-red-500/15' : 'border-white/10 bg-black/25'}`}>
+                                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                      <div className="min-w-0">
+                                          <div className="flex flex-wrap items-center gap-2">
+                                              <p className="text-base font-black text-white">{row.student.name}</p>
+                                              {row.recurrence && <span className="rounded-full border border-red-400/30 bg-red-500/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-red-100">Reincidencia semanal</span>}
+                                              {row.latestNotice && <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black ${mood.tone}`}>{mood.emoji} ultimo: {row.latestNotice.amount} XP</span>}
+                                          </div>
+                                          <p className="mt-2 text-sm leading-relaxed text-gray-300">{row.latestNotice?.reason || 'Sem perda de XP recente registrada.'}</p>
+                                          <p className="mt-1 text-[11px] font-bold text-gray-500">{row.latestNotice ? `Ultimo registro: ${formatXpLossDate(row.latestNotice.date)}` : 'Acompanhamento preventivo'}</p>
+                                      </div>
+                                      <div className="grid grid-cols-3 gap-2 text-center lg:min-w-[360px]">
+                                          <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                                              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-gray-500">Semana</p>
+                                              <p className="mt-2 text-sm font-black text-white">{row.weeklyLosses.length}x / -{row.weeklyLost}</p>
+                                          </div>
+                                          <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                                              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-gray-500">Total</p>
+                                              <p className="mt-2 text-sm font-black text-white">{row.xpLosses.length}x / -{row.totalLost}</p>
+                                          </div>
+                                          <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                                              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-gray-500">Faltas</p>
+                                              <p className="mt-2 text-sm font-black text-white">{row.attendanceStats.absences}</p>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+                          );
+                      }) : (
+                          <div className="rounded-[24px] border border-emerald-500/20 bg-emerald-500/10 p-5 text-sm font-bold text-emerald-100">
+                              Sem perdas de XP registradas. Excelente momento para reforcar comportamento positivo.
+                          </div>
+                      )}
+                  </div>
+              </section>
+
+              <section className="newgears-major-panel rounded-[30px] border border-emerald-500/20 bg-emerald-500/10 p-5 shadow-[0_18px_50px_rgba(0,0,0,0.22)]">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div>
+                          <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-100">
+                              <Trophy size={12} /> Ranking de consistencia
+                          </span>
+                          <h3 className="mt-3 text-2xl font-black text-white">Quem esta segurando o ritmo</h3>
+                          <p className="mt-2 text-sm leading-relaxed text-emerald-100/80">Pontua presenca, tarefas feitas e pouca perda de XP. E um ranking positivo, para virar cultura.</p>
+                      </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-3">
+                      {topConsistency.map((row, index) => (
+                          <div key={row.student.id} className="rounded-[22px] border border-white/10 bg-black/25 p-4">
+                              <div className="flex items-center justify-between gap-4">
+                                  <div className="flex min-w-0 items-center gap-3">
+                                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-500/10 text-sm font-black text-emerald-100">#{index + 1}</span>
+                                      <div className="min-w-0">
+                                          <p className="truncate text-sm font-black text-white">{row.student.name}</p>
+                                          <p className="mt-1 text-[11px] text-gray-400">{row.doneTasks} tarefa(s) feitas | {row.overdueTasks} atraso(s) | {row.weeklyLosses.length} perda(s) na semana</p>
+                                      </div>
+                                  </div>
+                                  <div className="text-right">
+                                      <p className="text-2xl font-black text-emerald-100">{row.consistencyScore}</p>
+                                      <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-500">pontos</p>
+                                  </div>
+                              </div>
+                              <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/35">
+                                  <div className="h-full rounded-full bg-gradient-to-r from-emerald-300 to-cyan-300" style={{ width: `${Math.min(100, row.consistencyScore)}%` }} />
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              </section>
+          </div>
+      );
+  }
+
   const Notification = () => { if (!notification) return null; const isError = notification.type === 'error'; const isDownload = notification.type === 'download'; return (<div className={`newgears-toast fixed top-6 right-6 z-[100] px-6 py-4 rounded-[22px] flex items-center gap-3 animate-in slide-in-from-right duration-300 border ${isError ? 'bg-red-500/12 border-red-400/40 text-red-200' : isDownload ? 'bg-cyan-500/12 border-cyan-400/40 text-cyan-100' : 'bg-emerald-500/12 border-emerald-400/40 text-emerald-100'}`}>{isError ? <AlertCircle size={24}/> : isDownload ? <Download size={24}/> : <CheckCircle size={24}/>}<span className="font-black text-sm">{notification.msg}</span></div>) }
 
   const XpLossAlertModal = () => {
@@ -4648,6 +5160,7 @@ const handleFileSelect = (e) => {
       const mood = getXpLossMood(xpLossAlertNotice.amount);
       const xpLost = Math.abs(xpLossAlertNotice.amount);
       const deleteState = getXpLossDeleteState(xpLossAlertNotice);
+      const blocksBisReward = isNoticeInsideRange(xpLossAlertNotice, bisCycleStartDate, bisCycleEndDate);
 
       return (
           <div className="fixed inset-0 z-[230] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md animate-in fade-in">
@@ -4673,7 +5186,9 @@ const handleFileSelect = (e) => {
                               </span>
                               <h3 className="mt-3 text-2xl font-black leading-tight text-white">Voce perdeu {xpLost} XP</h3>
                               <p className="mt-2 text-sm leading-relaxed text-gray-300">
-                                  Esse aviso vai voltar a cada 5 minutos enquanto a notificacao estiver ativa.
+                                  {hasStudentWeeklyRecurrence
+                                      ? `Atencao: voce ja perdeu XP ${studentWeeklyXpLosses.length} vezes nesta semana. Isso entrou como reincidencia no painel do tecnico.`
+                                      : 'Esse aviso vai voltar a cada 5 minutos enquanto a notificacao estiver ativa.'}
                               </p>
                           </div>
                       </div>
@@ -4692,6 +5207,8 @@ const handleFileSelect = (e) => {
                       </div>
 
                       <div className="mt-5 rounded-[20px] border border-white/10 bg-white/5 p-3 text-xs font-bold leading-relaxed text-gray-300">
+                          {hasStudentWeeklyRecurrence && <span className="mb-2 block text-red-100">Reincidencia semanal ativa: procure recuperar postura e tarefas antes do proximo treino.</span>}
+                          {blocksBisReward && <span className="mb-2 block text-yellow-100">Caixa de Bis: essa perda bloqueia a recompensa coletiva deste ciclo.</span>}
                           Voce so pode apagar essa notificacao depois de 5 dias da retirada. Status: <span className="text-white">{deleteState.label}</span>.
                       </div>
 
@@ -4838,12 +5355,17 @@ const handleFileSelect = (e) => {
   const renderModal = () => {
 
     if (!modal.type) return null;
+    const modalFrameClass = modal.type === 'imageView'
+      ? 'max-w-4xl h-auto p-6 overflow-y-auto custom-scrollbar'
+      : modal.type === 'attendance'
+        ? 'max-w-7xl h-[94vh] overflow-hidden p-0'
+        : 'max-w-md max-h-[90vh] p-6 overflow-y-auto custom-scrollbar';
 
     return (
 
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/92 p-4 animate-in fade-in backdrop-blur-sm">
 
-        <div className={`newgears-modal-frame p-6 w-full relative animate-in zoom-in-95 z-60 overflow-y-auto custom-scrollbar ${modal.type === 'imageView' ? 'max-w-4xl h-auto' : 'max-w-md max-h-[90vh]'}`}>
+        <div className={`newgears-modal-frame w-full relative animate-in zoom-in-95 z-60 ${modalFrameClass}`}>
 
           <button onClick={closeModal} className="absolute top-4 right-4 text-slate-400 hover:text-white p-2 z-50 rounded-full border border-white/10 bg-white/5"><X size={20}/></button>
 
@@ -5304,7 +5826,7 @@ const handleFileSelect = (e) => {
 
     
 
-          {modal.type === 'attendance' && (<form onSubmit={handleAttendanceSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><ListTodo className="text-green-500"/> Chamada do Dia</h3><div className="mb-6 max-h-60 overflow-y-auto custom-scrollbar">{students.map(s => { const stats = getAttendanceStats(s); return ( <label key={s.id} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-lg border-b border-white/5 cursor-pointer"><input type="checkbox" name="present" value={s.id} defaultChecked className="accent-green-500 w-5 h-5"/><div className="flex-1"><span className="text-white font-bold block">{s.name}</span><span className="text-xs text-gray-500">{s.turma} • Presença: <span className={stats.percent < 75 ? 'text-red-500' : 'text-green-500'}>{stats.percent}%</span> • Faltas: {stats.absences}</span></div></label>) })}</div><button className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg">Confirmar Presença</button></form>)}
+          {modal.type === 'attendance' && <AttendanceModalContent />}
 
           {modal.type === 'grades' && (
               <SchoolGradesForm
@@ -6627,20 +7149,6 @@ const handleFileSelect = (e) => {
                   <span className="font-bold text-xs">Central Tatica</span>
                 </button>
               )}
-              {!isAdmin && viewAsStudent && (
-                <button
-                  onClick={toggleStudentHeroPanel}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all border ${
-                    studentPanelState.hero
-                      ? 'bg-blue-500/12 border-blue-500/30 text-blue-100 shadow-[0_0_15px_rgba(96,165,250,0.16)]'
-                      : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:text-white'
-                  }`}
-                  title={studentPanelState.hero ? 'Ocultar painel principal do aluno' : 'Mostrar painel principal do aluno'}
-                >
-                  {studentPanelState.hero ? <EyeOff size={18} /> : <Eye size={18} />}
-                  <span className="font-bold text-xs">Painel FLL</span>
-                </button>
-              )}
               {isAdmin && (
                 <button
                   onClick={toggleAdminCompactMode}
@@ -6662,18 +7170,6 @@ const handleFileSelect = (e) => {
               >
                   <LayoutDashboard size={18} />
                   <span className="font-bold text-xs">{isDashboardPanelVisible ? `Resumo (${visibleWorkspacePanelCount})` : 'Resumo Rapido'}</span>
-              </button>
-              <button
-                onClick={openCommandCenterMode}
-                className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 p-2 rounded-full hover:bg-yellow-500 hover:text-black transition-all md:px-4 md:py-2 md:rounded-lg flex items-center gap-2 shadow-[0_0_15px_rgba(234,179,8,0.15)]"
-              >
-                  <Crown size={18} /> <span className="hidden md:inline text-xs font-bold uppercase tracking-wider">Central de Comando</span>
-              </button>
-              <button
-                onClick={openJudgeMode}
-                className="bg-amber-500/10 border border-amber-500/20 text-amber-400 p-2 rounded-full hover:bg-amber-500 hover:text-black transition-all md:px-4 md:py-2 md:rounded-lg flex items-center gap-2 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
-              >
-                  <Gavel size={18} /> <span className="hidden md:inline text-xs font-bold uppercase tracking-wider">Modo Juizes</span>
               </button>
               {/* --- BOTÃƒÆ’O MODO TV (TODOS PODEM ACESSAR) --- */}
               <button 
@@ -6904,6 +7400,7 @@ const handleFileSelect = (e) => {
                     )}
                     
                     {/* --- VISUALIZAÇÃO KANBAN --- */}
+                    {adminTab === 'discipline' && <DisciplinePanel />}
                     {adminTab === 'kanban' && <KanbanView {...kanbanViewProps} />}
                     {adminTab === 'logbook' && <LogbookView {...logbookViewProps} />}
                     {adminTab === 'agenda' && <AgendaView {...agendaViewProps} />}
@@ -6987,7 +7484,7 @@ const handleFileSelect = (e) => {
                   )}
                   {studentPanelState.achievements && (
                     <div className="[&>div]:mb-0 w-full">
-                      <TeamAchievementsPanel showLocked={false} />
+                      <TeamAchievementsPanel showLocked={true} />
                     </div>
                   )}
                 </div>
@@ -7014,7 +7511,7 @@ const handleFileSelect = (e) => {
           )}
 
     {/* ALERTA DE LÍDER DE GESTÃO */}
-    {currentWeekData?.assignments?.[STATION_KEYS.MANAGEMENT]?.some(s => s.id === viewAsStudent.id) && !["Heloise", "Sofia"].includes(viewAsStudent.name) && (
+    {isWeeklyLeader && (
         <div className="bg-gradient-to-r from-purple-600 to-indigo-600 p-4 rounded-xl border border-purple-400/30 shadow-lg mb-6 animate-pulse flex items-center justify-between">
             <div className="flex items-center gap-3">
                 <div className="bg-white/20 p-2 rounded-full">
@@ -7022,7 +7519,7 @@ const handleFileSelect = (e) => {
                 </div>
                 <div>
                     <h3 className="text-white font-bold text-lg leading-tight">Voce e o Lider de Gestao esta semana!</h3>
-                    <p className="text-purple-100 text-xs">Sua missao: cobrar tarefas e manter a equipe focada.</p>
+                    <p className="text-purple-100 text-xs">Sua missao: atualizar as estacoes e criar tarefas no Kanban.</p>
                 </div>
             </div>
         </div>
@@ -7080,6 +7577,99 @@ const handleFileSelect = (e) => {
                                   ))}
                                 </div>
                               </section>
+
+                              {isWeeklyLeader && (
+                                <section className="newgears-major-panel rounded-[30px] border border-purple-400/25 bg-purple-500/10 p-5 shadow-[0_18px_50px_rgba(0,0,0,0.24)]">
+                                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                    <div>
+                                      <span className="inline-flex items-center gap-2 rounded-full border border-yellow-300/25 bg-yellow-300/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-yellow-100">
+                                        <Crown size={12} /> Lider da semana
+                                      </span>
+                                      <h3 className="mt-3 text-2xl font-black text-white">Obrigacoes de gestao da semana</h3>
+                                      <p className="mt-2 max-w-3xl text-sm leading-relaxed text-purple-100/80">
+                                        Como lider, voce ajusta o foco das estacoes e abre tarefas no Kanban para o time. Isso substitui o relatorio manual para o tecnico: fica tudo registrado no sistema.
+                                      </p>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2 text-center">
+                                      <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                                        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Missoes</p>
+                                        <p className="mt-2 text-xl font-black text-white">{weeklyLeaderMissionReadyCount}/3</p>
+                                      </div>
+                                      <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                                        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Kanban</p>
+                                        <p className="mt-2 text-xl font-black text-white">{weeklyLeaderTasks.length}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-5 grid gap-4 xl:grid-cols-3">
+                                    {WEEKLY_STATION_KEYS.map((station) => (
+                                      <div key={station} className="rounded-[24px] border border-white/10 bg-black/25 p-4">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <p className="text-sm font-black text-white">{station}</p>
+                                          <span className={`rounded-full border px-2 py-1 text-[10px] font-bold ${missions?.[station]?.text?.trim() ? 'border-green-400/25 bg-green-500/10 text-green-100' : 'border-yellow-400/25 bg-yellow-500/10 text-yellow-100'}`}>
+                                            {missions?.[station]?.text?.trim() ? 'Pronta' : 'Pendente'}
+                                          </span>
+                                        </div>
+                                        <textarea
+                                          value={missions?.[station]?.text || ''}
+                                          onChange={(event) => updateMission(station, 'text', event.target.value)}
+                                          placeholder={`O que ${station} precisa fazer nesta semana?`}
+                                          className="mt-3 h-24 w-full resize-none rounded-2xl border border-white/10 bg-black/35 p-3 text-sm text-white outline-none placeholder:text-gray-600 focus:border-purple-300"
+                                        />
+                                        <input
+                                          type="date"
+                                          value={missions?.[station]?.deadline || ''}
+                                          onChange={(event) => updateMission(station, 'deadline', event.target.value)}
+                                          className="mt-2 w-full rounded-2xl border border-white/10 bg-black/35 p-3 text-sm text-white outline-none focus:border-purple-300"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSaveStationMission(station)}
+                                          className="mt-3 w-full rounded-2xl border border-green-400/25 bg-green-500/10 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-green-100 transition-all hover:bg-green-500 hover:text-black"
+                                        >
+                                          Salvar foco
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  <form onSubmit={handleWeeklyLeaderTaskSubmit} className="mt-5 rounded-[24px] border border-white/10 bg-black/25 p-4">
+                                    <div className="grid gap-3 xl:grid-cols-[minmax(0,1.3fr),180px,190px,160px,auto]">
+                                      <input
+                                        value={leaderTaskDraft.text}
+                                        onChange={(event) => setLeaderTaskDraft(prev => ({ ...prev, text: event.target.value }))}
+                                        placeholder="Criar tarefa obrigatoria no Kanban..."
+                                        className="rounded-2xl border border-white/10 bg-black/35 p-3 text-sm text-white outline-none placeholder:text-gray-600 focus:border-orange-300"
+                                      />
+                                      <select
+                                        value={leaderTaskDraft.studentId}
+                                        onChange={(event) => setLeaderTaskDraft(prev => ({ ...prev, studentId: event.target.value }))}
+                                        className="rounded-2xl border border-white/10 bg-black/35 p-3 text-sm text-white outline-none focus:border-orange-300"
+                                      >
+                                        <option value="">Equipe</option>
+                                        {students.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}
+                                      </select>
+                                      <select
+                                        value={leaderTaskDraft.station}
+                                        onChange={(event) => setLeaderTaskDraft(prev => ({ ...prev, station: event.target.value }))}
+                                        className="rounded-2xl border border-white/10 bg-black/35 p-3 text-sm text-white outline-none focus:border-orange-300"
+                                      >
+                                        {WEEKLY_STATION_KEYS.map((station) => <option key={station} value={station}>{station}</option>)}
+                                      </select>
+                                      <input
+                                        type="date"
+                                        value={leaderTaskDraft.dueDate || currentWeekData?.endDate || localTodayStr}
+                                        onChange={(event) => setLeaderTaskDraft(prev => ({ ...prev, dueDate: event.target.value }))}
+                                        className="rounded-2xl border border-white/10 bg-black/35 p-3 text-sm text-white outline-none focus:border-orange-300"
+                                      />
+                                      <button className="rounded-2xl border border-orange-400/25 bg-orange-500/10 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-orange-100 transition-all hover:bg-orange-500 hover:text-white">
+                                        Criar
+                                      </button>
+                                    </div>
+                                  </form>
+                                </section>
+                              )}
 
                               <section className={`newgears-major-panel relative overflow-hidden rounded-[32px] border ${studentMissionTone.border} bg-gradient-to-br ${studentMissionTone.bg} p-6 md:p-8 shadow-[0_20px_60px_rgba(0,0,0,0.25)]`}>
                                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.12),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(255,255,255,0.08),transparent_30%)] pointer-events-none"></div>
