@@ -9,6 +9,9 @@ import RoundsView from './views/RoundsView';
 import LogbookView from './views/LogbookView';
 import KanbanView from './views/KanbanView';
 import AgendaView from './views/AgendaView';
+import ActivityHistoryView from './views/ActivityHistoryView';
+import PublicTeamView from './views/PublicTeamView';
+import PublicTvModeView from './views/PublicTvModeView';
 import { STATION_KEYS } from './constants/workspace';
 import { DEFAULT_PROJECT_SUMMARY, PROJECT_MAIN_DOC_ID, resolveProjectSummary } from './utils/projectSummary';
 import {
@@ -122,6 +125,9 @@ import {
   Maximize,      // <--- NOVO: Expandir gráfico
   Minimize,      // <--- NOVO: Minimizar gráfico
   Sparkles,
+  Globe2,
+  History,
+  Palette,
 } from 'lucide-react';
 
 const PitStopModal = lazy(() => import('./components/PitStopModal'));
@@ -139,6 +145,12 @@ const RobotDesignStrategyPanel = lazy(() => import('./components/RobotDesignStra
 const RobotRoundsPanel = lazy(() => import('./components/RobotRoundsPanel'));
 const ConfettiBurst = lazy(() => import('react-confetti'));
 const RotationOperationsPanel = lazy(() => import('./components/RotationOperationsPanel'));
+const TOURNAMENT_TARGET_DATE = '2026-12-01T08:00:00';
+
+const readStoredTheme = () => {
+  if (typeof window === 'undefined') return 'classic';
+  return localStorage.getItem('newgears_visual_theme') === 'gold' ? 'gold' : 'classic';
+};
 
 const LazyPanelFallback = ({ label = 'Carregando modulo...', minHeightClass = 'min-h-[220px]' }) => (
   <div className={`newgears-major-panel flex ${minHeightClass} items-center justify-center rounded-[28px] border border-white/10 bg-[#11131d]/92 p-6 text-center shadow-[0_18px_48px_rgba(0,0,0,0.24)]`}>
@@ -796,6 +808,7 @@ function App() {
   const [badgeStudent, setBadgeStudent] = useState(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [isLiteMode, setIsLiteMode] = useState(() => detectLiteMode());
+  const [visualTheme, setVisualTheme] = useState(() => readStoredTheme());
   const prevXpRef = useRef(null);
   const confettiTimeoutRef = useRef(null);
   const [showBatteryModal, setShowBatteryModal] = useState(false);
@@ -812,6 +825,7 @@ function App() {
     if (typeof window === 'undefined') return '';
     return new URLSearchParams(window.location.search).get('view') || '';
   };
+  const [isPublicMode, setIsPublicMode] = useState(() => getStandaloneView() === 'public');
   const [adminTab, setAdminTab] = useState('rotation');
   const [studentTab, setStudentTab] = useState('mission');
   const [isTvMode, setIsTvMode] = useState(() => getStandaloneView() === 'tv');
@@ -825,6 +839,7 @@ function App() {
   const [tasks, setTasks] = useState([]);
   const [logbookEntries, setLogbookEntries] = useState([]);
   const [events, setEvents] = useState([]);
+  const [activityLogs, setActivityLogs] = useState([]);
   const [adminProfile, setAdminProfile] = useState({ name: 'Tecnico', avatarImage: null, specialty: '' });
   const [isCropping, setIsCropping] = useState(false);
   const [cropImgSrc, setCropImgSrc] = useState(null);
@@ -873,8 +888,10 @@ function App() {
   const [studentLogbookDraft, setStudentLogbookDraft] = useState('');
   const [leaderTaskDraft, setLeaderTaskDraft] = useState({ text: '', studentId: '', station: STATION_KEYS.MANAGEMENT, dueDate: '' });
   const isTvOnlyView = getStandaloneView() === 'tv';
+  const isPublicTvMode = getStandaloneView() === 'public-tv';
   const today = new Date().toISOString().split('T')[0];
   const isLogbookViewActive = isAdmin ? adminTab === 'logbook' : studentTab === 'logbook';
+  const isActivityHistoryActive = Boolean(currentUser) && (isAdmin ? adminTab === 'history' : studentTab === 'history');
   const isPitStopModalOpen = modal.type === 'pitstop';
   const dashboardNeedsStrategyData =
     (adminPanelState.dashboard && (adminPanelState.prep || adminPanelState.judge || adminPanelState.stats || adminPanelState.achievements))
@@ -884,6 +901,8 @@ function App() {
     || (studentPanelState.dashboard && (studentPanelState.prep || studentPanelState.judge || studentPanelState.stats));
   const shouldLoadStrategyWorkspaceData =
     isTvOnlyView
+    || isPublicMode
+    || isPublicTvMode
     || isTvMode
     || isJudgeMode
     || isCommandCenterMode
@@ -891,6 +910,8 @@ function App() {
     || dashboardNeedsStrategyData;
   const shouldLoadRobotWorkspaceData =
     isTvOnlyView
+    || isPublicMode
+    || isPublicTvMode
     || isTvMode
     || isJudgeMode
     || isCommandCenterMode
@@ -923,6 +944,22 @@ function App() {
   useEffect(() => {
       localStorage.setItem('newgears_student_mission_mode', studentMissionMode);
   }, [studentMissionMode]);
+
+  useEffect(() => {
+      localStorage.setItem('newgears_visual_theme', visualTheme);
+      document.documentElement.dataset.newgearsTheme = visualTheme;
+  }, [visualTheme]);
+
+  useEffect(() => {
+      if (typeof window === 'undefined') return;
+
+      const syncPublicMode = () => {
+          setIsPublicMode(new URLSearchParams(window.location.search).get('view') === 'public');
+      };
+
+      window.addEventListener('popstate', syncPublicMode);
+      return () => window.removeEventListener('popstate', syncPublicMode);
+  }, []);
 
   useEffect(() => {
       if (typeof window === 'undefined') return;
@@ -1032,6 +1069,75 @@ function App() {
       }
   };
 
+  const recordActivity = async ({
+      action,
+      category = 'default',
+      title = '',
+      detail = '',
+      entityId = '',
+  }) => {
+      if (!db || !currentUser) return;
+
+      const actorName = viewAsStudent?.name
+          || (currentUser?.type === 'admin' ? adminProfile?.name : currentUser?.name)
+          || 'Equipe';
+
+      try {
+          await addDoc(collection(db, "activityLogs"), {
+              action,
+              category,
+              title: `${title || ''}`.trim(),
+              detail: `${detail || ''}`.trim(),
+              entityId: `${entityId || ''}`,
+              actorName,
+              actorId: viewAsStudent?.id || '',
+              actorType: currentUser?.type || 'team',
+              createdAt: new Date().toISOString()
+          });
+      } catch (error) {
+          console.error("Erro ao registrar historico:", error);
+      }
+  };
+
+  const openPublicMode = () => {
+      if (typeof window === 'undefined') return;
+      const publicUrl = new URL(window.location.href);
+      publicUrl.searchParams.set('view', 'public');
+      window.history.pushState({}, '', publicUrl);
+      setIsPublicMode(true);
+  };
+
+  const closePublicMode = () => {
+      if (typeof window === 'undefined') return;
+      const loginUrl = new URL(window.location.href);
+      if (loginUrl.searchParams.get('view') === 'public') {
+          loginUrl.searchParams.delete('view');
+      }
+      window.history.pushState({}, '', loginUrl);
+      setIsPublicMode(false);
+  };
+
+  const openPublicTvMode = () => {
+      if (typeof window === 'undefined') return;
+      const publicTvUrl = new URL(window.location.href);
+      publicTvUrl.searchParams.set('view', 'public-tv');
+      const openedWindow = window.open(publicTvUrl.toString(), '_blank', 'noopener,noreferrer');
+      if (!openedWindow) {
+          window.location.href = publicTvUrl.toString();
+      }
+  };
+
+  const closePublicTvMode = () => {
+      if (typeof window === 'undefined') return;
+      const publicUrl = new URL(window.location.href);
+      publicUrl.searchParams.set('view', 'public');
+      window.location.href = publicUrl.toString();
+  };
+
+  const toggleVisualTheme = () => {
+      setVisualTheme((currentTheme) => currentTheme === 'gold' ? 'classic' : 'gold');
+  };
+
 // --- LISTA DE BADGES (VERSÃƒÆ’O FINAL) ---
   const BADGES_LIST = [
     { id: 'pitstop', name: 'Pit Stop F1', icon: <Timer size={20}/>, color: 'text-red-500', desc: 'Troca de anexo em menos de 3s.' },
@@ -1102,7 +1208,9 @@ function App() {
       if (!isAdmin) return;
       
       const currentBadges = normalizeStudentBadges(student.badges);
+      const currentBadgeAchievements = Array.isArray(student.badgeAchievements) ? student.badgeAchievements : [];
       let newBadges;
+      let nextBadgeAchievements = currentBadgeAchievements;
       let xpBonus = 0;
 
       // Lógica de Adicionar/Remover
@@ -1111,6 +1219,14 @@ function App() {
           // Opcional: Remover XP se tirar a badge? Melhor não, deixa o XP ganho.
       } else {
           newBadges = [...currentBadges, badgeId];
+          nextBadgeAchievements = [
+              ...currentBadgeAchievements,
+              {
+                  badgeId,
+                  badgeName: BADGES_LIST.find((badge) => badge.id === badgeId)?.name || 'Conquista FLL',
+                  awardedAt: new Date().toISOString()
+              }
+          ];
           xpBonus = 100; // Bônus de XP ao ganhar
       }
 
@@ -1118,11 +1234,21 @@ function App() {
       const studentRef = doc(db, "students", student.id);
       await updateDoc(studentRef, {
          badges: newBadges,
+         badgeAchievements: nextBadgeAchievements,
          xp: (student.xp || 0) + xpBonus
       });
 
       // 2. Atualiza o estado local para ver a mudança na hora (sem recarregar)
-      const updatedStudent = normalizeStudentRecord({ ...student, badges: newBadges, xp: (student.xp || 0) + xpBonus });
+      const updatedStudent = normalizeStudentRecord({ ...student, badges: newBadges, badgeAchievements: nextBadgeAchievements, xp: (student.xp || 0) + xpBonus });
+      if (xpBonus > 0) {
+          void recordActivity({
+              action: 'entregou uma conquista',
+              category: 'team',
+              title: `${BADGES_LIST.find((badge) => badge.id === badgeId)?.name || 'Conquista FLL'} para ${student.name}`,
+              detail: 'Nova badge registrada no perfil da equipe.',
+              entityId: student.id
+          });
+      }
       
       // Atualiza o aluno selecionado no modal
       setBadgeStudent(updatedStudent);
@@ -2126,6 +2252,19 @@ function App() {
   }, [isAdmin, isLogbookViewActive, viewAsStudent?.id]);
 
   useEffect(() => {
+    if (!db || !isActivityHistoryActive) return;
+
+    const historyQuery = query(collection(db, "activityLogs"), orderBy("createdAt", "desc"), limit(160));
+    const unsubscribe = onSnapshot(historyQuery, (snapshot) => {
+        setActivityLogs(snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id })));
+    }, (error) => {
+        console.error("Erro ao carregar historico de alteracoes:", error);
+    });
+
+    return () => unsubscribe();
+  }, [isActivityHistoryActive]);
+
+  useEffect(() => {
     if (!db || !isPitStopModalOpen) return;
 
     const pitStopQuery = query(collection(db, "pitstop_records"), orderBy("time", "asc"), limit(5));
@@ -2283,7 +2422,7 @@ function App() {
 
       const resolvedAuthor = author || (isAdmin ? "Tecnico" : (viewAsStudent?.name || "Equipe"));
 
-      await addDoc(collection(db, "tasks"), {
+      const taskRef = await addDoc(collection(db, "tasks"), {
           text,
           status: 'todo',
           createdAt: new Date().toISOString(),
@@ -2292,6 +2431,13 @@ function App() {
           tag,
           priority,
           ...extraData
+      });
+      void recordActivity({
+          action: 'criou uma tarefa',
+          category: 'kanban',
+          title: text,
+          detail: dueDate ? `Prazo: ${dueDate}` : 'Sem prazo definido',
+          entityId: taskRef.id
       });
   };
 
@@ -2371,6 +2517,13 @@ function App() {
           } else {
               await addDoc(collection(db, "attachments"), attachmentData);
           }
+          void recordActivity({
+              action: modal.data?.id ? 'atualizou um anexo do robo' : 'registrou um novo anexo do robo',
+              category: 'robot',
+              title: attachmentData.name,
+              detail: attachmentData.changes,
+              entityId: modal.data?.id || ''
+          });
           closeModal(); 
           showNotification("Garra/Anexo salva com sucesso!");
       } catch (error) {
@@ -2382,7 +2535,20 @@ function App() {
   const handleDeleteAttachment = async (e, id) => {
       e.stopPropagation();
       if (window.confirm("Tem certeza que deseja excluir esta garra/anexo?")) {
-          try { await deleteDoc(doc(db, "attachments", id)); showNotification("Garra excluída!"); } catch (error) {}
+          try {
+              const attachment = attachments.find((item) => item.id === id);
+              await deleteDoc(doc(db, "attachments", id));
+              void recordActivity({
+                  action: 'excluiu um anexo do robo',
+                  category: 'robot',
+                  title: attachment?.name || 'Anexo do robo',
+                  entityId: id
+              });
+              showNotification("Garra excluida!");
+          } catch (error) {
+              console.error("Erro ao excluir anexo:", error);
+              showNotification("Erro ao excluir anexo.", "error");
+          }
       }
   };
 
@@ -2427,6 +2593,13 @@ function App() {
                   await Promise.all(updates);
               }
           }
+          void recordActivity({
+              action: modal.data?.id ? 'atualizou uma programacao' : 'adicionou uma nova programacao',
+              category: 'programming',
+              title: codeData.title,
+              detail: shouldSetAsOfficial ? 'Definida como programacao oficial da equipe.' : 'Salva no cofre de codigos.',
+              entityId: modal.data?.id || ''
+          });
           closeModal(); 
           showNotification(shouldSetAsOfficial ? "Codigo salvo e definido como oficial!" : "Codigo salvo no cofre!");
       } catch (error) {
@@ -2439,7 +2612,14 @@ function App() {
       e.stopPropagation();
       if (window.confirm("Tem certeza que deseja excluir este código?")) {
           try { 
+              const snippet = codeSnippets.find((item) => item.id === id);
               await deleteDoc(doc(db, "codeSnippets", id)); 
+              void recordActivity({
+                  action: 'excluiu uma programacao',
+                  category: 'programming',
+                  title: snippet?.title || 'Programacao da equipe',
+                  entityId: id
+              });
               showNotification("Código excluído!"); 
           } catch (error) {
               console.error("Erro ao excluir código:", error);
@@ -2460,6 +2640,13 @@ function App() {
               ...prev,
               data: prev?.data ? { ...prev.data, applied: true } : prev.data
           }));
+          void recordActivity({
+              action: 'definiu a programacao oficial',
+              category: 'programming',
+              title: snippet.title,
+              detail: 'Esta passou a ser a base principal para os treinos.',
+              entityId: snippet.id
+          });
           showNotification(`Programacao "${snippet.title}" definida como ativa!`, "success");
       } catch (error) {
           console.error("Erro ao aplicar programacao:", error);
@@ -2491,6 +2678,7 @@ function App() {
       }
 
       try {
+          const task = tasks.find(t => t.id === id);
           const updateData = { status: newStatus };
           if (newStatus === 'done') {
               updateData.completedAt = new Date().toISOString(); // Salva quando terminou
@@ -2498,6 +2686,13 @@ function App() {
               updateData.completedAt = null; // Limpa se voltar pra Fazendo/A Fazer
           }
           await updateDoc(doc(db, "tasks", id), updateData);
+          void recordActivity({
+              action: 'moveu uma tarefa no Kanban',
+              category: 'kanban',
+              title: task?.text || 'Tarefa da equipe',
+              detail: `Novo status: ${newStatus}`,
+              entityId: id
+          });
       } catch (error) {
           console.error("Erro ao mover tarefa:", error);
       }
@@ -2505,7 +2700,14 @@ function App() {
 
   const removeTask = async (id) => {
       if(window.confirm("Excluir tarefa permanentemente?")) {
+          const task = tasks.find(t => t.id === id);
           await deleteDoc(doc(db, "tasks", id));
+          void recordActivity({
+              action: 'excluiu uma tarefa',
+              category: 'kanban',
+              title: task?.text || 'Tarefa da equipe',
+              entityId: id
+          });
       }
   }
 
@@ -2615,6 +2817,12 @@ function App() {
           };
 
           await addDoc(logbookRef, newEntry);
+          void recordActivity({
+              action: 'registrou uma entrada no diario',
+              category: 'team',
+              title: weekName,
+              detail: getLogbookEntryPreview(newEntry, 120)
+          });
 
           setStudentLogbookDraft('');
           showNotification("Diário de Bordo atualizado! 📖");
@@ -2720,7 +2928,14 @@ const handleDeleteRound = async (id) => {
       e.stopPropagation(); // Evita abrir o modal de visualização
       if (window.confirm("Tem certeza que deseja excluir esta versão do robô?")) {
           try {
+              const robotVersion = robotVersions.find((item) => item.id === id);
               await deleteDoc(doc(db, "robotVersions", id));
+              void recordActivity({
+                  action: 'excluiu uma versao do robo',
+                  category: 'robot',
+                  title: robotVersion?.version || 'Versao do robo',
+                  entityId: id
+              });
               showNotification("Versão do robô excluída!");
           } catch (error) {
               console.error("Erro ao excluir versão:", error);
@@ -2732,7 +2947,14 @@ const handleDeleteRound = async (id) => {
   const handleDeleteMission = async (id) => {
       if (window.confirm("Tem certeza que deseja excluir esta missão? Ela será removida permanentemente do banco de dados.")) {
           try {
+              const mission = missionsList.find((item) => item.id === id);
               await deleteDoc(doc(db, "missions", id));
+              void recordActivity({
+                  action: 'excluiu uma missao da mesa',
+                  category: 'robot',
+                  title: mission ? `${mission.code} - ${mission.name}` : 'Missao da mesa',
+                  entityId: id
+              });
               showNotification("Missão excluída com sucesso!");
               // Se estava editando essa mesma missão, limpa o formulário
               if (modal.data?.id === id) {
@@ -2786,6 +3008,13 @@ const handleDeleteRound = async (id) => {
               await addDoc(collection(db, "students"), studentData);
               showNotification("Aluno cadastrado com acesso!"); 
           }
+          void recordActivity({
+              action: isEditing ? 'atualizou o perfil de um integrante' : 'cadastrou um novo integrante',
+              category: 'team',
+              title: studentData.name,
+              detail: studentData.specialty || 'Perfil da equipe atualizado.',
+              entityId: modal.data?.id || ''
+          });
           
           closeModal(); 
       } catch (error) {
@@ -2815,6 +3044,13 @@ const handleDeleteRound = async (id) => {
       try {
           await setDoc(doc(db, "project", PROJECT_MAIN_DOC_ID), projectData, { merge: true });
           setProjectSummary({ ...projectData, id: PROJECT_MAIN_DOC_ID });
+          void recordActivity({
+              action: 'atualizou o projeto de inovacao',
+              category: 'team',
+              title: projectData.title,
+              detail: projectData.solution,
+              entityId: PROJECT_MAIN_DOC_ID
+          });
           closeModal();
           showNotification("Projeto de Inovacao atualizado!");
       } catch (error) {
@@ -2837,7 +3073,14 @@ const handleDeleteRound = async (id) => {
       };
 
       try {
-          await addDoc(collection(db, "outreach"), outreachData);
+          const outreachRef = await addDoc(collection(db, "outreach"), outreachData);
+          void recordActivity({
+              action: 'registrou uma acao de impacto',
+              category: 'team',
+              title: outreachData.name,
+              detail: `${outreachData.people || 0} pessoas alcancadas`,
+              entityId: outreachRef.id
+          });
           closeModal();
           showNotification("Evento de impacto registrado!");
       } catch (error) {
@@ -2909,6 +3152,13 @@ const handleDeleteRound = async (id) => {
 
           // Espera todos serem atualizados
           await Promise.all(updates);
+          void recordActivity({
+              action: existingSession ? 'corrigiu a chamada da equipe' : 'registrou a chamada da equipe',
+              category: 'team',
+              title: attendanceDate,
+              detail: `${presentIds.length}/${students.length} integrantes presentes`,
+              entityId: attendanceDate
+          });
           
           closeModal();
           showNotification(existingSession ? "Chamada corrigida para esta data!" : "Frequencia registrada no Firebase!");
@@ -2943,6 +3193,13 @@ const handleDeleteRound = async (id) => {
               // Se não tem ID, cria novo (Salvar)
               await addDoc(collection(db, "experts"), expertData);
           }
+          void recordActivity({
+              action: modal.data?.id ? 'atualizou um especialista' : 'registrou um especialista',
+              category: 'team',
+              title: expertData.name,
+              detail: expertData.role,
+              entityId: modal.data?.id || ''
+          });
           closeModal(); 
           showNotification("Especialista salvo no banco!");
       } catch (error) {
@@ -2972,6 +3229,13 @@ const handleDeleteRound = async (id) => {
           } else {
               await addDoc(collection(db, "robotVersions"), robotData);
           }
+          void recordActivity({
+              action: modal.data?.id ? 'atualizou uma versao do robo' : 'registrou uma versao do robo',
+              category: 'robot',
+              title: `${robotData.version}${robotData.name ? ` - ${robotData.name}` : ''}`,
+              detail: robotData.changes,
+              entityId: modal.data?.id || ''
+          });
           closeModal(); 
           showNotification("Versão do robô salva!");
       } catch (error) {
@@ -3009,6 +3273,13 @@ const handleDeleteRound = async (id) => {
               await addDoc(collection(db, "rounds"), roundData);
               showNotification("Saida salva!");
           }
+          void recordActivity({
+              action: modal.data?.id ? 'atualizou uma saida do robo' : 'planejou uma nova saida do robo',
+              category: 'robot',
+              title: roundData.name,
+              detail: `${roundData.totalPoints} pontos estimados em ${roundData.estimatedTime}s`,
+              entityId: modal.data?.id || ''
+          });
           closeModal();
       } catch (error) {
           console.error("Erro ao salvar round:", error);
@@ -3067,6 +3338,13 @@ const handleDeleteRound = async (id) => {
           } else {
               await addDoc(collection(db, "missions"), missionData);
           }
+          void recordActivity({
+              action: modal.data?.id ? 'atualizou uma missao da mesa' : 'cadastrou uma missao da mesa',
+              category: 'robot',
+              title: `${missionData.code} - ${missionData.name}`,
+              detail: `${missionData.points} pontos`,
+              entityId: modal.data?.id || ''
+          });
           // Após salvar, não fecha o modal: apenas limpa para que você possa adicionar/ver outras
           setModal({ type: 'missionForm', data: null });
           setSelectedFile(null);
@@ -3163,7 +3441,14 @@ const handleDeleteRound = async (id) => {
       };
 
       try {
-          await addDoc(collection(db, "decisionMatrix"), ideaData);
+          const ideaRef = await addDoc(collection(db, "decisionMatrix"), ideaData);
+          void recordActivity({
+              action: 'adicionou uma ideia na matriz',
+              category: 'team',
+              title: ideaData.name,
+              detail: `Impacto ${ideaData.impact} | Viabilidade ${ideaData.feasibility}`,
+              entityId: ideaRef.id
+          });
           closeModal(); 
           showNotification("Ideia salva na matriz!");
       } catch (error) {
@@ -3194,6 +3479,13 @@ const handleDeleteRound = async (id) => {
           } else {
               await addDoc(collection(db, "events"), eventData);
           }
+          void recordActivity({
+              action: modal.data?.id ? 'atualizou um evento da agenda' : 'criou um evento na agenda',
+              category: 'agenda',
+              title: eventData.title,
+              detail: `${eventData.date} as ${eventData.time}${eventData.location ? ` | ${eventData.location}` : ''}`,
+              entityId: modal.data?.id || ''
+          });
           closeModal();
           showNotification("Evento salvo na agenda!");
       } catch (error) {
@@ -3205,7 +3497,14 @@ const handleDeleteRound = async (id) => {
   const handleDeleteEvent = async (id) => {
       if(window.confirm("Deseja excluir este evento da agenda?")) {
           try {
+              const event = events.find((item) => item.id === id);
               await deleteDoc(doc(db, "events", id));
+              void recordActivity({
+                  action: 'excluiu um evento da agenda',
+                  category: 'agenda',
+                  title: event?.title || 'Evento da equipe',
+                  entityId: id
+              });
               showNotification("Evento excluído.");
           } catch(error) {
               console.error("Erro ao excluir evento:", error);
@@ -3225,6 +3524,13 @@ const handleDeleteRound = async (id) => {
 
       try {
           await updateDoc(doc(db, "events", event.id), { status: nextStatus });
+          void recordActivity({
+              action: 'alterou o status de um evento',
+              category: 'agenda',
+              title: event.title,
+              detail: `Novo status: ${getEventStatusMeta(nextStatus).label}`,
+              entityId: event.id
+          });
           showNotification(`Evento atualizado para ${getEventStatusMeta(nextStatus).label.toLowerCase()}.`, nextStatus === 'concluido' ? 'success' : undefined);
       } catch (error) {
           console.error("Erro ao atualizar status do evento:", error);
@@ -3309,6 +3615,12 @@ const handleDeleteRound = async (id) => {
           });
 
           await Promise.all(updates);
+          void recordActivity({
+              action: 'aplicou o rodizio semanal',
+              category: 'team',
+              title: currentWeekData.weekName,
+              detail: 'As estacoes da equipe foram sincronizadas com o cronograma.'
+          });
           showNotification("Rodízio automático aplicado com sucesso!", "success");
       } catch (error) {
           console.error("Erro ao aplicar rodízio:", error);
@@ -3615,6 +3927,7 @@ const handleDeleteRound = async (id) => {
           recurrence: weeklyLosses.length >= 2,
       };
   });
+
   const disciplineAlerts = disciplineRows.filter((row) => row.recurrence || row.weeklyLost >= 20);
   const totalWeeklyXpLost = disciplineRows.reduce((sum, row) => sum + row.weeklyLost, 0);
   const consistencyRanking = disciplineRows
@@ -3954,7 +4267,8 @@ const handleDeleteRound = async (id) => {
       { id: 'discipline', label: 'Disciplina', icon: <Shield size={16} />, description: 'Perdas de XP, reincidencia e ranking de consistencia da equipe.', badge: disciplineAlerts.length > 0 ? disciplineAlerts.length : null, pillTone: disciplineAlerts.length > 0 ? 'border-red-500/20 bg-red-500/10 text-red-200' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200', activeClass: 'bg-red-500 text-white shadow-lg shadow-red-900/20', inactiveClass: 'text-gray-400 hover:text-red-300 hover:bg-red-500/10' },
       { id: 'kanban', label: 'Kanban', icon: <ClipboardList size={16} />, description: 'Fluxo da semana, prioridades e entregas sem cara de planilha.', badge: urgentTasksCount > 0 ? urgentTasksCount : null, pillTone: 'border-orange-500/20 bg-orange-500/10 text-orange-200', activeClass: 'bg-orange-500 text-white shadow-lg shadow-orange-900/20', inactiveClass: 'text-gray-400 hover:text-orange-300 hover:bg-orange-500/10' },
       { id: 'logbook', label: 'Diario', icon: <Book size={16} />, description: 'Memoria viva do time com testes, aprendizados e mini vitorias.', pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
-      { id: 'agenda', label: 'Agenda', icon: <CalendarDays size={16} />, description: 'Prazos, encontros e checkpoints da equipe em modo missao.', badge: urgentEventsCount > 0 ? urgentEventsCount : null, pillTone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200', activeClass: 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20', inactiveClass: 'text-gray-400 hover:text-indigo-300 hover:bg-indigo-500/10' }
+      { id: 'agenda', label: 'Agenda', icon: <CalendarDays size={16} />, description: 'Prazos, encontros e checkpoints da equipe em modo missao.', badge: urgentEventsCount > 0 ? urgentEventsCount : null, pillTone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200', activeClass: 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20', inactiveClass: 'text-gray-400 hover:text-indigo-300 hover:bg-indigo-500/10' },
+      { id: 'history', label: 'Historico', icon: <History size={16} />, description: 'Registro coletivo com autor, data e alteracoes feitas no sistema.', pillTone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200', activeClass: 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-900/20', inactiveClass: 'text-gray-400 hover:text-cyan-300 hover:bg-cyan-500/10' }
   ];
 
   const studentWorkspaceTabs = [
@@ -3964,7 +4278,8 @@ const handleDeleteRound = async (id) => {
       { id: 'rounds', label: 'Robo', icon: <ListTodo size={16} />, description: 'Rounds, estrategia de mesa, codigo e anexos do robo.', pillTone: 'border-blue-500/20 bg-blue-500/10 text-blue-200', activeClass: 'bg-blue-600 text-white shadow-lg shadow-blue-900/20', inactiveClass: 'text-gray-400 hover:text-blue-300 hover:bg-blue-500/10' },
       { id: 'kanban', label: STUDENT_TASKS_LABEL, icon: <ClipboardList size={16} />, description: 'Seu quadro da semana para agir sem se perder nas entregas.', badge: urgentTasksCount > 0 ? urgentTasksCount : null, pillTone: 'border-orange-500/20 bg-orange-500/10 text-orange-200', activeClass: 'bg-orange-500 text-white shadow-lg shadow-orange-900/20', inactiveClass: 'text-gray-400 hover:text-orange-300 hover:bg-orange-500/10' },
       { id: 'logbook', label: 'Diario', icon: <Book size={16} />, description: 'Guarde o que aprendeu, testou e melhorou na temporada.', pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
-      { id: 'agenda', label: 'Agenda', icon: <CalendarDays size={16} />, description: 'Prazos, encontros e marcos importantes da equipe.', badge: urgentEventsCount > 0 ? urgentEventsCount : null, pillTone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200', activeClass: 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20', inactiveClass: 'text-gray-400 hover:text-indigo-300 hover:bg-indigo-500/10' }
+      { id: 'agenda', label: 'Agenda', icon: <CalendarDays size={16} />, description: 'Prazos, encontros e marcos importantes da equipe.', badge: urgentEventsCount > 0 ? urgentEventsCount : null, pillTone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200', activeClass: 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20', inactiveClass: 'text-gray-400 hover:text-indigo-300 hover:bg-indigo-500/10' },
+      { id: 'history', label: 'Historico', icon: <History size={16} />, description: 'Veja quem atualizou as informacoes compartilhadas da equipe.', pillTone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200', activeClass: 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-900/20', inactiveClass: 'text-gray-400 hover:text-cyan-300 hover:bg-cyan-500/10' }
   ];
 
   const workspaceSceneTopPaddingMap = {
@@ -3975,6 +4290,7 @@ const handleDeleteRound = async (id) => {
       kanban: 'pt-10 md:pt-12',
       logbook: 'pt-10 md:pt-12',
       agenda: 'pt-10 md:pt-12',
+      history: 'pt-10 md:pt-12',
   };
 
   const getWorkspaceSceneTopPadding = (tabId) => workspaceSceneTopPaddingMap[tabId] || 'pt-10 md:pt-12';
@@ -4739,6 +5055,13 @@ const handleDeleteRound = async (id) => {
       try {
           // Salva no banco de dados sem precisar de botão "Salvar"
           await setDoc(doc(db, "settings", docId), newRubric);
+          void recordActivity({
+              action: 'atualizou uma rubrica',
+              category: 'team',
+              title: isInnovation ? 'Projeto de inovacao' : 'Design do robo',
+              detail: `${category}: nivel ${value}`,
+              entityId: docId
+          });
       } catch (error) {
           console.error(`Erro ao salvar rubrica de ${rubricType}:`, error);
           showNotification("Erro ao salvar auto-avaliação.", "error");
@@ -4760,6 +5083,12 @@ const handleDeleteRound = async (id) => {
 
   const handleSaveStationMission = async (station) => {
     await saveMissionToFirebase(station);
+    void recordActivity({
+        action: 'atualizou a missao de uma estacao',
+        category: 'team',
+        title: station,
+        detail: missions[station]?.text || 'Meta semanal atualizada.'
+    });
     showNotification(`Meta de ${station} salva com sucesso!`, 'success');
   };
 
@@ -4796,6 +5125,12 @@ const handleFileSelect = (e) => {
           const studentRef = doc(db, "students", viewAsStudent.id);
           await updateDoc(studentRef, { 
               submission: submissionData 
+          });
+          void recordActivity({
+              action: 'registrou uma entrega para validacao',
+              category: 'team',
+              title: viewAsStudent.name,
+              detail: missions[viewAsStudent.station]?.text || 'Atividade semanal enviada.'
           });
 
           setSubmissionText(""); 
@@ -6553,6 +6888,12 @@ const handleFileSelect = (e) => {
               date: new Date().toISOString(),
               author: isAdmin ? 'Técnico' : viewAsStudent?.name || 'Equipe'
           });
+          void recordActivity({
+              action: 'registrou uma pontuacao de treino',
+              category: 'robot',
+              title: `${totalPoints} pontos`,
+              detail: `${totalTime}s no cronometro`
+          });
           showNotification("Pontuação registrada no gráfico! 📈");
       } catch (error) {
           console.error("Erro ao salvar histórico:", error);
@@ -6592,6 +6933,12 @@ const handleFileSelect = (e) => {
               author: isAdmin ? 'Tecnico' : viewAsStudent?.name || 'Equipe',
               practiceType: 'full_round',
               withinLimit: timeVal <= 150,
+          });
+          void recordActivity({
+              action: 'registrou um round completo',
+              category: 'robot',
+              title: `${scoreVal} pontos`,
+              detail: `${timeVal}s | ${timeVal <= 150 ? 'Dentro do limite de 2:30' : 'Acima do limite de 2:30'}`
           });
 
           setRoundFormValues((prev) => {
@@ -6651,6 +6998,13 @@ const handleFileSelect = (e) => {
         // 2. Atualiza o tempo estimado do round (para ficar real)
         await updateDoc(doc(db, "rounds", round.id), {
             estimatedTime: timeVal
+        });
+        void recordActivity({
+            action: 'registrou um treino de saida',
+            category: 'robot',
+            title: round.name,
+            detail: `${timeVal}s no cronometro`,
+            entityId: round.id
         });
 
         showNotification(`Treino de "${round.name}" registrado: ${timeVal}s ${trendMsg}`);
@@ -6818,6 +7172,41 @@ const handleFileSelect = (e) => {
 
   // --- PROTEÇÃO DE CARREGAMENTO (LOADING) ---
   // Só aparece DEPOIS que logou, enquanto baixa os dados
+  if (isPublicTvMode) {
+      return (
+          <PublicTvModeView
+              students={students}
+              adminProfile={adminProfile}
+              projectSummary={projectSummary}
+              outreachEvents={outreachEvents}
+              robotVersions={robotVersions}
+              attachments={attachments}
+              teamSeasonStats={teamSeasonStats}
+              tournamentTarget={TOURNAMENT_TARGET_DATE}
+              visualTheme={visualTheme}
+              onToggleTheme={toggleVisualTheme}
+              onExit={closePublicTvMode}
+          />
+      );
+  }
+
+  if (isPublicMode) {
+      return (
+          <PublicTeamView
+              students={students}
+              adminProfile={adminProfile}
+              projectSummary={projectSummary}
+              outreachEvents={outreachEvents}
+              robotVersions={robotVersions}
+              attachments={attachments}
+              visualTheme={visualTheme}
+              onBackToLogin={closePublicMode}
+              onOpenTvMode={openPublicTvMode}
+              onToggleTheme={toggleVisualTheme}
+          />
+      );
+  }
+
   if (!currentUser) {
       return (
           <div className="newgears-login-shell min-h-screen text-white flex items-center justify-center p-4 relative overflow-hidden">
@@ -6881,7 +7270,27 @@ const handleFileSelect = (e) => {
                       </button>
                   </form>
 
-                  <div className="mt-8 pt-6 border-t border-white/5 text-center">
+                  <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+                      <button
+                          type="button"
+                          onClick={openPublicMode}
+                          className="w-full rounded-lg border border-cyan-300/20 bg-cyan-300/10 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-cyan-100 hover:bg-cyan-300 hover:text-slate-950"
+                      >
+                          <span className="flex items-center justify-center gap-2">
+                              <Globe2 size={16} /> Conhecer a equipe
+                          </span>
+                      </button>
+                      <button
+                          type="button"
+                          onClick={toggleVisualTheme}
+                          title={visualTheme === 'gold' ? 'Usar tema classico' : 'Usar tema dourado'}
+                          className="rounded-lg border border-white/10 bg-white/5 px-3 py-3 text-white hover:bg-white/10"
+                      >
+                          <Palette size={17} />
+                      </button>
+                  </div>
+
+                  <div className="mt-6 pt-6 border-t border-white/5 text-center">
                       <p className="text-[11px] text-slate-400/70">Plataforma da equipe para aprender, jogar junto e crescer na temporada.</p>
                   </div>
               </div>
@@ -7114,10 +7523,23 @@ const handleFileSelect = (e) => {
               
               {/* --- CONTADOR COMPACTO --- */}
               <Countdown 
-                  targetDate="2026-12-01T08:00:00" 
+                  targetDate={TOURNAMENT_TARGET_DATE}
                   title="TORNEIO" 
                   compact={true} 
               />
+
+              <button
+                onClick={toggleVisualTheme}
+                title={visualTheme === 'gold' ? 'Usar tema classico' : 'Usar tema dourado'}
+                className={`flex items-center gap-2 rounded-lg border px-3 py-2 transition-all ${
+                  visualTheme === 'gold'
+                    ? 'border-yellow-300/30 bg-yellow-300/12 text-yellow-100'
+                    : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <Palette size={18} />
+                <span className="hidden md:inline text-xs font-bold">{visualTheme === 'gold' ? 'Tema Classico' : 'Tema Dourado'}</span>
+              </button>
 
               {/* 1. BOTÃƒÆ’O CRONOGRAMA (VOLTOU!) */}
               {/* Só aparece se o modal de cronograma não estiver aberto */}
@@ -7425,6 +7847,7 @@ const handleFileSelect = (e) => {
                     {adminTab === 'kanban' && <KanbanView {...kanbanViewProps} />}
                     {adminTab === 'logbook' && <LogbookView {...logbookViewProps} />}
                     {adminTab === 'agenda' && <AgendaView {...agendaViewProps} />}
+                    {adminTab === 'history' && <ActivityHistoryView activityLogs={activityLogs} />}
                   </WorkspaceScene>
                 </div>
             </div>
@@ -7968,6 +8391,7 @@ const handleFileSelect = (e) => {
                     {studentTab === 'kanban' && <div className="text-left"><KanbanView {...kanbanViewProps} /></div>}
                     {studentTab === 'logbook' && <div className="text-left"><LogbookView {...logbookViewProps} /></div>}
                     {studentTab === 'agenda' && <div className="text-left"><AgendaView {...agendaViewProps} /></div>}
+                    {studentTab === 'history' && <div className="text-left"><ActivityHistoryView activityLogs={activityLogs} /></div>}
                   </WorkspaceScene>
                 </div>
             </div>

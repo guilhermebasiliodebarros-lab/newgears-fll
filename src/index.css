@@ -20,6 +20,10 @@
   --ng-orange: #d01bf1;
   --ng-red: #d01bf1;
   --ng-pink: #d01bf1;
+  --ng-logo-start: #6293e9;
+  --ng-logo-mid: #5d58d3;
+  --ng-logo-deep: #820aaf;
+  --ng-logo-end: #d01bf1;
 }
 
 html,
@@ -733,4 +737,160 @@ button:active {
     transform: scaleX(1);
     opacity: 1;
   }
+}
+
+[data-newgears-theme='gold'] {
+  --ng-bg-1: #080706;
+  --ng-bg-2: #17130b;
+  --ng-bg-3: #241b0a;
+  --ng-bg-4: #100d08;
+  --ng-text: #fffdf5;
+  --ng-muted: #d8cab0;
+  --ng-cyan: #fff0b0;
+  --ng-blue: #e6bd54;
+  --ng-purple: #bd8422;
+  --ng-lime: #f2cf73;
+  --ng-yellow: #f7dc85;
+  --ng-orange: #d59a2a;
+  --ng-red: #d97706;
+  --ng-pink: #9b650d;
+  --ng-logo-start: #fff3bd;
+  --ng-logo-mid: #f1ce73;
+  --ng-logo-deep: #c68a22;
+  --ng-logo-end: #805208;
+}
+
+[data-newgears-theme='gold'] body {
+  background:
+    radial-gradient(circle at 10% 0%, rgba(255, 240, 176, 0.24), transparent 18%),
+    radial-gradient(circle at 92% 8%, rgba(198, 138, 34, 0.2), transparent 20%),
+    radial-gradient(circle at 84% 26%, rgba(128, 82, 8, 0.18), transparent 14%),
+    radial-gradient(circle at 16% 84%, rgba(241, 206, 115, 0.12), transparent 18%),
+    repeating-linear-gradient(125deg, rgba(255,255,255,0.04) 0, rgba(255,255,255,0.04) 2px, transparent 2px, transparent 104px),
+    linear-gradient(135deg, #070706 0%, #151109 42%, #231a0b 68%, #080706 100%);
+}
+
+[data-newgears-theme='gold'] body::before {
+  background-image:
+    repeating-linear-gradient(120deg, rgba(255, 246, 214, 0.05) 0, rgba(255, 246, 214, 0.05) 1px, transparent 1px, transparent 56px),
+    linear-gradient(rgba(255, 239, 184, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 239, 184, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, transparent, rgba(198, 138, 34, 0.1) 50%, transparent);
+}
+
+[data-newgears-theme='gold'] .newgears-shell::before {
+  background:
+    radial-gradient(circle at 10% 12%, rgba(255, 240, 176, 0.16), transparent 12%),
+    radial-gradient(circle at 84% 10%, rgba(198, 138, 34, 0.16), transparent 14%),
+    radial-gradient(circle at 80% 80%, rgba(128, 82, 8, 0.14), transparent 16%);
+}
+
+[data-newgears-theme='gold'] .newgears-orb--cyan {
+  background: radial-gradient(circle, rgba(255, 240, 176, 0.3), transparent 72%);
+}
+
+[data-newgears-theme='gold'] .newgears-orb--yellow,
+[data-newgears-theme='gold'] .newgears-orb--lime {
+  background: radial-gradient(circle, rgba(241, 206, 115, 0.22), transparent 72%);
+}
+
+[data-newgears-theme='gold'] .newgears-orb--pink {
+  background: radial-gradient(circle, rgba(198, 138, 34, 0.22), transparent 72%);
+}
+
+[data-newgears-theme='gold'] .newgears-topbar {
+  background:
+    linear-gradient(135deg, rgba(12, 11, 8, 0.98), rgba(31, 24, 11, 0.95)),
+    radial-gradient(circle at top left, rgba(255, 240, 176, 0.13), transparent 26%),
+    linear-gradient(90deg, rgba(198, 138, 34, 0.06), transparent 24%, transparent 78%, rgba(255, 240, 176, 0.06));
+  box-shadow:
+    0 26px 72px rgba(0, 0, 0, 0.38),
+    0 0 34px rgba(198, 138, 34, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+[data-newgears-theme='gold'] .newgears-login-shell,
+[data-newgears-theme='gold'] .newgears-loading-shell {
+  background:
+    radial-gradient(circle at top left, rgba(255, 240, 176, 0.18), transparent 24%),
+    radial-gradient(circle at top right, rgba(198, 138, 34, 0.16), transparent 22%),
+    radial-gradient(circle at bottom left, rgba(255, 255, 255, 0.1), transparent 24%),
+    linear-gradient(135deg, #090806 0%, #21190b 48%, #0d0c09 100%);
+}
+
+[data-newgears-theme='gold'] .newgears-public-shell,
+[data-newgears-theme='gold'] .newgears-public-tv-shell {
+  background:
+    radial-gradient(circle at top left, rgba(255, 240, 176, 0.12), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(198, 138, 34, 0.12), transparent 24%),
+    #090806;
+}
+
+[data-newgears-theme='gold'] .newgears-login-card,
+[data-newgears-theme='gold'] .newgears-modal-frame,
+[data-newgears-theme='gold'] .newgears-tabs-shell,
+[data-newgears-theme='gold'] .newgears-toolbar-shell,
+[data-newgears-theme='gold'] .newgears-scene-shell {
+  background:
+    linear-gradient(160deg, rgba(23, 20, 14, 0.98), rgba(11, 11, 10, 0.96)),
+    radial-gradient(circle at top right, rgba(241, 206, 115, 0.1), transparent 26%);
+}
+
+[data-newgears-theme='gold'] .newgears-logo-hub {
+  background:
+    linear-gradient(135deg, rgba(255, 250, 230, 0.16), rgba(255, 255, 255, 0.025)),
+    radial-gradient(circle at top left, rgba(255, 240, 176, 0.22), transparent 36%),
+    radial-gradient(circle at bottom right, rgba(198, 138, 34, 0.18), transparent 28%);
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.26),
+    0 0 28px rgba(198, 138, 34, 0.1);
+}
+
+[data-newgears-theme='gold'] .newgears-login-button {
+  color: #211707;
+  background: linear-gradient(135deg, #fff3bd 0%, #e6bd54 48%, #b97c1d 100%);
+  box-shadow:
+    0 18px 36px rgba(198, 138, 34, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+
+[data-newgears-theme='gold'] .custom-scrollbar {
+  scrollbar-color: rgba(230, 189, 84, 0.62) transparent;
+}
+
+[data-newgears-theme='gold'] .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(255, 240, 176, 0.82), rgba(198, 138, 34, 0.66));
+}
+
+[data-newgears-theme='gold'] [class*='text-cyan-'],
+[data-newgears-theme='gold'] [class*='text-blue-'],
+[data-newgears-theme='gold'] [class*='text-sky-'],
+[data-newgears-theme='gold'] [class*='text-indigo-'],
+[data-newgears-theme='gold'] [class*='text-violet-'],
+[data-newgears-theme='gold'] [class*='text-purple-'],
+[data-newgears-theme='gold'] [class*='text-fuchsia-'],
+[data-newgears-theme='gold'] [class*='text-pink-'] {
+  color: #f6d77f !important;
+}
+
+[data-newgears-theme='gold'] [class*='border-cyan-'],
+[data-newgears-theme='gold'] [class*='border-blue-'],
+[data-newgears-theme='gold'] [class*='border-sky-'],
+[data-newgears-theme='gold'] [class*='border-indigo-'],
+[data-newgears-theme='gold'] [class*='border-violet-'],
+[data-newgears-theme='gold'] [class*='border-purple-'],
+[data-newgears-theme='gold'] [class*='border-fuchsia-'],
+[data-newgears-theme='gold'] [class*='border-pink-'] {
+  border-color: rgba(230, 189, 84, 0.32) !important;
+}
+
+[data-newgears-theme='gold'] [class*='bg-cyan-'],
+[data-newgears-theme='gold'] [class*='bg-blue-'],
+[data-newgears-theme='gold'] [class*='bg-sky-'],
+[data-newgears-theme='gold'] [class*='bg-indigo-'],
+[data-newgears-theme='gold'] [class*='bg-violet-'],
+[data-newgears-theme='gold'] [class*='bg-purple-'],
+[data-newgears-theme='gold'] [class*='bg-fuchsia-'],
+[data-newgears-theme='gold'] [class*='bg-pink-'] {
+  background-color: rgba(198, 138, 34, 0.16) !important;
 }
