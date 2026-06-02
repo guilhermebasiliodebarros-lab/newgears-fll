@@ -8,6 +8,7 @@ export default function StrategyView({
   projectImpactNarrative,
   decisionMatrix,
   experts,
+  expertContacts,
   outreachEvents,
   totalImpactPeople,
   isAdmin,
@@ -20,6 +21,8 @@ export default function StrategyView({
   openExpertModal,
   openExpertView,
   handleDeleteExpert,
+  openExpertContactModal,
+  handleDeleteExpertContact,
   openOutreachForm,
   handleDeleteOutreach,
   setModal,
@@ -77,6 +80,7 @@ export default function StrategyView({
                     projectImpactNarrative={projectImpactNarrative}
                     decisionMatrix={decisionMatrix}
                     experts={experts}
+                    expertContacts={expertContacts}
                     outreachEvents={outreachEvents}
                     totalImpactPeople={totalImpactPeople}
                     isAdmin={isAdmin}
@@ -88,6 +92,9 @@ export default function StrategyView({
                     onOpenExpertEdit={openExpertModal}
                     onOpenExpertView={openExpertView}
                     onDeleteExpert={handleDeleteExpert}
+                    onOpenExpertContact={openExpertContactModal}
+                    onOpenExpertContactEdit={openExpertContactModal}
+                    onDeleteExpertContact={handleDeleteExpertContact}
                     onOpenImpact={() => openOutreachForm()}
                     onDeleteOutreach={handleDeleteOutreach}
                 />

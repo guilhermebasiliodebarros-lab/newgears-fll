@@ -848,6 +848,7 @@ function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [experts, setExperts] = useState([]);
+  const [expertContacts, setExpertContacts] = useState([]);
   const [robotVersions, setRobotVersions] = useState([]);
   const [attachments, setAttachments] = useState([]);
   const [codeSnippets, setCodeSnippets] = useState([]);
@@ -2168,6 +2169,7 @@ function App() {
     };
 
     const unsubExperts = createListener("experts", setExperts);
+    const unsubExpertContacts = createListener("expertContacts", setExpertContacts);
     const unsubMatrix = createListener("decisionMatrix", setDecisionMatrix);
     const unsubOutreach = createListener("outreach", setOutreachEvents);
 
@@ -2195,6 +2197,7 @@ function App() {
 
     return () => {
         unsubExperts();
+        unsubExpertContacts();
         unsubMatrix();
         unsubOutreach();
         unsubProjectMain();
@@ -2566,6 +2569,54 @@ function App() {
   const getStudentName = (id) => { const s = students.find(stud => stud.id === id); return s ? s.name : "Vaga"; }
 
   const convertBase64 = (file) => new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result); reader.onerror = error => reject(error); });
+  const convertExpertContactEvidence = async (file) => {
+      const maxDataLength = 680000;
+      const originalData = await convertBase64(file);
+
+      if (!file.type.startsWith('image/')) {
+          if (originalData.length > maxDataLength) {
+              throw new Error('O PDF ultrapassa o limite de 500 KB.');
+          }
+          return originalData;
+      }
+
+      if (originalData.length <= maxDataLength) return originalData;
+
+      return new Promise((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => {
+              const canvas = document.createElement('canvas');
+              const context = canvas.getContext('2d');
+              let scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
+              let quality = 0.88;
+
+              for (let attempt = 0; attempt < 10; attempt += 1) {
+                  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+                  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+                  context.fillStyle = '#ffffff';
+                  context.fillRect(0, 0, canvas.width, canvas.height);
+                  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+                  const compressedData = canvas.toDataURL('image/jpeg', quality);
+                  if (compressedData.length <= maxDataLength) {
+                      resolve(compressedData);
+                      return;
+                  }
+
+                  if (quality > 0.58) {
+                      quality -= 0.1;
+                  } else {
+                      scale *= 0.82;
+                      quality = 0.82;
+                  }
+              }
+
+              reject(new Error('Nao foi possivel compactar a imagem.'));
+          };
+          image.onerror = () => reject(new Error('Nao foi possivel ler a imagem.'));
+          image.src = originalData;
+      });
+  };
 
  
 
@@ -3126,6 +3177,26 @@ const handleDeleteRound = async (id) => {
       }
   };
 
+  const handleDeleteExpertContact = async (id) => {
+      if (!window.confirm("Tem certeza que deseja excluir este contato realizado?")) return;
+
+      try {
+          const expertContact = expertContacts.find((item) => item.id === id);
+          await deleteDoc(doc(db, "expertContacts", id));
+          void recordActivity({
+              action: 'excluiu um contato de prospeccao',
+              category: 'team',
+              title: expertContact?.name || 'Contato com especialista',
+              detail: expertContact?.channel || '',
+              entityId: id
+          });
+          showNotification("Contato excluido.");
+      } catch (error) {
+          console.error("Erro ao excluir contato:", error);
+          showNotification("Erro ao excluir contato.", "error");
+      }
+  };
+
   const handleDeleteRobotVersion = async (e, id) => {
       e.stopPropagation(); // Evita abrir o modal de visualização
       if (window.confirm("Tem certeza que deseja excluir esta versão do robô?")) {
@@ -3409,6 +3480,60 @@ const handleDeleteRound = async (id) => {
           showNotification("Erro ao salvar.", "error");
       }
   }
+
+  const handleExpertContactSubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const isEditing = Boolean(modal.data?.id);
+
+      try {
+          let evidence = modal.data?.evidence || null;
+          let evidenceName = modal.data?.evidenceName || '';
+          let evidenceType = modal.data?.evidenceType || '';
+
+          if (selectedFile) {
+              evidence = await convertExpertContactEvidence(selectedFile);
+              evidenceName = selectedFile.name;
+              evidenceType = evidence.startsWith('data:image/jpeg') ? 'image/jpeg' : (selectedFile.type || 'application/octet-stream');
+          }
+
+          const expertContactData = {
+              name: `${fd.get('name') || ''}`.trim(),
+              role: `${fd.get('role') || ''}`.trim(),
+              channel: `${fd.get('channel') || ''}`.trim(),
+              contactDetail: `${fd.get('contactDetail') || ''}`.trim(),
+              date: fd.get('date'),
+              status: `${fd.get('status') || 'sent'}`,
+              notes: `${fd.get('notes') || ''}`.trim(),
+              evidence,
+              evidenceName,
+              evidenceType,
+              author: modal.data?.author || viewAsStudent?.name || adminProfile?.name || currentUser?.name || 'Equipe',
+              createdAt: modal.data?.createdAt || new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+          };
+
+          let entityId = modal.data?.id || '';
+          if (isEditing) {
+              await updateDoc(doc(db, "expertContacts", modal.data.id), expertContactData);
+          } else {
+              const contactRef = await addDoc(collection(db, "expertContacts"), expertContactData);
+              entityId = contactRef.id;
+          }
+          void recordActivity({
+              action: isEditing ? 'atualizou um contato de prospeccao' : 'registrou um contato de prospeccao',
+              category: 'team',
+              title: expertContactData.name,
+              detail: `${expertContactData.channel} | ${expertContactData.status}`,
+              entityId
+          });
+          closeModal();
+          showNotification("Contato de prospeccao salvo!");
+      } catch (error) {
+          console.error("Erro ao salvar contato:", error);
+          showNotification(error.message || "Erro ao salvar contato.", "error");
+      }
+  };
 
   const handleRobotSubmit = async (e) => { 
       e.preventDefault(); 
@@ -3865,6 +3990,7 @@ const handleDeleteRound = async (id) => {
   const openReviewModal = (student) => setModal({ type: 'review', data: student });
 
   const openExpertModal = (data = null) => { setSelectedFile(null); setModal({ type: 'expertForm', data }); }
+  const openExpertContactModal = (data = null) => { setSelectedFile(null); setModal({ type: 'expertContactForm', data }); };
 
   const openRobotModal = (data = null) => { setSelectedFile(null); setModal({ type: 'robotForm', data }); }
   const openAttachmentModal = (data = null) => { setSelectedFile(null); setModal({ type: 'attachmentForm', data }); } // <--- NOVO
@@ -6195,6 +6321,98 @@ const handleFileSelect = (e) => {
 
         
 
+          {modal.type === 'expertContactForm' && (
+            <form onSubmit={handleExpertContactSubmit}>
+              <h3 className="mb-2 flex items-center gap-2 text-xl font-bold text-white">
+                <MessageSquare className="text-cyan-400" /> {modal.data ? 'Editar' : 'Novo'} contato realizado
+              </h3>
+              <p className="mb-6 text-xs leading-relaxed text-gray-400">
+                Registre tambem tentativas sem retorno. Elas mostram como a equipe buscou conhecimento fora da sala.
+              </p>
+
+              <div className="mb-4 grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-bold uppercase text-gray-400">Pessoa ou instituicao</label>
+                  <input name="name" defaultValue={modal.data?.name} required autoFocus className="w-full rounded-lg border border-white/20 bg-black/50 p-3 text-white outline-none focus:border-cyan-400" placeholder="Ex: Laboratorio de Ecologia" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold uppercase text-gray-400">Area ou cargo</label>
+                  <input name="role" defaultValue={modal.data?.role} className="w-full rounded-lg border border-white/20 bg-black/50 p-3 text-white outline-none focus:border-cyan-400" placeholder="Ex: Biologa pesquisadora" />
+                </div>
+              </div>
+
+              <div className="mb-4 grid gap-4 md:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-xs font-bold uppercase text-gray-400">Canal</label>
+                  <select name="channel" defaultValue={modal.data?.channel || 'email'} required className="w-full rounded-lg border border-white/20 bg-black/50 p-3 text-white outline-none focus:border-cyan-400">
+                    <option value="email">E-mail</option>
+                    <option value="instagram">Instagram</option>
+                    <option value="linkedin">LinkedIn</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="phone">Telefone</option>
+                    <option value="other">Outro</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold uppercase text-gray-400">Data do contato</label>
+                  <input name="date" type="date" defaultValue={modal.data?.date || today} required className="w-full rounded-lg border border-white/20 bg-black/50 p-3 text-white outline-none focus:border-cyan-400" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold uppercase text-gray-400">Status</label>
+                  <select name="status" defaultValue={modal.data?.status || 'sent'} required className="w-full rounded-lg border border-white/20 bg-black/50 p-3 text-white outline-none focus:border-cyan-400">
+                    <option value="sent">Mensagem enviada</option>
+                    <option value="waiting">Aguardando retorno</option>
+                    <option value="responded">Respondeu</option>
+                    <option value="meeting">Mentoria agendada</option>
+                    <option value="no_response">Sem retorno</option>
+                    <option value="unavailable">Nao disponivel</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="mb-1 block text-xs font-bold uppercase text-gray-400">E-mail, perfil ou identificacao</label>
+                <input name="contactDetail" defaultValue={modal.data?.contactDetail} className="w-full rounded-lg border border-white/20 bg-black/50 p-3 text-white outline-none focus:border-cyan-400" placeholder="Ex: @perfil ou contato@instituicao.org" />
+              </div>
+
+              <div className="mb-4">
+                <label className="mb-1 block text-xs font-bold uppercase text-gray-400">Observacoes</label>
+                <textarea name="notes" defaultValue={modal.data?.notes} className="h-24 w-full rounded-lg border border-white/20 bg-black/50 p-3 text-white outline-none focus:border-cyan-400" placeholder="Mensagem enviada, retorno recebido ou proximo passo." />
+              </div>
+
+              <div className="mb-6 rounded-lg border border-white/10 bg-white/5 p-3">
+                <label className="mb-2 block text-xs font-bold uppercase text-gray-400">Evidencia do contato</label>
+                <input
+                  key={selectedFile?.name || modal.data?.evidenceName || 'empty-contact-evidence'}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={handleFileSelect}
+                  className="w-full cursor-pointer text-xs text-gray-400 file:mr-4 file:rounded-full file:border-0 file:bg-cyan-500/10 file:px-4 file:py-2 file:text-xs file:font-bold file:text-cyan-300 hover:file:bg-cyan-500/20"
+                />
+                <p className="mt-2 text-[10px] leading-relaxed text-gray-500">Anexe um print da conversa ou um PDF do e-mail. Imagens grandes serao compactadas automaticamente; PDFs devem ter ate 500 KB.</p>
+                {selectedFile ? (
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-green-400">
+                    <span className="flex items-center gap-1"><CheckCircle size={12} /> Selecionado: {selectedFile.name}</span>
+                    <button type="button" onClick={() => setSelectedFile(null)} className="text-red-300 transition-colors hover:text-red-200">Remover</button>
+                  </div>
+                ) : modal.data?.evidence ? (
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-cyan-300">
+                    <span className="flex items-center gap-1"><FileText size={12} /> Salvo: {modal.data.evidenceName || 'Evidencia anexada'}</span>
+                    <button
+                      type="button"
+                      onClick={() => setModal((previous) => ({ ...previous, data: { ...(previous.data || {}), evidence: null, evidenceName: '', evidenceType: '' } }))}
+                      className="text-red-300 transition-colors hover:text-red-200"
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+
+              <button className="w-full rounded-lg bg-cyan-600 py-3 font-bold text-white hover:bg-cyan-500">Salvar contato</button>
+            </form>
+          )}
+
           {modal.type === 'xp' && (
             <div className="animate-in fade-in">
               <div className="flex items-center gap-4 mb-6 pb-4 border-b border-white/10">
@@ -7234,6 +7452,7 @@ const handleFileSelect = (e) => {
       projectImpactNarrative,
       decisionMatrix,
       experts,
+      expertContacts,
       outreachEvents,
       totalImpactPeople,
       isAdmin,
@@ -7246,6 +7465,8 @@ const handleFileSelect = (e) => {
       openExpertModal,
       openExpertView,
       handleDeleteExpert,
+      openExpertContactModal,
+      handleDeleteExpertContact,
       openOutreachForm,
       handleDeleteOutreach,
       setModal,

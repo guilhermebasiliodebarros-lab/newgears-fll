@@ -4,11 +4,18 @@ import {
   BarChart3,
   Calendar,
   CheckCircle,
+  Download,
   Image as ImageIcon,
+  Instagram,
+  Linkedin,
   Lightbulb,
+  Mail,
   Megaphone,
   MessageSquare,
+  Paperclip,
   Pencil,
+  Phone,
+  Send,
   Star,
   Target,
   Trash2,
@@ -28,11 +35,30 @@ const getImpactTone = (impact) => {
   return 'border-white/10 bg-white/5 text-gray-200';
 };
 
+const CONTACT_CHANNEL_META = {
+  email: { label: 'E-mail', icon: Mail },
+  instagram: { label: 'Instagram', icon: Instagram },
+  linkedin: { label: 'LinkedIn', icon: Linkedin },
+  whatsapp: { label: 'WhatsApp', icon: MessageSquare },
+  phone: { label: 'Telefone', icon: Phone },
+  other: { label: 'Outro', icon: Send },
+};
+
+const CONTACT_STATUS_META = {
+  sent: { label: 'Mensagem enviada', tone: 'border-blue-400/20 bg-blue-400/10 text-blue-100' },
+  waiting: { label: 'Aguardando retorno', tone: 'border-yellow-400/20 bg-yellow-400/10 text-yellow-100' },
+  responded: { label: 'Respondeu', tone: 'border-cyan-400/20 bg-cyan-400/10 text-cyan-100' },
+  meeting: { label: 'Mentoria agendada', tone: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100' },
+  no_response: { label: 'Sem retorno', tone: 'border-white/10 bg-white/5 text-gray-300' },
+  unavailable: { label: 'Nao disponivel', tone: 'border-red-400/20 bg-red-400/10 text-red-100' },
+};
+
 const InnovationStrategyPanel = ({
   projectSummary,
   projectImpactNarrative,
   decisionMatrix,
   experts,
+  expertContacts,
   outreachEvents,
   totalImpactPeople,
   isAdmin,
@@ -44,12 +70,16 @@ const InnovationStrategyPanel = ({
   onOpenExpertEdit,
   onOpenExpertView,
   onDeleteExpert,
+  onOpenExpertContact,
+  onOpenExpertContactEdit,
+  onDeleteExpertContact,
   onOpenImpact,
   onDeleteOutreach,
 }) => {
   const [showProjectGuide, setShowProjectGuide] = React.useState(false);
   const sortedDecisionIdeas = [...decisionMatrix].sort((left, right) => scoreDecisionIdea(right) - scoreDecisionIdea(left));
   const sortedExperts = [...experts].sort((left, right) => new Date(right.date || 0) - new Date(left.date || 0));
+  const sortedExpertContacts = [...expertContacts].sort((left, right) => new Date(right.date || 0) - new Date(left.date || 0));
   const sortedImpactEvents = [...outreachEvents].sort((left, right) => new Date(right.date || 0) - new Date(left.date || 0));
   const topDecisionIdea = sortedDecisionIdeas[0] || null;
   const matrixAverageScore = sortedDecisionIdeas.length > 0
@@ -58,6 +88,16 @@ const InnovationStrategyPanel = ({
   const appliedExperts = sortedExperts.filter((expert) => expert.applied);
   const expertsWithEvidence = sortedExperts.filter((expert) => expert.image);
   const expertConversionRate = sortedExperts.length > 0 ? Math.round((appliedExperts.length / sortedExperts.length) * 100) : 0;
+  const respondedExpertContacts = sortedExpertContacts.filter((contact) => ['responded', 'meeting'].includes(contact.status));
+  const scheduledExpertContacts = sortedExpertContacts.filter((contact) => contact.status === 'meeting');
+  const expertContactsWithEvidence = sortedExpertContacts.filter((contact) => contact.evidence);
+  const expertContactResponseRate = sortedExpertContacts.length > 0
+    ? Math.round((respondedExpertContacts.length / sortedExpertContacts.length) * 100)
+    : 0;
+  const expertContactChannelCounts = sortedExpertContacts.reduce((accumulator, contact) => {
+    accumulator[contact.channel || 'other'] = (accumulator[contact.channel || 'other'] || 0) + 1;
+    return accumulator;
+  }, {});
   const topImpactType = Object.entries(
     sortedImpactEvents.reduce((accumulator, event) => {
       accumulator[event.type || 'Outro'] = (accumulator[event.type || 'Outro'] || 0) + (event.people || 0);
@@ -109,9 +149,9 @@ const InnovationStrategyPanel = ({
       tone: 'border-purple-400/20 bg-purple-400/10 text-purple-100',
     },
     {
-      label: 'Especialistas',
-      value: sortedExperts.length,
-      helper: `${expertConversionRate}% das conversas ja viraram acao`,
+      label: 'Contatos feitos',
+      value: sortedExpertContacts.length,
+      helper: `${expertContactResponseRate}% de retorno nas prospeccoes`,
       tone: 'border-pink-400/20 bg-pink-400/10 text-pink-100',
     },
     {
@@ -169,9 +209,9 @@ const InnovationStrategyPanel = ({
       tone: 'border-purple-400/20 bg-purple-400/10 text-purple-100',
     },
     {
-      label: 'Especialistas',
-      value: sortedExperts.length,
-      helper: sortedExperts.length > 0 ? `${expertConversionRate}% das conversas viraram acao` : 'Registrem a primeira conversa relevante.',
+      label: 'Contatos feitos',
+      value: sortedExpertContacts.length,
+      helper: sortedExpertContacts.length > 0 ? `${respondedExpertContacts.length} retorno(s) recebido(s)` : 'Registrem a primeira tentativa de contato.',
       tone: 'border-pink-400/20 bg-pink-400/10 text-pink-100',
     },
     {
@@ -215,6 +255,9 @@ const InnovationStrategyPanel = ({
               </button>
               <button onClick={onOpenExpert} className="inline-flex items-center gap-2 rounded-[18px] border border-pink-400/20 bg-pink-400/10 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-pink-100 transition-all hover:-translate-y-0.5 hover:bg-pink-400 hover:text-white">
                 <MessageSquare size={14} /> Especialista
+              </button>
+              <button onClick={onOpenExpertContact} className="inline-flex items-center gap-2 rounded-[18px] border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-cyan-100 transition-all hover:-translate-y-0.5 hover:bg-cyan-400 hover:text-slate-950">
+                <Send size={14} /> Registrar contato
               </button>
               <button onClick={onOpenImpact} className="inline-flex items-center gap-2 rounded-[18px] border border-orange-400/20 bg-orange-400/10 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-orange-100 transition-all hover:-translate-y-0.5 hover:bg-orange-400 hover:text-white">
                 <Megaphone size={14} /> Impacto
@@ -448,6 +491,135 @@ const InnovationStrategyPanel = ({
           </div>
         </div>
       </div>
+
+      <section className="rounded-[30px] border border-cyan-400/20 bg-[#151520] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200/70">Prospeccao documentada</p>
+            <h3 className="mt-2 flex items-center gap-2 text-xl font-black text-white">
+              <Send className="text-cyan-300" />
+              Contatos realizados
+            </h3>
+            <p className="mt-3 max-w-3xl text-xs leading-relaxed text-gray-300">
+              Registre cada tentativa de contato, mesmo quando nao houver resposta. Isso mostra iniciativa, organizacao e busca ativa por conhecimento.
+            </p>
+          </div>
+          <button onClick={onOpenExpertContact} className="rounded-[16px] border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-xs font-black uppercase tracking-[0.14em] text-cyan-100 transition-all hover:bg-cyan-400 hover:text-slate-950">
+            + Novo contato
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-[22px] border border-cyan-400/20 bg-cyan-400/10 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-100/80">Contatos feitos</p>
+            <p className="mt-3 text-3xl font-black text-white">{sortedExpertContacts.length}</p>
+          </div>
+          <div className="rounded-[22px] border border-blue-400/20 bg-blue-400/10 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-100/80">Retornos</p>
+            <p className="mt-3 text-3xl font-black text-white">{respondedExpertContacts.length}</p>
+          </div>
+          <div className="rounded-[22px] border border-emerald-400/20 bg-emerald-400/10 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-100/80">Mentorias agendadas</p>
+            <p className="mt-3 text-3xl font-black text-white">{scheduledExpertContacts.length}</p>
+          </div>
+          <div className="rounded-[22px] border border-white/10 bg-black/25 p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Taxa de resposta</p>
+            <p className="mt-3 text-3xl font-black text-white">{expertContactResponseRate}%</p>
+          </div>
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-2">
+          <span className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-cyan-100">
+            <Paperclip size={12} />
+            Evidencias: {expertContactsWithEvidence.length}
+          </span>
+          {Object.entries(expertContactChannelCounts).map(([channel, total]) => {
+            const channelMeta = CONTACT_CHANNEL_META[channel] || CONTACT_CHANNEL_META.other;
+
+            return (
+              <span key={channel} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-gray-200">
+                {React.createElement(channelMeta.icon, { size: 12 })}
+                {channelMeta.label}: {total}
+              </span>
+            );
+          })}
+        </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">
+          {sortedExpertContacts.map((contact) => {
+            const channelMeta = CONTACT_CHANNEL_META[contact.channel] || CONTACT_CHANNEL_META.other;
+            const statusMeta = CONTACT_STATUS_META[contact.status] || CONTACT_STATUS_META.sent;
+
+            return (
+              <article key={contact.id} className="group relative rounded-[24px] border border-white/10 bg-black/25 p-4 transition-all hover:-translate-y-0.5 hover:border-cyan-300/25 hover:bg-white/5">
+                <div className="absolute right-3 top-3 flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                  <button onClick={() => onOpenExpertContactEdit(contact)} className="rounded-xl bg-black/60 p-2 text-gray-400 transition-colors hover:text-white" title="Editar contato">
+                    <Pencil size={14} />
+                  </button>
+                  {(isAdmin || contact.author === viewAsStudent?.name) && (
+                    <button onClick={() => onDeleteExpertContact(contact.id)} className="rounded-xl bg-black/60 p-2 text-gray-400 transition-colors hover:text-red-300" title="Excluir contato">
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="pr-20">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-black text-white">{contact.name}</h4>
+                      <p className="mt-1 text-xs text-gray-400">{contact.role || 'Area nao informada'}</p>
+                    </div>
+                    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${statusMeta.tone}`}>
+                      {statusMeta.label}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2 text-[10px] text-gray-400">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                      {React.createElement(channelMeta.icon, { size: 11 })} {channelMeta.label}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                      <Calendar size={11} /> {formatDate(contact.date)}
+                    </span>
+                    {contact.author && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                        <UserCircle size={11} /> {contact.author}
+                      </span>
+                    )}
+                  </div>
+
+                  {contact.contactDetail && <p className="mt-3 break-words text-xs font-bold text-cyan-200">{contact.contactDetail}</p>}
+                  {contact.notes && <p className="mt-3 text-xs leading-relaxed text-gray-300">{contact.notes}</p>}
+                  {contact.evidence && (
+                    <div className="mt-4 rounded-[18px] border border-cyan-400/15 bg-cyan-400/5 p-3">
+                      {contact.evidenceType?.startsWith('image/') && (
+                        <a href={contact.evidence} target="_blank" rel="noreferrer" className="mb-3 block overflow-hidden rounded-xl border border-white/10 bg-black/25">
+                          <img src={contact.evidence} alt={`Evidencia do contato com ${contact.name}`} className="max-h-36 w-full object-cover object-top transition-transform hover:scale-[1.02]" />
+                        </a>
+                      )}
+                      <div className="flex items-center justify-between gap-3">
+                        <a href={contact.evidence} target="_blank" rel="noreferrer" className="flex min-w-0 items-center gap-2 text-xs font-bold text-cyan-200 transition-colors hover:text-white">
+                          <Paperclip size={13} className="shrink-0" />
+                          <span className="truncate">{contact.evidenceName || 'Abrir evidencia'}</span>
+                        </a>
+                        <a href={contact.evidence} download={contact.evidenceName || `evidencia-${contact.name}`} className="rounded-lg border border-white/10 bg-black/25 p-2 text-gray-300 transition-colors hover:text-white" title="Baixar evidencia">
+                          <Download size={13} />
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+
+        {sortedExpertContacts.length === 0 && (
+          <div className="mt-5 rounded-[22px] border border-dashed border-white/15 bg-white/5 p-6 text-center text-sm italic text-gray-500">
+            Nenhuma tentativa registrada ainda. Comecem documentando os primeiros e-mails, mensagens ou contatos pelo LinkedIn.
+          </div>
+        )}
+      </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-[30px] border border-white/10 bg-[#151520] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">

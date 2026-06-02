@@ -518,7 +518,9 @@ export default function PublicTvModeView({
       </header>
 
       <main className="relative z-10 h-full pt-[65px] pb-[54px]">
-        {renderSlide()}
+        <div key={`${visualTheme}-${activeSlide.id}`} className="newgears-public-tv-slide h-full">
+          {renderSlide()}
+        </div>
       </main>
 
       <footer className="absolute inset-x-0 bottom-0 z-30 border-t border-white/10 bg-black/25 px-6 py-3 backdrop-blur-sm">
