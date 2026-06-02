@@ -9,10 +9,12 @@ import {
   MonitorPlay,
   Palette,
   Shield,
+  Star,
   UserCircle,
   Users,
 } from 'lucide-react';
 import LogoNewGears from '../components/LogoNewGears';
+import PublicQrCodes from '../components/PublicQrCodes';
 import { buildTrainingGallery } from '../utils/publicShowcase';
 
 const cleanText = (value) => `${value || ''}`.trim();
@@ -22,8 +24,10 @@ export default function PublicTeamView({
   adminProfile,
   projectSummary,
   outreachEvents,
+  galleryPhotos,
   robotVersions,
   attachments,
+  showcaseSettings,
   visualTheme,
   onBackToLogin,
   onOpenTvMode,
@@ -33,7 +37,7 @@ export default function PublicTeamView({
     .filter((student) => cleanText(student.name))
     .sort((left, right) => left.name.localeCompare(right.name));
   const totalImpactPeople = outreachEvents.reduce((sum, event) => sum + (Number(event.people) || 0), 0);
-  const trainingPhotos = buildTrainingGallery({ robotVersions, attachments }).slice(0, 6);
+  const trainingPhotos = buildTrainingGallery({ galleryPhotos, robotVersions, attachments }).slice(0, 6);
   const projectTitle = cleanText(projectSummary?.title) && projectSummary.title !== 'Nome do Projeto'
     ? projectSummary.title
     : 'Projeto de Inovacao';
@@ -162,13 +166,13 @@ export default function PublicTeamView({
           <div className="mx-auto w-full max-w-7xl">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div className="max-w-2xl">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-200/80">Evolucao documentada</p>
+                <p className="newgears-public-accent-text text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Evolucao documentada</p>
                 <h2 className="mt-3 text-3xl font-black text-white">Galeria de treinos</h2>
                 <p className="mt-3 text-sm leading-relaxed text-slate-300">
                   Fotos registradas durante testes do robo e evolucao dos anexos.
                 </p>
               </div>
-              <p className="flex items-center gap-2 text-sm font-black text-yellow-100">
+              <p className="newgears-public-accent-text-muted flex items-center gap-2 text-sm font-black">
                 <Camera size={17} /> {trainingPhotos.length} registros visiveis
               </p>
             </div>
@@ -176,10 +180,15 @@ export default function PublicTeamView({
             {trainingPhotos.length > 0 ? (
               <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {trainingPhotos.map((photo) => (
-                  <article key={photo.id} className="relative aspect-[4/3] overflow-hidden rounded-lg border border-white/10 bg-[#111827] shadow-lg">
+                  <article key={photo.id} className={`relative aspect-[4/3] overflow-hidden rounded-lg border bg-[#111827] shadow-lg ${photo.isFeatured ? 'newgears-public-accent-panel sm:col-span-2' : 'border-white/10'}`}>
                     <img src={photo.image} alt={photo.title} className="h-full w-full object-cover" />
+                    {photo.isFeatured && (
+                      <span className="newgears-public-accent-badge absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] shadow-lg">
+                        <Star size={13} fill="currentColor" /> Destaque da equipe
+                      </span>
+                    )}
                     <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,transparent,rgba(5,9,19,0.96))] px-4 pb-4 pt-14">
-                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-yellow-200">{photo.type}</p>
+                      <p className="newgears-public-accent-text text-[10px] font-black uppercase tracking-[0.14em]">{photo.type}</p>
                       <h3 className="mt-1 text-lg font-black text-white">{photo.title}</h3>
                     </div>
                   </article>
@@ -187,7 +196,7 @@ export default function PublicTeamView({
               </div>
             ) : (
               <div className="mt-8 rounded-lg border border-dashed border-white/15 bg-white/5 p-8 text-center">
-                <Camera size={30} className="mx-auto text-yellow-200" />
+                <Camera size={30} className="newgears-public-accent-text mx-auto" />
                 <p className="mt-3 text-sm font-bold text-slate-300">
                   As fotos aparecerao aqui quando a equipe registrar versoes do robo e anexos com imagem.
                 </p>
@@ -199,21 +208,33 @@ export default function PublicTeamView({
         <section className="border-b border-white/10 bg-[#070b14] px-5 py-12 md:px-8">
           <div className="mx-auto grid w-full max-w-7xl gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-200/80">Projeto de inovacao</p>
+              <p className="newgears-public-accent-text text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Projeto de inovacao</p>
               <h2 className="mt-3 text-3xl font-black text-white">{projectTitle}</h2>
               <p className="mt-4 text-sm leading-relaxed text-slate-300">{projectDescription}</p>
               {cleanText(projectSummary?.impact) && (
-                <div className="mt-5 rounded-lg border border-yellow-300/20 bg-yellow-300/10 p-4">
-                  <p className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em] text-yellow-100">
+                <div className="newgears-public-accent-panel mt-5 rounded-lg border p-4">
+                  <p className="newgears-public-accent-text-muted flex items-center gap-2 text-xs font-black uppercase tracking-[0.16em]">
                     <Lightbulb size={15} /> Impacto esperado
                   </p>
-                  <p className="mt-2 text-sm leading-relaxed text-yellow-50/85">{projectSummary.impact}</p>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-100/85">{projectSummary.impact}</p>
                 </div>
               )}
             </div>
 
             <div className="overflow-hidden rounded-lg border border-white/10 bg-white/5 shadow-2xl">
               <img src={projectImage} alt={projectTitle} className="aspect-[4/3] w-full object-cover" />
+            </div>
+          </div>
+        </section>
+
+        <section className="border-b border-white/10 bg-[#0a0f1a] px-5 py-12 md:px-8">
+          <div className="mx-auto w-full max-w-7xl">
+            <div className="max-w-2xl">
+              <p className="newgears-public-accent-text text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Continue acompanhando</p>
+              <h2 className="mt-3 text-3xl font-black text-white">Projeto e redes da equipe</h2>
+            </div>
+            <div className="mt-8 max-w-3xl">
+              <PublicQrCodes settings={showcaseSettings} compact />
             </div>
           </div>
         </section>
@@ -231,7 +252,7 @@ export default function PublicTeamView({
               <p className="mt-1 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">Pessoas alcancadas</p>
             </div>
             <div className="rounded-lg border border-white/10 bg-white/5 p-5">
-              <Briefcase size={21} className="text-yellow-300" />
+              <Briefcase size={21} className="newgears-public-accent-text" />
               <p className="mt-4 text-lg font-black text-white">{cleanText(adminProfile?.name) || 'Equipe tecnica'}</p>
               <p className="mt-1 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
                 {cleanText(adminProfile?.specialty) || 'Tecnico responsavel'}

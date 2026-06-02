@@ -17,12 +17,14 @@ import {
   Play,
   Shield,
   Sparkles,
+  Star,
   Trophy,
   UserCircle,
   Users,
   Wrench,
 } from 'lucide-react';
 import LogoNewGears from '../components/LogoNewGears';
+import PublicQrCodes from '../components/PublicQrCodes';
 import { buildPublicAchievements, buildTrainingGallery, getTournamentCountdown } from '../utils/publicShowcase';
 
 const SLIDE_DURATION_MS = 12000;
@@ -59,10 +61,11 @@ export default function PublicTvModeView({
   adminProfile,
   projectSummary,
   outreachEvents,
+  galleryPhotos,
   robotVersions,
   attachments,
   teamSeasonStats,
-  tournamentTarget,
+  showcaseSettings,
   visualTheme,
   onToggleTheme,
   onExit,
@@ -91,8 +94,8 @@ export default function PublicTvModeView({
   );
   const totalImpactPeople = outreachEvents.reduce((sum, event) => sum + (Number(event.people) || 0), 0);
   const trainingPhotos = useMemo(
-    () => buildTrainingGallery({ robotVersions, attachments }),
-    [attachments, robotVersions],
+    () => buildTrainingGallery({ galleryPhotos, robotVersions, attachments }),
+    [attachments, galleryPhotos, robotVersions],
   );
   const galleryPages = useMemo(
     () => splitIntoPages(trainingPhotos, PHOTOS_PER_SLIDE),
@@ -102,7 +105,7 @@ export default function PublicTvModeView({
     () => buildPublicAchievements({ students, teamSeasonStats, trainingPhotos, totalImpactPeople }),
     [students, teamSeasonStats, trainingPhotos, totalImpactPeople],
   );
-  const countdown = getTournamentCountdown(tournamentTarget, now);
+  const countdown = getTournamentCountdown(showcaseSettings.tournamentTarget, now);
   const projectTitle = cleanText(projectSummary?.title) && projectSummary.title !== 'Nome do Projeto'
     ? projectSummary.title
     : 'Projeto de Inovacao';
@@ -119,6 +122,7 @@ export default function PublicTvModeView({
       ? galleryPages.map((_, index) => ({ id: `gallery-${index}`, label: 'Galeria de treinos', pageIndex: index }))
       : [{ id: 'gallery-empty', label: 'Galeria de treinos' }]),
     { id: 'project', label: 'Projeto' },
+    { id: 'connect', label: 'Projeto e redes' },
     { id: 'impact', label: 'Impacto' },
     { id: 'achievements', label: 'Conquistas recentes' },
     { id: 'values', label: 'Jeito New Gears' },
@@ -211,8 +215,8 @@ export default function PublicTvModeView({
       return (
         <section className="grid h-full grid-cols-[minmax(0,1fr)_360px] items-center gap-12 px-[8vw] py-[9vh]">
           <div>
-            <p className="text-lg font-black uppercase tracking-[0.22em] text-yellow-200">Rumo ao proximo desafio</p>
-            <h2 className="mt-5 text-7xl font-black leading-tight text-white">Contagem regressiva para o torneio</h2>
+            <p className="newgears-public-accent-text text-lg font-black uppercase tracking-[0.22em]">Rumo ao proximo desafio</p>
+            <h2 className="mt-5 text-7xl font-black leading-tight text-white">{showcaseSettings.tournamentName}</h2>
             <p className="mt-6 text-2xl font-bold leading-relaxed text-slate-200">
               Cada treino deixa a equipe mais preparada para apresentar, competir e aprender junto.
             </p>
@@ -224,18 +228,18 @@ export default function PublicTvModeView({
                 { label: 'Minutos', value: countdown.minutes },
                 { label: 'Segundos', value: countdown.seconds },
               ].map((item) => (
-                <div key={item.label} className="rounded-lg border border-yellow-300/25 bg-yellow-300/10 p-5 text-center shadow-xl">
+                <div key={item.label} className="newgears-public-accent-panel rounded-lg border p-5 text-center shadow-xl">
                   <p className="text-6xl font-black text-white">{item.value}</p>
-                  <p className="mt-3 text-sm font-black uppercase tracking-[0.16em] text-yellow-100">{item.label}</p>
+                  <p className="newgears-public-accent-text-muted mt-3 text-sm font-black uppercase tracking-[0.16em]">{item.label}</p>
                 </div>
               ))}
             </div>
           </div>
 
           <div className="rounded-lg border border-white/12 bg-white/5 p-7 text-center shadow-2xl">
-            <CalendarDays size={54} className="mx-auto text-yellow-200" />
+            <CalendarDays size={54} className="newgears-public-accent-text mx-auto" />
             <p className="mt-6 text-sm font-black uppercase tracking-[0.18em] text-slate-400">Data configurada</p>
-            <p className="mt-3 text-4xl font-black text-white">{formatDate(tournamentTarget)}</p>
+            <p className="mt-3 text-4xl font-black text-white">{formatDate(showcaseSettings.tournamentTarget)}</p>
             <p className="mt-5 text-lg font-bold leading-relaxed text-slate-300">
               {countdown.arrived ? 'Chegou o grande dia.' : 'A temporada continua em movimento.'}
             </p>
@@ -290,11 +294,11 @@ export default function PublicTvModeView({
         <section className="flex h-full flex-col px-[6vw] py-[8vh]">
           <div className="flex items-end justify-between gap-8">
             <div>
-              <p className="text-base font-black uppercase tracking-[0.22em] text-yellow-200">Evolucao documentada</p>
+              <p className="newgears-public-accent-text text-base font-black uppercase tracking-[0.22em]">Evolucao documentada</p>
               <h2 className="mt-3 text-6xl font-black text-white">Galeria de treinos</h2>
             </div>
             <p className="flex items-center gap-2 text-xl font-bold text-slate-300">
-              <Camera size={22} className="text-yellow-200" /> {trainingPhotos.length} registros
+              <Camera size={22} className="newgears-public-accent-text" /> {trainingPhotos.length} registros
             </p>
           </div>
 
@@ -303,8 +307,13 @@ export default function PublicTvModeView({
               {pagePhotos.map((photo) => (
                 <article key={photo.id} className="relative min-h-0 overflow-hidden rounded-lg border border-white/12 bg-[#111827] shadow-xl">
                   <img src={photo.image} alt={photo.title} className="h-full w-full object-cover" />
+                  {photo.isFeatured && (
+                    <span className="newgears-public-accent-badge absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-black uppercase tracking-[0.14em] shadow-lg">
+                      <Star size={14} fill="currentColor" /> Destaque
+                    </span>
+                  )}
                   <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,transparent,rgba(5,9,19,0.96))] px-4 pb-4 pt-14">
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-yellow-200">{photo.type}</p>
+                    <p className="newgears-public-accent-text text-xs font-black uppercase tracking-[0.14em]">{photo.type}</p>
                     <h3 className="mt-1 text-xl font-black text-white">{photo.title}</h3>
                     <p className="mt-1 text-sm font-bold text-slate-300">{formatDate(photo.date)}</p>
                   </div>
@@ -314,7 +323,7 @@ export default function PublicTvModeView({
           ) : (
             <div className="mt-8 flex min-h-0 flex-1 items-center justify-center rounded-lg border border-dashed border-white/15 bg-white/5 text-center">
               <div>
-                <Camera size={58} className="mx-auto text-yellow-200" />
+                <Camera size={58} className="newgears-public-accent-text mx-auto" />
                 <p className="mt-5 text-3xl font-black text-white">Os proximos treinos vao aparecer aqui.</p>
                 <p className="mt-3 text-xl font-bold text-slate-300">Registre fotos nas versoes do robo e nos anexos.</p>
               </div>
@@ -328,15 +337,15 @@ export default function PublicTvModeView({
       return (
         <section className="grid h-full grid-cols-[minmax(0,1fr)_minmax(420px,0.95fr)] items-center gap-10 px-[7vw] py-[8vh]">
           <div>
-            <p className="text-base font-black uppercase tracking-[0.22em] text-yellow-200">Projeto de inovacao</p>
+            <p className="newgears-public-accent-text text-base font-black uppercase tracking-[0.22em]">Projeto de inovacao</p>
             <h2 className="mt-4 text-6xl font-black leading-tight text-white">{projectTitle}</h2>
             <p className="mt-7 text-2xl font-bold leading-relaxed text-slate-200">{projectDescription}</p>
             {cleanText(projectSummary?.impact) && (
-              <div className="mt-7 rounded-lg border border-yellow-300/25 bg-yellow-300/10 p-5">
-                <p className="flex items-center gap-3 text-base font-black uppercase tracking-[0.16em] text-yellow-100">
+              <div className="newgears-public-accent-panel mt-7 rounded-lg border p-5">
+                <p className="newgears-public-accent-text-muted flex items-center gap-3 text-base font-black uppercase tracking-[0.16em]">
                   <Lightbulb size={22} /> Impacto esperado
                 </p>
-                <p className="mt-3 text-xl font-bold leading-relaxed text-yellow-50/88">{projectSummary.impact}</p>
+                <p className="mt-3 text-xl font-bold leading-relaxed text-slate-100/88">{projectSummary.impact}</p>
               </div>
             )}
           </div>
@@ -386,30 +395,44 @@ export default function PublicTvModeView({
       );
     }
 
+    if (activeSlide.id === 'connect') {
+      return (
+        <section className="flex h-full flex-col px-[8vw] py-[8vh]">
+          <div className="max-w-3xl">
+            <p className="newgears-public-accent-text text-base font-black uppercase tracking-[0.22em]">Leve a New Gears com voce</p>
+            <h2 className="mt-3 text-6xl font-black text-white">Conheca o projeto e acompanhe a equipe</h2>
+          </div>
+          <div className="mt-8 min-h-0 max-w-5xl flex-1">
+            <PublicQrCodes settings={showcaseSettings} />
+          </div>
+        </section>
+      );
+    }
+
     if (activeSlide.id === 'achievements') {
       return (
         <section className="flex h-full flex-col px-[7vw] py-[8vh]">
           <div>
-            <p className="text-base font-black uppercase tracking-[0.22em] text-yellow-200">Temporada em movimento</p>
+            <p className="newgears-public-accent-text text-base font-black uppercase tracking-[0.22em]">Temporada em movimento</p>
             <h2 className="mt-3 text-6xl font-black text-white">Conquistas recentes</h2>
           </div>
 
           {achievements.length > 0 ? (
             <div className="mt-8 grid min-h-0 flex-1 grid-cols-3 grid-rows-2 gap-4">
               {achievements.map((achievement) => (
-                <article key={achievement.id} className="flex min-h-0 flex-col justify-center rounded-lg border border-yellow-300/20 bg-yellow-300/10 p-6 shadow-xl">
-                  <Trophy size={32} className="text-yellow-200" />
-                  <p className="mt-5 text-sm font-black uppercase tracking-[0.14em] text-yellow-100">{achievement.type}</p>
+                <article key={achievement.id} className="newgears-public-accent-panel flex min-h-0 flex-col justify-center rounded-lg border p-6 shadow-xl">
+                  <Trophy size={32} className="newgears-public-accent-text" />
+                  <p className="newgears-public-accent-text-muted mt-5 text-sm font-black uppercase tracking-[0.14em]">{achievement.type}</p>
                   <h3 className="mt-2 text-3xl font-black leading-tight text-white">{achievement.title}</h3>
                   <p className="mt-3 text-lg font-bold leading-relaxed text-slate-200">{achievement.detail}</p>
-                  {achievement.date && <p className="mt-3 text-sm font-black text-yellow-100/75">{formatDate(achievement.date)}</p>}
+                  {achievement.date && <p className="newgears-public-accent-text-muted mt-3 text-sm font-black opacity-75">{formatDate(achievement.date)}</p>}
                 </article>
               ))}
             </div>
           ) : (
             <div className="mt-8 flex min-h-0 flex-1 items-center justify-center rounded-lg border border-dashed border-white/15 bg-white/5 text-center">
               <div>
-                <Trophy size={58} className="mx-auto text-yellow-200" />
+                <Trophy size={58} className="newgears-public-accent-text mx-auto" />
                 <p className="mt-5 text-3xl font-black text-white">A primeira conquista esta a caminho.</p>
                 <p className="mt-3 text-xl font-bold text-slate-300">Cada treino pode abrir um novo destaque da equipe.</p>
               </div>
@@ -427,7 +450,7 @@ export default function PublicTvModeView({
           <div className="mt-10 grid grid-cols-2 gap-4">
             {[
               { label: 'Robotica', detail: 'Construir, programar e melhorar.', Icon: Wrench, tone: 'text-cyan-200 border-cyan-300/20 bg-cyan-300/10' },
-              { label: 'Inovacao', detail: 'Pesquisar problemas e criar solucoes.', Icon: Lightbulb, tone: 'text-yellow-100 border-yellow-300/20 bg-yellow-300/10' },
+              { label: 'Inovacao', detail: 'Pesquisar problemas e criar solucoes.', Icon: Lightbulb, tone: 'newgears-public-accent-panel newgears-public-accent-text-muted' },
               { label: 'Equipe', detail: 'Dividir responsabilidades e celebrar avancos.', Icon: Users, tone: 'text-fuchsia-100 border-fuchsia-300/20 bg-fuchsia-300/10' },
               { label: 'Impacto', detail: 'Compartilhar conhecimento com a comunidade.', Icon: Megaphone, tone: 'text-emerald-100 border-emerald-300/20 bg-emerald-300/10' },
             ].map(({ label, detail, Icon, tone }) => (
@@ -442,7 +465,7 @@ export default function PublicTvModeView({
 
         <div className="space-y-4">
           <div className="rounded-lg border border-white/12 bg-white/5 p-6">
-            <Briefcase size={28} className="text-yellow-200" />
+            <Briefcase size={28} className="newgears-public-accent-text" />
             <p className="mt-5 text-sm font-black uppercase tracking-[0.16em] text-slate-400">Equipe tecnica</p>
             <p className="mt-2 text-3xl font-black text-white">{cleanText(adminProfile?.name) || 'New Gears'}</p>
             <p className="mt-2 text-lg font-bold text-slate-300">{cleanText(adminProfile?.specialty) || 'Mentoria e desenvolvimento'}</p>
@@ -459,7 +482,7 @@ export default function PublicTvModeView({
   return (
     <div className="newgears-public-tv-shell relative h-screen overflow-hidden bg-[#070b14] text-white">
       <img src="/Unearthed.jpg" alt="" className="absolute inset-0 h-full w-full object-cover opacity-20" />
-      <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(5,9,19,0.98),rgba(12,17,35,0.94)_52%,rgba(24,12,37,0.94))]" />
+      <div className="newgears-public-tv-backdrop absolute inset-0" />
 
       <header className="absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-6 border-b border-white/10 bg-black/22 px-6 py-3 backdrop-blur-sm">
         <div className="flex items-center gap-3">

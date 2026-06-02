@@ -17,6 +17,14 @@ export const PUBLIC_BADGE_LABELS = Object.freeze({
   strategy_builder: 'Arquiteto da Estrategia',
 });
 
+export const DEFAULT_PUBLIC_SHOWCASE_SETTINGS = Object.freeze({
+  tournamentName: 'Proximo torneio FLL',
+  tournamentTarget: '2026-12-01T08:00',
+  innovationUrl: '',
+  socialUrl: '',
+  socialLabel: 'Redes da equipe',
+});
+
 const cleanText = (value) => `${value || ''}`.trim();
 
 const toTimestamp = (value) => {
@@ -24,28 +32,97 @@ const toTimestamp = (value) => {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 };
 
-export const buildTrainingGallery = ({ robotVersions = [], attachments = [] } = {}) => [
+const toDisplayOrder = (value) => {
+  if (value === null || value === undefined || value === '') return Number.POSITIVE_INFINITY;
+  const order = Number(value);
+  return Number.isFinite(order) ? order : Number.POSITIVE_INFINITY;
+};
+
+const compareGalleryPhotos = (left, right, prioritizeFeatured) => {
+  if (prioritizeFeatured && left.isFeatured !== right.isFeatured) {
+    return left.isFeatured ? -1 : 1;
+  }
+
+  const displayOrderDifference = toDisplayOrder(left.displayOrder) - toDisplayOrder(right.displayOrder);
+  if (displayOrderDifference) return displayOrderDifference;
+
+  return toTimestamp(right.date) - toTimestamp(left.date);
+};
+
+export const normalizePublicUrl = (value) => {
+  const cleanedValue = cleanText(value);
+  if (!cleanedValue) return '';
+  return /^https?:\/\//i.test(cleanedValue) ? cleanedValue : `https://${cleanedValue}`;
+};
+
+export const resolvePublicShowcaseSettings = (settings = {}) => ({
+  ...DEFAULT_PUBLIC_SHOWCASE_SETTINGS,
+  ...settings,
+  tournamentName: cleanText(settings.tournamentName) || DEFAULT_PUBLIC_SHOWCASE_SETTINGS.tournamentName,
+  tournamentTarget: cleanText(settings.tournamentTarget) || DEFAULT_PUBLIC_SHOWCASE_SETTINGS.tournamentTarget,
+  innovationUrl: normalizePublicUrl(settings.innovationUrl),
+  socialUrl: normalizePublicUrl(settings.socialUrl),
+  socialLabel: cleanText(settings.socialLabel) || DEFAULT_PUBLIC_SHOWCASE_SETTINGS.socialLabel,
+});
+
+export const buildTrainingGallery = ({
+  galleryPhotos = [],
+  robotVersions = [],
+  attachments = [],
+  includeHidden = false,
+  prioritizeFeatured = true,
+} = {}) => [
+  ...galleryPhotos
+    .filter((item) => item?.image)
+    .map((item) => ({
+      id: `gallery-${item.id}`,
+      sourceCollection: 'publicGalleryPhotos',
+      sourceId: item.id,
+      image: item.image,
+      title: cleanText(item.title) || 'Treino da equipe',
+      detail: cleanText(item.detail) || 'Registro da temporada',
+      date: item.date || item.createdAt || '',
+      type: 'Foto de treino',
+      isPublic: item.showInPublicGallery !== false,
+      isFeatured: item.isFeatured === true,
+      displayOrder: item.displayOrder,
+      canDelete: true,
+    })),
   ...robotVersions
     .filter((item) => item?.image)
     .map((item) => ({
       id: `robot-${item.id}`,
+      sourceCollection: 'robotVersions',
+      sourceId: item.id,
       image: item.image,
       title: cleanText(item.name) || cleanText(item.version) || 'Evolucao do robo',
       detail: cleanText(item.version) || 'Versao registrada',
       date: item.date || '',
       type: 'Versao do robo',
+      isPublic: item.showInPublicGallery !== false,
+      isFeatured: item.isFeatured === true,
+      displayOrder: item.displayOrder,
+      canDelete: false,
     })),
   ...attachments
     .filter((item) => item?.image)
     .map((item) => ({
       id: `attachment-${item.id}`,
+      sourceCollection: 'attachments',
+      sourceId: item.id,
       image: item.image,
       title: cleanText(item.name) || 'Anexo em teste',
       detail: cleanText(item.changes) || 'Teste de anexo registrado',
       date: item.date || '',
       type: 'Treino de anexo',
+      isPublic: item.showInPublicGallery !== false,
+      isFeatured: item.isFeatured === true,
+      displayOrder: item.displayOrder,
+      canDelete: false,
     })),
-].sort((left, right) => toTimestamp(right.date) - toTimestamp(left.date));
+]
+  .filter((item) => includeHidden || item.isPublic)
+  .sort((left, right) => compareGalleryPhotos(left, right, prioritizeFeatured));
 
 export const buildPublicAchievements = ({
   students = [],

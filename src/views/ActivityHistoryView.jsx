@@ -6,6 +6,7 @@ import {
   FileText,
   History,
   Search,
+  MonitorPlay,
   UserCircle,
   Users,
   Wrench,
@@ -17,6 +18,7 @@ const CATEGORY_META = {
   programming: { label: 'Programacao', icon: Code, tone: 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100' },
   robot: { label: 'Robo', icon: Wrench, tone: 'border-cyan-400/25 bg-cyan-400/10 text-cyan-100' },
   team: { label: 'Equipe', icon: Users, tone: 'border-fuchsia-400/25 bg-fuchsia-400/10 text-fuchsia-100' },
+  showcase: { label: 'Vitrine', icon: MonitorPlay, tone: 'border-yellow-400/25 bg-yellow-400/10 text-yellow-100' },
   default: { label: 'Sistema', icon: History, tone: 'border-white/15 bg-white/5 text-slate-100' },
 };
 

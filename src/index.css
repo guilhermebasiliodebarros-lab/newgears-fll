@@ -24,6 +24,12 @@
   --ng-logo-mid: #5d58d3;
   --ng-logo-deep: #820aaf;
   --ng-logo-end: #d01bf1;
+  --ng-public-accent: #67e8f9;
+  --ng-public-accent-muted: #cffafe;
+  --ng-public-accent-soft: rgba(34, 211, 238, 0.1);
+  --ng-public-accent-border: rgba(103, 232, 249, 0.28);
+  --ng-public-accent-strong: #67e8f9;
+  --ng-public-accent-contrast: #082f49;
 }
 
 html,
@@ -758,6 +764,35 @@ button:active {
   --ng-logo-mid: #f1ce73;
   --ng-logo-deep: #c68a22;
   --ng-logo-end: #805208;
+  --ng-public-accent: #f7dc85;
+  --ng-public-accent-muted: #fff0b0;
+  --ng-public-accent-soft: rgba(198, 138, 34, 0.16);
+  --ng-public-accent-border: rgba(230, 189, 84, 0.34);
+  --ng-public-accent-strong: #f1ce73;
+  --ng-public-accent-contrast: #211707;
+}
+
+.newgears-public-tv-backdrop {
+  background: linear-gradient(135deg, rgba(5, 9, 19, 0.98), rgba(12, 17, 35, 0.94) 52%, rgba(24, 12, 37, 0.94));
+}
+
+.newgears-public-accent-text {
+  color: var(--ng-public-accent);
+}
+
+.newgears-public-accent-text-muted {
+  color: var(--ng-public-accent-muted);
+}
+
+.newgears-public-accent-panel {
+  border-color: var(--ng-public-accent-border);
+  background-color: var(--ng-public-accent-soft);
+}
+
+.newgears-public-accent-badge {
+  border-color: var(--ng-public-accent-border);
+  background-color: var(--ng-public-accent-strong);
+  color: var(--ng-public-accent-contrast);
 }
 
 [data-newgears-theme='gold'] body {
@@ -824,6 +859,10 @@ button:active {
     radial-gradient(circle at top left, rgba(255, 240, 176, 0.12), transparent 24%),
     radial-gradient(circle at bottom right, rgba(198, 138, 34, 0.12), transparent 24%),
     #090806;
+}
+
+[data-newgears-theme='gold'] .newgears-public-tv-backdrop {
+  background: linear-gradient(135deg, rgba(9, 8, 6, 0.98), rgba(29, 23, 12, 0.95) 52%, rgba(45, 31, 8, 0.94));
 }
 
 [data-newgears-theme='gold'] .newgears-login-card,

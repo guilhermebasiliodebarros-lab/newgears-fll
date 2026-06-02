@@ -1,5 +1,5 @@
 import { Suspense, lazy, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy, limit } from "firebase/firestore";
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy, limit, writeBatch } from "firebase/firestore";
 import { db } from './firebase'; // Importa a instância já inicializada
 import Countdown from './components/Countdown';
 import LogoNewGears from './components/LogoNewGears';
@@ -10,10 +10,12 @@ import LogbookView from './views/LogbookView';
 import KanbanView from './views/KanbanView';
 import AgendaView from './views/AgendaView';
 import ActivityHistoryView from './views/ActivityHistoryView';
+import PublicShowcaseAdminView from './views/PublicShowcaseAdminView';
 import PublicTeamView from './views/PublicTeamView';
 import PublicTvModeView from './views/PublicTvModeView';
 import { STATION_KEYS } from './constants/workspace';
 import { DEFAULT_PROJECT_SUMMARY, PROJECT_MAIN_DOC_ID, resolveProjectSummary } from './utils/projectSummary';
+import { buildTrainingGallery, DEFAULT_PUBLIC_SHOWCASE_SETTINGS, resolvePublicShowcaseSettings } from './utils/publicShowcase';
 import {
   SCHOOL_REPORT_STAGE_CONFIG,
   SCHOOL_REPORT_SUBJECTS,
@@ -145,8 +147,6 @@ const RobotDesignStrategyPanel = lazy(() => import('./components/RobotDesignStra
 const RobotRoundsPanel = lazy(() => import('./components/RobotRoundsPanel'));
 const ConfettiBurst = lazy(() => import('react-confetti'));
 const RotationOperationsPanel = lazy(() => import('./components/RotationOperationsPanel'));
-const TOURNAMENT_TARGET_DATE = '2026-12-01T08:00:00';
-
 const readStoredTheme = () => {
   if (typeof window === 'undefined') return 'classic';
   return localStorage.getItem('newgears_visual_theme') === 'gold' ? 'gold' : 'classic';
@@ -867,6 +867,8 @@ function App() {
   const [robotDesignRubric, setRobotDesignRubric] = useState(DEFAULT_ROBOT_DESIGN_RUBRIC);
   const [outreachEvents, setOutreachEvents] = useState([]);
   const [projectSummary, setProjectSummary] = useState(DEFAULT_PROJECT_SUMMARY);
+  const [galleryPhotos, setGalleryPhotos] = useState([]);
+  const [showcaseSettings, setShowcaseSettings] = useState(DEFAULT_PUBLIC_SHOWCASE_SETTINGS);
   const [modal, setModal] = useState({ type: null, data: null });
   const [notification, setNotification] = useState(null);
   const [xpPenaltyReason, setXpPenaltyReason] = useState('');
@@ -916,6 +918,7 @@ function App() {
     || isJudgeMode
     || isCommandCenterMode
     || adminTab === 'rounds'
+    || adminTab === 'showcase'
     || studentTab === 'rounds'
     || ((adminTab === 'strategy' || studentTab === 'strategy') && strategySubTab === 'robot_design')
     || dashboardNeedsRobotData;
@@ -2092,6 +2095,7 @@ function App() {
     const unsubEvents = createListener("events", setEvents);
     const unsubAttendanceSessions = createListener("attendanceSessions", setAttendanceSessions);
     const unsubXpLossRecords = createListener("xpLossRecords", setXpLossRecords);
+    const unsubGalleryPhotos = createListener("publicGalleryPhotos", setGalleryPhotos);
     
 
     // Listeners para as Rubricas
@@ -2128,6 +2132,10 @@ function App() {
         });
     });
 
+    const unsubPublicShowcase = onSnapshot(doc(db, "settings", "public_showcase"), (docSnap) => {
+        setShowcaseSettings(resolvePublicShowcaseSettings(docSnap.exists() ? docSnap.data() : {}));
+    });
+
     // ... e não esqueça de adicionar no return para limpar:
     // return () => { ... unsubProject(); };
     
@@ -2137,10 +2145,12 @@ function App() {
         unsubEvents();
         unsubAttendanceSessions();
         unsubXpLossRecords();
+        unsubGalleryPhotos();
         unsubInnovationRubric();
         unsubRobotDesignRubric();
         unsubAdminProfile();
         unsubTeamStats();
+        unsubPublicShowcase();
     };
   }, []);
 
@@ -2315,6 +2325,198 @@ function App() {
       setNotification({ msg, type }); 
       setTimeout(() => setNotification(null), 3000); 
   }
+
+  const handleSaveShowcaseSettings = async (nextSettings) => {
+      const normalizedSettings = {
+          ...resolvePublicShowcaseSettings(nextSettings),
+          updatedAt: new Date().toISOString()
+      };
+
+      try {
+          await setDoc(doc(db, "settings", "public_showcase"), normalizedSettings, { merge: true });
+          setShowcaseSettings(normalizedSettings);
+          void recordActivity({
+              action: 'atualizou a vitrine publica',
+              category: 'showcase',
+              title: normalizedSettings.tournamentName,
+              detail: 'Data do torneio e links publicos revisados.',
+              entityId: 'public_showcase'
+          });
+          showNotification("Vitrine publica atualizada!", "success");
+      } catch (error) {
+          console.error("Erro ao salvar vitrine publica:", error);
+          showNotification("Nao foi possivel salvar a vitrine.", "error");
+          throw error;
+      }
+  };
+
+  const handleAddGalleryPhoto = async ({ title, detail, date, image }) => {
+      const photoData = {
+          title: `${title || ''}`.trim(),
+          detail: `${detail || ''}`.trim(),
+          date,
+          image,
+          showInPublicGallery: true,
+          isFeatured: false,
+          displayOrder: galleryPhotos.length + robotVersions.length + attachments.length,
+          createdAt: new Date().toISOString(),
+          createdBy: adminProfile?.name || currentUser?.name || 'Equipe'
+      };
+
+      try {
+          const photoRef = await addDoc(collection(db, "publicGalleryPhotos"), photoData);
+          void recordActivity({
+              action: 'adicionou uma foto na vitrine',
+              category: 'showcase',
+              title: photoData.title,
+              detail: photoData.detail || 'Novo registro de treino.',
+              entityId: photoRef.id
+          });
+          showNotification("Foto adicionada na galeria!", "success");
+      } catch (error) {
+          console.error("Erro ao adicionar foto na galeria:", error);
+          showNotification("Nao foi possivel enviar a foto.", "error");
+          throw error;
+      }
+  };
+
+  const handleToggleGalleryPhoto = async (photo) => {
+      const nextVisibility = !photo.isPublic;
+
+      try {
+          await updateDoc(doc(db, photo.sourceCollection, photo.sourceId), {
+              showInPublicGallery: nextVisibility,
+              ...(nextVisibility ? {} : { isFeatured: false })
+          });
+          void recordActivity({
+              action: nextVisibility ? 'exibiu uma foto na vitrine' : 'ocultou uma foto da vitrine',
+              category: 'showcase',
+              title: photo.title,
+              detail: photo.type,
+              entityId: photo.sourceId
+          });
+          showNotification(nextVisibility ? "Foto exibida na vitrine!" : "Foto ocultada da vitrine.", "success");
+      } catch (error) {
+          console.error("Erro ao alterar visibilidade da foto:", error);
+          showNotification("Nao foi possivel alterar a foto.", "error");
+          throw error;
+      }
+  };
+
+  const handleToggleFeaturedGalleryPhoto = async (photo) => {
+      const nextFeatured = !photo.isFeatured;
+      const featuredPhotos = [
+          ...galleryPhotos.map((item) => ({ ...item, sourceCollection: 'publicGalleryPhotos' })),
+          ...robotVersions.map((item) => ({ ...item, sourceCollection: 'robotVersions' })),
+          ...attachments.map((item) => ({ ...item, sourceCollection: 'attachments' }))
+      ].filter((item) => item.image && item.isFeatured && !(item.sourceCollection === photo.sourceCollection && item.id === photo.sourceId));
+
+      try {
+          await Promise.all([
+              ...featuredPhotos.map((item) => updateDoc(doc(db, item.sourceCollection, item.id), { isFeatured: false })),
+              updateDoc(doc(db, photo.sourceCollection, photo.sourceId), {
+                  isFeatured: nextFeatured,
+                  ...(nextFeatured ? { showInPublicGallery: true } : {})
+              })
+          ]);
+          void recordActivity({
+              action: nextFeatured ? 'marcou uma foto como destaque' : 'removeu o destaque de uma foto',
+              category: 'showcase',
+              title: photo.title,
+              detail: photo.type,
+              entityId: photo.sourceId
+          });
+          showNotification(nextFeatured ? "Foto marcada como destaque!" : "Destaque removido da foto.", "success");
+      } catch (error) {
+          console.error("Erro ao alterar destaque da foto:", error);
+          showNotification("Nao foi possivel alterar o destaque.", "error");
+          throw error;
+      }
+  };
+
+  const persistGalleryPhotoOrder = async (nextPhotos, activity) => {
+      const batch = writeBatch(db);
+      nextPhotos.forEach((item, index) => {
+          batch.update(doc(db, item.sourceCollection, item.sourceId), { displayOrder: index });
+      });
+
+      try {
+          await batch.commit();
+          void recordActivity({
+              category: 'showcase',
+              ...activity
+          });
+          showNotification("Ordem das fotos atualizada!", "success");
+      } catch (error) {
+          console.error("Erro ao reordenar fotos:", error);
+          showNotification("Nao foi possivel reordenar as fotos.", "error");
+          throw error;
+      }
+  };
+
+  const getOrderedGalleryPhotos = () => buildTrainingGallery({
+      galleryPhotos,
+      robotVersions,
+      attachments,
+      includeHidden: true,
+      prioritizeFeatured: false
+  });
+
+  const handleMoveGalleryPhoto = async (photo, direction) => {
+      const orderedPhotos = getOrderedGalleryPhotos();
+      const currentIndex = orderedPhotos.findIndex((item) => item.id === photo.id);
+      const nextIndex = currentIndex + direction;
+      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= orderedPhotos.length) return;
+
+      const nextPhotos = [...orderedPhotos];
+      const [movedPhoto] = nextPhotos.splice(currentIndex, 1);
+      nextPhotos.splice(nextIndex, 0, movedPhoto);
+
+      await persistGalleryPhotoOrder(nextPhotos, {
+          action: direction < 0 ? 'moveu uma foto para cima na vitrine' : 'moveu uma foto para baixo na vitrine',
+          title: photo.title,
+          detail: photo.type,
+          entityId: photo.sourceId
+      });
+  };
+
+  const handleReorderGalleryPhotos = async (sourcePhotoId, targetPhotoId) => {
+      const orderedPhotos = getOrderedGalleryPhotos();
+      const sourceIndex = orderedPhotos.findIndex((item) => item.id === sourcePhotoId);
+      const targetIndex = orderedPhotos.findIndex((item) => item.id === targetPhotoId);
+      if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return;
+
+      const nextPhotos = [...orderedPhotos];
+      const [movedPhoto] = nextPhotos.splice(sourceIndex, 1);
+      nextPhotos.splice(targetIndex, 0, movedPhoto);
+
+      await persistGalleryPhotoOrder(nextPhotos, {
+          action: 'reordenou fotos da vitrine por arraste',
+          title: movedPhoto.title,
+          detail: `${movedPhoto.type} movida para a posicao ${targetIndex + 1}.`,
+          entityId: movedPhoto.sourceId
+      });
+  };
+
+  const handleDeleteGalleryPhoto = async (photo) => {
+      if (photo.sourceCollection !== 'publicGalleryPhotos') return;
+
+      try {
+          await deleteDoc(doc(db, "publicGalleryPhotos", photo.sourceId));
+          void recordActivity({
+              action: 'excluiu uma foto da vitrine',
+              category: 'showcase',
+              title: photo.title,
+              detail: photo.type,
+              entityId: photo.sourceId
+          });
+          showNotification("Foto excluida da galeria.", "success");
+      } catch (error) {
+          console.error("Erro ao excluir foto da galeria:", error);
+          showNotification("Nao foi possivel excluir a foto.", "error");
+          throw error;
+      }
+  };
 
   const handleTeamCheckInSubmit = async (level) => {
       if (!viewAsStudent) return;
@@ -4268,6 +4470,7 @@ const handleDeleteRound = async (id) => {
       { id: 'kanban', label: 'Kanban', icon: <ClipboardList size={16} />, description: 'Fluxo da semana, prioridades e entregas sem cara de planilha.', badge: urgentTasksCount > 0 ? urgentTasksCount : null, pillTone: 'border-orange-500/20 bg-orange-500/10 text-orange-200', activeClass: 'bg-orange-500 text-white shadow-lg shadow-orange-900/20', inactiveClass: 'text-gray-400 hover:text-orange-300 hover:bg-orange-500/10' },
       { id: 'logbook', label: 'Diario', icon: <Book size={16} />, description: 'Memoria viva do time com testes, aprendizados e mini vitorias.', pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
       { id: 'agenda', label: 'Agenda', icon: <CalendarDays size={16} />, description: 'Prazos, encontros e checkpoints da equipe em modo missao.', badge: urgentEventsCount > 0 ? urgentEventsCount : null, pillTone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200', activeClass: 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20', inactiveClass: 'text-gray-400 hover:text-indigo-300 hover:bg-indigo-500/10' },
+      { id: 'showcase', label: 'Vitrine', icon: <MonitorPlay size={16} />, description: 'Curadoria das fotos, torneio e QR Codes exibidos para a escola.', pill: `${galleryPhotos.length} fotos`, pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
       { id: 'history', label: 'Historico', icon: <History size={16} />, description: 'Registro coletivo com autor, data e alteracoes feitas no sistema.', pillTone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200', activeClass: 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-900/20', inactiveClass: 'text-gray-400 hover:text-cyan-300 hover:bg-cyan-500/10' }
   ];
 
@@ -4290,6 +4493,7 @@ const handleDeleteRound = async (id) => {
       kanban: 'pt-10 md:pt-12',
       logbook: 'pt-10 md:pt-12',
       agenda: 'pt-10 md:pt-12',
+      showcase: 'pt-10 md:pt-12',
       history: 'pt-10 md:pt-12',
   };
 
@@ -7179,10 +7383,11 @@ const handleFileSelect = (e) => {
               adminProfile={adminProfile}
               projectSummary={projectSummary}
               outreachEvents={outreachEvents}
+              galleryPhotos={galleryPhotos}
               robotVersions={robotVersions}
               attachments={attachments}
               teamSeasonStats={teamSeasonStats}
-              tournamentTarget={TOURNAMENT_TARGET_DATE}
+              showcaseSettings={showcaseSettings}
               visualTheme={visualTheme}
               onToggleTheme={toggleVisualTheme}
               onExit={closePublicTvMode}
@@ -7197,8 +7402,10 @@ const handleFileSelect = (e) => {
               adminProfile={adminProfile}
               projectSummary={projectSummary}
               outreachEvents={outreachEvents}
+              galleryPhotos={galleryPhotos}
               robotVersions={robotVersions}
               attachments={attachments}
+              showcaseSettings={showcaseSettings}
               visualTheme={visualTheme}
               onBackToLogin={closePublicMode}
               onOpenTvMode={openPublicTvMode}
@@ -7523,7 +7730,7 @@ const handleFileSelect = (e) => {
               
               {/* --- CONTADOR COMPACTO --- */}
               <Countdown 
-                  targetDate={TOURNAMENT_TARGET_DATE}
+                  targetDate={showcaseSettings.tournamentTarget}
                   title="TORNEIO" 
                   compact={true} 
               />
@@ -7847,6 +8054,22 @@ const handleFileSelect = (e) => {
                     {adminTab === 'kanban' && <KanbanView {...kanbanViewProps} />}
                     {adminTab === 'logbook' && <LogbookView {...logbookViewProps} />}
                     {adminTab === 'agenda' && <AgendaView {...agendaViewProps} />}
+                    {adminTab === 'showcase' && (
+                      <PublicShowcaseAdminView
+                        settings={showcaseSettings}
+                        galleryPhotos={galleryPhotos}
+                        robotVersions={robotVersions}
+                        attachments={attachments}
+                        onSaveSettings={handleSaveShowcaseSettings}
+                        onAddPhoto={handleAddGalleryPhoto}
+                        onTogglePhoto={handleToggleGalleryPhoto}
+                        onToggleFeatured={handleToggleFeaturedGalleryPhoto}
+                        onMovePhoto={handleMoveGalleryPhoto}
+                        onReorderPhotos={handleReorderGalleryPhotos}
+                        onDeletePhoto={handleDeleteGalleryPhoto}
+                        onOpenTvMode={openPublicTvMode}
+                      />
+                    )}
                     {adminTab === 'history' && <ActivityHistoryView activityLogs={activityLogs} />}
                   </WorkspaceScene>
                 </div>
