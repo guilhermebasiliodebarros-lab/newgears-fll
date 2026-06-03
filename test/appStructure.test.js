@@ -6,6 +6,7 @@ const publicTeamViewFile = new URL('../src/views/PublicTeamView.jsx', import.met
 const publicTvModeViewFile = new URL('../src/views/PublicTvModeView.jsx', import.meta.url);
 const publicShowcaseAdminViewFile = new URL('../src/views/PublicShowcaseAdminView.jsx', import.meta.url);
 const innovationStrategyPanelFile = new URL('../src/components/InnovationStrategyPanel.jsx', import.meta.url);
+const cssFile = new URL('../src/index.css', import.meta.url);
 
 const extractedViews = [
   'StrategyView',
@@ -21,6 +22,7 @@ export async function runAppStructureTests() {
   const publicTvModeViewSource = await readFile(publicTvModeViewFile, 'utf8');
   const publicShowcaseAdminViewSource = await readFile(publicShowcaseAdminViewFile, 'utf8');
   const innovationStrategyPanelSource = await readFile(innovationStrategyPanelFile, 'utf8');
+  const cssSource = await readFile(cssFile, 'utf8');
 
   for (const viewName of extractedViews) {
     assert.match(source, new RegExp(`import ${viewName} from './views/${viewName}'`));
@@ -55,10 +57,15 @@ export async function runAppStructureTests() {
   assert.match(publicShowcaseAdminViewSource, /onDrop=\{\(event\) => handleDrop\(event,\s*photo\)\}/);
   assert.match(source, /onReorderPhotos=\{handleReorderGalleryPhotos\}/);
   assert.match(source, /modal\.type === 'expertContactForm'/);
+  assert.match(source, /newgears-modal-scrollable/);
+  assert.match(source, /newgears-modal-submit-bar/);
   assert.match(source, /accept="image\/\*,application\/pdf"/);
   assert.match(source, /convertExpertContactEvidence/);
   assert.match(innovationStrategyPanelSource, /Contatos realizados/);
   assert.match(innovationStrategyPanelSource, /Taxa de resposta/);
   assert.match(innovationStrategyPanelSource, /Evidencias:/);
   assert.match(innovationStrategyPanelSource, /download=\{contact\.evidenceName/);
+  assert.match(cssSource, /\.newgears-modal-frame\.newgears-modal-scrollable/);
+  assert.match(cssSource, /\[data-newgears-theme='gold'\] \[class\*='from-purple-'\]/);
+  assert.match(cssSource, /\[data-newgears-theme='gold'\] \.newgears-scan-bar/);
 }

@@ -6041,9 +6041,12 @@ const handleFileSelect = (e) => {
   const renderModal = () => {
 
     if (!modal.type) return null;
+    const isScrollableModal = modal.type !== 'attendance';
     const modalFrameClass = modal.type === 'imageView'
       ? 'max-w-4xl h-auto p-6 overflow-y-auto custom-scrollbar'
-      : modal.type === 'attendance'
+      : modal.type === 'expertContactForm'
+        ? 'max-w-2xl max-h-[92vh] p-6 overflow-y-auto custom-scrollbar'
+        : modal.type === 'attendance'
         ? 'max-w-7xl h-[94vh] overflow-hidden p-0'
         : 'max-w-md max-h-[90vh] p-6 overflow-y-auto custom-scrollbar';
 
@@ -6051,7 +6054,7 @@ const handleFileSelect = (e) => {
 
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/92 p-4 animate-in fade-in backdrop-blur-sm">
 
-        <div className={`newgears-modal-frame w-full relative animate-in zoom-in-95 z-60 ${modalFrameClass}`}>
+        <div className={`newgears-modal-frame w-full relative animate-in zoom-in-95 z-60 ${isScrollableModal ? 'newgears-modal-scrollable' : ''} ${modalFrameClass}`}>
 
           <button onClick={closeModal} className="absolute top-4 right-4 text-slate-400 hover:text-white p-2 z-50 rounded-full border border-white/10 bg-white/5"><X size={20}/></button>
 
@@ -6409,7 +6412,9 @@ const handleFileSelect = (e) => {
                 ) : null}
               </div>
 
-              <button className="w-full rounded-lg bg-cyan-600 py-3 font-bold text-white hover:bg-cyan-500">Salvar contato</button>
+              <div className="newgears-modal-submit-bar sticky bottom-0 -mx-1 mt-2 border-t border-white/10 px-1 pb-1 pt-3">
+                <button type="submit" className="w-full rounded-lg bg-cyan-600 py-3 font-bold text-white shadow-lg shadow-cyan-950/30 hover:bg-cyan-500">Salvar contato</button>
+              </div>
             </form>
           )}
 
