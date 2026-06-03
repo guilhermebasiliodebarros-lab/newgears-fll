@@ -432,8 +432,24 @@ const formatShortDateLabel = (dateValue) => {
 
 const XP_LOSS_ALERT_REPEAT_MS = 5 * 60 * 1000;
 const XP_LOSS_DELETE_WAIT_DAYS = 5;
+const BADGE_XP_BONUS = 100;
+const XP_SOURCE_LABELS = {
+  badge: 'Badge',
+  manual_reward: 'Recompensa manual',
+  penalty: 'Penalidade',
+  correction: 'Correcao',
+  activity: 'Atividade aprovada',
+  english_challenge: 'Desafio de ingles',
+  check_in: 'Check-in',
+  compliment: 'Elogio',
+  school_report: 'Notas escolares',
+  station_week: 'Fechamento de semana',
+  undo: 'Desfazer',
+};
 const WEEKLY_CAPTAIN_NAMES = ['Heloise', 'Sofia'];
 const WEEKLY_STATION_KEYS = [STATION_KEYS.ENGINEERING, STATION_KEYS.INNOVATION, STATION_KEYS.MANAGEMENT];
+
+const getXpSourceLabel = (source) => XP_SOURCE_LABELS[source] || 'Manual';
 
 const getXpLossDate = (dateValue) => {
   if (!dateValue) return null;
@@ -875,6 +891,7 @@ function App() {
   const [xpPenaltyReason, setXpPenaltyReason] = useState('');
   const [xpPenaltyShouldNotify, setXpPenaltyShouldNotify] = useState(true);
   const [xpLossAlertNotice, setXpLossAlertNotice] = useState(null);
+  const notificationTimeoutRef = useRef(null);
   const xpLossLastAlertAtRef = useRef(new Map());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionText, setSubmissionText] = useState("");
@@ -1104,6 +1121,66 @@ function App() {
       }
   };
 
+  const recordXpOrigin = async ({
+      student,
+      amount,
+      source = 'manual_reward',
+      mode = 'reward',
+      reason = '',
+      notifyStudent = false,
+      badgeId = '',
+      badgeName = '',
+      referenceRecordId = '',
+  }) => {
+      if (!db || !student?.id) return null;
+
+      const createdBy = currentUser?.type === 'admin'
+          ? (adminProfile?.name || currentUser?.name || 'Tecnico')
+          : (viewAsStudent?.name || currentUser?.name || 'Equipe');
+
+      try {
+          return await addDoc(collection(db, "xpRecords"), {
+              studentId: student.id,
+              studentName: student.name || 'Aluno',
+              amount: Number(amount) || 0,
+              source,
+              sourceLabel: getXpSourceLabel(source),
+              mode,
+              reason: `${reason || ''}`.trim(),
+              notifyStudent: Boolean(notifyStudent),
+              badgeId,
+              badgeName,
+              referenceRecordId,
+              createdAt: new Date().toISOString(),
+              createdBy
+          });
+      } catch (error) {
+          console.error("Erro ao registrar origem de XP:", error);
+          return null;
+      }
+  };
+
+  const syncStudentLocally = (student) => {
+      const normalizedStudent = normalizeStudentRecord(student);
+
+      setStudents(prevStudents =>
+        prevStudents.map(existingStudent => existingStudent.id === normalizedStudent.id ? normalizedStudent : existingStudent)
+      );
+      setBadgeStudent(prevStudent => prevStudent?.id === normalizedStudent.id ? normalizedStudent : prevStudent);
+      setViewAsStudent(prevStudent => prevStudent?.id === normalizedStudent.id ? normalizedStudent : prevStudent);
+
+      return normalizedStudent;
+  };
+
+  const showNotification = (msg, type = 'success', action = null, duration = 3000) => { 
+      if (notificationTimeoutRef.current) {
+          clearTimeout(notificationTimeoutRef.current);
+      }
+
+      setNotification({ msg, type, action }); 
+      notificationTimeoutRef.current = setTimeout(() => setNotification(null), action ? 7000 : duration); 
+  }
+
   const openPublicMode = () => {
       if (typeof window === 'undefined') return;
       const publicUrl = new URL(window.location.href);
@@ -1196,12 +1273,20 @@ function App() {
               englishChallengeUnlocked: false // Bloqueia o botão de novo automaticamente!
           });
 
+          await recordXpOrigin({
+              student: viewAsStudent,
+              amount: xpBonus,
+              source: 'english_challenge',
+              mode: 'reward',
+              reason: 'Desafio de ingles concluido'
+          });
+
           // Atualiza a tela do aluno
-          setViewAsStudent(prev => ({ 
-              ...prev, 
-              xp: (prev.xp || 0) + xpBonus, 
-              englishChallengeUnlocked: false 
-          }));
+          syncStudentLocally({
+              ...viewAsStudent,
+              xp: (viewAsStudent.xp || 0) + xpBonus,
+              englishChallengeUnlocked: false
+          });
           
           alert("Great job! Mandou bem no inglês! +20 XP 🇺🇸✨");
       } catch (error) {
@@ -1210,58 +1295,116 @@ function App() {
   };
  // Função atualizada para o Técnico dar Badges
   const toggleBadge = async (student, badgeId) => {
-      if (!isAdmin) return;
-      
-      const currentBadges = normalizeStudentBadges(student.badges);
-      const currentBadgeAchievements = Array.isArray(student.badgeAchievements) ? student.badgeAchievements : [];
-      let newBadges;
-      let nextBadgeAchievements = currentBadgeAchievements;
-      let xpBonus = 0;
+      if (!isAdmin || !student?.id) return;
 
-      // Lógica de Adicionar/Remover
-      if (currentBadges.includes(badgeId)) {
-          newBadges = currentBadges.filter(b => b !== badgeId);
-          // Opcional: Remover XP se tirar a badge? Melhor não, deixa o XP ganho.
-      } else {
-          newBadges = [...currentBadges, badgeId];
-          nextBadgeAchievements = [
+      const previousStudent = normalizeStudentRecord(student);
+      const badgeMeta = BADGES_LIST.find((badge) => badge.id === badgeId);
+      const badgeName = badgeMeta?.name || 'Conquista FLL';
+      const currentBadges = normalizeStudentBadges(previousStudent.badges);
+      const currentBadgeAchievements = Array.isArray(previousStudent.badgeAchievements) ? previousStudent.badgeAchievements : [];
+      const isRemovingBadge = currentBadges.includes(badgeId);
+      const xpDelta = isRemovingBadge ? -BADGE_XP_BONUS : BADGE_XP_BONUS;
+      const newBadges = isRemovingBadge
+          ? currentBadges.filter(badge => badge !== badgeId)
+          : [...currentBadges, badgeId];
+      const nextBadgeAchievements = isRemovingBadge
+          ? currentBadgeAchievements.filter((achievement) => normalizeBadgeToken(achievement?.badgeId || achievement?.id || achievement?.badgeName) !== badgeId)
+          : [
               ...currentBadgeAchievements,
               {
                   badgeId,
-                  badgeName: BADGES_LIST.find((badge) => badge.id === badgeId)?.name || 'Conquista FLL',
-                  awardedAt: new Date().toISOString()
+                  badgeName,
+                  awardedAt: new Date().toISOString(),
+                  xpAmount: BADGE_XP_BONUS,
+                  xpSource: 'badge'
               }
           ];
-          xpBonus = 100; // Bônus de XP ao ganhar
-      }
-
-      // 1. Atualiza no Firebase
-      const studentRef = doc(db, "students", student.id);
-      await updateDoc(studentRef, {
+      const nextXp = (previousStudent.xp || 0) + xpDelta;
+      const updateData = {
          badges: newBadges,
          badgeAchievements: nextBadgeAchievements,
-         xp: (student.xp || 0) + xpBonus
-      });
+         xp: nextXp
+      };
 
-      // 2. Atualiza o estado local para ver a mudança na hora (sem recarregar)
-      const updatedStudent = normalizeStudentRecord({ ...student, badges: newBadges, badgeAchievements: nextBadgeAchievements, xp: (student.xp || 0) + xpBonus });
-      if (xpBonus > 0) {
-          void recordActivity({
-              action: 'entregou uma conquista',
-              category: 'team',
-              title: `${BADGES_LIST.find((badge) => badge.id === badgeId)?.name || 'Conquista FLL'} para ${student.name}`,
-              detail: 'Nova badge registrada no perfil da equipe.',
-              entityId: student.id
+      try {
+          const studentRef = doc(db, "students", previousStudent.id);
+          await updateDoc(studentRef, updateData);
+
+          const xpRecordRef = await recordXpOrigin({
+              student: previousStudent,
+              amount: xpDelta,
+              source: 'badge',
+              mode: isRemovingBadge ? 'correction' : 'reward',
+              reason: isRemovingBadge ? `Badge removida: ${badgeName}` : `Badge aplicada: ${badgeName}`,
+              notifyStudent: false,
+              badgeId,
+              badgeName
           });
-      }
-      
-      // Atualiza o aluno selecionado no modal
-      setBadgeStudent(updatedStudent);
 
-      // Atualiza a lista geral de alunos na tela
-      setStudents(prevStudents => 
-        prevStudents.map(s => s.id === student.id ? updatedStudent : s)
-      );
+          const updatedStudent = syncStudentLocally({ ...previousStudent, ...updateData });
+          void recordActivity({
+              action: isRemovingBadge ? 'corrigiu uma conquista' : 'entregou uma conquista',
+              category: 'team',
+              title: `${badgeName} para ${previousStudent.name}`,
+              detail: isRemovingBadge
+                  ? `${xpDelta} XP por remocao de badge, sem notificacao ao aluno.`
+                  : `+${BADGE_XP_BONUS} XP com origem badge.`,
+              entityId: previousStudent.id
+          });
+
+          let undoUsed = false;
+          const undoBadgeChange = async () => {
+              if (undoUsed) return;
+              undoUsed = true;
+
+              const restoreData = {
+                  badges: currentBadges,
+                  badgeAchievements: currentBadgeAchievements,
+                  xp: previousStudent.xp || 0
+              };
+
+              try {
+                  await updateDoc(studentRef, restoreData);
+                  await recordXpOrigin({
+                      student: previousStudent,
+                      amount: -xpDelta,
+                      source: 'undo',
+                      mode: 'undo',
+                      reason: `Desfazer alteracao de badge: ${badgeName}`,
+                      notifyStudent: false,
+                      badgeId,
+                      badgeName,
+                      referenceRecordId: xpRecordRef?.id || ''
+                  });
+                  syncStudentLocally({ ...previousStudent, ...restoreData });
+                  void recordActivity({
+                      action: 'desfez uma alteracao de conquista',
+                      category: 'team',
+                      title: `${badgeName} para ${previousStudent.name}`,
+                      detail: `XP restaurado para ${previousStudent.xp || 0}.`,
+                      entityId: previousStudent.id
+                  });
+                  showNotification("Alteracao de badge desfeita.", "success");
+              } catch (error) {
+                  console.error("Erro ao desfazer badge:", error);
+                  showNotification("Nao foi possivel desfazer a badge.", "error");
+              }
+          };
+
+          showNotification(
+              isRemovingBadge
+                  ? `${badgeName} removida. ${xpDelta} XP corrigidos.`
+                  : `${badgeName} aplicada. +${BADGE_XP_BONUS} XP.`,
+              "success",
+              { label: 'Desfazer', onClick: undoBadgeChange }
+          );
+
+          return updatedStudent;
+      } catch (error) {
+          console.error("Erro ao atualizar badge:", error);
+          showNotification("Erro ao atualizar badge.", "error");
+          return null;
+      }
       };
   // --- LÓGICA DA CHUVA DE CONFETES (LEVEL UP E GRANDES GANHOS DE XP) ---
 
@@ -1269,6 +1412,9 @@ function App() {
       return () => {
           if (confettiTimeoutRef.current) {
               clearTimeout(confettiTimeoutRef.current);
+          }
+          if (notificationTimeoutRef.current) {
+              clearTimeout(notificationTimeoutRef.current);
           }
       };
   }, []);
@@ -1394,6 +1540,19 @@ function App() {
           // Ganha 5 XP por participar (Incentivo!)
           // (Aqui reaproveitamos sua função de dar XP se ela existir, ou fazemos direto)
           await updateDoc(doc(db, "students", viewAsStudent.id), {
+              xp: (viewAsStudent.xp || 0) + 2
+          });
+
+          await recordXpOrigin({
+              student: viewAsStudent,
+              amount: 2,
+              source: 'check_in',
+              mode: 'reward',
+              reason: 'Check-in de energia'
+          });
+
+          syncStudentLocally({
+              ...viewAsStudent,
               xp: (viewAsStudent.xp || 0) + 2
           });
 
@@ -2324,12 +2483,6 @@ function App() {
 
   // --- FIM DOS USE EFFECTS ---
 
-  // Função de notificação (corrigida)
-  const showNotification = (msg, type = 'success') => { 
-      setNotification({ msg, type }); 
-      setTimeout(() => setNotification(null), 3000); 
-  }
-
   const handleSaveShowcaseSettings = async (nextSettings) => {
       const normalizedSettings = {
           ...resolvePublicShowcaseSettings(nextSettings),
@@ -2553,12 +2706,15 @@ function App() {
               xp: updatedXp
           });
 
-          setStudents(prevStudents =>
-            prevStudents.map(student =>
-              student.id === viewAsStudent.id ? { ...student, xp: updatedXp } : student
-            )
-          );
-          setViewAsStudent(prev => (prev ? { ...prev, xp: updatedXp } : prev));
+          await recordXpOrigin({
+              student: viewAsStudent,
+              amount: CHECK_IN_REWARD_XP,
+              source: 'check_in',
+              mode: 'reward',
+              reason: 'Check-in da equipe'
+          });
+
+          syncStudentLocally({ ...viewAsStudent, xp: updatedXp });
           setShowBatteryModal(false);
           showNotification(`Check-in registrado! +${CHECK_IN_REWARD_XP} XP na conta.`, "success");
       } catch (error) {
@@ -3638,6 +3794,19 @@ const handleDeleteRound = async (id) => {
               xp: (viewAsStudent.xp || 0) + 1 
           });
 
+          await recordXpOrigin({
+              student: viewAsStudent,
+              amount: 1,
+              source: 'compliment',
+              mode: 'reward',
+              reason: `Elogio enviado para ${complimentData.to}`
+          });
+
+          syncStudentLocally({
+              ...viewAsStudent,
+              xp: (viewAsStudent.xp || 0) + 1
+          });
+
           closeModal();
           showNotification("Elogio enviado! (+1 XP)", "success");
       } catch (error) {
@@ -3727,20 +3896,38 @@ const handleDeleteRound = async (id) => {
           const previousStageXp = previousStageRecord?.xpApplied ?? calculateSchoolReportXp(previousStageRecord?.grades || {});
           const xpDelta = bonusXP - previousStageXp;
           const nowIso = new Date().toISOString();
+          const nextSchoolGrades = {
+              ...currentSchoolGrades,
+              [stageId]: {
+                  ...previousStageRecord,
+                  label: stageMeta.label,
+                  grades: newGrades,
+                  xpApplied: bonusXP,
+                  submittedAt: previousStageRecord?.submittedAt || nowIso,
+                  updatedAt: nowIso
+              }
+          };
           
           await updateDoc(studentRef, {
               xp: (student.xp || 0) + xpDelta,
-              schoolGrades: {
-                  ...currentSchoolGrades,
-                  [stageId]: {
-                      ...previousStageRecord,
-                      label: stageMeta.label,
-                      grades: newGrades,
-                      xpApplied: bonusXP,
-                      submittedAt: previousStageRecord?.submittedAt || nowIso,
-                      updatedAt: nowIso
-                  }
-              }
+              schoolGrades: nextSchoolGrades
+          });
+
+          if (xpDelta !== 0) {
+              await recordXpOrigin({
+                  student,
+                  amount: xpDelta,
+                  source: 'school_report',
+                  mode: xpDelta > 0 ? 'reward' : 'correction',
+                  reason: stageMeta.label,
+                  notifyStudent: false
+              });
+          }
+
+          syncStudentLocally({
+              ...student,
+              xp: (student.xp || 0) + xpDelta,
+              schoolGrades: nextSchoolGrades
           });
 
           closeModal();
@@ -3883,6 +4070,7 @@ const handleDeleteRound = async (id) => {
 
       try {
           // Cria uma lista de atualizações para enviar tudo de uma vez
+          const stationXpAwards = [];
           const updates = stationStudents.map(student => {
               const studentRef = doc(db, "students", student.id);
               
@@ -3890,6 +4078,7 @@ const handleDeleteRound = async (id) => {
               let xpGain = 0;
               if (student.submission?.status === 'approved') {
                   xpGain = isCompleteTeam ? FULL_TEAM_XP : PARTIAL_TEAM_XP;
+                  stationXpAwards.push({ student, xpGain });
               }
 
               // Prepara a atualização: Dá XP, remove a estação e limpa a entrega
@@ -3943,6 +4132,13 @@ const handleDeleteRound = async (id) => {
           });
 
           await Promise.all(updates);
+          await Promise.all(stationXpAwards.map(({ student, xpGain }) => recordXpOrigin({
+              student,
+              amount: xpGain,
+              source: 'station_week',
+              mode: 'reward',
+              reason: `${station} | ${isCompleteTeam ? 'semana completa' : 'semana parcial'}`
+          })));
           void recordActivity({
               action: 'aplicou o rodizio semanal',
               category: 'team',
@@ -5138,13 +5334,24 @@ const handleDeleteRound = async (id) => {
                       showNotification("Escreva o motivo para retirar XP.", "error");
                       return;
                   }
+
+                  const previousStudent = normalizeStudentRecord(student);
+                  const xpSource = context === 'approval'
+                      ? 'activity'
+                      : val > 0
+                          ? 'manual_reward'
+                          : shouldNotifyStudent
+                              ? 'penalty'
+                              : 'correction';
+                  const xpMode = val > 0 ? 'reward' : shouldNotifyStudent ? 'penalty' : 'correction';
                   
                   try {
-                      const studentRef = doc(db, "students", student.id);
+                      const studentRef = doc(db, "students", previousStudent.id);
                       let xpLossNotice = null;
+                      let xpLossRecordRef = null;
                       
                       // Prepara a atualização do XP
-                      const updateData = { xp: (student.xp || 0) + val };
+                      const updateData = { xp: (previousStudent.xp || 0) + val };
 
                       if (shouldNotifyStudent) {
                           const now = new Date();
@@ -5157,7 +5364,7 @@ const handleDeleteRound = async (id) => {
                           };
 
                           updateData.xpLossNotifications = [
-                              ...normalizeXpLossNotifications(student.xpLossNotifications),
+                              ...normalizeXpLossNotifications(previousStudent.xpLossNotifications),
                               xpLossNotice,
                           ];
                       }
@@ -5165,29 +5372,94 @@ const handleDeleteRound = async (id) => {
                       // Se for contexto de aprovação, muda o status da entrega também
                       if (context === 'approval') {
                           // Mantém os dados da entrega, mas muda status para 'approved'
-                          const newSubmission = { ...student.submission, status: 'approved' };
+                          const newSubmission = { ...previousStudent.submission, status: 'approved' };
                           updateData.submission = newSubmission;
                       }
 
                       await updateDoc(studentRef, updateData);
                       if (xpLossNotice) {
-                          await addDoc(collection(db, "xpLossRecords"), {
+                          xpLossRecordRef = await addDoc(collection(db, "xpLossRecords"), {
                               noticeId: xpLossNotice.id,
-                              studentId: student.id,
-                              studentName: student.name,
+                              studentId: previousStudent.id,
+                              studentName: previousStudent.name,
                               amount: val,
                               reason: cleanReason,
+                              source: xpSource,
+                              sourceLabel: getXpSourceLabel(xpSource),
+                              mode: xpMode,
+                              notifyStudent: true,
                               date: xpLossNotice.date,
                               createdAt: xpLossNotice.createdAt,
                               createdBy: currentUser?.name || 'Tecnico'
                           });
                       }
+
+                      const xpRecordRef = await recordXpOrigin({
+                          student: previousStudent,
+                          amount: val,
+                          source: xpSource,
+                          mode: xpMode,
+                          reason: cleanReason,
+                          notifyStudent: shouldNotifyStudent
+                      });
+
+                      const updatedStudent = syncStudentLocally({ ...previousStudent, ...updateData });
+                      void recordActivity({
+                          action: val > 0 ? 'registrou ganho de XP' : shouldNotifyStudent ? 'registrou penalidade de XP' : 'corrigiu XP',
+                          category: 'team',
+                          title: `${val > 0 ? '+' : ''}${val} XP para ${previousStudent.name}`,
+                          detail: `Origem: ${getXpSourceLabel(xpSource)}${cleanReason ? ` | ${cleanReason}` : ''}`,
+                          entityId: previousStudent.id
+                      });
+
+                      let undoUsed = false;
+                      const undoXpChange = async () => {
+                          if (undoUsed) return;
+                          undoUsed = true;
+
+                          const restoreData = {
+                              xp: previousStudent.xp || 0,
+                              xpLossNotifications: normalizeXpLossNotifications(previousStudent.xpLossNotifications)
+                          };
+
+                          if (context === 'approval') {
+                              restoreData.submission = previousStudent.submission || null;
+                          }
+
+                          try {
+                              await updateDoc(studentRef, restoreData);
+                              if (xpLossRecordRef?.id) {
+                                  await deleteDoc(doc(db, "xpLossRecords", xpLossRecordRef.id));
+                              }
+                              await recordXpOrigin({
+                                  student: previousStudent,
+                                  amount: -val,
+                                  source: 'undo',
+                                  mode: 'undo',
+                                  reason: `Desfazer ajuste de XP: ${getXpSourceLabel(xpSource)}`,
+                                  notifyStudent: false,
+                                  referenceRecordId: xpRecordRef?.id || ''
+                              });
+                              syncStudentLocally({ ...updatedStudent, ...restoreData });
+                              void recordActivity({
+                                  action: 'desfez ajuste de XP',
+                                  category: 'team',
+                                  title: `${previousStudent.name}`,
+                                  detail: `XP restaurado para ${previousStudent.xp || 0}.`,
+                                  entityId: previousStudent.id
+                              });
+                              showNotification("Ajuste de XP desfeito.", "success");
+                          } catch (error) {
+                              console.error("Erro ao desfazer XP:", error);
+                              showNotification("Nao foi possivel desfazer o XP.", "error");
+                          }
+                      };
                       
                       closeModal(); 
                       let msg = `XP atualizado: ${val > 0 ? '+' : ''}${val}`;
                       if (val < 0) msg = shouldNotifyStudent ? `XP retirado: ${val}. Aviso enviado ao aluno.` : `XP corrigido: ${val}. Sem aviso ao aluno.`;
                       if (context === 'approval') msg = "Atividade Aprovada com Sucesso!";
-                      showNotification(msg, "success");
+                      showNotification(msg, "success", { label: 'Desfazer', onClick: undoXpChange });
 
                   } catch (error) {
                       console.error("Erro ao atualizar XP:", error);
@@ -5842,7 +6114,38 @@ const handleFileSelect = (e) => {
       );
   }
 
-  const Notification = () => { if (!notification) return null; const isError = notification.type === 'error'; const isDownload = notification.type === 'download'; return (<div className={`newgears-toast fixed top-6 right-6 z-[100] px-6 py-4 rounded-[22px] flex items-center gap-3 animate-in slide-in-from-right duration-300 border ${isError ? 'bg-red-500/12 border-red-400/40 text-red-200' : isDownload ? 'bg-cyan-500/12 border-cyan-400/40 text-cyan-100' : 'bg-emerald-500/12 border-emerald-400/40 text-emerald-100'}`}>{isError ? <AlertCircle size={24}/> : isDownload ? <Download size={24}/> : <CheckCircle size={24}/>}<span className="font-black text-sm">{notification.msg}</span></div>) }
+  const Notification = () => {
+      if (!notification) return null;
+
+      const isError = notification.type === 'error';
+      const isDownload = notification.type === 'download';
+      const action = notification.action;
+      const handleActionClick = () => {
+          if (notificationTimeoutRef.current) {
+              clearTimeout(notificationTimeoutRef.current);
+          }
+          setNotification(null);
+          void action?.onClick?.();
+      };
+
+      return (
+        <div className={`newgears-toast fixed top-6 right-6 z-[100] max-w-[min(92vw,520px)] rounded-[22px] border px-5 py-4 animate-in slide-in-from-right duration-300 ${isError ? 'bg-red-500/12 border-red-400/40 text-red-200' : isDownload ? 'bg-cyan-500/12 border-cyan-400/40 text-cyan-100' : 'bg-emerald-500/12 border-emerald-400/40 text-emerald-100'}`}>
+          <div className="flex items-center gap-3">
+            {isError ? <AlertCircle size={24}/> : isDownload ? <Download size={24}/> : <CheckCircle size={24}/>}
+            <span className="min-w-0 flex-1 text-sm font-black leading-snug">{notification.msg}</span>
+            {action ? (
+              <button
+                type="button"
+                onClick={handleActionClick}
+                className="shrink-0 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-white hover:text-black"
+              >
+                {action.label || 'Desfazer'}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      );
+  }
 
   const XpLossAlertModal = () => {
       if (!xpLossAlertNotice) return null;
@@ -6453,13 +6756,15 @@ const handleFileSelect = (e) => {
       
                 {/* Remover XP */}
                 <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4 shadow-inner">
-                  <p className="text-xs text-red-500 font-bold uppercase mb-3 flex items-center gap-1"><TrendingUp size={14} className="rotate-180"/> Penalizar (-)</p>
+                  <p className="text-xs text-red-500 font-bold uppercase mb-3 flex items-center gap-1">
+                    <TrendingUp size={14} className="rotate-180"/>
+                    {xpPenaltyShouldNotify ? 'Penalidade (-)' : 'Correcao de XP (-)'}
+                  </p>
                   <textarea
                     value={xpPenaltyReason}
                     onChange={(event) => setXpPenaltyReason(event.target.value)}
-                    placeholder={xpPenaltyShouldNotify ? "Motivo que o aluno vai receber..." : "Correcao silenciosa: motivo nao sera enviado"}
-                    disabled={!xpPenaltyShouldNotify}
-                    className={`mb-3 h-20 w-full resize-none rounded-xl border border-red-500/20 bg-black/50 p-3 text-sm text-white outline-none placeholder:text-red-100/35 focus:border-red-400 ${xpPenaltyShouldNotify ? '' : 'opacity-55 cursor-not-allowed'}`}
+                    placeholder={xpPenaltyShouldNotify ? "Motivo que o aluno vai receber..." : "Observacao interna da correcao (opcional)"}
+                    className="mb-3 h-20 w-full resize-none rounded-xl border border-red-500/20 bg-black/50 p-3 text-sm text-white outline-none placeholder:text-red-100/35 focus:border-red-400"
                   />
                   <label className="mb-3 flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-red-500/20 bg-black/30 p-3 text-xs text-red-100">
                     <span className="flex items-center gap-2 font-bold">
@@ -6472,7 +6777,7 @@ const handleFileSelect = (e) => {
                       Avisar aluno sobre esta retirada
                     </span>
                     <span className={`text-[10px] font-black uppercase tracking-[0.16em] ${xpPenaltyShouldNotify ? 'text-red-300' : 'text-gray-400'}`}>
-                      {xpPenaltyShouldNotify ? 'Notifica' : 'Silencioso'}
+                      {xpPenaltyShouldNotify ? 'Origem: Penalidade' : 'Origem: Correcao'}
                     </span>
                   </label>
                   <div className="grid grid-cols-4 gap-2">
@@ -6483,7 +6788,7 @@ const handleFileSelect = (e) => {
                 </div>
       
                 {/* Valor Personalizado */}
-                <form onSubmit={(e) => { e.preventDefault(); modal.data.onConfirm(e.target.customVal.value, xpPenaltyReason, xpPenaltyShouldNotify); }} className="flex gap-2 pt-2">
+                <form onSubmit={(e) => { e.preventDefault(); const customValue = e.target.customVal.value; modal.data.onConfirm(customValue, Number(customValue) < 0 ? xpPenaltyReason : '', xpPenaltyShouldNotify); }} className="flex gap-2 pt-2">
                   <input name="customVal" type="number" placeholder="Ou digite outro valor..." className="flex-1 bg-black/50 border border-white/20 rounded-xl p-3 text-white text-center font-mono focus:border-yellow-500 outline-none" required />
                   <button className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold px-6 rounded-xl transition-all shadow-lg shadow-yellow-900/20">Aplicar</button>
                 </form>
