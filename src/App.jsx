@@ -873,6 +873,7 @@ function App() {
   const [modal, setModal] = useState({ type: null, data: null });
   const [notification, setNotification] = useState(null);
   const [xpPenaltyReason, setXpPenaltyReason] = useState('');
+  const [xpPenaltyShouldNotify, setXpPenaltyShouldNotify] = useState(true);
   const [xpLossAlertNotice, setXpLossAlertNotice] = useState(null);
   const xpLossLastAlertAtRef = useRef(new Map());
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -5121,16 +5122,19 @@ const handleDeleteRound = async (id) => {
       }
 
       setXpPenaltyReason('');
+      setXpPenaltyShouldNotify(true);
       setModal({ 
           type: 'xp', 
           data: { 
               student: student, 
-              onConfirm: async (amount, reason = '') => { 
+              onConfirm: async (amount, reason = '', notifyStudent = true) => { 
                   const val = parseInt(amount); 
                   if (isNaN(val)) return; 
 
                   const cleanReason = reason.trim();
-                  if (val < 0 && !cleanReason) {
+                  const shouldNotifyStudent = val < 0 && notifyStudent;
+
+                  if (shouldNotifyStudent && !cleanReason) {
                       showNotification("Escreva o motivo para retirar XP.", "error");
                       return;
                   }
@@ -5142,7 +5146,7 @@ const handleDeleteRound = async (id) => {
                       // Prepara a atualização do XP
                       const updateData = { xp: (student.xp || 0) + val };
 
-                      if (val < 0) {
+                      if (shouldNotifyStudent) {
                           const now = new Date();
                           xpLossNotice = {
                               id: `xp-loss-${now.getTime()}`,
@@ -5181,7 +5185,7 @@ const handleDeleteRound = async (id) => {
                       
                       closeModal(); 
                       let msg = `XP atualizado: ${val > 0 ? '+' : ''}${val}`;
-                      if (val < 0) msg = `XP retirado: ${val}. Aviso enviado ao aluno.`;
+                      if (val < 0) msg = shouldNotifyStudent ? `XP retirado: ${val}. Aviso enviado ao aluno.` : `XP corrigido: ${val}. Sem aviso ao aluno.`;
                       if (context === 'approval') msg = "Atividade Aprovada com Sucesso!";
                       showNotification(msg, "success");
 
@@ -6453,18 +6457,33 @@ const handleFileSelect = (e) => {
                   <textarea
                     value={xpPenaltyReason}
                     onChange={(event) => setXpPenaltyReason(event.target.value)}
-                    placeholder="Motivo da retirada de XP..."
-                    className="mb-3 h-20 w-full resize-none rounded-xl border border-red-500/20 bg-black/50 p-3 text-sm text-white outline-none placeholder:text-red-100/35 focus:border-red-400"
+                    placeholder={xpPenaltyShouldNotify ? "Motivo que o aluno vai receber..." : "Correcao silenciosa: motivo nao sera enviado"}
+                    disabled={!xpPenaltyShouldNotify}
+                    className={`mb-3 h-20 w-full resize-none rounded-xl border border-red-500/20 bg-black/50 p-3 text-sm text-white outline-none placeholder:text-red-100/35 focus:border-red-400 ${xpPenaltyShouldNotify ? '' : 'opacity-55 cursor-not-allowed'}`}
                   />
+                  <label className="mb-3 flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-red-500/20 bg-black/30 p-3 text-xs text-red-100">
+                    <span className="flex items-center gap-2 font-bold">
+                      <input
+                        type="checkbox"
+                        checked={xpPenaltyShouldNotify}
+                        onChange={(event) => setXpPenaltyShouldNotify(event.target.checked)}
+                        className="h-4 w-4 accent-red-500"
+                      />
+                      Avisar aluno sobre esta retirada
+                    </span>
+                    <span className={`text-[10px] font-black uppercase tracking-[0.16em] ${xpPenaltyShouldNotify ? 'text-red-300' : 'text-gray-400'}`}>
+                      {xpPenaltyShouldNotify ? 'Notifica' : 'Silencioso'}
+                    </span>
+                  </label>
                   <div className="grid grid-cols-4 gap-2">
                     {[-5, -10, -20, -50].map(val => (
-                      <button key={val} type="button" onClick={() => modal.data.onConfirm(val, xpPenaltyReason)} className="bg-red-500/10 text-red-500 font-black py-3 rounded-lg border border-red-500/20 hover:bg-red-500 hover:text-white transition-colors shadow-sm">{val}</button>
+                      <button key={val} type="button" onClick={() => modal.data.onConfirm(val, xpPenaltyReason, xpPenaltyShouldNotify)} className="bg-red-500/10 text-red-500 font-black py-3 rounded-lg border border-red-500/20 hover:bg-red-500 hover:text-white transition-colors shadow-sm">{val}</button>
                     ))}
                   </div>
                 </div>
       
                 {/* Valor Personalizado */}
-                <form onSubmit={(e) => { e.preventDefault(); modal.data.onConfirm(e.target.customVal.value, xpPenaltyReason); }} className="flex gap-2 pt-2">
+                <form onSubmit={(e) => { e.preventDefault(); modal.data.onConfirm(e.target.customVal.value, xpPenaltyReason, xpPenaltyShouldNotify); }} className="flex gap-2 pt-2">
                   <input name="customVal" type="number" placeholder="Ou digite outro valor..." className="flex-1 bg-black/50 border border-white/20 rounded-xl p-3 text-white text-center font-mono focus:border-yellow-500 outline-none" required />
                   <button className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold px-6 rounded-xl transition-all shadow-lg shadow-yellow-900/20">Aplicar</button>
                 </form>
