@@ -1,5 +1,5 @@
 import { Suspense, lazy, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy, limit, writeBatch } from "firebase/firestore";
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy, limit, writeBatch, deleteField } from "firebase/firestore";
 import { db } from './firebase'; // Importa a instância já inicializada
 import Countdown from './components/Countdown';
 import LogoNewGears from './components/LogoNewGears';
@@ -181,13 +181,13 @@ const LazyOverlayFallback = ({ label = 'Carregando modo...' }) => (
 
 const LEVELS = [
 
-    { name: "Novato", min: 0, max: 499, color: "text-gray-400" },
+    { name: "Novato", min: 0, max: 999, color: "text-gray-400" },
 
-    { name: "Aprendiz", min: 500, max: 1199, color: "text-blue-400" },
+    { name: "Aprendiz", min: 1000, max: 2499, color: "text-blue-400" },
 
-    { name: "Veterano", min: 1200, max: 2399, color: "text-purple-400" },
+    { name: "Veterano", min: 2500, max: 4999, color: "text-purple-400" },
 
-    { name: "Mestre FLL", min: 2400, max: 10000, color: "text-yellow-400" }
+    { name: "Mestre FLL", min: 5000, max: 50000, color: "text-yellow-400" }
 
 ];
 // --- LISTA DE TÉCNICOS (ADMINISTRADORES) ---
@@ -345,6 +345,44 @@ const BADGE_TOKEN_ALIASES = {
   guardiao_do_diario: 'logbook_keeper',
   strategy_builder: 'strategy_builder',
   arquiteto_da_estrategia: 'strategy_builder',
+  robot_design_lead: 'robot_design_lead',
+  designer_do_robo: 'robot_design_lead',
+  mission_pathfinder: 'mission_pathfinder',
+  mapa_das_missoes: 'mission_pathfinder',
+  table_strategy: 'table_strategy',
+  estrategista_de_mesa: 'table_strategy',
+  reliability_tester: 'reliability_tester',
+  teste_10x: 'reliability_tester',
+  round_programmer: 'round_programmer',
+  programador_de_round: 'round_programmer',
+  autonomous_coder: 'round_programmer',
+  autonomo_preciso: 'round_programmer',
+  pit_mechanic: 'pit_mechanic',
+  mecanico_de_pit: 'pit_mechanic',
+  sensor_calibrator: 'pit_mechanic',
+  calibrador_de_sensores: 'pit_mechanic',
+  quick_prototyper: 'quick_prototyper',
+  prototipador_rapido: 'quick_prototyper',
+  team_spirit: 'team_spirit',
+  espirito_de_equipe: 'team_spirit',
+  coopertition_guardian: 'team_spirit',
+  guardiao_da_coopertition: 'team_spirit',
+  gracious_professional: 'gracious_professional',
+  profissional_gentil: 'gracious_professional',
+  discovery_spark: 'discovery_spark',
+  descoberta_fll: 'discovery_spark',
+  inclusion_builder: 'inclusion_builder',
+  inclusao_em_acao: 'inclusion_builder',
+  impact_maker: 'impact_maker',
+  impacto_real: 'impact_maker',
+  feedback_hunter: 'feedback_hunter',
+  cacador_de_feedback: 'feedback_hunter',
+  innovation_validator: 'innovation_validator',
+  validador_de_solucao: 'innovation_validator',
+  judge_room_ready: 'judge_room_ready',
+  sala_dos_juizes_ready: 'judge_room_ready',
+  tournament_scout: 'tournament_scout',
+  scout_de_torneio: 'tournament_scout',
 };
 
 const normalizeBadgeToken = (value) => {
@@ -433,6 +471,7 @@ const formatShortDateLabel = (dateValue) => {
 const XP_LOSS_ALERT_REPEAT_MS = 5 * 60 * 1000;
 const XP_LOSS_DELETE_WAIT_DAYS = 5;
 const BADGE_XP_BONUS = 100;
+const LEADER_PENALTY_XP = -5;
 const XP_SOURCE_LABELS = {
   badge: 'Badge',
   manual_reward: 'Recompensa manual',
@@ -489,6 +528,11 @@ const isWeeklyCaptainName = (name) => WEEKLY_CAPTAIN_NAMES.some((captainName) =>
 
 const getNoticeTime = (notice) => {
   const date = getXpLossDate(notice?.date || notice?.createdAt);
+  return date ? date.getTime() : 0;
+};
+
+const getPenaltyRequestTime = (request) => {
+  const date = getXpLossDate(request?.requestedAt || request?.reviewedAt || request?.createdAt);
   return date ? date.getTime() : 0;
 };
 
@@ -872,6 +916,7 @@ function App() {
   const [scoreHistory, setScoreHistory] = useState([]);
   const [attendanceSessions, setAttendanceSessions] = useState([]);
   const [xpLossRecords, setXpLossRecords] = useState([]);
+  const [leaderPenaltyRequests, setLeaderPenaltyRequests] = useState([]);
   const [teamSeasonStats, setTeamSeasonStats] = useState({ successfulWeekIds: [], successfulWeeks: 0 });
   const [activeTimer, setActiveTimer] = useState(null);
   const [timerDisplay, setTimerDisplay] = useState(0); 
@@ -908,6 +953,8 @@ function App() {
   const [studentLogbookWeekFilter, setStudentLogbookWeekFilter] = useState('all');
   const [studentLogbookDraft, setStudentLogbookDraft] = useState('');
   const [leaderTaskDraft, setLeaderTaskDraft] = useState({ text: '', studentId: '', station: STATION_KEYS.MANAGEMENT, dueDate: '' });
+  const [leaderPenaltyDraft, setLeaderPenaltyDraft] = useState({ studentId: '', reason: '', evidenceFile: null });
+  const [leaderPenaltyFileInputKey, setLeaderPenaltyFileInputKey] = useState(0);
   const isTvOnlyView = getStandaloneView() === 'tv';
   const isPublicTvMode = getStandaloneView() === 'public-tv';
   const today = new Date().toISOString().split('T')[0];
@@ -1238,6 +1285,22 @@ function App() {
     { id: 'pit_presenter', name: 'Voz dos Juizes', icon: <MessageSquare size={20}/>, color: 'text-orange-400', desc: 'Explicou projeto, robo ou processo com clareza para a banca.' },
     { id: 'logbook_keeper', name: 'Guardiao do Diario', icon: <Book size={20}/>, color: 'text-sky-400', desc: 'Registrou testes, decisoes e aprendizados no diario de engenharia.' },
     { id: 'strategy_builder', name: 'Arquiteto da Estrategia', icon: <Lightbulb size={20}/>, color: 'text-amber-400', desc: 'Transformou uma ideia solta em plano real de execucao FLL.' },
+    { id: 'robot_design_lead', name: 'Designer do Robo', icon: <Bot size={20}/>, color: 'text-slate-300', desc: 'Explicou escolhas mecanicas, modularidade e iteracoes do robo.' },
+    { id: 'mission_pathfinder', name: 'Mapa das Missoes', icon: <Rocket size={20}/>, color: 'text-blue-300', desc: 'Montou rotas de mesa alinhadas com pontuacao e risco.' },
+    { id: 'table_strategy', name: 'Estrategista de Mesa', icon: <Flag size={20}/>, color: 'text-lime-400', desc: 'Priorizou missoes por tempo, anexos e chance de acerto.' },
+    { id: 'reliability_tester', name: 'Teste 10x', icon: <CheckCheck size={20}/>, color: 'text-emerald-300', desc: 'Validou uma solucao com repeticoes e dados confiaveis.' },
+    { id: 'round_programmer', name: 'Programador de Round', icon: <Laptop size={20}/>, color: 'text-cyan-300', desc: 'Programou uma saida completa com objetivo, tempo e repeticao.' },
+    { id: 'pit_mechanic', name: 'Mecanico de Pit', icon: <Settings size={20}/>, color: 'text-teal-300', desc: 'Organizou anexos, troca rapida e prontidao da mesa.' },
+    { id: 'quick_prototyper', name: 'Prototipador Rapido', icon: <Wrench size={20}/>, color: 'text-orange-300', desc: 'Testou uma ideia fisica rapido e registrou o aprendizado.' },
+    { id: 'team_spirit', name: 'Espirito de Equipe', icon: <HeartHandshake size={20}/>, color: 'text-rose-300', desc: 'Puxou energia boa, colaboracao e foco coletivo no treino.' },
+    { id: 'gracious_professional', name: 'Profissional Gentil', icon: <Smile size={20}/>, color: 'text-pink-300', desc: 'Defendeu ideias com respeito, escuta e maturidade FLL.' },
+    { id: 'discovery_spark', name: 'Descoberta FLL', icon: <Search size={20}/>, color: 'text-yellow-300', desc: 'Aprendeu algo novo e trouxe esse conhecimento para o time.' },
+    { id: 'inclusion_builder', name: 'Inclusao em Acao', icon: <Users size={20}/>, color: 'text-violet-300', desc: 'Fez alguem participar melhor do treino, projeto ou robo.' },
+    { id: 'impact_maker', name: 'Impacto Real', icon: <Globe2 size={20}/>, color: 'text-green-300', desc: 'Conectou a solucao de inovacao com usuarios ou comunidade.' },
+    { id: 'feedback_hunter', name: 'Cacador de Feedback', icon: <MessageSquare size={20}/>, color: 'text-fuchsia-300', desc: 'Buscou retorno externo e transformou em melhoria concreta.' },
+    { id: 'innovation_validator', name: 'Validador de Solucao', icon: <Microscope size={20}/>, color: 'text-purple-300', desc: 'Testou a ideia do projeto com evidencia, criterio e iteracao.' },
+    { id: 'judge_room_ready', name: 'Sala dos Juizes Ready', icon: <MonitorPlay size={20}/>, color: 'text-indigo-300', desc: 'Ensaiou apresentacao, respostas e transicoes para os juizes.' },
+    { id: 'tournament_scout', name: 'Scout de Torneio', icon: <Trophy size={20}/>, color: 'text-amber-300', desc: 'Observou regras, tendencias ou estrategias para preparar o torneio.' },
   ];
 
   // --- DESAFIO DE INGLÊS: Função do Técnico ---
@@ -2256,6 +2319,7 @@ function App() {
     const unsubEvents = createListener("events", setEvents);
     const unsubAttendanceSessions = createListener("attendanceSessions", setAttendanceSessions);
     const unsubXpLossRecords = createListener("xpLossRecords", setXpLossRecords);
+    const unsubLeaderPenaltyRequests = createListener("leaderPenaltyRequests", setLeaderPenaltyRequests);
     const unsubGalleryPhotos = createListener("publicGalleryPhotos", setGalleryPhotos);
     
 
@@ -2306,6 +2370,7 @@ function App() {
         unsubEvents();
         unsubAttendanceSessions();
         unsubXpLossRecords();
+        unsubLeaderPenaltyRequests();
         unsubGalleryPhotos();
         unsubInnovationRubric();
         unsubRobotDesignRubric();
@@ -2901,6 +2966,211 @@ function App() {
       } catch (error) {
           console.error("Erro ao criar tarefa do lider:", error);
           showNotification("Erro ao criar tarefa.", "error");
+      }
+  }
+
+  // --- FUNCOES DA LIDERANCA ---
+  const handleWeeklyLeaderPenaltySubmit = async (event) => {
+      event.preventDefault();
+
+      if (!isWeeklyLeader || !viewAsStudent?.id) {
+          showNotification("Apenas o lider da semana pode aplicar essa penalizacao.", "error");
+          return;
+      }
+
+      const targetStudent = students.find((student) => student.id === leaderPenaltyDraft.studentId);
+      const cleanReason = leaderPenaltyDraft.reason.trim();
+
+      if (!targetStudent) {
+          showNotification("Selecione o aluno penalizado.", "error");
+          return;
+      }
+
+      if (targetStudent.id === viewAsStudent.id) {
+          showNotification("O lider nao pode se penalizar por este painel.", "error");
+          return;
+      }
+
+      if (!cleanReason) {
+          showNotification("Escreva o motivo da penalizacao.", "error");
+          return;
+      }
+
+      const now = new Date();
+      const leaderWeekId = String(currentWeekData?.id || '');
+      const leaderWeekName = currentWeekData?.weekName || '';
+      let evidenceImage = '';
+      let evidenceFileName = '';
+      let evidenceMimeType = '';
+
+      try {
+          if (leaderPenaltyDraft.evidenceFile) {
+              evidenceImage = await convertExpertContactEvidence(leaderPenaltyDraft.evidenceFile);
+              evidenceFileName = leaderPenaltyDraft.evidenceFile.name || 'evidencia.jpg';
+              evidenceMimeType = leaderPenaltyDraft.evidenceFile.type || 'image/jpeg';
+          }
+
+          await addDoc(collection(db, "leaderPenaltyRequests"), {
+              studentId: targetStudent.id,
+              studentName: targetStudent.name,
+              amount: LEADER_PENALTY_XP,
+              reason: cleanReason,
+              evidenceImage,
+              evidenceFileName,
+              evidenceMimeType,
+              status: 'pending',
+              requestedAt: now.toISOString(),
+              requestedByLeaderId: viewAsStudent.id,
+              requestedByLeaderName: viewAsStudent.name,
+              leaderWeekId,
+              leaderWeekName
+          });
+
+          void recordActivity({
+              action: 'solicitou penalidade da lideranca',
+              category: 'team',
+              title: `Revisao de ${LEADER_PENALTY_XP} XP para ${targetStudent.name}`,
+              detail: `${leaderWeekName || 'Semana atual'} | ${cleanReason}${evidenceImage ? ' | com foto' : ''}`,
+              entityId: targetStudent.id
+          });
+
+          setLeaderPenaltyDraft({ studentId: '', reason: '', evidenceFile: null });
+          setLeaderPenaltyFileInputKey(prev => prev + 1);
+          showNotification(`Pedido enviado ao tecnico. ${targetStudent.name} ainda nao perdeu XP.`, "success");
+      } catch (error) {
+          console.error("Erro ao solicitar penalizacao do lider:", error);
+          showNotification(error.message || "Erro ao enviar penalizacao para revisao.", "error");
+      }
+  }
+
+  const handleLeaderPenaltyReview = async (request, decision) => {
+      if (!isAdmin || !request?.id) {
+          showNotification("Apenas tecnicos podem revisar penalizacoes.", "error");
+          return;
+      }
+
+      if ((request.status || 'pending') !== 'pending') {
+          showNotification("Essa solicitacao ja foi revisada.", "error");
+          return;
+      }
+
+      const approved = decision === 'approved';
+      const reviewedAt = new Date().toISOString();
+      const reviewedBy = adminProfile?.name || currentUser?.name || 'Tecnico';
+      const requestRef = doc(db, "leaderPenaltyRequests", request.id);
+
+      if (!approved) {
+          try {
+              await updateDoc(requestRef, {
+                  status: 'rejected',
+                  reviewedAt,
+                  reviewedBy,
+                  evidenceImage: deleteField(),
+                  evidenceFileName: deleteField(),
+                  evidenceMimeType: deleteField()
+              });
+              void recordActivity({
+                  action: 'rejeitou penalidade da lideranca',
+                  category: 'team',
+                  title: `${request.studentName || 'Aluno'}`,
+                  detail: `${request.requestedByLeaderName || 'Lider'} | ${request.reason || 'Sem motivo informado.'}`,
+                  entityId: request.studentId || ''
+              });
+              showNotification("Penalizacao rejeitada. Nenhum XP foi retirado.", "success");
+          } catch (error) {
+              console.error("Erro ao rejeitar penalizacao:", error);
+              showNotification("Erro ao rejeitar penalizacao.", "error");
+          }
+          return;
+      }
+
+      const targetStudent = students.find((student) => student.id === request.studentId);
+      if (!targetStudent) {
+          showNotification("Aluno da solicitacao nao foi encontrado.", "error");
+          return;
+      }
+
+      const previousStudent = normalizeStudentRecord(targetStudent);
+      const cleanReason = `${request.reason || ''}`.trim();
+      const requestAmount = Number(request.amount) || LEADER_PENALTY_XP;
+      const penaltyAmount = requestAmount < 0 ? requestAmount : -Math.abs(requestAmount);
+      const penaltyReason = `Penalizacao aprovada pelo tecnico (${request.requestedByLeaderName || 'lider'}): ${cleanReason || 'Sem motivo informado.'}`;
+      const xpLossNotice = {
+          id: `leader-penalty-approved-${Date.now()}`,
+          amount: penaltyAmount,
+          reason: penaltyReason,
+          date: reviewedAt,
+          createdAt: reviewedAt,
+      };
+      const nextNotifications = [
+          ...normalizeXpLossNotifications(previousStudent.xpLossNotifications),
+          xpLossNotice,
+      ];
+      const nextXp = (previousStudent.xp || 0) + penaltyAmount;
+
+      try {
+          await updateDoc(doc(db, "students", previousStudent.id), {
+              xp: nextXp,
+              xpLossNotifications: nextNotifications
+          });
+
+          await addDoc(collection(db, "xpLossRecords"), {
+              noticeId: xpLossNotice.id,
+              leaderPenaltyRequestId: request.id,
+              studentId: previousStudent.id,
+              studentName: previousStudent.name,
+              amount: penaltyAmount,
+              reason: penaltyReason,
+              source: 'penalty',
+              sourceLabel: getXpSourceLabel('penalty'),
+              mode: 'penalty',
+              notifyStudent: true,
+              date: xpLossNotice.date,
+              createdAt: xpLossNotice.createdAt,
+              createdBy: reviewedBy,
+              requestedByLeaderId: request.requestedByLeaderId || '',
+              requestedByLeaderName: request.requestedByLeaderName || '',
+              leaderWeekId: request.leaderWeekId || '',
+              leaderWeekName: request.leaderWeekName || ''
+          });
+
+          await recordXpOrigin({
+              student: previousStudent,
+              amount: penaltyAmount,
+              source: 'penalty',
+              mode: 'penalty',
+              reason: penaltyReason,
+              notifyStudent: true
+          });
+
+          await updateDoc(requestRef, {
+              status: 'approved',
+              reviewedAt,
+              reviewedBy,
+              xpLossNoticeId: xpLossNotice.id,
+              evidenceImage: deleteField(),
+              evidenceFileName: deleteField(),
+              evidenceMimeType: deleteField()
+          });
+
+          syncStudentLocally({
+              ...previousStudent,
+              xp: nextXp,
+              xpLossNotifications: nextNotifications
+          });
+
+          void recordActivity({
+              action: 'aprovou penalidade da lideranca',
+              category: 'team',
+              title: `${penaltyAmount} XP para ${previousStudent.name}`,
+              detail: `${request.requestedByLeaderName || 'Lider'} | ${cleanReason || 'Sem motivo informado.'}`,
+              entityId: previousStudent.id
+          });
+
+          showNotification(`${previousStudent.name} perdeu ${Math.abs(penaltyAmount)} XP apos revisao.`, "success");
+      } catch (error) {
+          console.error("Erro ao aprovar penalizacao:", error);
+          showNotification("Erro ao aprovar penalizacao.", "error");
       }
   }
 
@@ -4455,6 +4725,9 @@ const handleDeleteRound = async (id) => {
 
   const disciplineAlerts = disciplineRows.filter((row) => row.recurrence || row.weeklyLost >= 20);
   const totalWeeklyXpLost = disciplineRows.reduce((sum, row) => sum + row.weeklyLost, 0);
+  const pendingLeaderPenaltyRequests = leaderPenaltyRequests
+      .filter((request) => (request.status || 'pending') === 'pending')
+      .sort((left, right) => getPenaltyRequestTime(right) - getPenaltyRequestTime(left));
   const consistencyRanking = disciplineRows
       .map((row) => {
           const studentTasks = tasks.filter((task) => task.author && task.author.includes(row.student.name));
@@ -4495,6 +4768,15 @@ const handleDeleteRound = async (id) => {
   const weeklyLeaderTasks = isWeeklyLeader
       ? tasks.filter((task) => task.createdByLeaderId === viewAsStudent.id && task.leaderWeekId === String(currentWeekData?.id || ''))
       : [];
+  const weeklyLeaderPenaltyRequests = isWeeklyLeader
+      ? leaderPenaltyRequests
+          .filter((request) =>
+              request.requestedByLeaderId === viewAsStudent.id
+              && request.leaderWeekId === String(currentWeekData?.id || '')
+          )
+          .sort((left, right) => getPenaltyRequestTime(right) - getPenaltyRequestTime(left))
+      : [];
+  const weeklyLeaderPendingPenaltyRequests = weeklyLeaderPenaltyRequests.filter((request) => (request.status || 'pending') === 'pending');
   const weeklyLeaderKanbanReady = weeklyLeaderTasks.length > 0;
   const weeklyLeaderPendingCount = weeklyLeaderMissingStations.length + (weeklyLeaderKanbanReady ? 0 : 1);
   const hasWeeklyLeaderPendingWork = isWeeklyLeader && weeklyLeaderPendingCount > 0;
@@ -4789,7 +5071,7 @@ const handleDeleteRound = async (id) => {
       { id: 'strategy', label: 'Estrategia', icon: <Lightbulb size={16} />, description: 'Projeto, impacto, ideias e narrativa que os juizes entendem rapido.', pillTone: 'border-purple-500/20 bg-purple-500/10 text-purple-200', activeClass: 'bg-purple-500 text-white shadow-lg shadow-purple-900/20', inactiveClass: 'text-gray-400 hover:text-purple-300 hover:bg-purple-500/10' },
       { id: 'rounds', label: 'Robo', icon: <ListTodo size={16} />, description: 'Saidas, anexos, codigo e evolucao do robo em linguagem de equipe.', pillTone: 'border-blue-500/20 bg-blue-500/10 text-blue-200', activeClass: 'bg-blue-600 text-white shadow-lg shadow-blue-900/20', inactiveClass: 'text-gray-400 hover:text-blue-300 hover:bg-blue-500/10' },
       { id: 'rubrics', label: 'Rubricas', icon: <Scale size={16} />, description: 'Placar oficial da equipe com leitura simples e proximo passo.', pill: `${overallRubricAverage}/4`, pillTone: 'border-gray-400/20 bg-gray-400/10 text-gray-100', activeClass: 'bg-gray-300 text-black shadow-lg shadow-gray-900/20', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
-      { id: 'discipline', label: 'Disciplina', icon: <Shield size={16} />, description: 'Perdas de XP, reincidencia e ranking de consistencia da equipe.', badge: disciplineAlerts.length > 0 ? disciplineAlerts.length : null, pillTone: disciplineAlerts.length > 0 ? 'border-red-500/20 bg-red-500/10 text-red-200' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200', activeClass: 'bg-red-500 text-white shadow-lg shadow-red-900/20', inactiveClass: 'text-gray-400 hover:text-red-300 hover:bg-red-500/10' },
+      { id: 'discipline', label: 'Disciplina', icon: <Shield size={16} />, description: 'Perdas de XP, reincidencia e ranking de consistencia da equipe.', badge: (pendingLeaderPenaltyRequests.length + disciplineAlerts.length) > 0 ? pendingLeaderPenaltyRequests.length + disciplineAlerts.length : null, pillTone: pendingLeaderPenaltyRequests.length > 0 || disciplineAlerts.length > 0 ? 'border-red-500/20 bg-red-500/10 text-red-200' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200', activeClass: 'bg-red-500 text-white shadow-lg shadow-red-900/20', inactiveClass: 'text-gray-400 hover:text-red-300 hover:bg-red-500/10' },
       { id: 'kanban', label: 'Kanban', icon: <ClipboardList size={16} />, description: 'Fluxo da semana, prioridades e entregas sem cara de planilha.', badge: urgentTasksCount > 0 ? urgentTasksCount : null, pillTone: 'border-orange-500/20 bg-orange-500/10 text-orange-200', activeClass: 'bg-orange-500 text-white shadow-lg shadow-orange-900/20', inactiveClass: 'text-gray-400 hover:text-orange-300 hover:bg-orange-500/10' },
       { id: 'logbook', label: 'Diario', icon: <Book size={16} />, description: 'Memoria viva do time com testes, aprendizados e mini vitorias.', pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
       { id: 'agenda', label: 'Agenda', icon: <CalendarDays size={16} />, description: 'Prazos, encontros e checkpoints da equipe em modo missao.', badge: urgentEventsCount > 0 ? urgentEventsCount : null, pillTone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200', activeClass: 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20', inactiveClass: 'text-gray-400 hover:text-indigo-300 hover:bg-indigo-500/10' },
@@ -5993,7 +6275,11 @@ const handleFileSelect = (e) => {
                               Aqui fica o historico de motivos, quem repetiu perda na semana e onde vale intervir antes que vire costume.
                           </p>
                       </div>
-                      <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="grid grid-cols-2 gap-2 text-center md:grid-cols-4">
+                          <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
+                              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Revisao</p>
+                              <p className="mt-2 text-xl font-black text-white">{pendingLeaderPenaltyRequests.length}</p>
+                          </div>
                           <div className="rounded-2xl border border-white/10 bg-black/25 p-3">
                               <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Alertas</p>
                               <p className="mt-2 text-xl font-black text-white">{disciplineAlerts.length}</p>
@@ -6008,6 +6294,68 @@ const handleFileSelect = (e) => {
                           </div>
                       </div>
                   </div>
+
+                  {pendingLeaderPenaltyRequests.length > 0 && (
+                      <div className="mt-5 rounded-[24px] border border-yellow-300/25 bg-yellow-400/10 p-4">
+                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                              <div>
+                                  <span className="inline-flex items-center gap-2 rounded-full border border-yellow-300/25 bg-black/20 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-yellow-100">
+                                      <Gavel size={12} /> Revisao do tecnico
+                                  </span>
+                                  <h4 className="mt-3 text-lg font-black text-white">Penalizacoes pedidas pelo lider</h4>
+                                  <p className="mt-1 text-sm leading-relaxed text-yellow-50/80">
+                                      Nada foi descontado ainda. Aprove apenas quando o motivo fizer sentido.
+                                  </p>
+                              </div>
+                              <span className="rounded-full border border-yellow-300/25 bg-black/20 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-yellow-100">
+                                  {pendingLeaderPenaltyRequests.length} pendente(s)
+                              </span>
+                          </div>
+
+                          <div className="mt-4 grid gap-3">
+                              {pendingLeaderPenaltyRequests.map((request) => (
+                                  <div key={request.id} className="rounded-[22px] border border-white/10 bg-black/25 p-4">
+                                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                          <div className="min-w-0">
+                                              <div className="flex flex-wrap items-center gap-2">
+                                                  <p className="text-base font-black text-white">{request.studentName || 'Aluno'}</p>
+                                                  <span className="rounded-full border border-yellow-300/20 bg-yellow-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-yellow-100">{request.amount || LEADER_PENALTY_XP} XP solicitado</span>
+                                                  {request.evidenceImage && <span className="rounded-full border border-cyan-300/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-cyan-100">Com foto</span>}
+                                              </div>
+                                              <p className="mt-2 text-sm font-bold leading-relaxed text-yellow-50">{request.reason || 'Sem motivo informado.'}</p>
+                                              <p className="mt-2 text-[11px] font-bold text-yellow-100/70">
+                                                  Lider: {request.requestedByLeaderName || 'Nao informado'} | {formatShortDateLabel(request.requestedAt)}
+                                              </p>
+                                              {request.evidenceImage && (
+                                                  <img
+                                                      src={request.evidenceImage}
+                                                      alt={`Evidencia enviada por ${request.requestedByLeaderName || 'lider'}`}
+                                                      className="mt-3 max-h-56 w-full rounded-2xl border border-white/10 object-cover"
+                                                  />
+                                              )}
+                                          </div>
+                                          <div className="flex flex-col gap-2 sm:flex-row lg:min-w-[260px] lg:justify-end">
+                                              <button
+                                                  type="button"
+                                                  onClick={() => handleLeaderPenaltyReview(request, 'approved')}
+                                                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-green-300/25 bg-green-500/15 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-green-100 transition-all hover:bg-green-500 hover:text-black"
+                                              >
+                                                  <Check size={14} /> Aprovar
+                                              </button>
+                                              <button
+                                                  type="button"
+                                                  onClick={() => handleLeaderPenaltyReview(request, 'rejected')}
+                                                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-300/25 bg-red-500/15 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-red-100 transition-all hover:bg-red-500 hover:text-white"
+                                              >
+                                                  <X size={14} /> Rejeitar
+                                              </button>
+                                          </div>
+                                      </div>
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+                  )}
 
                   <div className={`mt-5 rounded-[24px] border p-4 ${
                       isBisRewardAlive
@@ -8192,7 +8540,7 @@ const handleFileSelect = (e) => {
 {/* --- MODAL DO TÉCNICO: ENTREGAR BADGES --- */}
       {isAdmin && badgeStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-[#1a1a24] rounded-2xl border border-white/10 p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl relative">
+          <div className="bg-[#1a1a24] rounded-2xl border border-white/10 p-6 w-full max-w-5xl max-h-[90vh] overflow-y-auto shadow-2xl relative">
             
             {/* Botão Fechar */}
             <button 
@@ -8212,7 +8560,7 @@ const handleFileSelect = (e) => {
             </div>
 
             {/* Grid de Badges */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {BADGES_LIST.map(badge => {
                 const hasBadge = hasStudentBadge(badgeStudent, badge.id);
                 return (
@@ -8751,7 +9099,7 @@ const handleFileSelect = (e) => {
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <div className="grid grid-cols-2 gap-2 text-center">
+                    <div className="grid grid-cols-3 gap-2 text-center">
                         <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3">
                             <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Estacoes</p>
                             <p className="mt-1 text-lg font-black text-white">{weeklyLeaderMissionReadyCount}/3</p>
@@ -8759,6 +9107,10 @@ const handleFileSelect = (e) => {
                         <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3">
                             <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Kanban</p>
                             <p className="mt-1 text-lg font-black text-white">{weeklyLeaderTasks.length}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3">
+                            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Pen.</p>
+                            <p className="mt-1 text-lg font-black text-white">{weeklyLeaderPendingPenaltyRequests.length}</p>
                         </div>
                     </div>
                     <button
@@ -8838,7 +9190,7 @@ const handleFileSelect = (e) => {
                                         Como lider, voce ajusta o foco das estacoes e abre tarefas no Kanban para o time. Isso substitui o relatorio manual para o tecnico: fica tudo registrado no sistema.
                                       </p>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2 text-center">
+                                    <div className="grid grid-cols-3 gap-2 text-center">
                                       <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
                                         <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Missoes</p>
                                         <p className="mt-2 text-xl font-black text-white">{weeklyLeaderMissionReadyCount}/3</p>
@@ -8846,6 +9198,10 @@ const handleFileSelect = (e) => {
                                       <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
                                         <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Kanban</p>
                                         <p className="mt-2 text-xl font-black text-white">{weeklyLeaderTasks.length}</p>
+                                      </div>
+                                      <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                                        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-400">Pen.</p>
+                                        <p className="mt-2 text-xl font-black text-white">{weeklyLeaderPendingPenaltyRequests.length}</p>
                                       </div>
                                     </div>
                                   </div>
@@ -8957,6 +9313,92 @@ const handleFileSelect = (e) => {
                                         Criar
                                       </button>
                                     </div>
+                                  </form>
+
+                                  <form onSubmit={handleWeeklyLeaderPenaltySubmit} className="mt-5 rounded-[24px] border border-red-400/25 bg-red-500/10 p-4">
+                                    <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                      <div>
+                                        <p className="text-sm font-black text-white flex items-center gap-2">
+                                          <Gavel size={15} className="text-red-200" /> Penalizacao da lideranca
+                                        </p>
+                                        <p className="mt-1 text-xs text-red-50/70">O tecnico revisa antes de qualquer XP sair do aluno.</p>
+                                      </div>
+                                      <span className="rounded-full border border-red-300/25 bg-black/20 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-red-100">
+                                        {weeklyLeaderPendingPenaltyRequests.length} pendente(s)
+                                      </span>
+                                    </div>
+                                    <div className="grid gap-3 xl:grid-cols-[220px,minmax(0,1fr),240px,auto]">
+                                      <select
+                                        value={leaderPenaltyDraft.studentId}
+                                        onChange={(event) => setLeaderPenaltyDraft(prev => ({ ...prev, studentId: event.target.value }))}
+                                        className="rounded-2xl border border-white/10 bg-black/35 p-3 text-sm text-white outline-none focus:border-red-300"
+                                      >
+                                        <option value="">Selecionar aluno</option>
+                                        {students
+                                          .filter((student) => student.id !== viewAsStudent.id)
+                                          .map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}
+                                      </select>
+                                      <input
+                                        value={leaderPenaltyDraft.reason}
+                                        onChange={(event) => setLeaderPenaltyDraft(prev => ({ ...prev, reason: event.target.value }))}
+                                        placeholder="Motivo objetivo da penalizacao..."
+                                        className="rounded-2xl border border-white/10 bg-black/35 p-3 text-sm text-white outline-none placeholder:text-gray-600 focus:border-red-300"
+                                      />
+                                      <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/10 bg-black/35 p-3 text-xs font-black uppercase tracking-[0.12em] text-red-50 transition-all hover:border-red-300/45 hover:bg-red-500/10">
+                                        <ImageIcon size={14} />
+                                        {leaderPenaltyDraft.evidenceFile ? 'Foto anexada' : 'Foto opcional'}
+                                        <input
+                                          key={leaderPenaltyFileInputKey}
+                                          type="file"
+                                          accept="image/*"
+                                          onChange={(event) => {
+                                            const file = event.target.files?.[0] || null;
+                                            if (file && !file.type.startsWith('image/')) {
+                                              showNotification("Envie apenas imagem como evidencia.", "error");
+                                              event.target.value = '';
+                                              return;
+                                            }
+                                            setLeaderPenaltyDraft(prev => ({ ...prev, evidenceFile: file }));
+                                          }}
+                                          className="sr-only"
+                                        />
+                                      </label>
+                                      <button className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-300/25 bg-red-500/15 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-red-50 transition-all hover:bg-red-500 hover:text-white">
+                                        <AlertTriangle size={14} /> Enviar revisao
+                                      </button>
+                                    </div>
+                                    {leaderPenaltyDraft.evidenceFile && (
+                                      <p className="mt-2 text-[11px] font-bold text-red-50/70">
+                                        Foto selecionada: {leaderPenaltyDraft.evidenceFile.name}
+                                      </p>
+                                    )}
+                                    {weeklyLeaderPenaltyRequests.length > 0 && (
+                                      <div className="mt-4 grid gap-2 md:grid-cols-3">
+                                        {weeklyLeaderPenaltyRequests.slice(0, 3).map((request) => (
+                                          <div key={request.id} className="rounded-2xl border border-red-300/15 bg-black/20 p-3">
+                                            <div className="flex items-center justify-between gap-2">
+                                              <p className="truncate text-xs font-black text-white">{request.studentName || 'Aluno'}</p>
+                                              <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black ${
+                                                request.status === 'approved'
+                                                  ? 'border-green-300/20 bg-green-500/10 text-green-100'
+                                                  : request.status === 'rejected'
+                                                      ? 'border-gray-300/20 bg-white/10 text-gray-200'
+                                                      : 'border-yellow-300/20 bg-yellow-500/10 text-yellow-100'
+                                              }`}>
+                                                {request.status === 'approved' ? 'Aprovada' : request.status === 'rejected' ? 'Rejeitada' : 'Pendente'}
+                                              </span>
+                                            </div>
+                                            <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-red-50/75">
+                                              {request.reason || 'Sem motivo registrado.'}
+                                            </p>
+                                            {request.evidenceImage && (
+                                              <span className="mt-2 inline-flex rounded-full border border-cyan-300/20 bg-cyan-500/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-cyan-100">Com foto</span>
+                                            )}
+                                            <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-red-100/70">{formatShortDateLabel(request.requestedAt || request.reviewedAt)}</p>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
                                   </form>
                                 </section>
                               )}
