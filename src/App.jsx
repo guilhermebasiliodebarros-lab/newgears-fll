@@ -383,6 +383,51 @@ const BADGE_TOKEN_ALIASES = {
   sala_dos_juizes_ready: 'judge_room_ready',
   tournament_scout: 'tournament_scout',
   scout_de_torneio: 'tournament_scout',
+  bioglow_explorer: 'bioglow_explorer',
+  explorador_bioglow: 'bioglow_explorer',
+  rulebook_reader: 'rulebook_reader',
+  leitor_do_livro_de_regras: 'rulebook_reader',
+  mission_model_master: 'mission_model_master',
+  mestre_dos_modelos: 'mission_model_master',
+  sensor_surgeon: 'sensor_surgeon',
+  cirurgiao_de_sensores: 'sensor_surgeon',
+  round_analyst: 'round_analyst',
+  analista_de_rounds: 'round_analyst',
+  design_iterator: 'design_iterator',
+  iterador_fll: 'design_iterator',
+  launch_captain: 'launch_captain',
+  capitao_de_lancamento: 'launch_captain',
+  rookie_mentor: 'rookie_mentor',
+  mentor_dos_novatos: 'rookie_mentor',
+  pit_anchor: 'pit_anchor',
+  ancora_do_pit: 'pit_anchor',
+  field_reset_master: 'field_reset_master',
+  mestre_do_reset: 'field_reset_master',
+  pressure_driver: 'pressure_driver',
+  piloto_de_pressao: 'pressure_driver',
+  badge_beggar: 'badge_beggar',
+  badge_do_mendigo: 'badge_beggar',
+  mendigo_de_badge: 'badge_beggar',
+  laugh_only: 'laugh_only',
+  so_risada: 'laugh_only',
+  professional_laughter: 'laugh_only',
+  risada_profissional: 'laugh_only',
+  premium_laziness: 'premium_laziness',
+  preguica_premium: 'premium_laziness',
+  little_work_fc: 'little_work_fc',
+  pouco_trabalho_fc: 'little_work_fc',
+  chair_referee: 'chair_referee',
+  fiscal_de_cadeira: 'chair_referee',
+  disappeared_at_crunch_time: 'disappeared_at_crunch_time',
+  sumiu_na_hora_h: 'disappeared_at_crunch_time',
+  audience_coach: 'audience_coach',
+  coach_da_arquibancada: 'audience_coach',
+  maybe_master: 'maybe_master',
+  mestre_do_talvez: 'maybe_master',
+  battery_two_percent: 'battery_two_percent',
+  bateria_dois_por_cento: 'battery_two_percent',
+  decorative_presence: 'decorative_presence',
+  presenca_decorativa: 'decorative_presence',
 };
 
 const normalizeBadgeToken = (value) => {
@@ -471,6 +516,7 @@ const formatShortDateLabel = (dateValue) => {
 const XP_LOSS_ALERT_REPEAT_MS = 5 * 60 * 1000;
 const XP_LOSS_DELETE_WAIT_DAYS = 5;
 const BADGE_XP_BONUS = 100;
+const getBadgeXpBonus = (badge) => Number.isFinite(badge?.xpBonus) ? badge.xpBonus : BADGE_XP_BONUS;
 const LEADER_PENALTY_XP = -5;
 const XP_SOURCE_LABELS = {
   badge: 'Badge',
@@ -1301,6 +1347,27 @@ function App() {
     { id: 'innovation_validator', name: 'Validador de Solucao', icon: <Microscope size={20}/>, color: 'text-purple-300', desc: 'Testou a ideia do projeto com evidencia, criterio e iteracao.' },
     { id: 'judge_room_ready', name: 'Sala dos Juizes Ready', icon: <MonitorPlay size={20}/>, color: 'text-indigo-300', desc: 'Ensaiou apresentacao, respostas e transicoes para os juizes.' },
     { id: 'tournament_scout', name: 'Scout de Torneio', icon: <Trophy size={20}/>, color: 'text-amber-300', desc: 'Observou regras, tendencias ou estrategias para preparar o torneio.' },
+    { id: 'bioglow_explorer', name: 'Explorador Bioglow', icon: <Sparkles size={20}/>, color: 'text-emerald-300', desc: 'Estudou a temporada Bioglow e conectou missoes, projeto e estrategia.' },
+    { id: 'rulebook_reader', name: 'Leitor do Livro de Regras', icon: <BookOpen size={20}/>, color: 'text-sky-300', desc: 'Consultou regra oficial antes de decidir pontuacao, construcao ou estrategia.' },
+    { id: 'mission_model_master', name: 'Mestre dos Modelos', icon: <ClipboardList size={20}/>, color: 'text-lime-300', desc: 'Montou, revisou ou explicou modelos de missao com cuidado competitivo.' },
+    { id: 'sensor_surgeon', name: 'Cirurgiao de Sensores', icon: <Cpu size={20}/>, color: 'text-cyan-200', desc: 'Calibrou sensores e melhorou a confiabilidade do robo na mesa.' },
+    { id: 'round_analyst', name: 'Analista de Rounds', icon: <BarChart3 size={20}/>, color: 'text-blue-200', desc: 'Usou tempos, acertos e erros para melhorar a proxima saida.' },
+    { id: 'design_iterator', name: 'Iterador FLL', icon: <GitBranch size={20}/>, color: 'text-violet-300', desc: 'Transformou teste ruim em versao melhor, com aprendizado registrado.' },
+    { id: 'launch_captain', name: 'Capitao de Lancamento', icon: <Rocket size={20}/>, color: 'text-orange-300', desc: 'Preparou base, alinhamento e primeira acao do robo com consistencia.' },
+    { id: 'rookie_mentor', name: 'Mentor dos Novatos', icon: <UserPlus size={20}/>, color: 'text-green-200', desc: 'Ajudou alguem novo a participar de robo, projeto ou valores da equipe.' },
+    { id: 'pit_anchor', name: 'Ancora do Pit', icon: <Megaphone size={20}/>, color: 'text-yellow-200', desc: 'Segurou a apresentacao no pit com presenca, ordem e escuta.' },
+    { id: 'field_reset_master', name: 'Mestre do Reset', icon: <BatteryCharging size={20}/>, color: 'text-teal-200', desc: 'Deixou robo, anexos e mesa prontos para repetir teste sem bagunca.' },
+    { id: 'pressure_driver', name: 'Piloto de Pressao', icon: <Gamepad2 size={20}/>, color: 'text-red-300', desc: 'Executou round sob pressao mantendo ritmo, foco e tomada de decisao.' },
+    { id: 'badge_beggar', name: 'Badge do Mendigo', icon: <HelpCircle size={20}/>, color: 'text-zinc-300', desc: 'Pediu badge com tanta persistencia que ganhou uma badge para pedir menos.', xpBonus: 0 },
+    { id: 'laugh_only', name: 'So Risada', icon: <Smile size={20}/>, color: 'text-pink-200', desc: 'Ficou rindo do caos e ajudou pelo menos o clima da equipe.', xpBonus: 0 },
+    { id: 'premium_laziness', name: 'Preguica Premium', icon: <Pause size={20}/>, color: 'text-slate-300', desc: 'Economizou energia com uma dedicacao quase olimpica.', xpBonus: 0 },
+    { id: 'little_work_fc', name: 'Pouco Trabalho FC', icon: <BatteryLow size={20}/>, color: 'text-orange-200', desc: 'Entregou pouco, opinou muito e saiu com estilo questionavel.', xpBonus: 0 },
+    { id: 'chair_referee', name: 'Fiscal de Cadeira', icon: <Eye size={20}/>, color: 'text-cyan-200', desc: 'Acompanhou tudo sentado, julgando com muita propriedade.', xpBonus: 0 },
+    { id: 'disappeared_at_crunch_time', name: 'Sumiu na Hora H', icon: <EyeOff size={20}/>, color: 'text-violet-200', desc: 'Foi visto antes do trabalho comecar e depois virou misterio.', xpBonus: 0 },
+    { id: 'audience_coach', name: 'Coach da Arquibancada', icon: <Megaphone size={20}/>, color: 'text-yellow-200', desc: 'Deu instrucoes valiosas sem correr o risco de executar nenhuma.', xpBonus: 0 },
+    { id: 'maybe_master', name: 'Mestre do Talvez', icon: <HelpCircle size={20}/>, color: 'text-blue-200', desc: 'Prometeu ajudar daqui a pouco, em algum momento, talvez.', xpBonus: 0 },
+    { id: 'battery_two_percent', name: 'Bateria 2%', icon: <BatteryWarning size={20}/>, color: 'text-red-200', desc: 'Chegou no treino com energia suficiente para respirar e reclamar.', xpBonus: 0 },
+    { id: 'decorative_presence', name: 'Presenca Decorativa', icon: <UserCircle size={20}/>, color: 'text-gray-300', desc: 'Esteve presente no ambiente. A produtividade ainda esta em analise.', xpBonus: 0 },
   ];
 
   // --- DESAFIO DE INGLÊS: Função do Técnico ---
@@ -1363,10 +1430,11 @@ function App() {
       const previousStudent = normalizeStudentRecord(student);
       const badgeMeta = BADGES_LIST.find((badge) => badge.id === badgeId);
       const badgeName = badgeMeta?.name || 'Conquista FLL';
+      const badgeXpBonus = getBadgeXpBonus(badgeMeta);
       const currentBadges = normalizeStudentBadges(previousStudent.badges);
       const currentBadgeAchievements = Array.isArray(previousStudent.badgeAchievements) ? previousStudent.badgeAchievements : [];
       const isRemovingBadge = currentBadges.includes(badgeId);
-      const xpDelta = isRemovingBadge ? -BADGE_XP_BONUS : BADGE_XP_BONUS;
+      const xpDelta = isRemovingBadge ? -badgeXpBonus : badgeXpBonus;
       const newBadges = isRemovingBadge
           ? currentBadges.filter(badge => badge !== badgeId)
           : [...currentBadges, badgeId];
@@ -1378,7 +1446,7 @@ function App() {
                   badgeId,
                   badgeName,
                   awardedAt: new Date().toISOString(),
-                  xpAmount: BADGE_XP_BONUS,
+                  xpAmount: badgeXpBonus,
                   xpSource: 'badge'
               }
           ];
@@ -1410,8 +1478,12 @@ function App() {
               category: 'team',
               title: `${badgeName} para ${previousStudent.name}`,
               detail: isRemovingBadge
-                  ? `${xpDelta} XP por remocao de badge, sem notificacao ao aluno.`
-                  : `+${BADGE_XP_BONUS} XP com origem badge.`,
+                  ? badgeXpBonus > 0
+                      ? `${xpDelta} XP por remocao de badge, sem notificacao ao aluno.`
+                      : 'Badge sem XP removida.'
+                  : badgeXpBonus > 0
+                      ? `+${badgeXpBonus} XP com origem badge.`
+                      : 'Badge sem XP aplicada.',
               entityId: previousStudent.id
           });
 
@@ -1456,8 +1528,12 @@ function App() {
 
           showNotification(
               isRemovingBadge
-                  ? `${badgeName} removida. ${xpDelta} XP corrigidos.`
-                  : `${badgeName} aplicada. +${BADGE_XP_BONUS} XP.`,
+                  ? badgeXpBonus > 0
+                      ? `${badgeName} removida. ${xpDelta} XP corrigidos.`
+                      : `${badgeName} removida. Sem XP.`
+                  : badgeXpBonus > 0
+                      ? `${badgeName} aplicada. +${badgeXpBonus} XP.`
+                      : `${badgeName} aplicada. Sem XP.`,
               "success",
               { label: 'Desfazer', onClick: undoBadgeChange }
           );
@@ -6829,11 +6905,15 @@ const handleFileSelect = (e) => {
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                         {BADGES_LIST.map(badge => {
                             const hasBadge = hasStudentBadge(modal.data, badge.id);
+                            const badgeXp = getBadgeXpBonus(badge);
                             return (
                                 <div key={badge.id} className={`relative flex min-h-[132px] flex-col items-center rounded-xl border p-3 text-center transition-all ${hasBadge ? 'bg-gradient-to-br from-white/5 to-transparent border-yellow-500/30' : 'bg-black/40 border-white/5 opacity-55 grayscale'}`}>
                                     <div className={`mb-2 ${hasBadge ? badge.color : 'text-gray-500'}`}>{badge.icon}</div>
                                     <span className="text-[10px] font-bold text-white leading-tight">{badge.name}</span>
                                     <p className={`mt-2 text-[10px] leading-snug ${hasBadge ? 'text-gray-300' : 'text-gray-500'}`}>{badge.desc}</p>
+                                    <span className={`mt-auto rounded-full border px-2 py-0.5 text-[9px] font-black ${badgeXp > 0 ? 'border-yellow-500/20 bg-yellow-500/10 text-yellow-100' : 'border-white/10 bg-white/5 text-gray-400'}`}>
+                                      {badgeXp > 0 ? `+${badgeXp} XP` : '0 XP'}
+                                    </span>
                                     {hasBadge && <div className="absolute top-2 right-2 w-1.5 h-1.5 bg-green-500 rounded-full shadow-[0_0_5px_rgba(34,197,94,1)]"></div>}
                                 </div>
                             )
@@ -8563,6 +8643,7 @@ const handleFileSelect = (e) => {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {BADGES_LIST.map(badge => {
                 const hasBadge = hasStudentBadge(badgeStudent, badge.id);
+                const badgeXp = getBadgeXpBonus(badge);
                 return (
                   <button
                     key={badge.id}
@@ -8582,6 +8663,9 @@ const handleFileSelect = (e) => {
                     <p className={`mt-2 text-center text-[10px] leading-snug ${hasBadge ? 'text-gray-300' : 'text-gray-500'}`}>
                       {badge.desc}
                     </p>
+                    <span className={`mt-auto rounded-full border px-2 py-0.5 text-[9px] font-black ${badgeXp > 0 ? 'border-yellow-500/20 bg-yellow-500/10 text-yellow-100' : 'border-white/10 bg-white/5 text-gray-400'}`}>
+                      {badgeXp > 0 ? `+${badgeXp} XP` : '0 XP'}
+                    </span>
                     {hasBadge && (
                        <div className="absolute top-2 right-2">
                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,1)]"></div>

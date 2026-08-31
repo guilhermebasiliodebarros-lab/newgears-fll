@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Stage,
   Layer,
@@ -12,7 +12,7 @@ import {
 import useImage from 'use-image';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { FolderOpen, Maximize, Minimize, Trash2 } from 'lucide-react';
+import { FolderOpen, Image as ImageIcon, Maximize, Minimize, RotateCcw, Trash2, Upload } from 'lucide-react';
 
 const ROUTE_PALETTE = [
   { number: 1, label: 'Saida 1', detail: 'Azul', code: '#3b82f6' },
@@ -29,6 +29,78 @@ const ROUTE_PALETTE = [
 
 const STAGE_WIDTH = 800;
 const STAGE_HEIGHT = 450;
+const DEFAULT_SEASON_MAP = {
+  id: 'bioglow_local',
+  name: 'Bioglow',
+  src: '/Bioglow.png',
+};
+const CUSTOM_MAP_STORAGE_KEY = 'newgears_strategy_board_map_v1';
+const MAX_CUSTOM_MAP_LENGTH = 4_500_000;
+
+const withCacheBust = (src) => (src.startsWith('data:') ? src : `${src}?t=${new Date().getTime()}`);
+
+const getStoredMapConfig = () => {
+  try {
+    const rawConfig = localStorage.getItem(CUSTOM_MAP_STORAGE_KEY);
+    if (!rawConfig) return null;
+
+    const parsedConfig = JSON.parse(rawConfig);
+    if (!parsedConfig?.id || !parsedConfig?.src) return null;
+
+    return {
+      id: parsedConfig.id,
+      name: parsedConfig.name || 'Mesa personalizada',
+      src: parsedConfig.src,
+    };
+  } catch (error) {
+    console.error('Erro ao carregar imagem da mesa:', error);
+    return null;
+  }
+};
+
+const resizeTableMapFile = (file) => new Promise((resolve, reject) => {
+  if (!file?.type?.startsWith('image/')) {
+    reject(new Error('Escolha um arquivo de imagem.'));
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    const source = reader.result;
+    const image = new window.Image();
+
+    image.onload = () => {
+      const canvas = document.createElement('canvas');
+      const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+      const context = canvas.getContext('2d');
+      if (!context) {
+        reject(new Error('Nao foi possivel preparar esta imagem.'));
+        return;
+      }
+
+      context.fillStyle = '#050505';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      if (dataUrl.length > MAX_CUSTOM_MAP_LENGTH) {
+        reject(new Error('A imagem ficou pesada demais. Use um arquivo menor.'));
+        return;
+      }
+
+      resolve(dataUrl);
+    };
+
+    image.onerror = () => reject(new Error('Nao foi possivel ler esta imagem.'));
+    image.src = source;
+  };
+
+  reader.onerror = () => reject(new Error('Nao foi possivel abrir o arquivo.'));
+  reader.readAsDataURL(file);
+});
 
 const createRouteId = () => `route-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -127,6 +199,7 @@ const MapImage = ({ src, width, height }) => {
 const StrategyBoard = () => {
   const [activeMapUrl, setActiveMapUrl] = useState(null);
   const [activeMapId, setActiveMapId] = useState(null);
+  const [activeMapName, setActiveMapName] = useState(DEFAULT_SEASON_MAP.name);
   const [tool, setTool] = useState('line');
   const [activeColor, setActiveColor] = useState(ROUTE_PALETTE[0].code);
   const [lines, setLines] = useState([]);
@@ -138,6 +211,8 @@ const StrategyBoard = () => {
   const [loadedStrategyId, setLoadedStrategyId] = useState(null);
   const [strategyName, setStrategyName] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isMapChanging, setIsMapChanging] = useState(false);
+  const [mapUploadError, setMapUploadError] = useState('');
 
   const stageRef = useRef(null);
   const activePalette = useMemo(() => getPaletteEntry(activeColor), [activeColor]);
@@ -156,7 +231,7 @@ const StrategyBoard = () => {
   }, [lines]);
   const areAllSavedStrategiesSelected = sortedSavedStrategies.length > 0 && selectedSavedStrategyIds.length === sortedSavedStrategies.length;
 
-  const loadStrategiesList = async (mapId) => {
+  const loadStrategiesList = useCallback(async (mapId) => {
     try {
       const strategyQuery = query(collection(db, 'strategies'), where('mapId', '==', mapId));
       const strategySnapshot = await getDocs(strategyQuery);
@@ -166,18 +241,82 @@ const StrategyBoard = () => {
     } catch (error) {
       console.error('Erro ao listar estrategias:', error);
     }
-  };
+  }, []);
+
+  const activateMap = useCallback(async (mapConfig) => {
+    setActiveMapUrl(withCacheBust(mapConfig.src));
+    setActiveMapId(mapConfig.id);
+    setActiveMapName(mapConfig.name);
+    setLines([]);
+    setDraftRoute(null);
+    setSelectedRouteId(null);
+    setSelectedSavedStrategyIds([]);
+    setLoadedStrategyId(null);
+    await loadStrategiesList(mapConfig.id);
+  }, [loadStrategiesList]);
 
   useEffect(() => {
     const init = async () => {
-      const localMapId = 'mapa_padrao_local';
-      setActiveMapUrl(`/Unearthed.jpg?t=${new Date().getTime()}`);
-      setActiveMapId(localMapId);
-      await loadStrategiesList(localMapId);
+      await activateMap(getStoredMapConfig() || DEFAULT_SEASON_MAP);
     };
 
     init();
-  }, []);
+  }, [activateMap]);
+
+  const handleMapImageChange = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (lines.length > 0 && !window.confirm('Trocar a imagem da mesa? As rotas desenhadas agora serao limpas da tela.')) {
+      return;
+    }
+
+    setIsMapChanging(true);
+    setMapUploadError('');
+
+    try {
+      const imageSrc = await resizeTableMapFile(file);
+      const cleanName = file.name.replace(/\.[^/.]+$/, '') || 'Mesa personalizada';
+      const safeName = cleanName
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '') || 'custom';
+      const mapConfig = {
+        id: `custom_${safeName}_${file.size}_${file.lastModified || Date.now()}`,
+        name: cleanName,
+        src: imageSrc,
+      };
+
+      localStorage.setItem(CUSTOM_MAP_STORAGE_KEY, JSON.stringify(mapConfig));
+      await activateMap(mapConfig);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Nao foi possivel trocar a imagem da mesa.';
+      console.error('Erro ao trocar imagem da mesa:', error);
+      setMapUploadError(message);
+      alert(message);
+    } finally {
+      setIsMapChanging(false);
+    }
+  };
+
+  const handleResetMapImage = async () => {
+    if (lines.length > 0 && !window.confirm('Voltar para a mesa Bioglow? As rotas desenhadas agora serao limpas da tela.')) {
+      return;
+    }
+
+    setIsMapChanging(true);
+    setMapUploadError('');
+
+    try {
+      localStorage.removeItem(CUSTOM_MAP_STORAGE_KEY);
+      await activateMap(DEFAULT_SEASON_MAP);
+    } finally {
+      setIsMapChanging(false);
+    }
+  };
 
   const switchTool = (nextTool) => {
     setTool(nextTool);
@@ -665,6 +804,47 @@ const StrategyBoard = () => {
                 Selecionar = destacar ou apagar
               </span>
             </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-4 mt-4">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold">Imagem da mesa</p>
+            <div className="mt-3 flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10 text-blue-200">
+                <ImageIcon size={18} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-black text-white">{activeMapName}</p>
+                <p className="mt-1 text-[11px] text-gray-400">PNG ou JPG</p>
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border px-3 py-3 text-xs font-bold transition-all ${isMapChanging ? 'border-white/10 bg-white/5 text-gray-500' : 'border-blue-500/30 bg-blue-500/10 text-blue-100 hover:bg-blue-500 hover:text-white'}`}>
+                <Upload size={14} />
+                {isMapChanging ? 'Carregando' : 'Mudar imagem'}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/webp"
+                  onChange={handleMapImageChange}
+                  disabled={isMapChanging}
+                  className="hidden"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={handleResetMapImage}
+                disabled={isMapChanging}
+                className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-xs font-bold transition-all ${isMapChanging ? 'border-white/10 bg-white/5 text-gray-500 cursor-not-allowed' : 'border-white/10 bg-white/5 text-gray-200 hover:bg-white/10'}`}
+              >
+                <RotateCcw size={14} /> Bioglow
+              </button>
+            </div>
+
+            {mapUploadError && (
+              <p className="mt-3 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-bold text-red-200">
+                {mapUploadError}
+              </p>
+            )}
           </div>
         </div>
       </div>
