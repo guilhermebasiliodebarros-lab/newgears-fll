@@ -17,6 +17,7 @@ import PublicTvModeView from './views/PublicTvModeView';
 import { STATION_KEYS } from './constants/workspace';
 import { DEFAULT_PROJECT_SUMMARY, PROJECT_MAIN_DOC_ID, resolveProjectSummary } from './utils/projectSummary';
 import { buildTrainingGallery, DEFAULT_PUBLIC_SHOWCASE_SETTINGS, resolvePublicShowcaseSettings } from './utils/publicShowcase';
+import { DEFAULT_FINAL_SPRINT_WEIGHTS, PRESENTATION_EVALUATION_CRITERIA, WEEKLY_EVALUATION_CRITERIA, getFinalSprintEvaluationWeek } from './utils/finalSprintEvaluations';
 import {
   SCHOOL_REPORT_STAGE_CONFIG,
   SCHOOL_REPORT_SUBJECTS,
@@ -148,6 +149,7 @@ const RobotDesignStrategyPanel = lazy(() => import('./components/RobotDesignStra
 const RobotRoundsPanel = lazy(() => import('./components/RobotRoundsPanel'));
 const ConfettiBurst = lazy(() => import('react-confetti'));
 const RotationOperationsPanel = lazy(() => import('./components/RotationOperationsPanel'));
+const FinalSprintEvaluationsView = lazy(() => import('./views/FinalSprintEvaluationsView'));
 const readStoredTheme = () => {
   if (typeof window === 'undefined') return 'classic';
   return localStorage.getItem('newgears_visual_theme') === 'gold' ? 'gold' : 'classic';
@@ -945,6 +947,9 @@ function App() {
   const [students, setStudents] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [finalSprintAssignments, setFinalSprintAssignments] = useState([]);
+  const [finalSprintEvaluations, setFinalSprintEvaluations] = useState([]);
+  const [finalSprintSelections, setFinalSprintSelections] = useState([]);
+  const [finalSprintWeights, setFinalSprintWeights] = useState(DEFAULT_FINAL_SPRINT_WEIGHTS);
   const [logbookEntries, setLogbookEntries] = useState([]);
   const [events, setEvents] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
@@ -1337,6 +1342,149 @@ function App() {
       } catch (error) {
           console.error('Erro ao salvar atualização da reta final:', error);
           showNotification('Não foi possível salvar a atualização.', 'error');
+          return false;
+      }
+  };
+
+  const getFinalSprintEvaluationDocId = (type, studentId, periodId = '') => encodeURIComponent(`${type}__${studentId}__${periodId}`);
+  const getFinalSprintEvaluationTotal = (ratings, criteria) => {
+      if (!ratings || !criteria.every(({ id }) => ratings[id] !== null && ratings[id] !== undefined && ratings[id] !== '' && Number.isInteger(Number(ratings[id])) && Number(ratings[id]) >= 0 && Number(ratings[id]) <= 5)) return null;
+      return criteria.reduce((total, { id }) => total + Number(ratings[id]), 0);
+  };
+
+  const handleSaveWeeklyEvaluation = async ({ student, week, draft }) => {
+      if (currentUser?.type !== 'admin' || !isAdmin || !student?.id || !week?.id) return false;
+      const total = getFinalSprintEvaluationTotal(draft.ratings, WEEKLY_EVALUATION_CRITERIA);
+      if (total === null || !`${draft.improvement || ''}`.trim()) {
+          showNotification('Complete as notas e registre um próximo ponto a melhorar.', 'error');
+          return false;
+      }
+      const studentId = String(student.id);
+      const existing = finalSprintEvaluations.find((item) => item.type === 'weekly' && String(item.studentId) === studentId && item.weekId === week.id);
+      const now = new Date().toISOString();
+      try {
+          await setDoc(doc(db, 'finalSprintEvaluations', getFinalSprintEvaluationDocId('weekly', studentId, week.id)), {
+              type: 'weekly',
+              status: 'complete',
+              studentId,
+              studentName: student.name || 'Aluno',
+              weekId: week.id,
+              weekLabel: week.label,
+              ratings: Object.fromEntries(WEEKLY_EVALUATION_CRITERIA.map(({ id }) => [id, Number(draft.ratings[id])])),
+              total,
+              strengths: `${draft.strengths || ''}`.trim().slice(0, 600),
+              improvement: `${draft.improvement || ''}`.trim().slice(0, 600),
+              evaluatorName: currentUser.name || 'Perfil técnico',
+              createdAt: existing?.createdAt || now,
+              updatedAt: now,
+          }, { merge: true });
+          showNotification(`Avaliação semanal de ${student.name || 'aluno'} salva.`, 'success');
+          return true;
+      } catch (error) {
+          console.error('Erro ao salvar avaliação semanal da reta final:', error);
+          showNotification('Não foi possível salvar a avaliação semanal.', 'error');
+          return false;
+      }
+  };
+
+  const handleSavePresentationEvaluation = async ({ student, draft }) => {
+      if (currentUser?.type !== 'admin' || !isAdmin || !student?.id) return false;
+      const total = getFinalSprintEvaluationTotal(draft.ratings, PRESENTATION_EVALUATION_CRITERIA);
+      if (total === null || !`${draft.improvement || ''}`.trim()) {
+          showNotification('Complete as notas e registre um próximo ponto a melhorar.', 'error');
+          return false;
+      }
+      const studentId = String(student.id);
+      const existing = finalSprintEvaluations.find((item) => item.type === 'presentation' && String(item.studentId) === studentId);
+      const now = new Date().toISOString();
+      try {
+          await setDoc(doc(db, 'finalSprintEvaluations', getFinalSprintEvaluationDocId('presentation', studentId)), {
+              type: 'presentation',
+              status: 'complete',
+              studentId,
+              studentName: student.name || 'Aluno',
+              presentedAt: draft.presentedAt || now.slice(0, 10),
+              ratings: Object.fromEntries(PRESENTATION_EVALUATION_CRITERIA.map(({ id }) => [id, Number(draft.ratings[id])])),
+              total,
+              strengths: `${draft.strengths || ''}`.trim().slice(0, 600),
+              improvement: `${draft.improvement || ''}`.trim().slice(0, 600),
+              evaluatorName: currentUser.name || 'Perfil técnico',
+              createdAt: existing?.createdAt || now,
+              updatedAt: now,
+          }, { merge: true });
+          showNotification(`Avaliação da apresentação de ${student.name || 'aluno'} salva.`, 'success');
+          return true;
+      } catch (error) {
+          console.error('Erro ao salvar avaliação da apresentação:', error);
+          showNotification('Não foi possível salvar a avaliação da apresentação.', 'error');
+          return false;
+      }
+  };
+
+  const handleSaveFinalSprintSelection = async ({ student, draft }) => {
+      if (currentUser?.type !== 'admin' || !isAdmin || !student?.id) return false;
+      const historyScore = Number(draft.historyScore);
+      const viniciusScore = Number(draft.viniciusScore);
+      if (!Number.isInteger(historyScore) || historyScore < 0 || historyScore > 10 || !Number.isInteger(viniciusScore) || viniciusScore < 0 || viniciusScore > 10) {
+          showNotification('Informe uma nota de 0 a 10 para o histórico e para o relatório do Vinicius.', 'error');
+          return false;
+      }
+      const studentId = String(student.id);
+      const existing = finalSprintSelections.find((item) => String(item.studentId) === studentId);
+      const nextSelected = draft.selectedForTournament === true;
+      const selectedCount = finalSprintSelections.filter((item) => item.selectedForTournament === true).length;
+      if (nextSelected && existing?.selectedForTournament !== true && selectedCount >= 6) {
+          showNotification('O limite de seis alunos selecionados já foi atingido.', 'error');
+          return false;
+      }
+      const now = new Date().toISOString();
+      try {
+          await setDoc(doc(db, 'finalSprintSelectionScores', getFinalSprintEvaluationDocId('selection', studentId)), {
+              studentId,
+              studentName: student.name || 'Aluno',
+              historyScore,
+              historyNote: `${draft.historyNote || ''}`.trim().slice(0, 500),
+              viniciusScore,
+              viniciusNote: `${draft.viniciusNote || ''}`.trim().slice(0, 500),
+              selectedForTournament: nextSelected,
+              selectionNote: `${draft.selectionNote || ''}`.trim().slice(0, 500),
+              updatedAt: now,
+              createdAt: existing?.createdAt || now,
+          }, { merge: true });
+          setFinalSprintSelections((current) => [...current.filter((item) => String(item.studentId) !== studentId), {
+              ...draft,
+              studentId,
+              studentName: student.name || 'Aluno',
+              historyScore,
+              viniciusScore,
+              selectedForTournament: nextSelected,
+              updatedAt: now,
+          }]);
+          showNotification(nextSelected ? `${student.name || 'Aluno'} marcado para o torneio.` : 'Dados de prontidão salvos.', 'success');
+          return true;
+      } catch (error) {
+          console.error('Erro ao salvar dados de prontidão para o torneio:', error);
+          showNotification('Não foi possível salvar os dados de prontidão.', 'error');
+          return false;
+      }
+  };
+
+  const handleSaveFinalSprintWeights = async (nextWeights) => {
+      if (currentUser?.type !== 'admin' || !isAdmin) return false;
+      const validWeights = Object.keys(DEFAULT_FINAL_SPRINT_WEIGHTS).every((key) => Number.isInteger(nextWeights[key]) && nextWeights[key] >= 0);
+      const totalWeight = Object.values(nextWeights).reduce((sum, value) => sum + Number(value || 0), 0);
+      if (!validWeights || totalWeight !== 100) {
+          showNotification('Os pesos devem ser números inteiros e somar 100.', 'error');
+          return false;
+      }
+      try {
+          await setDoc(doc(db, 'settings', 'final_sprint_weights'), { ...nextWeights, updatedAt: new Date().toISOString() }, { merge: true });
+          setFinalSprintWeights(nextWeights);
+          showNotification('Pesos da nota de prontidão salvos.', 'success');
+          return true;
+      } catch (error) {
+          console.error('Erro ao salvar pesos da reta final:', error);
+          showNotification('Não foi possível salvar os pesos.', 'error');
           return false;
       }
   };
@@ -2666,6 +2814,60 @@ function App() {
 
     return () => unsubscribe();
   }, [isFinalSprintActive, currentUser?.type, isAdmin, viewAsStudent?.id]);
+
+  useEffect(() => {
+    if (!db || !currentUser) {
+      setFinalSprintEvaluations([]);
+      return;
+    }
+    const isTechnicalProfile = currentUser?.type === 'admin' && isAdmin;
+    const evaluationsRef = collection(db, 'finalSprintEvaluations');
+    const evaluationsQuery = isTechnicalProfile
+      ? evaluationsRef
+      : currentUser?.type === 'student' && viewAsStudent?.id
+        ? query(evaluationsRef, where('studentId', '==', String(viewAsStudent.id)))
+        : null;
+    if (!evaluationsQuery) {
+      setFinalSprintEvaluations([]);
+      return;
+    }
+    const unsubscribe = onSnapshot(evaluationsQuery, (snapshot) => {
+      setFinalSprintEvaluations(snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id })));
+    }, (error) => {
+      console.error('Erro ao carregar avaliações da reta final:', error);
+      showNotification('Não foi possível carregar as avaliações.', 'error');
+    });
+    return () => unsubscribe();
+  }, [currentUser?.type, isAdmin, viewAsStudent?.id]);
+
+  useEffect(() => {
+    if (!db || currentUser?.type !== 'admin' || !isAdmin) {
+      setFinalSprintSelections([]);
+      return;
+    }
+    const unsubscribe = onSnapshot(collection(db, 'finalSprintSelectionScores'), (snapshot) => {
+      setFinalSprintSelections(snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id })));
+    }, (error) => {
+      console.error('Erro ao carregar pontuações de prontidão:', error);
+      showNotification('Não foi possível carregar os dados de prontidão.', 'error');
+    });
+    return () => unsubscribe();
+  }, [currentUser?.type, isAdmin]);
+
+  useEffect(() => {
+    if (!db || currentUser?.type !== 'admin' || !isAdmin) return;
+    const unsubscribe = onSnapshot(doc(db, 'settings', 'final_sprint_weights'), (snapshot) => {
+      if (!snapshot.exists()) return;
+      const saved = snapshot.data();
+      const values = Object.fromEntries(Object.keys(DEFAULT_FINAL_SPRINT_WEIGHTS).map((key) => [key, Number(saved[key])]));
+      if (Object.values(values).every(Number.isInteger) && Object.values(values).reduce((sum, value) => sum + value, 0) === 100) {
+        setFinalSprintWeights(values);
+      }
+    }, (error) => {
+      console.error('Erro ao carregar pesos da nota de prontidão:', error);
+    });
+    return () => unsubscribe();
+  }, [currentUser?.type, isAdmin]);
 
   useEffect(() => {
     if (!db || !isPitStopModalOpen) return;
@@ -5210,8 +5412,15 @@ const handleDeleteRound = async (id) => {
       { label: 'Proximo Evento', value: nextUpcomingEvent ? nextUpcomingEvent.date.split('-').reverse().join('/') : 'Sem agenda', helper: nextUpcomingEvent ? nextUpcomingEvent.title : 'cadastre o proximo marco', icon: <CalendarDays size={16} />, tone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-300' }
   ];
 
+  const currentFinalSprintWeek = getFinalSprintEvaluationWeek();
+  const currentWeekEvaluationIds = new Set(finalSprintEvaluations
+      .filter((entry) => entry.type === 'weekly' && entry.weekId === currentFinalSprintWeek.id && entry.status === 'complete')
+      .map((entry) => String(entry.studentId)));
+  const pendingWeeklyEvaluationCount = Math.max(0, students.filter((student) => student?.id && !currentWeekEvaluationIds.has(String(student.id))).length);
+
   const adminHeroActions = [
       { label: 'Central de Comando', onClick: openCommandCenterMode, icon: <Crown size={14} />, style: 'bg-yellow-500/10 text-yellow-300 border-yellow-500/20 hover:bg-yellow-500 hover:text-black' },
+      { label: 'Avaliar a Semana', onClick: () => setAdminTab('evaluations'), icon: <ClipboardList size={14} />, style: 'bg-amber-500/10 text-amber-200 border-amber-500/20 hover:bg-amber-400 hover:text-black' },
       { label: 'Abrir Rubricas', onClick: () => setAdminTab('rubrics'), icon: <Scale size={14} />, style: 'bg-white/10 text-white border-white/15 hover:bg-white hover:text-black' },
       { label: 'Kanban da Semana', onClick: () => setAdminTab('kanban'), icon: <ClipboardList size={14} />, style: 'bg-orange-500/10 text-orange-300 border-orange-500/20 hover:bg-orange-500 hover:text-white' },
       { label: 'Agenda', onClick: () => setAdminTab('agenda'), icon: <CalendarDays size={14} />, style: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20 hover:bg-indigo-500 hover:text-white' }
@@ -5226,6 +5435,7 @@ const handleDeleteRound = async (id) => {
 
   const studentHeroActions = [
       { label: 'Minha Missao', onClick: () => setStudentTab('mission'), icon: <Rocket size={14} />, style: 'bg-white/10 text-white border-white/15 hover:bg-white hover:text-black' },
+      { label: 'Meu Feedback', onClick: () => setStudentTab('feedback'), icon: <MessageSquare size={14} />, style: 'bg-cyan-500/10 text-cyan-200 border-cyan-500/20 hover:bg-cyan-400 hover:text-black' },
       { label: 'Rubricas', onClick: () => setStudentTab('rubrics'), icon: <Scale size={14} />, style: 'bg-purple-500/10 text-purple-200 border-purple-500/20 hover:bg-purple-500 hover:text-white' },
       { label: STUDENT_TASKS_LABEL, onClick: () => setStudentTab('kanban'), icon: <ClipboardList size={14} />, style: 'bg-orange-500/10 text-orange-300 border-orange-500/20 hover:bg-orange-500 hover:text-white' },
       { label: 'Agenda', onClick: () => setStudentTab('agenda'), icon: <CalendarDays size={14} />, style: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20 hover:bg-indigo-500 hover:text-white' }
@@ -5233,6 +5443,7 @@ const handleDeleteRound = async (id) => {
 
   const adminWorkspaceTabs = [
       { id: 'sprint', label: 'Reta final', icon: <Flag size={16} />, description: 'Frentes de trabalho e preparação para o torneio de dezembro.', pillTone: 'border-amber-500/20 bg-amber-500/10 text-amber-200', activeClass: 'bg-amber-400 text-black shadow-lg shadow-amber-900/20', inactiveClass: 'text-gray-400 hover:text-amber-300 hover:bg-amber-500/10' },
+      { id: 'evaluations', label: 'Avaliações', icon: <ClipboardList size={16} />, description: 'Avalie a semana às sextas e acompanhe a preparação para o torneio.', badge: pendingWeeklyEvaluationCount > 0 ? pendingWeeklyEvaluationCount : null, pillTone: 'border-rose-500/20 bg-rose-500/10 text-rose-200', activeClass: 'bg-rose-400 text-black shadow-lg shadow-rose-900/20', inactiveClass: 'text-gray-400 hover:text-rose-300 hover:bg-rose-500/10' },
       { id: 'rotation', label: 'Rodízio', icon: <LayoutDashboard size={16} />, description: 'Configuração do rodízio para retomar quando a equipe voltar às estações.', pill: currentWeekData?.weekName || 'Rodízio', pillTone: 'border-white/10 bg-white/5 text-gray-200', activeClass: 'bg-white text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
       { id: 'strategy', label: 'Estrategia', icon: <Lightbulb size={16} />, description: 'Projeto, impacto, ideias e narrativa que os juizes entendem rapido.', pillTone: 'border-purple-500/20 bg-purple-500/10 text-purple-200', activeClass: 'bg-purple-500 text-white shadow-lg shadow-purple-900/20', inactiveClass: 'text-gray-400 hover:text-purple-300 hover:bg-purple-500/10' },
       { id: 'rounds', label: 'Robo', icon: <ListTodo size={16} />, description: 'Saidas, anexos, codigo e evolucao do robo em linguagem de equipe.', pillTone: 'border-blue-500/20 bg-blue-500/10 text-blue-200', activeClass: 'bg-blue-600 text-white shadow-lg shadow-blue-900/20', inactiveClass: 'text-gray-400 hover:text-blue-300 hover:bg-blue-500/10' },
@@ -5247,6 +5458,7 @@ const handleDeleteRound = async (id) => {
 
   const studentWorkspaceTabs = [
       { id: 'sprint', label: 'Reta final', icon: <Flag size={16} />, description: 'Escolha onde contribuir e mantenha seus próximos passos registrados.', pillTone: 'border-amber-500/20 bg-amber-500/10 text-amber-200', activeClass: 'bg-amber-400 text-black shadow-lg shadow-amber-900/20', inactiveClass: 'text-gray-400 hover:text-amber-300 hover:bg-amber-500/10' },
+      { id: 'feedback', label: 'Meu feedback', icon: <MessageSquare size={16} />, description: 'Consulte seus pontos fortes e o próximo passo recomendado.', pillTone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200', activeClass: 'bg-cyan-300 text-black shadow-lg shadow-cyan-900/20', inactiveClass: 'text-gray-400 hover:text-cyan-300 hover:bg-cyan-500/10' },
       { id: 'mission', label: 'Minha Missao', icon: <Rocket size={16} />, description: 'Seu foco da semana, status da entrega e proximo passo.', pill: viewAsStudent?.station || 'Equipe', pillTone: 'border-white/10 bg-white/5 text-gray-200', activeClass: 'bg-white text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
       { id: 'strategy', label: 'Estrategia', icon: <Lightbulb size={16} />, description: 'Entenda o projeto, o impacto e o caminho competitivo do time.', pillTone: 'border-purple-500/20 bg-purple-500/10 text-purple-200', activeClass: 'bg-purple-500 text-white shadow-lg shadow-purple-900/20', inactiveClass: 'text-gray-400 hover:text-purple-300 hover:bg-purple-500/10' },
       { id: 'rubrics', label: 'Rubricas', icon: <Scale size={16} />, description: 'Veja o placar da equipe e onde subir de nivel.', pill: `${overallRubricAverage}/4`, pillTone: 'border-gray-400/20 bg-gray-400/10 text-gray-100', activeClass: 'bg-gray-300 text-black shadow-lg shadow-gray-900/20', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
@@ -5258,6 +5470,8 @@ const handleDeleteRound = async (id) => {
 
   const workspaceSceneTopPaddingMap = {
       sprint: 'pt-10 md:pt-12',
+      evaluations: 'pt-10 md:pt-12',
+      feedback: 'pt-10 md:pt-12',
       rotation: 'pt-10 md:pt-12',
       strategy: 'pt-10 md:pt-12',
       rounds: 'pt-10 md:pt-12',
@@ -8406,6 +8620,20 @@ const handleFileSelect = (e) => {
       onSaveProgress: handleSaveFinalSprintProgress,
   };
 
+  const finalSprintEvaluationViewProps = {
+      isTechnicalProfile: currentUser?.type === 'admin' && isAdmin,
+      student: viewAsStudent,
+      students,
+      evaluations: finalSprintEvaluations,
+      selections: finalSprintSelections,
+      weights: finalSprintWeights,
+      pendingWeeklyCount: pendingWeeklyEvaluationCount,
+      onSaveWeekly: handleSaveWeeklyEvaluation,
+      onSavePresentation: handleSavePresentationEvaluation,
+      onSaveSelection: handleSaveFinalSprintSelection,
+      onSaveWeights: handleSaveFinalSprintWeights,
+  };
+
   const roundsViewProps = {
       rounds,
       missionsList,
@@ -9151,6 +9379,7 @@ const handleFileSelect = (e) => {
                 <div className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(adminTab)}`}>
                   <WorkspaceScene sceneId={`admin-${adminTab}`}>
                     {adminTab === 'sprint' && <FinalSprintView {...finalSprintViewProps} />}
+                    {adminTab === 'evaluations' && <Suspense fallback={<LazyPanelFallback label="Carregando avaliações da reta final..." minHeightClass="min-h-[420px]" />}><FinalSprintEvaluationsView {...finalSprintEvaluationViewProps} /></Suspense>}
                     {adminTab === 'rotation' && (
                       <Suspense fallback={<LazyPanelFallback label="Carregando operacoes de rotacao..." minHeightClass="min-h-[420px]" />}>
                         <RotationOperationsPanel
@@ -9384,6 +9613,7 @@ const handleFileSelect = (e) => {
                 <div className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(studentTab)}`}>
                   <WorkspaceScene sceneId={`student-${studentTab}`}>
                     {studentTab === 'sprint' && <FinalSprintView {...finalSprintViewProps} />}
+                    {studentTab === 'feedback' && <Suspense fallback={<LazyPanelFallback label="Carregando seu feedback..." minHeightClass="min-h-[420px]" />}><FinalSprintEvaluationsView {...finalSprintEvaluationViewProps} /></Suspense>}
                     {studentTab === 'mission' && (
                         <>
                           {viewAsStudent.station ? (
