@@ -112,16 +112,16 @@ const getBaseTone = (base) => {
 };
 
 const RobotRoundsPanel = ({
-  rounds,
-  missionsList,
-  attachments,
+  rounds = [],
+  missionsList = [],
+  attachments = [],
   activeCommandCode,
-  scoreHistory,
+  scoreHistory = [],
   robotSubTab,
   onChangeRobotSubTab,
   activeTimer,
   timerDisplay,
-  roundFormValues,
+  roundFormValues = {},
   fullRoundTimeValue,
   fullRoundScoreValue,
   fullRoundTimerActive,
@@ -136,6 +136,7 @@ const RobotRoundsPanel = ({
   onSavePracticeScore,
   onDeleteRound,
   onSaveFullRoundRun,
+  onSaveExitPractice,
   onSaveRoundRun,
   scoreChart,
   readonly = false,
@@ -161,8 +162,46 @@ const RobotRoundsPanel = ({
   }, {});
 
   const generalPracticeRuns = scoreHistory
-    .filter((entry) => !entry.roundId && (typeof entry.score === 'number' || typeof entry.time === 'number'))
+    .filter((entry) => !entry.roundId && entry.practiceType !== 'exit_practice' && (typeof entry.score === 'number' || typeof entry.time === 'number'))
     .sort((left, right) => new Date(right.date || 0) - new Date(left.date || 0));
+
+  const exitRuns = scoreHistory
+    .filter((entry) => entry.practiceType === 'exit_practice' && Number(entry.exitNumber) >= 1 && Number(entry.exitNumber) <= 8)
+    .sort((left, right) => new Date(right.date || 0) - new Date(left.date || 0));
+  const exitReportRows = Array.from({ length: 8 }, (_, index) => {
+    const exitNumber = index + 1;
+    const runs = exitRuns.filter((entry) => Number(entry.exitNumber) === exitNumber);
+    const chronologicalRuns = [...runs].reverse();
+    const firstRun = chronologicalRuns[0] || null;
+    const latestRun = runs[0] || null;
+    const bestScore = runs.length ? Math.max(...runs.map((entry) => Number(entry.score) || 0)) : null;
+    const bestTime = runs.length ? Math.min(...runs.map((entry) => Number(entry.time) || Number.MAX_SAFE_INTEGER)) : null;
+    const reliabilityRuns = runs.filter((entry) => entry.successes !== null && entry.successes !== undefined && Number.isFinite(Number(entry.successes)));
+    const attempts = reliabilityRuns.reduce((sum, entry) => sum + (Number(entry.attempts) || 1), 0);
+    const successes = reliabilityRuns.reduce((sum, entry) => sum + Number(entry.successes), 0);
+    return { exitNumber, runs, firstRun, latestRun, bestScore, bestTime, attempts, successes };
+  });
+  const [selectedExitChart, setSelectedExitChart] = React.useState(1);
+  const selectedExitRuns = exitRuns
+    .filter((entry) => Number(entry.exitNumber) === Number(selectedExitChart))
+    .sort((left, right) => new Date(left.date || 0) - new Date(right.date || 0))
+    .slice(-20);
+  const exitChartWidth = 900;
+  const exitChartHeight = 270;
+  const exitChartPadding = { top: 28, right: 52, bottom: 42, left: 52 };
+  const exitChartPlotWidth = exitChartWidth - exitChartPadding.left - exitChartPadding.right;
+  const exitChartPlotHeight = exitChartHeight - exitChartPadding.top - exitChartPadding.bottom;
+  const exitChartMaxScore = Math.max(10, ...selectedExitRuns.map((entry) => Number(entry.score) || 0));
+  const exitChartMaxTime = Math.max(10, ...selectedExitRuns.map((entry) => Number(entry.time) || 0));
+  const getExitChartX = (index) => exitChartPadding.left + (selectedExitRuns.length > 1 ? (index / (selectedExitRuns.length - 1)) * exitChartPlotWidth : exitChartPlotWidth / 2);
+  const getExitScoreY = (value) => exitChartPadding.top + exitChartPlotHeight - ((Number(value) || 0) / exitChartMaxScore) * exitChartPlotHeight;
+  const getExitTimeY = (value) => exitChartPadding.top + exitChartPlotHeight - ((Number(value) || 0) / exitChartMaxTime) * exitChartPlotHeight;
+  const exitScorePath = selectedExitRuns.map((entry, index) => `${index === 0 ? 'M' : 'L'} ${getExitChartX(index)} ${getExitScoreY(entry.score)}`).join(' ');
+  const exitTimePath = selectedExitRuns.map((entry, index) => `${index === 0 ? 'M' : 'L'} ${getExitChartX(index)} ${getExitTimeY(entry.time)}`).join(' ');
+  const selectedExitLatest = selectedExitRuns[selectedExitRuns.length - 1] || null;
+  const selectedExitPrevious = selectedExitRuns[selectedExitRuns.length - 2] || null;
+  const selectedExitAverageScore = selectedExitRuns.length ? selectedExitRuns.reduce((sum, entry) => sum + (Number(entry.score) || 0), 0) / selectedExitRuns.length : 0;
+  const selectedExitAverageTime = selectedExitRuns.length ? selectedExitRuns.reduce((sum, entry) => sum + (Number(entry.time) || 0), 0) / selectedExitRuns.length : 0;
 
   const latestGeneralRun = generalPracticeRuns[0] || null;
   const fullRoundRuns = generalPracticeRuns.filter((entry) => entry.practiceType === 'full_round');
@@ -289,6 +328,15 @@ const RobotRoundsPanel = ({
       inactiveClass: 'border-white/10 bg-black/20 text-gray-300 hover:bg-white/5 hover:text-white',
     },
     {
+      id: 'exits',
+      label: 'Treino das saidas',
+      description: 'Treine e documente as oito saidas antes de consolidar os rounds.',
+      icon: <Flag size={16} />,
+      tone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200',
+      activeClass: 'border-emerald-500/30 bg-emerald-500 text-black shadow-[0_18px_40px_rgba(16,185,129,0.18)]',
+      inactiveClass: 'border-white/10 bg-black/20 text-gray-300 hover:bg-white/5 hover:text-white',
+    },
+    {
       id: 'map',
       label: 'Mesa Tatica',
       description: 'Desenho tatico, trajetos e combinacoes de saida.',
@@ -343,7 +391,7 @@ const RobotRoundsPanel = ({
   ];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div id="robot-rounds-panel" className="scroll-mt-5 space-y-6 animate-in fade-in duration-300">
       <section className="newgears-major-panel relative overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(19,21,35,0.96),rgba(12,14,24,0.96))] p-4 md:mt-5 md:p-5 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px),radial-gradient(circle_at_top_left,rgba(6,182,212,0.14),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.12),transparent_28%)] bg-[size:22px_22px,22px_22px,auto,auto]" />
         <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -363,7 +411,13 @@ const RobotRoundsPanel = ({
             {robotTabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => onChangeRobotSubTab(tab.id)}
+                type="button"
+                onClick={() => {
+                  onChangeRobotSubTab(tab.id);
+                  if (typeof document !== 'undefined') {
+                    document.getElementById('robot-rounds-panel')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                  }
+                }}
                 className={`flex items-center justify-center gap-2 rounded-[18px] px-5 py-3 text-sm font-black transition-all ${robotSubTab === tab.id ? tab.activeClass : 'text-gray-300 hover:bg-white/8 hover:text-white'}`}
               >
                 {tab.icon}
@@ -911,6 +965,135 @@ const RobotRoundsPanel = ({
               </div>
             </div>
           </div>
+        </>
+      ) : robotSubTab === 'exits' ? (
+        <>
+          <section className="newgears-major-panel rounded-[28px] border border-emerald-500/20 bg-gradient-to-br from-[#10251e] via-[#111820] to-[#0f1218] p-6 md:p-8">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-200/80">Ciclo de projeto e evidencia</p>
+            <h3 className="mt-3 text-3xl font-black text-white">Treino das oito saidas</h3>
+            <p className="mt-3 max-w-4xl text-sm leading-relaxed text-gray-300">Registre cada teste com tempo, pontos, confiabilidade e o que mudou. Assim o relatorio mostra como a equipe testou, ajustou e melhorou o robo e a programacao antes de juntar tudo em rounds.</p>
+            <div className="mt-5 flex flex-wrap gap-2 text-xs">
+              <MetaChip tone="border-cyan-500/20 bg-cyan-500/10 text-cyan-200"><Timer size={11} /> Tempo por saida</MetaChip>
+              <MetaChip tone="border-yellow-500/20 bg-yellow-500/10 text-yellow-200"><Trophy size={11} /> Pontuacao</MetaChip>
+              <MetaChip tone="border-purple-500/20 bg-purple-500/10 text-purple-200"><Wrench size={11} /> Ajustes e aprendizados</MetaChip>
+            </div>
+          </section>
+
+          <section id="exit-practice-chart" className="scroll-mt-5 rounded-[28px] border border-white/10 bg-[#151a25] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.2)] md:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">Evolucao por tentativa</p>
+                <h4 className="mt-2 flex items-center gap-2 text-xl font-black text-white"><TrendingUp className="text-emerald-300" /> Pontuacao e tempo da saida</h4>
+                <p className="mt-2 text-xs text-gray-400">Compare os ultimos 20 testes. Pontuacao maior e tempo menor indicam progresso.</p>
+              </div>
+              <label className="min-w-[190px] space-y-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400">Saida no grafico
+                <select value={selectedExitChart} onChange={(event) => setSelectedExitChart(Number(event.target.value))} className="mt-1 block w-full rounded-xl border border-white/10 bg-[#111722] px-3 py-2.5 text-sm font-bold normal-case text-white outline-none focus:border-emerald-400">
+                  {exitReportRows.map((row) => <option key={row.exitNumber} value={row.exitNumber}>Saida {row.exitNumber} ({row.runs.length} testes)</option>)}
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <MetricCard label="Ultima pontuacao" value={selectedExitLatest ? `${selectedExitLatest.score} pts` : '--'} helper={selectedExitLatest ? formatDateTime(selectedExitLatest.date) : 'Registre o primeiro teste desta saida.'} tone="border-emerald-500/20 bg-emerald-500/10 text-emerald-200" icon={<Trophy size={14} className="text-emerald-300" />} />
+              <MetricCard label="Ultimo tempo" value={selectedExitLatest ? formatSeconds(selectedExitLatest.time) : '--'} helper="Tempo de execucao da saida selecionada" tone="border-cyan-500/20 bg-cyan-500/10 text-cyan-200" icon={<Timer size={14} className="text-cyan-300" />} />
+              <MetricCard label="Variacao do teste anterior" value={selectedExitPrevious && selectedExitLatest ? `${Number(selectedExitLatest.score || 0) - Number(selectedExitPrevious.score || 0) >= 0 ? '+' : ''}${Number(selectedExitLatest.score || 0) - Number(selectedExitPrevious.score || 0)} pts` : '--'} helper={selectedExitPrevious && selectedExitLatest ? `${Number(selectedExitLatest.time || 0) - Number(selectedExitPrevious.time || 0) > 0 ? '+' : ''}${Number(selectedExitLatest.time || 0) - Number(selectedExitPrevious.time || 0)}s no tempo (negativo significa mais rapido)` : 'Precisa de pelo menos dois testes.'} tone="border-purple-500/20 bg-purple-500/10 text-purple-200" icon={<Activity size={14} className="text-purple-300" />} />
+            </div>
+
+            {selectedExitRuns.length === 0 ? (
+              <div className="mt-5 flex min-h-[260px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-center">
+                <TrendingUp size={30} className="text-gray-500" />
+                <p className="mt-3 text-sm font-bold text-gray-300">Ainda nao ha testes para a Saida {selectedExitChart}.</p>
+                <p className="mt-1 text-xs text-gray-500">Registre uma tentativa abaixo e a evolucao aparecera aqui.</p>
+              </div>
+            ) : (
+              <>
+                <div className="mt-5 flex flex-wrap gap-4 text-xs font-bold text-gray-300">
+                  <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-400" /> Pontuacao</span>
+                  <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-cyan-400" /> Tempo em segundos (menor e melhor)</span>
+                  {selectedExitRuns.length > 1 ? <span className="text-gray-500">Linhas tracejadas mostram as medias da saida.</span> : null}
+                  <span className="text-gray-500">Mostrando {selectedExitRuns.length} de {exitReportRows[selectedExitChart - 1].runs.length} teste(s)</span>
+                </div>
+                <div className="mt-3 overflow-x-auto rounded-2xl border border-white/5 bg-black/20 p-2">
+                  <svg viewBox={`0 0 ${exitChartWidth} ${exitChartHeight}`} className="h-auto min-w-[680px] w-full" role="img" aria-label={`Evolucao de pontuacao e tempo da Saida ${selectedExitChart}`}>
+                    {[0, 1, 2, 3, 4].map((tick) => {
+                      const fraction = tick / 4;
+                      const y = exitChartPadding.top + fraction * exitChartPlotHeight;
+                      return <g key={tick}>
+                        <line x1={exitChartPadding.left} y1={y} x2={exitChartWidth - exitChartPadding.right} y2={y} stroke="rgba(255,255,255,0.12)" strokeDasharray="4 5" />
+                        <text x={exitChartPadding.left - 10} y={y + 4} textAnchor="end" fill="#a1a1aa" fontSize="10">{Math.round(exitChartMaxScore * (1 - fraction))}</text>
+                        <text x={exitChartWidth - exitChartPadding.right + 10} y={y + 4} textAnchor="start" fill="#a1a1aa" fontSize="10">{Math.round(exitChartMaxTime * (1 - fraction))}s</text>
+                      </g>;
+                    })}
+                    <text x={exitChartPadding.left} y="15" fill="#6ee7b7" fontSize="10" fontWeight="bold">PONTOS</text>
+                    <text x={exitChartWidth - exitChartPadding.right} y="15" textAnchor="end" fill="#67e8f9" fontSize="10" fontWeight="bold">TEMPO</text>
+                    {selectedExitRuns.length > 1 ? <>
+                      <line x1={exitChartPadding.left} y1={getExitScoreY(selectedExitAverageScore)} x2={exitChartWidth - exitChartPadding.right} y2={getExitScoreY(selectedExitAverageScore)} stroke="#34d399" strokeDasharray="4 5" opacity="0.55" />
+                      <line x1={exitChartPadding.left} y1={getExitTimeY(selectedExitAverageTime)} x2={exitChartWidth - exitChartPadding.right} y2={getExitTimeY(selectedExitAverageTime)} stroke="#22d3ee" strokeDasharray="4 5" opacity="0.55" />
+                    </> : null}
+                    {selectedExitRuns.length > 1 ? <>
+                      <path d={exitScorePath} fill="none" stroke="#34d399" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d={exitTimePath} fill="none" stroke="#22d3ee" strokeWidth="3" strokeDasharray="7 5" strokeLinecap="round" strokeLinejoin="round" />
+                    </> : null}
+                    {selectedExitRuns.map((entry, index) => {
+                      const x = getExitChartX(index);
+                      const scoreY = getExitScoreY(entry.score);
+                      const timeY = getExitTimeY(entry.time);
+                      return <g key={entry.id || `${entry.date}-${index}`}>
+                        <circle cx={x} cy={scoreY} r="5" fill="#111722" stroke="#34d399" strokeWidth="3"><title>{`Teste ${index + 1}: ${entry.score} pontos | ${entry.time}s | ${formatDateTime(entry.date)}`}</title></circle>
+                        <circle cx={x} cy={timeY} r="5" fill="#111722" stroke="#22d3ee" strokeWidth="3"><title>{`Teste ${index + 1}: ${entry.time}s | ${entry.score} pontos | ${formatDateTime(entry.date)}`}</title></circle>
+                        {(index === 0 || index === selectedExitRuns.length - 1 || index % 4 === 0) ? <text x={x} y={exitChartHeight - 12} textAnchor="middle" fill="#9ca3af" fontSize="10">{formatDateOnly(entry.date)}</text> : null}
+                      </g>;
+                    })}
+                  </svg>
+                </div>
+              </>
+            )}
+          </section>
+
+          <section className="overflow-hidden rounded-[24px] border border-white/10 bg-[#111722]">
+            <div className="border-b border-white/10 px-5 py-4">
+              <h4 className="text-lg font-black text-white">Relatorio comparativo das saidas</h4>
+              <p className="mt-1 text-xs text-gray-400">A variacao compara o primeiro teste registrado com o mais recente. Tempo menor e pontuacao maior indicam melhora.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[850px] text-left text-xs">
+                <thead className="bg-white/5 text-[10px] uppercase tracking-[0.14em] text-gray-400"><tr><th className="px-4 py-3">Saida</th><th className="px-4 py-3">Testes</th><th className="px-4 py-3">Ultimo resultado</th><th className="px-4 py-3">Melhor tempo</th><th className="px-4 py-3">Melhor pontuacao</th><th className="px-4 py-3">Variacao desde o inicio</th><th className="px-4 py-3">Confiabilidade</th></tr></thead>
+                <tbody>{exitReportRows.map((row) => {
+                  const scoreDelta = row.runs.length > 1 ? Number(row.latestRun.score || 0) - Number(row.firstRun.score || 0) : null;
+                  const timeDelta = row.runs.length > 1 ? Number(row.latestRun.time || 0) - Number(row.firstRun.time || 0) : null;
+                  return <tr key={row.exitNumber} className="border-t border-white/5 text-gray-200"><td className="px-4 py-3 font-bold text-white">Saida {row.exitNumber}</td><td className="px-4 py-3">{row.runs.length}</td><td className="px-4 py-3">{row.latestRun ? `${row.latestRun.score} pts / ${formatSeconds(row.latestRun.time)}` : '--'}</td><td className="px-4 py-3">{row.bestTime === null ? '--' : formatSeconds(row.bestTime)}</td><td className="px-4 py-3">{row.bestScore === null ? '--' : `${row.bestScore} pts`}</td><td className="px-4 py-3">{scoreDelta === null ? '--' : `${scoreDelta >= 0 ? '+' : ''}${scoreDelta} pts / ${timeDelta > 0 ? '+' : ''}${timeDelta}s`}</td><td className="px-4 py-3">{row.attempts ? `${row.successes}/${row.attempts} (${Math.round((row.successes / row.attempts) * 100)}%)` : '--'}</td></tr>;
+                })}</tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="grid gap-4 xl:grid-cols-2">
+            {exitReportRows.map((row) => {
+              const timerKey = `__exit_${row.exitNumber}_time__`;
+              const timerActive = activeTimer?.roundId === timerKey;
+              const latest = row.latestRun;
+              const previous = row.runs[1];
+              const scoreDelta = latest && previous ? Number(latest.score || 0) - Number(previous.score || 0) : null;
+              const timeDelta = latest && previous ? Number(latest.time || 0) - Number(previous.time || 0) : null;
+              return <article key={row.exitNumber} className="rounded-[24px] border border-white/10 bg-[#151a25] p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-200">Saida {row.exitNumber} de 8</p><h4 className="mt-1 text-xl font-black text-white">Teste individual</h4></div><div className="flex items-center gap-2"><MetaChip>{row.runs.length} teste(s)</MetaChip><button type="button" onClick={() => { setSelectedExitChart(row.exitNumber); document.getElementById('exit-practice-chart')?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }} className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1.5 text-[10px] font-bold text-emerald-200 hover:bg-emerald-500/20">Ver grafico</button></div></div>
+                <div className="mt-4 grid grid-cols-3 gap-2"><div className="rounded-xl border border-white/5 bg-black/20 p-3"><p className="text-[9px] uppercase text-gray-500">Melhor</p><p className="mt-1 font-black text-white">{row.bestScore ?? '--'} pts</p></div><div className="rounded-xl border border-white/5 bg-black/20 p-3"><p className="text-[9px] uppercase text-gray-500">Mais rapido</p><p className="mt-1 font-black text-white">{row.bestTime === null ? '--' : formatSeconds(row.bestTime)}</p></div><div className="rounded-xl border border-white/5 bg-black/20 p-3"><p className="text-[9px] uppercase text-gray-500">Ultima variacao</p><p className="mt-1 font-black text-white">{scoreDelta === null ? '--' : `${scoreDelta >= 0 ? '+' : ''}${scoreDelta} pts / ${timeDelta > 0 ? '+' : ''}${timeDelta}s`}</p></div></div>
+                {!readonly ? <form className="mt-4 space-y-3" onSubmit={(event) => onSaveExitPractice(event, row.exitNumber)}>
+                  <div className="grid gap-3 sm:grid-cols-2"><label className="space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Pontuacao<input name="score" type="number" min="0" required className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white" placeholder="Pontos desta saida" /></label><label className="space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Tempo (segundos)<input name="time" type="number" min="1" required value={roundFormValues[timerKey] ?? ''} onChange={(event) => onRoundFormValueChange(timerKey, event.target.value)} className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white" placeholder="Cronometre ou informe" /></label></div>
+                  <div className="grid gap-3 sm:grid-cols-2"><label className="space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Tentativas de confiabilidade<input name="attempts" type="number" min="1" defaultValue="1" required className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white" /></label><label className="space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Acertos (opcional)<input name="successes" type="number" min="0" className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white" placeholder="Deixe vazio se nao mediu" /></label></div>
+                  <label className="block space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">O que estavamos testando<textarea name="testGoal" rows="2" className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-xs text-white" placeholder="Ex.: alinhar o sensor antes de empurrar o modelo" /></label>
+                  <label className="block space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Missao, estrategia e recurso consultado<textarea name="strategy" rows="2" className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-xs text-white" placeholder="Por que escolhemos esta missao? Que recurso de construcao/codigo ou orientacao ajudou?" /></label>
+                  <label className="block space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Participantes e contribuicoes<textarea name="contributors" rows="2" className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-xs text-white" placeholder="Ex.: nome — ideia, desenho, montagem, programacao ou teste" /></label>
+                  <label className="block space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Anexo e sua finalidade<textarea name="attachmentUse" rows="2" className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-xs text-white" placeholder="Qual anexo foi usado e por que ele ajuda nesta missao?" /></label>
+                  <label className="block space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Codigo ou sensor e sua finalidade<textarea name="programmingUse" rows="2" className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-xs text-white" placeholder="Que bloco, rotina ou sensor foi usado e o que controla?" /></label>
+                  <label className="block space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">O que mudou no robo ou no codigo<textarea name="adjustment" rows="2" className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-xs text-white" placeholder="Peca, anexo, posicao, potencia ou bloco ajustado" /></label>
+                  <label className="block space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Aprendizado / proximo passo<textarea name="learning" rows="2" className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-xs text-white" placeholder="O resultado confirmou a hipotese? O que testar depois?" /></label>
+                  <div className="flex flex-wrap gap-2"><button type="button" onClick={() => onToggleTimer({ id: timerKey, name: `Saida ${row.exitNumber}` })} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold ${timerActive ? 'bg-red-500 text-white' : 'border border-white/10 bg-white/5 text-gray-200'}`}>{timerActive ? <Square size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}{timerActive ? 'Parar cronometro' : 'Cronometrar'}</button><button className="inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-4 py-2.5 text-xs font-black text-black"><Check size={13} /> Salvar teste</button></div>
+                </form> : <p className="mt-4 text-xs text-gray-400">Registro em modo de consulta.</p>}
+                {latest ? <div className="mt-4 border-t border-white/10 pt-3 text-xs text-gray-400"><p><span className="font-bold text-white">Ultimo teste:</span> {formatDateTime(latest.date)} por {latest.author || 'Equipe'}.</p>{latest.strategy ? <p className="mt-2"><span className="font-bold text-yellow-200">Estrategia:</span> {latest.strategy}</p> : null}{latest.contributors ? <p className="mt-2"><span className="font-bold text-emerald-200">Participantes:</span> {latest.contributors}</p> : null}{latest.attachmentUse ? <p className="mt-2"><span className="font-bold text-cyan-200">Anexo:</span> {latest.attachmentUse}</p> : null}{latest.programmingUse ? <p className="mt-2"><span className="font-bold text-blue-200">Codigo/sensor:</span> {latest.programmingUse}</p> : null}{latest.adjustment ? <p className="mt-2"><span className="font-bold text-cyan-200">Ajuste:</span> {latest.adjustment}</p> : null}{latest.learning ? <p className="mt-2"><span className="font-bold text-purple-200">Aprendizado:</span> {latest.learning}</p> : null}</div> : null}
+              </article>;
+            })}
+          </section>
         </>
       ) : (
         <>

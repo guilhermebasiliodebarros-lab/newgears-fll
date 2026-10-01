@@ -23,6 +23,7 @@ export default function RoundsView({
   handleSavePracticeScore,
   handleDeleteRound,
   handleSaveFullRoundRun,
+  handleSaveExitPractice,
   handleSaveRoundRun,
   ScoreEvolutionChart,
   RobotRoundsPanel,
@@ -56,6 +57,7 @@ export default function RoundsView({
             onSavePracticeScore={handleSavePracticeScore}
             onDeleteRound={handleDeleteRound}
             onSaveFullRoundRun={handleSaveFullRoundRun}
+            onSaveExitPractice={handleSaveExitPractice}
             onSaveRoundRun={handleSaveRoundRun}
             scoreChart={<ScoreEvolutionChart />}
             readonly={readonly}

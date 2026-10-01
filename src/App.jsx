@@ -9,6 +9,7 @@ import RoundsView from './views/RoundsView';
 import LogbookView from './views/LogbookView';
 import KanbanView from './views/KanbanView';
 import AgendaView from './views/AgendaView';
+import FinalSprintView, { FINAL_SPRINT_FRONTS } from './views/FinalSprintView';
 import ActivityHistoryView from './views/ActivityHistoryView';
 import PublicShowcaseAdminView from './views/PublicShowcaseAdminView';
 import PublicTeamView from './views/PublicTeamView';
@@ -932,8 +933,8 @@ function App() {
     return new URLSearchParams(window.location.search).get('view') || '';
   };
   const [isPublicMode, setIsPublicMode] = useState(() => getStandaloneView() === 'public');
-  const [adminTab, setAdminTab] = useState('rotation');
-  const [studentTab, setStudentTab] = useState('mission');
+  const [adminTab, setAdminTab] = useState('sprint');
+  const [studentTab, setStudentTab] = useState('sprint');
   const [isTvMode, setIsTvMode] = useState(() => getStandaloneView() === 'tv');
   const [isJudgeMode, setIsJudgeMode] = useState(false);
   const [isCommandCenterMode, setIsCommandCenterMode] = useState(false);
@@ -943,6 +944,7 @@ function App() {
   const [decisionMatrix, setDecisionMatrix] = useState([]);
   const [students, setStudents] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [finalSprintAssignments, setFinalSprintAssignments] = useState([]);
   const [logbookEntries, setLogbookEntries] = useState([]);
   const [events, setEvents] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
@@ -1005,7 +1007,8 @@ function App() {
   const isPublicTvMode = getStandaloneView() === 'public-tv';
   const today = new Date().toISOString().split('T')[0];
   const isLogbookViewActive = isAdmin ? adminTab === 'logbook' : studentTab === 'logbook';
-  const isActivityHistoryActive = Boolean(currentUser) && (isAdmin ? adminTab === 'history' : studentTab === 'history');
+  const isFinalSprintActive = Boolean(currentUser) && (isAdmin ? adminTab === 'sprint' : studentTab === 'sprint');
+  const isActivityHistoryActive = currentUser?.type === 'admin' && isAdmin && adminTab === 'history';
   const isPitStopModalOpen = modal.type === 'pitstop';
   const dashboardNeedsStrategyData =
     (adminPanelState.dashboard && (adminPanelState.prep || adminPanelState.judge || adminPanelState.stats || adminPanelState.achievements))
@@ -1273,6 +1276,70 @@ function App() {
       setNotification({ msg, type, action }); 
       notificationTimeoutRef.current = setTimeout(() => setNotification(null), action ? 7000 : duration); 
   }
+
+  const getFinalSprintAssignmentDocId = (studentId, frontId) => encodeURIComponent(`${studentId}__${frontId}`);
+
+  const handleToggleFinalSprintFront = async (frontId) => {
+      if (currentUser?.type === 'admin' || !viewAsStudent?.id) return;
+      const front = FINAL_SPRINT_FRONTS.find((item) => item.id === frontId);
+      if (!front) return;
+      const studentId = String(viewAsStudent.id);
+      const existing = finalSprintAssignments.find((item) => item.frontId === frontId && String(item.studentId) === studentId);
+      const assignmentRef = doc(db, 'finalSprintAssignments', getFinalSprintAssignmentDocId(studentId, frontId));
+      const now = new Date().toISOString();
+      const nextActive = existing ? existing.active === false : true;
+
+      try {
+          await setDoc(assignmentRef, {
+              studentId,
+              studentName: viewAsStudent.name || currentUser.name || 'Aluno',
+              frontId,
+              frontLabel: front.title,
+              active: nextActive,
+              status: existing?.status || 'planned',
+              createdAt: existing?.createdAt || now,
+              updatedAt: now,
+          }, { merge: true });
+          showNotification(nextActive ? `Você entrou na frente ${front.title}.` : 'Sua participação nesta frente foi encerrada. As atualizações ficaram guardadas.', 'success');
+      } catch (error) {
+          console.error('Erro ao atualizar participação da reta final:', error);
+          showNotification('Não foi possível atualizar sua participação.', 'error');
+      }
+  };
+
+  const handleSaveFinalSprintProgress = async (frontId, draft) => {
+      if (currentUser?.type === 'admin' || !viewAsStudent?.id) return false;
+      const front = FINAL_SPRINT_FRONTS.find((item) => item.id === frontId);
+      const studentId = String(viewAsStudent.id);
+      const existing = finalSprintAssignments.find((item) => item.frontId === frontId && String(item.studentId) === studentId);
+      if (!front || !existing || existing.active === false) return false;
+      if (!`${draft.commitment || ''}`.trim()) {
+          showNotification('Escreva seu próximo passo antes de salvar.', 'error');
+          return false;
+      }
+      const allowedStatuses = ['planned', 'in_progress', 'done'];
+      const now = new Date().toISOString();
+
+      try {
+          await setDoc(doc(db, 'finalSprintAssignments', getFinalSprintAssignmentDocId(studentId, frontId)), {
+              studentId,
+              studentName: viewAsStudent.name || currentUser.name || 'Aluno',
+              frontId,
+              frontLabel: front.title,
+              commitment: `${draft.commitment || ''}`.trim().slice(0, 240),
+              progressNote: `${draft.progressNote || ''}`.trim().slice(0, 1000),
+              status: allowedStatuses.includes(draft.status) ? draft.status : 'planned',
+              active: true,
+              updatedAt: now,
+          }, { merge: true });
+          showNotification('Atualização da frente salva.', 'success');
+          return true;
+      } catch (error) {
+          console.error('Erro ao salvar atualização da reta final:', error);
+          showNotification('Não foi possível salvar a atualização.', 'error');
+          return false;
+      }
+  };
 
   const openPublicMode = () => {
       if (typeof window === 'undefined') return;
@@ -2577,6 +2644,28 @@ function App() {
 
     return () => unsubscribe();
   }, [isActivityHistoryActive]);
+
+  useEffect(() => {
+    if (!db || !isFinalSprintActive) return;
+    setFinalSprintAssignments([]);
+    const isTechnicalProfile = currentUser?.type === 'admin' && isAdmin;
+    const assignmentsRef = collection(db, 'finalSprintAssignments');
+    const assignmentsQuery = isTechnicalProfile
+      ? assignmentsRef
+      : viewAsStudent?.id
+        ? query(assignmentsRef, where('studentId', '==', String(viewAsStudent.id)))
+        : null;
+    if (!assignmentsQuery) return;
+
+    const unsubscribe = onSnapshot(assignmentsQuery, (snapshot) => {
+      setFinalSprintAssignments(snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id })));
+    }, (error) => {
+      console.error('Erro ao carregar frentes da reta final:', error);
+      showNotification('Não foi possível carregar as frentes da reta final.', 'error');
+    });
+
+    return () => unsubscribe();
+  }, [isFinalSprintActive, currentUser?.type, isAdmin, viewAsStudent?.id]);
 
   useEffect(() => {
     if (!db || !isPitStopModalOpen) return;
@@ -5143,7 +5232,8 @@ const handleDeleteRound = async (id) => {
   ];
 
   const adminWorkspaceTabs = [
-      { id: 'rotation', label: 'Rodizio', icon: <LayoutDashboard size={16} />, description: 'Escala viva da semana, remanejamentos e energia do time.', pill: currentWeekData?.weekName || 'Semana', pillTone: 'border-white/10 bg-white/5 text-gray-200', activeClass: 'bg-white text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
+      { id: 'sprint', label: 'Reta final', icon: <Flag size={16} />, description: 'Frentes de trabalho e preparação para o torneio de dezembro.', pillTone: 'border-amber-500/20 bg-amber-500/10 text-amber-200', activeClass: 'bg-amber-400 text-black shadow-lg shadow-amber-900/20', inactiveClass: 'text-gray-400 hover:text-amber-300 hover:bg-amber-500/10' },
+      { id: 'rotation', label: 'Rodízio', icon: <LayoutDashboard size={16} />, description: 'Configuração do rodízio para retomar quando a equipe voltar às estações.', pill: currentWeekData?.weekName || 'Rodízio', pillTone: 'border-white/10 bg-white/5 text-gray-200', activeClass: 'bg-white text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
       { id: 'strategy', label: 'Estrategia', icon: <Lightbulb size={16} />, description: 'Projeto, impacto, ideias e narrativa que os juizes entendem rapido.', pillTone: 'border-purple-500/20 bg-purple-500/10 text-purple-200', activeClass: 'bg-purple-500 text-white shadow-lg shadow-purple-900/20', inactiveClass: 'text-gray-400 hover:text-purple-300 hover:bg-purple-500/10' },
       { id: 'rounds', label: 'Robo', icon: <ListTodo size={16} />, description: 'Saidas, anexos, codigo e evolucao do robo em linguagem de equipe.', pillTone: 'border-blue-500/20 bg-blue-500/10 text-blue-200', activeClass: 'bg-blue-600 text-white shadow-lg shadow-blue-900/20', inactiveClass: 'text-gray-400 hover:text-blue-300 hover:bg-blue-500/10' },
       { id: 'rubrics', label: 'Rubricas', icon: <Scale size={16} />, description: 'Placar oficial da equipe com leitura simples e proximo passo.', pill: `${overallRubricAverage}/4`, pillTone: 'border-gray-400/20 bg-gray-400/10 text-gray-100', activeClass: 'bg-gray-300 text-black shadow-lg shadow-gray-900/20', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
@@ -5153,9 +5243,10 @@ const handleDeleteRound = async (id) => {
       { id: 'agenda', label: 'Agenda', icon: <CalendarDays size={16} />, description: 'Prazos, encontros e checkpoints da equipe em modo missao.', badge: urgentEventsCount > 0 ? urgentEventsCount : null, pillTone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200', activeClass: 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20', inactiveClass: 'text-gray-400 hover:text-indigo-300 hover:bg-indigo-500/10' },
       { id: 'showcase', label: 'Vitrine', icon: <MonitorPlay size={16} />, description: 'Curadoria das fotos, torneio e QR Codes exibidos para a escola.', pill: `${galleryPhotos.length} fotos`, pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
       { id: 'history', label: 'Historico', icon: <History size={16} />, description: 'Registro coletivo com autor, data e alteracoes feitas no sistema.', pillTone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200', activeClass: 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-900/20', inactiveClass: 'text-gray-400 hover:text-cyan-300 hover:bg-cyan-500/10' }
-  ];
+  ].filter((tab) => tab.id !== 'history' || currentUser?.type === 'admin');
 
   const studentWorkspaceTabs = [
+      { id: 'sprint', label: 'Reta final', icon: <Flag size={16} />, description: 'Escolha onde contribuir e mantenha seus próximos passos registrados.', pillTone: 'border-amber-500/20 bg-amber-500/10 text-amber-200', activeClass: 'bg-amber-400 text-black shadow-lg shadow-amber-900/20', inactiveClass: 'text-gray-400 hover:text-amber-300 hover:bg-amber-500/10' },
       { id: 'mission', label: 'Minha Missao', icon: <Rocket size={16} />, description: 'Seu foco da semana, status da entrega e proximo passo.', pill: viewAsStudent?.station || 'Equipe', pillTone: 'border-white/10 bg-white/5 text-gray-200', activeClass: 'bg-white text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
       { id: 'strategy', label: 'Estrategia', icon: <Lightbulb size={16} />, description: 'Entenda o projeto, o impacto e o caminho competitivo do time.', pillTone: 'border-purple-500/20 bg-purple-500/10 text-purple-200', activeClass: 'bg-purple-500 text-white shadow-lg shadow-purple-900/20', inactiveClass: 'text-gray-400 hover:text-purple-300 hover:bg-purple-500/10' },
       { id: 'rubrics', label: 'Rubricas', icon: <Scale size={16} />, description: 'Veja o placar da equipe e onde subir de nivel.', pill: `${overallRubricAverage}/4`, pillTone: 'border-gray-400/20 bg-gray-400/10 text-gray-100', activeClass: 'bg-gray-300 text-black shadow-lg shadow-gray-900/20', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
@@ -5163,10 +5254,10 @@ const handleDeleteRound = async (id) => {
       { id: 'kanban', label: STUDENT_TASKS_LABEL, icon: <ClipboardList size={16} />, description: 'Seu quadro da semana para agir sem se perder nas entregas.', badge: urgentTasksCount > 0 ? urgentTasksCount : null, pillTone: 'border-orange-500/20 bg-orange-500/10 text-orange-200', activeClass: 'bg-orange-500 text-white shadow-lg shadow-orange-900/20', inactiveClass: 'text-gray-400 hover:text-orange-300 hover:bg-orange-500/10' },
       { id: 'logbook', label: 'Diario', icon: <Book size={16} />, description: 'Guarde o que aprendeu, testou e melhorou na temporada.', pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
       { id: 'agenda', label: 'Agenda', icon: <CalendarDays size={16} />, description: 'Prazos, encontros e marcos importantes da equipe.', badge: urgentEventsCount > 0 ? urgentEventsCount : null, pillTone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200', activeClass: 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20', inactiveClass: 'text-gray-400 hover:text-indigo-300 hover:bg-indigo-500/10' },
-      { id: 'history', label: 'Historico', icon: <History size={16} />, description: 'Veja quem atualizou as informacoes compartilhadas da equipe.', pillTone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200', activeClass: 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-900/20', inactiveClass: 'text-gray-400 hover:text-cyan-300 hover:bg-cyan-500/10' }
   ];
 
   const workspaceSceneTopPaddingMap = {
+      sprint: 'pt-10 md:pt-12',
       rotation: 'pt-10 md:pt-12',
       strategy: 'pt-10 md:pt-12',
       rounds: 'pt-10 md:pt-12',
@@ -7704,7 +7795,7 @@ const handleFileSelect = (e) => {
 
       if (isGeneral) {
           // Pega apenas históricos de pontuação total
-          rawData = scoreHistory.filter(h => !h.roundId);
+          rawData = scoreHistory.filter(h => !h.roundId && h.practiceType !== 'exit_practice');
       } else {
           // Pega histórico de TEMPO de um round específico
           rawData = scoreHistory.filter(h => h.roundId === chartFilter);
@@ -7712,7 +7803,7 @@ const handleFileSelect = (e) => {
       }
 
       if (isTvFullRoundsView) {
-          rawData = scoreHistory.filter(h => !h.roundId && (h.practiceType === 'full_round' || h.time != null));
+          rawData = scoreHistory.filter(h => !h.roundId && h.practiceType !== 'exit_practice' && (h.practiceType === 'full_round' || h.time != null));
           color = chartPalette.secondary;
       }
 
@@ -8099,7 +8190,7 @@ const handleFileSelect = (e) => {
       const upcomingWindow = [
           { time: timeVal, score: scoreVal },
           ...scoreHistory
-              .filter((entry) => !entry.roundId)
+              .filter((entry) => !entry.roundId && entry.practiceType !== 'exit_practice')
               .sort((left, right) => new Date(right.date || 0) - new Date(left.date || 0)),
       ].slice(0, 10);
       const withinLimitCount = upcomingWindow.filter((entry) => Number(entry.time) <= 150).length;
@@ -8140,6 +8231,68 @@ const handleFileSelect = (e) => {
   };
 
   // --- NOVA FUNÇÃO: SALVAR EXECUÇÃO DE UM ROUND ESPECÍFICO ---
+  const handleSaveExitPractice = async (e, exitNumber) => {
+      e.preventDefault();
+      const form = e.currentTarget;
+      const formData = new FormData(form);
+      const timeVal = Number.parseInt(formData.get('time'), 10);
+      const scoreVal = Number.parseInt(formData.get('score'), 10);
+      const attemptsVal = Number.parseInt(formData.get('attempts'), 10) || 1;
+      const rawSuccesses = formData.get('successes');
+      const successesVal = rawSuccesses === '' || rawSuccesses === null ? null : Number.parseInt(rawSuccesses, 10);
+      if (!Number.isFinite(timeVal) || timeVal < 1 || !Number.isFinite(scoreVal) || scoreVal < 0) {
+          showNotification('Preencha tempo e pontuacao desta saida.', 'error');
+          return;
+      }
+      if (successesVal !== null && successesVal > attemptsVal) {
+          showNotification('Os acertos nao podem superar o numero de tentativas.', 'error');
+          return;
+      }
+
+      const run = {
+          practiceType: 'exit_practice',
+          exitNumber,
+          exitName: `Saida ${exitNumber}`,
+          time: timeVal,
+          score: scoreVal,
+          attempts: successesVal === null ? null : attemptsVal,
+          successes: successesVal,
+          testGoal: `${formData.get('testGoal') || ''}`.trim(),
+          strategy: `${formData.get('strategy') || ''}`.trim(),
+          contributors: `${formData.get('contributors') || ''}`.trim(),
+          attachmentUse: `${formData.get('attachmentUse') || ''}`.trim(),
+          programmingUse: `${formData.get('programmingUse') || ''}`.trim(),
+          adjustment: `${formData.get('adjustment') || ''}`.trim(),
+          learning: `${formData.get('learning') || ''}`.trim(),
+          date: new Date().toISOString(),
+          author: isAdmin ? 'Tecnico' : viewAsStudent?.name || 'Equipe',
+      };
+
+      try {
+          await addDoc(collection(db, 'score_history'), run);
+          void recordActivity({
+              action: 'registrou um teste de saida',
+              category: 'robot',
+              title: `Saida ${exitNumber}: ${scoreVal} pontos`,
+              detail: `${timeVal}s${successesVal === null ? '' : ` | ${successesVal}/${attemptsVal} acertos`}${run.adjustment ? ` | Ajuste: ${run.adjustment}` : ''}`,
+          });
+          setRoundFormValues((previous) => {
+              const next = { ...previous };
+              delete next[`__exit_${exitNumber}_time__`];
+              return next;
+          });
+          if (activeTimer?.roundId === `__exit_${exitNumber}_time__`) {
+              setActiveTimer(null);
+              setTimerDisplay(0);
+          }
+          form.reset();
+          showNotification(`Teste da Saida ${exitNumber} registrado.`, 'success');
+      } catch (error) {
+          console.error('Erro ao salvar teste de saida:', error);
+          showNotification('Erro ao salvar teste de saida.', 'error');
+      }
+  };
+
   const handleSaveRoundRun = async (e, round) => {
     e.preventDefault();
     const timeVal = parseInt(e.target.time.value);
@@ -8245,6 +8398,14 @@ const handleFileSelect = (e) => {
       handleDeleteCode
   };
 
+  const finalSprintViewProps = {
+      isTechnicalProfile: currentUser?.type === 'admin' && isAdmin,
+      student: viewAsStudent,
+      assignments: finalSprintAssignments,
+      onToggleFront: handleToggleFinalSprintFront,
+      onSaveProgress: handleSaveFinalSprintProgress,
+  };
+
   const roundsViewProps = {
       rounds,
       missionsList,
@@ -8268,6 +8429,7 @@ const handleFileSelect = (e) => {
       handleSavePracticeScore,
       handleDeleteRound,
       handleSaveFullRoundRun,
+      handleSaveExitPractice,
       handleSaveRoundRun,
       ScoreEvolutionChart,
       RobotRoundsPanel,
@@ -8988,6 +9150,7 @@ const handleFileSelect = (e) => {
                 {/* CONTEÃƒÅ¡DO DA ABA SELECIONADA */}
                 <div className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(adminTab)}`}>
                   <WorkspaceScene sceneId={`admin-${adminTab}`}>
+                    {adminTab === 'sprint' && <FinalSprintView {...finalSprintViewProps} />}
                     {adminTab === 'rotation' && (
                       <Suspense fallback={<LazyPanelFallback label="Carregando operacoes de rotacao..." minHeightClass="min-h-[420px]" />}>
                         <RotationOperationsPanel
@@ -9052,7 +9215,7 @@ const handleFileSelect = (e) => {
                         onOpenTvMode={openPublicTvMode}
                       />
                     )}
-                    {adminTab === 'history' && <ActivityHistoryView activityLogs={activityLogs} />}
+                    {adminTab === 'history' && currentUser?.type === 'admin' && <ActivityHistoryView activityLogs={activityLogs} />}
                   </WorkspaceScene>
                 </div>
             </div>
@@ -9220,6 +9383,7 @@ const handleFileSelect = (e) => {
                 {/* CONTEÃƒÅ¡DO DA ABA SELECIONADA */}
                 <div className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(studentTab)}`}>
                   <WorkspaceScene sceneId={`student-${studentTab}`}>
+                    {studentTab === 'sprint' && <FinalSprintView {...finalSprintViewProps} />}
                     {studentTab === 'mission' && (
                         <>
                           {viewAsStudent.station ? (
@@ -9690,7 +9854,6 @@ const handleFileSelect = (e) => {
                     {studentTab === 'kanban' && <div className="text-left"><KanbanView {...kanbanViewProps} /></div>}
                     {studentTab === 'logbook' && <div className="text-left"><LogbookView {...logbookViewProps} /></div>}
                     {studentTab === 'agenda' && <div className="text-left"><AgendaView {...agendaViewProps} /></div>}
-                    {studentTab === 'history' && <div className="text-left"><ActivityHistoryView activityLogs={activityLogs} /></div>}
                   </WorkspaceScene>
                 </div>
             </div>
