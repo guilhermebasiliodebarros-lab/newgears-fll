@@ -1057,7 +1057,7 @@ function App() {
     || isTvMode
     || isJudgeMode
     || isCommandCenterMode
-    || ((adminTab === 'strategy' || studentTab === 'strategy') && ['innovation', 'prototype'].includes(strategySubTab))
+    || ((adminTab === 'strategy' || studentTab === 'strategy') && ['innovation', 'prototype', 'judge_practice'].includes(strategySubTab))
     || dashboardNeedsStrategyData;
   const shouldLoadRobotWorkspaceData =
     isTvOnlyView
@@ -1069,7 +1069,7 @@ function App() {
     || adminTab === 'rounds'
     || adminTab === 'showcase'
     || studentTab === 'rounds'
-    || ((adminTab === 'strategy' || studentTab === 'strategy') && strategySubTab === 'robot_design')
+    || ((adminTab === 'strategy' || studentTab === 'strategy') && ['robot_design', 'judge_practice'].includes(strategySubTab))
     || dashboardNeedsRobotData;
   const [missions, setMissions] = useState({
     [STATION_KEYS.ENGINEERING]: { text: 'Definir estrategia do robo.', deadline: today },
@@ -8717,6 +8717,8 @@ const handleFileSelect = (e) => {
       strategySubTab,
       setStrategySubTab,
       projectSummary,
+      students,
+      scoreHistory,
       projectImpactNarrative,
       decisionMatrix,
       prototypeIterations,

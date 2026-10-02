@@ -1,11 +1,14 @@
 import { Suspense } from 'react';
-import { GitBranch, Lightbulb, Wrench } from 'lucide-react';
+import { GitBranch, Lightbulb, MessageCircle, Wrench } from 'lucide-react';
 import PrototypeEvolutionView from './PrototypeEvolutionView';
+import JudgePracticeView from './JudgePracticeView';
 
 export default function StrategyView({
   strategySubTab,
   setStrategySubTab,
   projectSummary,
+  students,
+  scoreHistory,
   projectImpactNarrative,
   decisionMatrix,
   prototypeIterations,
@@ -59,7 +62,7 @@ export default function StrategyView({
                       </p>
                   </div>
 
-                  <div className="inline-flex w-full flex-col rounded-[24px] border border-white/10 bg-black/20 p-1.5 sm:w-auto sm:flex-row">
+                  <div className="inline-flex w-full flex-col rounded-[24px] border border-white/10 bg-black/20 p-1.5 sm:w-auto sm:flex-row sm:flex-wrap">
                       <button 
                           onClick={() => setStrategySubTab('innovation')}
                           className={`px-5 py-3 rounded-[18px] text-sm font-black flex items-center justify-center gap-2 transition-all ${strategySubTab === 'innovation' ? 'bg-yellow-500 text-black shadow-[0_16px_30px_rgba(234,179,8,0.26)]' : 'text-gray-300 hover:text-white hover:bg-white/8'}`}
@@ -77,6 +80,12 @@ export default function StrategyView({
                           className={`px-5 py-3 rounded-[18px] text-sm font-black flex items-center justify-center gap-2 transition-all ${strategySubTab === 'robot_design' ? 'bg-blue-600 text-white shadow-[0_16px_30px_rgba(37,99,235,0.26)]' : 'text-gray-300 hover:text-white hover:bg-white/8'}`}
                       >
                           <Wrench size={16}/> Design do Robo
+                      </button>
+                      <button
+                          onClick={() => setStrategySubTab('judge_practice')}
+                          className={`px-5 py-3 rounded-[18px] text-sm font-black flex items-center justify-center gap-2 transition-all ${strategySubTab === 'judge_practice' ? 'bg-violet-300 text-[#140d20] shadow-[0_16px_30px_rgba(196,181,253,0.2)]' : 'text-gray-300 hover:text-white hover:bg-white/8'}`}
+                      >
+                          <MessageCircle size={16}/> Treino com juízes
                       </button>
                   </div>
               </div>
@@ -143,6 +152,23 @@ export default function StrategyView({
                     onDeleteCode={handleDeleteCode}
                 />
               </Suspense>
+          )}
+
+          {strategySubTab === 'judge_practice' && (
+              <JudgePracticeView
+                  projectSummary={projectSummary}
+                  students={students}
+                  scoreHistory={scoreHistory}
+                  prototypeIterations={prototypeIterations}
+                  experts={experts}
+                  expertContacts={expertContacts}
+                  outreachEvents={outreachEvents}
+                  robotVersions={robotVersions}
+                  attachments={attachments}
+                  codeSnippets={codeSnippets}
+                  activeCommandCode={activeCommandCode}
+                  rounds={rounds}
+              />
           )}
 
           {/* Blocos legados removidos da navegacao principal para evitar codigo morto e mutacao acidental. */}
