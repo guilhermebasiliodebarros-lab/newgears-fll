@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 
 export default function RoundsView({
   rounds,
+  robotVersions,
   missionsList,
   attachments,
   activeCommandCode,
@@ -34,6 +35,7 @@ export default function RoundsView({
       <Suspense fallback={<LazyPanelFallback label="Carregando central de rounds..." minHeightClass="min-h-[420px]" />}>
         <RobotRoundsPanel
             rounds={rounds}
+            robotVersions={robotVersions}
             missionsList={missionsList}
             attachments={attachments}
             activeCommandCode={activeCommandCode}

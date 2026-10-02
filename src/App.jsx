@@ -476,7 +476,13 @@ const normalizeStudentBadges = (badges) => {
 
 const normalizeStudentRecord = (student) => {
   if (!student || typeof student !== 'object') return student;
-  return { ...student, badges: normalizeStudentBadges(student.badges), xpLossNotifications: normalizeXpLossNotifications(student.xpLossNotifications) };
+  return {
+    ...student,
+    badges: normalizeStudentBadges(student.badges),
+    xpLossNotifications: normalizeXpLossNotifications(student.xpLossNotifications),
+    competencies: Array.isArray(student.competencies) ? student.competencies : [],
+    interests: Array.isArray(student.interests) ? student.interests : [],
+  };
 };
 
 const normalizeXpLossNotifications = (notifications) => {
@@ -536,6 +542,26 @@ const XP_SOURCE_LABELS = {
 };
 const WEEKLY_CAPTAIN_NAMES = ['Heloise', 'Sofia'];
 const WEEKLY_STATION_KEYS = [STATION_KEYS.ENGINEERING, STATION_KEYS.INNOVATION, STATION_KEYS.MANAGEMENT];
+const STUDENT_COMPETENCY_OPTIONS = [
+  'Montagem e anexos',
+  'Programação e sensores',
+  'Estratégia de mesa',
+  'Testes e análise de dados',
+  'Pesquisa e validação',
+  'Apresentação e comunicação',
+  'Registro e documentação',
+  'Organização e colaboração',
+];
+const STUDENT_INTEREST_OPTIONS = [
+  'Engenharia e construção',
+  'Programação e tecnologia',
+  'Missões e estratégia',
+  'Pesquisa e inovação',
+  'Apresentação aos juízes',
+  'Design e prototipagem',
+  'Organização da equipe',
+  'Comunicação e divulgação',
+];
 
 const getXpSourceLabel = (source) => XP_SOURCE_LABELS[source] || 'Manual';
 
@@ -944,9 +970,12 @@ function App() {
   const [robotSubTab, setRobotSubTab] = useState('overview');
   const [missionsList, setMissionsList] = useState([]);
   const [decisionMatrix, setDecisionMatrix] = useState([]);
+  const [prototypeIterations, setPrototypeIterations] = useState([]);
   const [students, setStudents] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [finalSprintAssignments, setFinalSprintAssignments] = useState([]);
+  const [finalSprintAssignmentsState, setFinalSprintAssignmentsState] = useState({ loading: true, error: false });
+  const [finalSprintAssignmentsRetry, setFinalSprintAssignmentsRetry] = useState(0);
   const [finalSprintEvaluations, setFinalSprintEvaluations] = useState([]);
   const [finalSprintSelections, setFinalSprintSelections] = useState([]);
   const [finalSprintWeights, setFinalSprintWeights] = useState(DEFAULT_FINAL_SPRINT_WEIGHTS);
@@ -1028,7 +1057,7 @@ function App() {
     || isTvMode
     || isJudgeMode
     || isCommandCenterMode
-    || ((adminTab === 'strategy' || studentTab === 'strategy') && strategySubTab === 'innovation')
+    || ((adminTab === 'strategy' || studentTab === 'strategy') && ['innovation', 'prototype'].includes(strategySubTab))
     || dashboardNeedsStrategyData;
   const shouldLoadRobotWorkspaceData =
     isTvOnlyView
@@ -1290,9 +1319,15 @@ function App() {
       if (!front) return;
       const studentId = String(viewAsStudent.id);
       const existing = finalSprintAssignments.find((item) => item.frontId === frontId && String(item.studentId) === studentId);
+      if (existing && existing.active !== false) return;
+      const activeSelectionCount = finalSprintAssignments.filter((item) => String(item.studentId) === studentId && item.active !== false).length;
+      if (activeSelectionCount >= 4) {
+          showNotification('Você já escolheu as quatro frentes. Essas escolhas ficam registradas até o torneio.', 'error');
+          return;
+      }
       const assignmentRef = doc(db, 'finalSprintAssignments', getFinalSprintAssignmentDocId(studentId, frontId));
       const now = new Date().toISOString();
-      const nextActive = existing ? existing.active === false : true;
+      const nextActive = true;
 
       try {
           await setDoc(assignmentRef, {
@@ -2688,6 +2723,7 @@ function App() {
     const unsubExpertContacts = createListener("expertContacts", setExpertContacts);
     const unsubMatrix = createListener("decisionMatrix", setDecisionMatrix);
     const unsubOutreach = createListener("outreach", setOutreachEvents);
+    const unsubPrototypeIterations = createListener("prototypeIterations", setPrototypeIterations);
 
     let hasProjectMain = false;
 
@@ -2716,6 +2752,7 @@ function App() {
         unsubExpertContacts();
         unsubMatrix();
         unsubOutreach();
+        unsubPrototypeIterations();
         unsubProjectMain();
         unsubProjectFallback();
     };
@@ -2794,8 +2831,13 @@ function App() {
   }, [isActivityHistoryActive]);
 
   useEffect(() => {
-    if (!db || !isFinalSprintActive) return;
+    if (!isFinalSprintActive) return;
+    if (!db) {
+      setFinalSprintAssignmentsState({ loading: false, error: true });
+      return;
+    }
     setFinalSprintAssignments([]);
+    setFinalSprintAssignmentsState({ loading: true, error: false });
     const isTechnicalProfile = currentUser?.type === 'admin' && isAdmin;
     const assignmentsRef = collection(db, 'finalSprintAssignments');
     const assignmentsQuery = isTechnicalProfile
@@ -2803,17 +2845,21 @@ function App() {
       : viewAsStudent?.id
         ? query(assignmentsRef, where('studentId', '==', String(viewAsStudent.id)))
         : null;
-    if (!assignmentsQuery) return;
+    if (!assignmentsQuery) {
+      setFinalSprintAssignmentsState({ loading: false, error: false });
+      return;
+    }
 
     const unsubscribe = onSnapshot(assignmentsQuery, (snapshot) => {
       setFinalSprintAssignments(snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id })));
+      setFinalSprintAssignmentsState({ loading: false, error: false });
     }, (error) => {
       console.error('Erro ao carregar frentes da reta final:', error);
-      showNotification('Não foi possível carregar as frentes da reta final.', 'error');
+      setFinalSprintAssignmentsState({ loading: false, error: true });
     });
 
     return () => unsubscribe();
-  }, [isFinalSprintActive, currentUser?.type, isAdmin, viewAsStudent?.id]);
+  }, [isFinalSprintActive, currentUser?.type, isAdmin, viewAsStudent?.id, finalSprintAssignmentsRetry]);
 
   useEffect(() => {
     if (!db || !currentUser) {
@@ -4042,6 +4088,8 @@ const handleDeleteRound = async (id) => {
       
       // Verifica se estamos editando ou criando
       const isEditing = modal.data?.id;
+      const customCompetencies = `${fd.get('customCompetencies') || ''}`.split(/[,;\n]/).map((item) => item.trim()).filter(Boolean);
+      const customInterests = `${fd.get('customInterests') || ''}`.split(/[,;\n]/).map((item) => item.trim()).filter(Boolean);
 
       // A imagem agora já vem processada e redimensionada pelo Crop e está em modal.data.avatarImage
       const avatarImage = modal.data?.avatarImage || null;
@@ -4051,6 +4099,8 @@ const handleDeleteRound = async (id) => {
           name: fd.get('name'), 
           turma: fd.get('turma'), 
           specialty: (fd.get('specialty') || '').toString().trim(),
+          competencies: [...new Set([...fd.getAll('competencies').map((value) => `${value}`.trim()), ...customCompetencies].filter(Boolean))],
+          interests: [...new Set([...fd.getAll('interests').map((value) => `${value}`.trim()), ...customInterests].filter(Boolean))],
           username: fd.get('username'), 
           password: fd.get('password'), 
           avatarImage: avatarImage, // Novo campo para a foto
@@ -7186,6 +7236,19 @@ const handleFileSelect = (e) => {
                     </div>
                 </div>
 
+                {(modal.data.competencies?.length > 0 || modal.data.interests?.length > 0) && (
+                  <section className="mb-6 grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-4">
+                      <h3 className="text-xs font-bold uppercase text-emerald-100">Competências</h3>
+                      <div className="mt-3 flex flex-wrap gap-2">{(modal.data.competencies || []).length ? modal.data.competencies.map((item) => <span key={item} className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-[10px] font-bold text-emerald-100">{item}</span>) : <span className="text-xs text-gray-500">Ainda não informado</span>}</div>
+                    </div>
+                    <div className="rounded-xl border border-cyan-500/15 bg-cyan-500/5 p-4">
+                      <h3 className="text-xs font-bold uppercase text-cyan-100">Interesses</h3>
+                      <div className="mt-3 flex flex-wrap gap-2">{(modal.data.interests || []).length ? modal.data.interests.map((item) => <span key={item} className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-[10px] font-bold text-cyan-100">{item}</span>) : <span className="text-xs text-gray-500">Ainda não informado</span>}</div>
+                    </div>
+                  </section>
+                )}
+
                 {/* Status Grid */}
                 <div className="grid grid-cols-2 gap-4 mb-8">
                     <div className="bg-[#151520] p-4 rounded-xl border border-white/10 flex flex-col items-center justify-center relative overflow-hidden">
@@ -7274,6 +7337,24 @@ const handleFileSelect = (e) => {
         <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Especialidade principal (fixa)</label>
         <input name="specialty" defaultValue={modal.data?.specialty || ''} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Lideranca, inovacao e engenharia" />
         <p className="mt-1 text-[10px] text-gray-500">Esse campo representa o melhor jogo do aluno e nao muda com o rodizio semanal.</p>
+    </div>
+
+    <div className="mb-4 rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-4">
+        <p className="text-xs font-bold uppercase text-emerald-100">Competências</p>
+        <p className="mb-3 mt-1 text-[10px] text-gray-400">O que você já sabe fazer e pode compartilhar com a equipe.</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {STUDENT_COMPETENCY_OPTIONS.map((competency) => <label key={competency} className="flex items-center gap-2 rounded-lg border border-white/5 bg-black/20 p-2 text-xs text-gray-200"><input type="checkbox" name="competencies" value={competency} defaultChecked={(modal.data?.competencies || []).includes(competency)} className="accent-emerald-400" />{competency}</label>)}
+        </div>
+        <label className="mt-3 block text-[10px] font-bold uppercase tracking-wide text-gray-400">Outras competências que você quer incluir<input name="customCompetencies" defaultValue={(modal.data?.competencies || []).filter((item) => !STUDENT_COMPETENCY_OPTIONS.includes(item)).join(', ')} className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-xs font-normal normal-case text-white outline-none focus:border-emerald-400" placeholder="Ex.: edição de vídeo, desenho 3D" /><span className="mt-1 block font-normal normal-case text-gray-500">Separe várias opções por vírgula.</span></label>
+    </div>
+
+    <div className="mb-6 rounded-xl border border-cyan-500/15 bg-cyan-500/5 p-4">
+        <p className="text-xs font-bold uppercase text-cyan-100">Interesses</p>
+        <p className="mb-3 mt-1 text-[10px] text-gray-400">O que você quer aprender, experimentar ou praticar mais.</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {STUDENT_INTEREST_OPTIONS.map((interest) => <label key={interest} className="flex items-center gap-2 rounded-lg border border-white/5 bg-black/20 p-2 text-xs text-gray-200"><input type="checkbox" name="interests" value={interest} defaultChecked={(modal.data?.interests || []).includes(interest)} className="accent-cyan-400" />{interest}</label>)}
+        </div>
+        <label className="mt-3 block text-[10px] font-bold uppercase tracking-wide text-gray-400">Outros assuntos que você quer explorar<input name="customInterests" defaultValue={(modal.data?.interests || []).filter((item) => !STUDENT_INTEREST_OPTIONS.includes(item)).join(', ')} className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-xs font-normal normal-case text-white outline-none focus:border-cyan-400" placeholder="Ex.: inteligência artificial, sustentabilidade" /><span className="mt-1 block font-normal normal-case text-gray-500">Separe várias opções por vírgula.</span></label>
     </div>
 
     {/* DADOS DE LOGIN (COM FUNDO CINZA PARA ORGANIZAR) */}
@@ -8454,6 +8535,8 @@ const handleFileSelect = (e) => {
       const attemptsVal = Number.parseInt(formData.get('attempts'), 10) || 1;
       const rawSuccesses = formData.get('successes');
       const successesVal = rawSuccesses === '' || rawSuccesses === null ? null : Number.parseInt(rawSuccesses, 10);
+      const robotVersionId = `${formData.get('robotVersionId') || ''}`;
+      const robotVersion = robotVersions.find((item) => String(item.id) === robotVersionId);
       if (!Number.isFinite(timeVal) || timeVal < 1 || !Number.isFinite(scoreVal) || scoreVal < 0) {
           showNotification('Preencha tempo e pontuacao desta saida.', 'error');
           return;
@@ -8469,6 +8552,8 @@ const handleFileSelect = (e) => {
           exitName: `Saida ${exitNumber}`,
           time: timeVal,
           score: scoreVal,
+          robotVersionId: robotVersion?.id || '',
+          robotVersionLabel: robotVersion ? `${robotVersion.version || 'Versão'}${robotVersion.name ? ` · ${robotVersion.name}` : ''}` : '',
           attempts: successesVal === null ? null : attemptsVal,
           successes: successesVal,
           testGoal: `${formData.get('testGoal') || ''}`.trim(),
@@ -8569,12 +8654,73 @@ const handleFileSelect = (e) => {
   };
 
 
+  const handleSavePrototypeIteration = async (draft) => {
+      const version = `${draft.version || ''}`.trim().slice(0, 100);
+      const focus = `${draft.focus || ''}`.trim().slice(0, 100);
+      const improvement = `${draft.improvement || ''}`.trim().slice(0, 1200);
+      if (!version || !focus || !draft.date || !improvement) {
+          showNotification('Preencha a versão, a etapa, a data e a melhoria aplicada antes de salvar.', 'error');
+          return false;
+      }
+
+      let photo = '';
+      if (draft.photo) {
+          if (!draft.photo.type?.startsWith('image/')) {
+              showNotification('Escolha uma foto JPG ou PNG para esta versão.', 'error');
+              return false;
+          }
+          try {
+              photo = await convertExpertContactEvidence(draft.photo);
+          } catch (error) {
+              console.error('Erro ao preparar foto do protótipo:', error);
+              showNotification(error.message || 'Não foi possível preparar a foto.', 'error');
+              return false;
+          }
+      }
+
+      const now = new Date().toISOString();
+      const iteration = {
+          version,
+          focus,
+          date: draft.date,
+          photo,
+          participants: `${draft.participants || ''}`.trim().slice(0, 500),
+          feedback: `${draft.feedback || ''}`.trim().slice(0, 1200),
+          improvement,
+          result: `${draft.result || ''}`.trim().slice(0, 1200),
+          nextStep: `${draft.nextStep || ''}`.trim().slice(0, 1200),
+          author: viewAsStudent?.name || currentUser?.name || 'Equipe',
+          authorId: viewAsStudent?.id ? String(viewAsStudent.id) : String(currentUser?.name || 'tecnico'),
+          createdAt: now,
+          updatedAt: now,
+      };
+
+      try {
+          const savedRecord = await addDoc(collection(db, 'prototypeIterations'), iteration);
+          void recordActivity({
+              action: 'registrou uma versão do protótipo',
+              category: 'innovation',
+              title: `${version} · ${focus}`,
+              detail: iteration.improvement || iteration.feedback || iteration.result || 'Nova etapa da evolução do protótipo.',
+              entityId: savedRecord.id,
+          });
+          showNotification('Versão do protótipo registrada.', 'success');
+          return true;
+      } catch (error) {
+          console.error('Erro ao registrar versão do protótipo:', error);
+          showNotification('Não foi possível salvar a versão do protótipo.', 'error');
+          return false;
+      }
+  };
+
   const strategyViewProps = {
       strategySubTab,
       setStrategySubTab,
       projectSummary,
       projectImpactNarrative,
       decisionMatrix,
+      prototypeIterations,
+      onSavePrototypeIteration: handleSavePrototypeIteration,
       experts,
       expertContacts,
       outreachEvents,
@@ -8616,8 +8762,11 @@ const handleFileSelect = (e) => {
       isTechnicalProfile: currentUser?.type === 'admin' && isAdmin,
       student: viewAsStudent,
       assignments: finalSprintAssignments,
+      assignmentsLoading: finalSprintAssignmentsState.loading,
+      assignmentsError: finalSprintAssignmentsState.error,
       onToggleFront: handleToggleFinalSprintFront,
       onSaveProgress: handleSaveFinalSprintProgress,
+      onRetryAssignments: () => setFinalSprintAssignmentsRetry((attempt) => attempt + 1),
   };
 
   const finalSprintEvaluationViewProps = {
@@ -8636,6 +8785,7 @@ const handleFileSelect = (e) => {
 
   const roundsViewProps = {
       rounds,
+      robotVersions,
       missionsList,
       attachments,
       activeCommandCode,

@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
-import { Lightbulb, Wrench } from 'lucide-react';
+import { GitBranch, Lightbulb, Wrench } from 'lucide-react';
+import PrototypeEvolutionView from './PrototypeEvolutionView';
 
 export default function StrategyView({
   strategySubTab,
@@ -7,6 +8,8 @@ export default function StrategyView({
   projectSummary,
   projectImpactNarrative,
   decisionMatrix,
+  prototypeIterations,
+  onSavePrototypeIteration,
   experts,
   expertContacts,
   outreachEvents,
@@ -52,7 +55,7 @@ export default function StrategyView({
                       <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-black">Mapa da estrategia</p>
                       <h3 className="newgears-display mt-2 text-2xl font-black text-white">Escolha a trilha que a equipe quer explorar agora.</h3>
                       <p className="mt-2 text-sm leading-relaxed text-gray-300">
-                          Uma trilha cuida do projeto e do impacto. A outra mostra como o robo evoluiu. As duas precisam ter mais cara de equipe criativa e menos cara de relatorio.
+                          Organizem o projeto, registrem a evolução do protótipo com evidências e expliquem o design do robô.
                       </p>
                   </div>
 
@@ -62,6 +65,12 @@ export default function StrategyView({
                           className={`px-5 py-3 rounded-[18px] text-sm font-black flex items-center justify-center gap-2 transition-all ${strategySubTab === 'innovation' ? 'bg-yellow-500 text-black shadow-[0_16px_30px_rgba(234,179,8,0.26)]' : 'text-gray-300 hover:text-white hover:bg-white/8'}`}
                       >
                           <Lightbulb size={16}/> Projeto de Inovacao
+                      </button>
+                      <button
+                          onClick={() => setStrategySubTab('prototype')}
+                          className={`px-5 py-3 rounded-[18px] text-sm font-black flex items-center justify-center gap-2 transition-all ${strategySubTab === 'prototype' ? 'bg-emerald-400 text-black shadow-[0_16px_30px_rgba(52,211,153,0.2)]' : 'text-gray-300 hover:text-white hover:bg-white/8'}`}
+                      >
+                          <GitBranch size={16}/> Protótipo e evolução
                       </button>
                       <button 
                           onClick={() => setStrategySubTab('robot_design')}
@@ -99,6 +108,13 @@ export default function StrategyView({
                     onDeleteOutreach={handleDeleteOutreach}
                 />
               </Suspense>
+          )}
+
+          {strategySubTab === 'prototype' && (
+              <PrototypeEvolutionView
+                  iterations={prototypeIterations}
+                  onSave={onSavePrototypeIteration}
+              />
           )}
 
           {strategySubTab === 'robot_design' && (
