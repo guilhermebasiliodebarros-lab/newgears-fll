@@ -1,0 +1,41 @@
+// Integrar estes blocos às regras existentes; este arquivo sozinho não libera as outras abas.
+// Uma regra global "allow read, write: if true" deve EXCLUIR estas coleções.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isReportMember() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/weeklyReportMembers/$(request.auth.uid))
+        && get(/databases/$(database)/documents/weeklyReportMembers/$(request.auth.uid)).data.active == true
+        && get(/databases/$(database)/documents/weeklyReportMembers/$(request.auth.uid)).data.role in ['admin', 'student']
+        && get(/databases/$(database)/documents/weeklyReportMembers/$(request.auth.uid)).data.email.lower() == request.auth.token.email.lower();
+    }
+    function isReportAdmin() {
+      return isReportMember()
+        && get(/databases/$(database)/documents/weeklyReportMembers/$(request.auth.uid)).data.role == 'admin';
+    }
+    match /weeklyReportMembers/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+    match /weeklyReports/{reportId} {
+      allow read: if isReportMember();
+      // Todas as alterações passam pela API, que verifica autor/admin e conteúdo do arquivo.
+      allow write: if false;
+    }
+    match /weeklyReportReads/{uid}/reports/{reportId} {
+      allow read: if isReportMember() && request.auth.uid == uid;
+      allow write: if false;
+    }
+    match /weeklyReportRecipients/{recipientId} {
+      allow read: if isReportAdmin();
+      allow write: if false;
+    }
+    match /weeklyReportEmailJobs/{jobId} {
+      allow read, write: if false;
+    }
+    match /weeklyReportCleanup/{cleanupId} {
+      allow read, write: if false;
+    }
+  }
+}

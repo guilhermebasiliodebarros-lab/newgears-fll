@@ -1,6 +1,12 @@
 import { Suspense, lazy, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy, limit, writeBatch, deleteField } from "firebase/firestore";
-import { db } from './firebase'; // Importa a instância já inicializada
+import { auth, db, FIREBASE_AUTH_ENABLED } from './firebase'; // Reutiliza o mesmo projeto Firebase
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { loadReportsSession } from './services/weeklyReports';
+import useWeeklyReports from './hooks/useWeeklyReports';
+import WeeklyReportsView from './views/WeeklyReportsView';
+import ReportRecipientsView from './views/ReportRecipientsView';
+import WeeklyReportsSummary from './components/WeeklyReportsSummary';
 import Countdown from './components/Countdown';
 import LogoNewGears from './components/LogoNewGears';
 import { WorkspaceHero, WorkspaceTabs, WorkspaceScene, WorkspaceCollapsible, WorkspacePanelToolbar } from './components/WorkspaceChrome';
@@ -17,7 +23,7 @@ import PublicTvModeView from './views/PublicTvModeView';
 import { STATION_KEYS } from './constants/workspace';
 import { DEFAULT_PROJECT_SUMMARY, PROJECT_MAIN_DOC_ID, resolveProjectSummary } from './utils/projectSummary';
 import { buildTrainingGallery, DEFAULT_PUBLIC_SHOWCASE_SETTINGS, resolvePublicShowcaseSettings } from './utils/publicShowcase';
-import { DEFAULT_FINAL_SPRINT_WEIGHTS, PRESENTATION_EVALUATION_CRITERIA, WEEKLY_EVALUATION_CRITERIA, getFinalSprintEvaluationWeek } from './utils/finalSprintEvaluations';
+import { PRESENTATION_EVALUATION_CRITERIA, WEEKLY_EVALUATION_CRITERIA, getFinalSprintEvaluationWeek, parseFinalSprintReportScore } from './utils/finalSprintEvaluations';
 import {
   SCHOOL_REPORT_STAGE_CONFIG,
   SCHOOL_REPORT_SUBJECTS,
@@ -929,14 +935,49 @@ const SchoolGradesForm = ({ data, onSubmit }) => {
 
 function App() {
   // === TODOS OS ESTADOS (HOOKS) ===
-  const [currentUser, setCurrentUser] = useState(() => readStoredUser());
+  const [currentUser, setCurrentUser] = useState(() => FIREBASE_AUTH_ENABLED ? null : readStoredUser());
   const [loginUser, setLoginUser] = useState("");
   const [loginPass, setLoginPass] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [loginBusy, setLoginBusy] = useState(FIREBASE_AUTH_ENABLED);
+  const reportsWorkspace = useWeeklyReports(currentUser);
 
-  const [isAdmin, setIsAdmin] = useState(() => readStoredUser()?.type === 'admin');
+  const [isAdmin, setIsAdmin] = useState(() => !FIREBASE_AUTH_ENABLED && readStoredUser()?.type === 'admin');
 
-  const [viewAsStudent, setViewAsStudent] = useState(() => getStoredStudentSnapshot(readStoredUser()));
+  const [viewAsStudent, setViewAsStudent] = useState(() => FIREBASE_AUTH_ENABLED ? null : getStoredStudentSnapshot(readStoredUser()));
+
+  useEffect(() => {
+    if (!FIREBASE_AUTH_ENABLED) return undefined;
+    let generation = 0;
+    let mounted = true;
+    const unsubscribe = onAuthStateChanged(auth, async (account) => {
+      const attempt = ++generation;
+      setCurrentUser(null); setIsAdmin(false); setViewAsStudent(null);
+      if (!account) { setLoginBusy(false); return; }
+      setLoginBusy(true);
+      try {
+        const { user } = await loadReportsSession();
+        if (!mounted || attempt !== generation || auth.currentUser?.uid !== user.uid) return;
+        const student = user.role === 'student' ? { id: user.studentId, name: user.name, email: user.email } : null;
+        const session = { type: user.role, uid: user.uid, name: user.name, email: user.email, studentId: user.studentId, ...(student ? { data: student } : {}) };
+        setCurrentUser(session); setIsAdmin(user.role === 'admin'); setViewAsStudent(student);
+        localStorage.setItem('roboquest_user', JSON.stringify(session));
+        setLoginError('');
+      } catch (error) {
+        if (!mounted || attempt !== generation) return;
+        setLoginError(error.message || 'Não foi possível validar sua conta.');
+        await signOut(auth).catch(() => {});
+      } finally {
+        if (mounted && attempt === generation) setLoginBusy(false);
+      }
+    }, () => {
+      if (!mounted) return;
+      setCurrentUser(null); setIsAdmin(false); setViewAsStudent(null);
+      setLoginError('Não foi possível restaurar a sessão. Confira a conexão e entre novamente.');
+      setLoginBusy(false);
+    });
+    return () => { mounted = false; generation += 1; unsubscribe(); };
+  }, []);
 
   const [logoutCountdown, setLogoutCountdown] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -961,8 +1002,16 @@ function App() {
     return new URLSearchParams(window.location.search).get('view') || '';
   };
   const [isPublicMode, setIsPublicMode] = useState(() => getStandaloneView() === 'public');
-  const [adminTab, setAdminTab] = useState('sprint');
-  const [studentTab, setStudentTab] = useState('sprint');
+  const [focusedReportId, setFocusedReportId] = useState(() => new URLSearchParams(window.location.search).get('report') || '');
+  const [adminTab, setAdminTab] = useState(() => new URLSearchParams(window.location.search).has('report') ? 'weekly_reports' : 'sprint');
+  const [studentTab, setStudentTab] = useState(() => new URLSearchParams(window.location.search).has('report') ? 'weekly_reports' : 'sprint');
+  const openWeeklyReports = (reportId = '') => {
+    setFocusedReportId(reportId);
+    setAdminTab('weekly_reports'); setStudentTab('weekly_reports');
+    const url = new URL(window.location.href);
+    if (reportId) url.searchParams.set('report', reportId); else url.searchParams.delete('report');
+    window.history.replaceState({}, '', url);
+  };
   const [isTvMode, setIsTvMode] = useState(() => getStandaloneView() === 'tv');
   const [isJudgeMode, setIsJudgeMode] = useState(false);
   const [isCommandCenterMode, setIsCommandCenterMode] = useState(false);
@@ -978,7 +1027,6 @@ function App() {
   const [finalSprintAssignmentsRetry, setFinalSprintAssignmentsRetry] = useState(0);
   const [finalSprintEvaluations, setFinalSprintEvaluations] = useState([]);
   const [finalSprintSelections, setFinalSprintSelections] = useState([]);
-  const [finalSprintWeights, setFinalSprintWeights] = useState(DEFAULT_FINAL_SPRINT_WEIGHTS);
   const [logbookEntries, setLogbookEntries] = useState([]);
   const [events, setEvents] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
@@ -1456,14 +1504,44 @@ function App() {
       }
   };
 
-  const handleSaveFinalSprintSelection = async ({ student, draft }) => {
+  const handleSaveReportEvaluation = async ({ student, draft }) => {
       if (currentUser?.type !== 'admin' || !isAdmin || !student?.id) return false;
-      const historyScore = Number(draft.historyScore);
-      const viniciusScore = Number(draft.viniciusScore);
-      if (!Number.isInteger(historyScore) || historyScore < 0 || historyScore > 10 || !Number.isInteger(viniciusScore) || viniciusScore < 0 || viniciusScore > 10) {
-          showNotification('Informe uma nota de 0 a 10 para o histórico e para o relatório do Vinicius.', 'error');
+      const total = parseFinalSprintReportScore(draft.score);
+      if (total === null) {
+          showNotification('Informe uma nota de 0 a 10 para a avaliação do relatório.', 'error');
           return false;
       }
+      const studentId = String(student.id);
+      const existing = finalSprintEvaluations.find((item) => item.type === 'report' && String(item.studentId) === studentId);
+      const now = new Date().toISOString();
+      const evaluation = {
+          type: 'report',
+          status: 'complete',
+          studentId,
+          studentName: student.name || 'Aluno',
+          total,
+          note: `${draft.note || ''}`.trim().slice(0, 6000),
+          strengths: `${draft.strengths || ''}`.trim().slice(0, 3000),
+          improvement: `${draft.improvement || ''}`.trim().slice(0, 3000),
+          evaluatorName: currentUser.name || 'Perfil técnico',
+          createdAt: existing?.createdAt || now,
+          updatedAt: now,
+      };
+      const evaluationId = getFinalSprintEvaluationDocId('report', studentId);
+      try {
+          await setDoc(doc(db, 'finalSprintEvaluations', evaluationId), evaluation, { merge: true });
+          setFinalSprintEvaluations((current) => [...current.filter((item) => !(item.type === 'report' && String(item.studentId) === studentId)), { ...evaluation, id: evaluationId }]);
+          showNotification(`Avaliação do relatório de ${student.name || 'aluno'} salva.`, 'success');
+          return true;
+      } catch (error) {
+          console.error('Erro ao salvar avaliação do relatório:', error);
+          showNotification('Não foi possível salvar a avaliação do relatório.', 'error');
+          return false;
+      }
+  };
+
+  const handleSaveFinalSprintSelection = async ({ student, draft }) => {
+      if (currentUser?.type !== 'admin' || !isAdmin || !student?.id) return false;
       const studentId = String(student.id);
       const existing = finalSprintSelections.find((item) => String(item.studentId) === studentId);
       const nextSelected = draft.selectedForTournament === true;
@@ -1477,21 +1555,16 @@ function App() {
           await setDoc(doc(db, 'finalSprintSelectionScores', getFinalSprintEvaluationDocId('selection', studentId)), {
               studentId,
               studentName: student.name || 'Aluno',
-              historyScore,
-              historyNote: `${draft.historyNote || ''}`.trim().slice(0, 500),
-              viniciusScore,
-              viniciusNote: `${draft.viniciusNote || ''}`.trim().slice(0, 500),
               selectedForTournament: nextSelected,
               selectionNote: `${draft.selectionNote || ''}`.trim().slice(0, 500),
               updatedAt: now,
               createdAt: existing?.createdAt || now,
           }, { merge: true });
           setFinalSprintSelections((current) => [...current.filter((item) => String(item.studentId) !== studentId), {
+              ...existing,
               ...draft,
               studentId,
               studentName: student.name || 'Aluno',
-              historyScore,
-              viniciusScore,
               selectedForTournament: nextSelected,
               updatedAt: now,
           }]);
@@ -1500,26 +1573,6 @@ function App() {
       } catch (error) {
           console.error('Erro ao salvar dados de prontidão para o torneio:', error);
           showNotification('Não foi possível salvar os dados de prontidão.', 'error');
-          return false;
-      }
-  };
-
-  const handleSaveFinalSprintWeights = async (nextWeights) => {
-      if (currentUser?.type !== 'admin' || !isAdmin) return false;
-      const validWeights = Object.keys(DEFAULT_FINAL_SPRINT_WEIGHTS).every((key) => Number.isInteger(nextWeights[key]) && nextWeights[key] >= 0);
-      const totalWeight = Object.values(nextWeights).reduce((sum, value) => sum + Number(value || 0), 0);
-      if (!validWeights || totalWeight !== 100) {
-          showNotification('Os pesos devem ser números inteiros e somar 100.', 'error');
-          return false;
-      }
-      try {
-          await setDoc(doc(db, 'settings', 'final_sprint_weights'), { ...nextWeights, updatedAt: new Date().toISOString() }, { merge: true });
-          setFinalSprintWeights(nextWeights);
-          showNotification('Pesos da nota de prontidão salvos.', 'success');
-          return true;
-      } catch (error) {
-          console.error('Erro ao salvar pesos da reta final:', error);
-          showNotification('Não foi possível salvar os pesos.', 'error');
           return false;
       }
   };
@@ -1957,9 +2010,27 @@ function App() {
       ? Math.round(teamMoods.reduce((acc, curr) => acc + curr.level, 0) / teamMoods.length) 
       : 0;
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setLoginError("");
+    if (loginBusy) return;
+    if (FIREBASE_AUTH_ENABLED) {
+        setLoginBusy(true);
+        try {
+            await signInWithEmailAndPassword(auth, loginUser.trim().toLowerCase(), loginPass);
+            // A sessão e o papel são obtidos no servidor pelo observador de Firebase Auth.
+        } catch (error) {
+            setLoginError(error.code === 'auth/too-many-requests'
+                ? 'Muitas tentativas. Aguarde um pouco e tente novamente.'
+                : error.code === 'auth/network-request-failed'
+                    ? 'Não foi possível conectar. Confira a internet.'
+                    : ['auth/operation-not-allowed', 'auth/unauthorized-domain', 'auth/configuration-not-found'].includes(error.code)
+                        ? 'O técnico precisa concluir a configuração do Firebase Authentication.'
+                        : 'E-mail ou senha incorretos.');
+            setLoginBusy(false);
+        }
+        return;
+    }
     
     // Normaliza (remove espaços e deixa minúsculo) para evitar erros de digitação
     const userClean = loginUser.trim().toLowerCase();
@@ -2012,7 +2083,11 @@ function App() {
 
   
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+      if (FIREBASE_AUTH_ENABLED) {
+          try { await signOut(auth); }
+          catch { showNotification('Não foi possível encerrar a sessão. Tente novamente.', 'error'); return; }
+      }
       setCurrentUser(null);
       setIsAdmin(false);
       setViewAsStudent(null);
@@ -2896,21 +2971,6 @@ function App() {
     }, (error) => {
       console.error('Erro ao carregar pontuações de prontidão:', error);
       showNotification('Não foi possível carregar os dados de prontidão.', 'error');
-    });
-    return () => unsubscribe();
-  }, [currentUser?.type, isAdmin]);
-
-  useEffect(() => {
-    if (!db || currentUser?.type !== 'admin' || !isAdmin) return;
-    const unsubscribe = onSnapshot(doc(db, 'settings', 'final_sprint_weights'), (snapshot) => {
-      if (!snapshot.exists()) return;
-      const saved = snapshot.data();
-      const values = Object.fromEntries(Object.keys(DEFAULT_FINAL_SPRINT_WEIGHTS).map((key) => [key, Number(saved[key])]));
-      if (Object.values(values).every(Number.isInteger) && Object.values(values).reduce((sum, value) => sum + value, 0) === 100) {
-        setFinalSprintWeights(values);
-      }
-    }, (error) => {
-      console.error('Erro ao carregar pesos da nota de prontidão:', error);
     });
     return () => unsubscribe();
   }, [currentUser?.type, isAdmin]);
@@ -5492,6 +5552,8 @@ const handleDeleteRound = async (id) => {
   ];
 
   const adminWorkspaceTabs = [
+      { id: 'weekly_reports', label: 'Relatórios Semanais', icon: <FileText size={16} />, description: 'Pesquisas e desenvolvimentos compartilhados por toda a equipe.', badge: reportsWorkspace.unreadReports.length || null, pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
+      { id: 'report_recipients', label: 'Integrantes / Notificações', icon: <Users size={16} />, description: 'Gerencie os destinatários dos avisos de novos relatórios.', pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
       { id: 'sprint', label: 'Reta final', icon: <Flag size={16} />, description: 'Frentes de trabalho e preparação para o torneio de dezembro.', pillTone: 'border-amber-500/20 bg-amber-500/10 text-amber-200', activeClass: 'bg-amber-400 text-black shadow-lg shadow-amber-900/20', inactiveClass: 'text-gray-400 hover:text-amber-300 hover:bg-amber-500/10' },
       { id: 'evaluations', label: 'Avaliações', icon: <ClipboardList size={16} />, description: 'Avalie a semana às sextas e acompanhe a preparação para o torneio.', badge: pendingWeeklyEvaluationCount > 0 ? pendingWeeklyEvaluationCount : null, pillTone: 'border-rose-500/20 bg-rose-500/10 text-rose-200', activeClass: 'bg-rose-400 text-black shadow-lg shadow-rose-900/20', inactiveClass: 'text-gray-400 hover:text-rose-300 hover:bg-rose-500/10' },
       { id: 'rotation', label: 'Rodízio', icon: <LayoutDashboard size={16} />, description: 'Configuração do rodízio para retomar quando a equipe voltar às estações.', pill: currentWeekData?.weekName || 'Rodízio', pillTone: 'border-white/10 bg-white/5 text-gray-200', activeClass: 'bg-white text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
@@ -5504,9 +5566,10 @@ const handleDeleteRound = async (id) => {
       { id: 'agenda', label: 'Agenda', icon: <CalendarDays size={16} />, description: 'Prazos, encontros e checkpoints da equipe em modo missao.', badge: urgentEventsCount > 0 ? urgentEventsCount : null, pillTone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200', activeClass: 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20', inactiveClass: 'text-gray-400 hover:text-indigo-300 hover:bg-indigo-500/10' },
       { id: 'showcase', label: 'Vitrine', icon: <MonitorPlay size={16} />, description: 'Curadoria das fotos, torneio e QR Codes exibidos para a escola.', pill: `${galleryPhotos.length} fotos`, pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
       { id: 'history', label: 'Historico', icon: <History size={16} />, description: 'Registro coletivo com autor, data e alteracoes feitas no sistema.', pillTone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200', activeClass: 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-900/20', inactiveClass: 'text-gray-400 hover:text-cyan-300 hover:bg-cyan-500/10' }
-  ].filter((tab) => tab.id !== 'history' || currentUser?.type === 'admin');
+  ].filter((tab) => !['history', 'report_recipients'].includes(tab.id) || currentUser?.type === 'admin');
 
   const studentWorkspaceTabs = [
+      { id: 'weekly_reports', label: 'Relatórios Semanais', icon: <FileText size={16} />, description: 'Compartilhe seu relatório e consulte os registros da equipe.', badge: reportsWorkspace.unreadReports.length || null, pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
       { id: 'sprint', label: 'Reta final', icon: <Flag size={16} />, description: 'Escolha onde contribuir e mantenha seus próximos passos registrados.', pillTone: 'border-amber-500/20 bg-amber-500/10 text-amber-200', activeClass: 'bg-amber-400 text-black shadow-lg shadow-amber-900/20', inactiveClass: 'text-gray-400 hover:text-amber-300 hover:bg-amber-500/10' },
       { id: 'feedback', label: 'Meu feedback', icon: <MessageSquare size={16} />, description: 'Consulte seus pontos fortes e o próximo passo recomendado.', pillTone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200', activeClass: 'bg-cyan-300 text-black shadow-lg shadow-cyan-900/20', inactiveClass: 'text-gray-400 hover:text-cyan-300 hover:bg-cyan-500/10' },
       { id: 'mission', label: 'Minha Missao', icon: <Rocket size={16} />, description: 'Seu foco da semana, status da entrega e proximo passo.', pill: viewAsStudent?.station || 'Equipe', pillTone: 'border-white/10 bg-white/5 text-gray-200', activeClass: 'bg-white text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
@@ -8777,12 +8840,11 @@ const handleFileSelect = (e) => {
       students,
       evaluations: finalSprintEvaluations,
       selections: finalSprintSelections,
-      weights: finalSprintWeights,
       pendingWeeklyCount: pendingWeeklyEvaluationCount,
       onSaveWeekly: handleSaveWeeklyEvaluation,
       onSavePresentation: handleSavePresentationEvaluation,
+      onSaveReport: handleSaveReportEvaluation,
       onSaveSelection: handleSaveFinalSprintSelection,
-      onSaveWeights: handleSaveFinalSprintWeights,
   };
 
   const roundsViewProps = {
@@ -8957,15 +9019,17 @@ const handleFileSelect = (e) => {
 
                   <form onSubmit={handleLogin} className="space-y-5">
                       <div>
-                          <label className="text-[10px] text-slate-300/60 uppercase font-black mb-1.5 block tracking-wider">Seu usuario</label>
+                          <label className="text-[10px] text-slate-300/60 uppercase font-black mb-1.5 block tracking-wider">{FIREBASE_AUTH_ENABLED ? 'Seu e-mail' : 'Seu usuario'}</label>
                           <div className="relative">
                               <UserCircle className="absolute left-3 top-3.5 text-slate-400" size={18} />
                               <input
-                                  type="text"
+                                  type={FIREBASE_AUTH_ENABLED ? 'email' : 'text'}
                                   value={loginUser}
                                   onChange={(e) => setLoginUser(e.target.value)}
                                   className="newgears-login-input w-full p-3 pl-10 text-white outline-none transition-all placeholder:text-slate-500 font-medium"
-                                  placeholder="Ex: tecnico ou ana.fll"
+                                  placeholder={FIREBASE_AUTH_ENABLED ? 'seu@email.com' : 'Ex: tecnico ou ana.fll'}
+                                  disabled={loginBusy}
+                                  autoComplete="username"
                                   autoFocus
                               />
                           </div>
@@ -8981,6 +9045,8 @@ const handleFileSelect = (e) => {
                                   onChange={(e) => setLoginPass(e.target.value)}
                                   className="newgears-login-input w-full p-3 pl-10 text-white outline-none transition-all placeholder:text-slate-500 font-medium"
                                   placeholder="••••••"
+                                  disabled={loginBusy}
+                                  autoComplete="current-password"
                               />
                           </div>
                       </div>
@@ -8992,8 +9058,8 @@ const handleFileSelect = (e) => {
                           </div>
                       )}
 
-                      <button className="newgears-login-button w-full text-white font-black py-4 mt-2 text-sm uppercase tracking-widest flex items-center justify-center gap-2">
-                          <LogOut size={18} className="rotate-180" /> Entrar na Base
+                      <button disabled={loginBusy} className="newgears-login-button w-full text-white font-black py-4 mt-2 text-sm uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50">
+                          <LogOut size={18} className="rotate-180" /> {loginBusy ? 'Validando acesso…' : 'Entrar na Base'}
                       </button>
                   </form>
 
@@ -9457,6 +9523,7 @@ const handleFileSelect = (e) => {
           {!adminPanelState.compact && (
           <WorkspaceCollapsible isOpen={adminPanelState.dashboard}>
             <div className="flex flex-col gap-6 mb-6">
+              <WeeklyReportsSummary workspace={reportsWorkspace} onOpen={openWeeklyReports} />
               <WorkspacePanelToolbar
                 eyebrow="Painel Tatico"
                 panels={adminDashboardPanels}
@@ -9530,6 +9597,8 @@ const handleFileSelect = (e) => {
                 {/* CONTEÃƒÅ¡DO DA ABA SELECIONADA */}
                 <div className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(adminTab)}`}>
                   <WorkspaceScene sceneId={`admin-${adminTab}`}>
+                    {adminTab === 'weekly_reports' && <WeeklyReportsView key={focusedReportId || 'all-reports'} user={currentUser} workspace={reportsWorkspace} defaultWeek={currentWeekData?.weekName} focusedReportId={focusedReportId} />}
+                    {adminTab === 'report_recipients' && <ReportRecipientsView user={currentUser} workspace={reportsWorkspace} />}
                     {adminTab === 'sprint' && <FinalSprintView {...finalSprintViewProps} />}
                     {adminTab === 'evaluations' && <Suspense fallback={<LazyPanelFallback label="Carregando avaliações da reta final..." minHeightClass="min-h-[420px]" />}><FinalSprintEvaluationsView {...finalSprintEvaluationViewProps} /></Suspense>}
                     {adminTab === 'rotation' && (
@@ -9628,6 +9697,7 @@ const handleFileSelect = (e) => {
 
           <WorkspaceCollapsible isOpen={studentPanelState.dashboard}>
             <div className="flex flex-col gap-6 mb-6">
+              <WeeklyReportsSummary workspace={reportsWorkspace} onOpen={openWeeklyReports} />
               <WorkspacePanelToolbar
                 eyebrow="Painel do Piloto"
                 panels={studentDashboardPanels}
@@ -9764,6 +9834,7 @@ const handleFileSelect = (e) => {
                 {/* CONTEÃƒÅ¡DO DA ABA SELECIONADA */}
                 <div className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(studentTab)}`}>
                   <WorkspaceScene sceneId={`student-${studentTab}`}>
+                    {studentTab === 'weekly_reports' && <WeeklyReportsView key={focusedReportId || 'all-reports'} user={currentUser} workspace={reportsWorkspace} defaultWeek={currentWeekData?.weekName} focusedReportId={focusedReportId} />}
                     {studentTab === 'sprint' && <FinalSprintView {...finalSprintViewProps} />}
                     {studentTab === 'feedback' && <Suspense fallback={<LazyPanelFallback label="Carregando seu feedback..." minHeightClass="min-h-[420px]" />}><FinalSprintEvaluationsView {...finalSprintEvaluationViewProps} /></Suspense>}
                     {studentTab === 'mission' && (
