@@ -1,5 +1,28 @@
 import React from 'react';
-import { Crown, Maximize2, Minimize2, Radio, ScanSearch, Shield, Zap } from 'lucide-react';
+import { Crown, Maximize2, Minimize2, Radio, ScanSearch, Shield, Zap, RotateCcw, Flag } from 'lucide-react';
+
+export const SeasonModeControl = ({ value, onChange, disabled = false }) => (
+  <div className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/25 p-1" aria-label="Temporada ativa">
+    <button
+      type="button"
+      onClick={() => onChange('rotation')}
+      disabled={disabled}
+      aria-pressed={value === 'rotation'}
+      className={`inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-[11px] font-black transition-all disabled:cursor-not-allowed disabled:opacity-60 ${value === 'rotation' ? 'bg-blue-400 text-slate-950 shadow-lg shadow-blue-950/30' : 'text-slate-300 hover:bg-white/8 hover:text-white'}`}
+    >
+      <RotateCcw size={14} /> Rodízio
+    </button>
+    <button
+      type="button"
+      onClick={() => onChange('final')}
+      disabled={disabled}
+      aria-pressed={value === 'final'}
+      className={`inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-[11px] font-black transition-all disabled:cursor-not-allowed disabled:opacity-60 ${value === 'final' ? 'bg-amber-300 text-slate-950 shadow-lg shadow-amber-950/30' : 'text-slate-300 hover:bg-white/8 hover:text-white'}`}
+    >
+      <Flag size={14} /> Reta final
+    </button>
+  </div>
+);
 
 export const WorkspaceHero = ({
   eyebrow,
@@ -7,10 +30,11 @@ export const WorkspaceHero = ({
   subtitle,
   metrics,
   actions,
+  shortcutLabel = 'Atalhos',
   accent = 'from-[#15254a] via-[#2a1458] to-[#140b2e]',
   footerContent = null,
 }) => (
-  <section className={`newgears-workspace-hero newgears-hud-shell relative overflow-hidden border border-white/12 bg-gradient-to-br ${accent} p-6 md:p-8 shadow-[0_36px_110px_rgba(0,0,0,0.34)]`}>
+  <section className={`newgears-workspace-hero newgears-hud-shell relative overflow-hidden rounded-[32px] border border-white/12 bg-gradient-to-br ${accent} p-6 md:p-8 shadow-[0_36px_110px_rgba(0,0,0,0.34)]`}>
     <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.045)_0%,transparent_26%,transparent_70%,rgba(255,255,255,0.04)_100%),linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:auto,26px_26px,26px_26px]" />
     <div className="pointer-events-none absolute left-6 top-5 h-24 w-24 border-l-2 border-t-2 border-blue-300/25" />
     <div className="pointer-events-none absolute bottom-6 right-6 h-24 w-24 border-b-2 border-r-2 border-fuchsia-300/20" />
@@ -46,7 +70,7 @@ export const WorkspaceHero = ({
             <span className="newgears-display mt-2 block text-lg font-black text-white">{metrics.length}</span>
           </div>
           <div className="newgears-mini-hud border border-white/12 bg-black/22 px-4 py-3">
-            <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-300/72">Atalhos</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-300/72">{shortcutLabel}</span>
             <span className="newgears-display mt-2 block text-lg font-black text-white">{actions.length}</span>
           </div>
           <div className="newgears-status-strip inline-flex items-center gap-2 border border-fuchsia-400/20 bg-fuchsia-400/10 px-4 py-3 text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-100">
@@ -60,7 +84,7 @@ export const WorkspaceHero = ({
             <button
               key={action.label}
               onClick={action.onClick}
-              className={`newgears-workspace-action newgears-action-button inline-flex items-center gap-2 border px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-white shadow-[0_18px_36px_rgba(0,0,0,0.2)] transition-all hover:-translate-y-1 ${action.style}`}
+              className={`newgears-workspace-action newgears-action-button inline-flex items-center gap-2 rounded-full border px-5 py-3 text-xs font-black uppercase tracking-[0.14em] text-white shadow-[0_18px_36px_rgba(0,0,0,0.2)] transition-all hover:-translate-y-1 ${action.style}`}
             >
               {action.icon}
               {action.label}
@@ -71,7 +95,7 @@ export const WorkspaceHero = ({
 
       <div className="grid grid-cols-2 gap-3">
         {metrics.map((metric, index) => (
-          <div key={metric.label} className="newgears-workspace-metric newgears-metric-card border border-white/12 bg-black/24 p-4 shadow-[0_20px_40px_rgba(0,0,0,0.18)]">
+          <div key={metric.label} className="newgears-workspace-metric newgears-metric-card rounded-[24px] border border-white/12 bg-black/24 p-4 shadow-[0_20px_40px_rgba(0,0,0,0.18)]">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <span className="text-[9px] font-black uppercase tracking-[0.24em] text-slate-100/50">Setor {String(index + 1).padStart(2, '0')}</span>
@@ -106,7 +130,7 @@ export const WorkspaceTabs = ({ eyebrow, tabs, activeId, onChange }) => {
   const activeTab = tabs.find((tab) => tab.id === activeId) || tabs[0];
 
   return (
-    <div className="newgears-tabs-shell newgears-hud-shell sticky top-[90px] z-30 overflow-hidden border border-white/12 bg-[linear-gradient(145deg,rgba(15,18,35,0.95),rgba(11,16,31,0.94))] shadow-[0_30px_80px_rgba(0,0,0,0.32)]">
+    <div className="newgears-tabs-shell newgears-hud-shell sticky top-[90px] z-30 overflow-hidden rounded-[26px] border border-white/12 bg-[linear-gradient(145deg,rgba(15,18,35,0.95),rgba(11,16,31,0.94))] shadow-[0_30px_80px_rgba(0,0,0,0.32)]">
       <div className="pointer-events-none absolute left-5 right-5 top-0 h-[2px] rounded-full bg-gradient-to-r from-blue-300 via-violet-400 to-fuchsia-400 opacity-85" />
       <div className="pointer-events-none absolute left-10 right-10 -top-5 h-8 bg-[radial-gradient(circle_at_center,rgba(96,165,250,0.16),transparent_70%)] blur-xl" />
       <div className="border-b border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),transparent_42%),linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:auto,24px_24px,24px_24px] px-5 pb-2.5 pt-3">
@@ -150,7 +174,7 @@ export const WorkspaceTabs = ({ eyebrow, tabs, activeId, onChange }) => {
             data-active={activeId === tab.id ? 'true' : 'false'}
             title={tab.label}
             aria-label={tab.label}
-            className={`newgears-tab-button relative flex min-w-[198px] items-center gap-2.5 border px-3.5 py-2.5 text-left text-xs font-black uppercase tracking-[0.12em] shadow-[0_14px_28px_rgba(0,0,0,0.16)] transition-all hover:-translate-y-0.5 md:min-w-[214px] ${activeId === tab.id ? tab.activeClass : tab.inactiveClass}`}
+            className={`newgears-tab-button relative flex min-w-[198px] items-center gap-2.5 rounded-[18px] border px-3.5 py-2.5 text-left text-xs font-black uppercase tracking-[0.12em] shadow-[0_14px_28px_rgba(0,0,0,0.16)] transition-all hover:-translate-y-0.5 md:min-w-[214px] ${activeId === tab.id ? tab.activeClass : tab.inactiveClass}`}
           >
             <span className={`absolute left-0 top-0 h-full w-1.5 ${activeId === tab.id ? 'bg-gradient-to-b from-blue-300 via-violet-400 to-fuchsia-400' : 'bg-white/8'}`} />
             <span className="newgears-tab-index inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-[13px] border border-white/12 bg-black/25 text-[11px] font-black text-white/85">

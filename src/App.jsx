@@ -9,7 +9,7 @@ import ReportRecipientsView from './views/ReportRecipientsView';
 import WeeklyReportsSummary from './components/WeeklyReportsSummary';
 import Countdown from './components/Countdown';
 import LogoNewGears from './components/LogoNewGears';
-import { WorkspaceHero, WorkspaceTabs, WorkspaceScene, WorkspaceCollapsible, WorkspacePanelToolbar } from './components/WorkspaceChrome';
+import { WorkspaceHero, WorkspaceTabs, WorkspaceScene, WorkspaceCollapsible, WorkspacePanelToolbar, SeasonModeControl } from './components/WorkspaceChrome';
 import StrategyView from './views/StrategyView';
 import RoundsView from './views/RoundsView';
 import LogbookView from './views/LogbookView';
@@ -155,6 +155,7 @@ const RobotDesignStrategyPanel = lazy(() => import('./components/RobotDesignStra
 const RobotRoundsPanel = lazy(() => import('./components/RobotRoundsPanel'));
 const ConfettiBurst = lazy(() => import('react-confetti'));
 const RotationOperationsPanel = lazy(() => import('./components/RotationOperationsPanel'));
+const StudentManagementPanel = lazy(() => import('./components/RotationOperationsPanel').then((module) => ({ default: module.StudentManagementPanel })));
 const FinalSprintEvaluationsView = lazy(() => import('./views/FinalSprintEvaluationsView'));
 const readStoredTheme = () => {
   if (typeof window === 'undefined') return 'classic';
@@ -486,8 +487,6 @@ const normalizeStudentRecord = (student) => {
     ...student,
     badges: normalizeStudentBadges(student.badges),
     xpLossNotifications: normalizeXpLossNotifications(student.xpLossNotifications),
-    competencies: Array.isArray(student.competencies) ? student.competencies : [],
-    interests: Array.isArray(student.interests) ? student.interests : [],
   };
 };
 
@@ -548,27 +547,6 @@ const XP_SOURCE_LABELS = {
 };
 const WEEKLY_CAPTAIN_NAMES = ['Heloise', 'Sofia'];
 const WEEKLY_STATION_KEYS = [STATION_KEYS.ENGINEERING, STATION_KEYS.INNOVATION, STATION_KEYS.MANAGEMENT];
-const STUDENT_COMPETENCY_OPTIONS = [
-  'Montagem e anexos',
-  'Programação e sensores',
-  'Estratégia de mesa',
-  'Testes e análise de dados',
-  'Pesquisa e validação',
-  'Apresentação e comunicação',
-  'Registro e documentação',
-  'Organização e colaboração',
-];
-const STUDENT_INTEREST_OPTIONS = [
-  'Engenharia e construção',
-  'Programação e tecnologia',
-  'Missões e estratégia',
-  'Pesquisa e inovação',
-  'Apresentação aos juízes',
-  'Design e prototipagem',
-  'Organização da equipe',
-  'Comunicação e divulgação',
-];
-
 const getXpSourceLabel = (source) => XP_SOURCE_LABELS[source] || 'Manual';
 
 const getXpLossDate = (dateValue) => {
@@ -1004,6 +982,8 @@ function App() {
   const [isPublicMode, setIsPublicMode] = useState(() => getStandaloneView() === 'public');
   const [focusedReportId, setFocusedReportId] = useState(() => new URLSearchParams(window.location.search).get('report') || '');
   const [adminTab, setAdminTab] = useState(() => new URLSearchParams(window.location.search).has('report') ? 'weekly_reports' : 'sprint');
+  const [workspaceSeason, setWorkspaceSeason] = useState(() => localStorage.getItem('newgears_workspace_season') === 'rotation' ? 'rotation' : 'final');
+  const [isSavingWorkspaceSeason, setIsSavingWorkspaceSeason] = useState(false);
   const [studentTab, setStudentTab] = useState(() => new URLSearchParams(window.location.search).has('report') ? 'weekly_reports' : 'sprint');
   const openWeeklyReports = (reportId = '') => {
     setFocusedReportId(reportId);
@@ -2762,6 +2742,13 @@ function App() {
         setShowcaseSettings(resolvePublicShowcaseSettings(docSnap.exists() ? docSnap.data() : {}));
     });
 
+    const unsubWorkspaceSeason = onSnapshot(doc(db, "settings", "workspace_season"), (docSnap) => {
+        const season = docSnap.exists() ? docSnap.data().activeSeason : 'final';
+        const normalizedSeason = season === 'rotation' ? 'rotation' : 'final';
+        setWorkspaceSeason(normalizedSeason);
+        localStorage.setItem('newgears_workspace_season', normalizedSeason);
+    });
+
     // ... e não esqueça de adicionar no return para limpar:
     // return () => { ... unsubProject(); };
     
@@ -2778,6 +2765,7 @@ function App() {
         unsubAdminProfile();
         unsubTeamStats();
         unsubPublicShowcase();
+        unsubWorkspaceSeason();
     };
   }, []);
 
@@ -4148,8 +4136,6 @@ const handleDeleteRound = async (id) => {
       
       // Verifica se estamos editando ou criando
       const isEditing = modal.data?.id;
-      const customCompetencies = `${fd.get('customCompetencies') || ''}`.split(/[,;\n]/).map((item) => item.trim()).filter(Boolean);
-      const customInterests = `${fd.get('customInterests') || ''}`.split(/[,;\n]/).map((item) => item.trim()).filter(Boolean);
 
       // A imagem agora já vem processada e redimensionada pelo Crop e está em modal.data.avatarImage
       const avatarImage = modal.data?.avatarImage || null;
@@ -4159,8 +4145,6 @@ const handleDeleteRound = async (id) => {
           name: fd.get('name'), 
           turma: fd.get('turma'), 
           specialty: (fd.get('specialty') || '').toString().trim(),
-          competencies: [...new Set([...fd.getAll('competencies').map((value) => `${value}`.trim()), ...customCompetencies].filter(Boolean))],
-          interests: [...new Set([...fd.getAll('interests').map((value) => `${value}`.trim()), ...customInterests].filter(Boolean))],
           username: fd.get('username'), 
           password: fd.get('password'), 
           avatarImage: avatarImage, // Novo campo para a foto
@@ -5528,13 +5512,49 @@ const handleDeleteRound = async (id) => {
       .map((entry) => String(entry.studentId)));
   const pendingWeeklyEvaluationCount = Math.max(0, students.filter((student) => student?.id && !currentWeekEvaluationIds.has(String(student.id))).length);
 
-  const adminHeroActions = [
-      { label: 'Central de Comando', onClick: openCommandCenterMode, icon: <Crown size={14} />, style: 'bg-yellow-500/10 text-yellow-300 border-yellow-500/20 hover:bg-yellow-500 hover:text-black' },
-      { label: 'Avaliar a Semana', onClick: () => setAdminTab('evaluations'), icon: <ClipboardList size={14} />, style: 'bg-amber-500/10 text-amber-200 border-amber-500/20 hover:bg-amber-400 hover:text-black' },
-      { label: 'Abrir Rubricas', onClick: () => setAdminTab('rubrics'), icon: <Scale size={14} />, style: 'bg-white/10 text-white border-white/15 hover:bg-white hover:text-black' },
-      { label: 'Kanban da Semana', onClick: () => setAdminTab('kanban'), icon: <ClipboardList size={14} />, style: 'bg-orange-500/10 text-orange-300 border-orange-500/20 hover:bg-orange-500 hover:text-white' },
-      { label: 'Agenda', onClick: () => setAdminTab('agenda'), icon: <CalendarDays size={14} />, style: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20 hover:bg-indigo-500 hover:text-white' }
-  ];
+  const incompleteStudentRecords = students
+      .map((student) => ({
+        ...student,
+        missingFields: [
+          !String(student.name || '').trim() && 'nome',
+          !String(student.turma || '').trim() && 'turma',
+          !String(student.username || '').trim() && 'usuário',
+          !String(student.password || '').trim() && 'senha de acesso',
+        ].filter(Boolean),
+      }))
+      .filter((student) => student.missingFields.length > 0);
+
+  const handleWorkspaceSeasonChange = async (season) => {
+      if (currentUser?.type !== 'admin' || !['rotation', 'final'].includes(season)) return;
+      setWorkspaceSeason(season);
+      setAdminTab(season === 'rotation' ? 'rotation' : 'sprint');
+      localStorage.setItem('newgears_workspace_season', season);
+      if (!db) return;
+
+      setIsSavingWorkspaceSeason(true);
+      try {
+          await setDoc(doc(db, 'settings', 'workspace_season'), { activeSeason: season }, { merge: true });
+      } catch (error) {
+          console.error('Não foi possível salvar a temporada ativa:', error);
+          showNotification('A temporada foi alterada neste painel, mas não foi possível sincronizar com a equipe.', 'error');
+      } finally {
+          setIsSavingWorkspaceSeason(false);
+      }
+  };
+
+  const adminHeroActions = workspaceSeason === 'rotation'
+      ? [
+          { label: 'Gerenciar alunos', onClick: () => setAdminTab('students'), icon: <Users size={14} />, style: 'bg-emerald-500/10 text-emerald-200 border-emerald-500/20 hover:bg-emerald-400 hover:text-black' },
+          { label: 'Abrir rodízio', onClick: () => setAdminTab('rotation'), icon: <RotateCcw size={14} />, style: 'bg-blue-500/10 text-blue-200 border-blue-500/20 hover:bg-blue-400 hover:text-black' },
+          { label: 'Kanban da Semana', onClick: () => setAdminTab('kanban'), icon: <ClipboardList size={14} />, style: 'bg-orange-500/10 text-orange-300 border-orange-500/20 hover:bg-orange-500 hover:text-white' },
+          { label: 'Agenda', onClick: () => setAdminTab('agenda'), icon: <CalendarDays size={14} />, style: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20 hover:bg-indigo-500 hover:text-white' }
+      ]
+      : [
+          { label: 'Gerenciar alunos', onClick: () => setAdminTab('students'), icon: <Users size={14} />, style: 'bg-emerald-500/10 text-emerald-200 border-emerald-500/20 hover:bg-emerald-400 hover:text-black' },
+          { label: 'Avaliar a Semana', onClick: () => setAdminTab('evaluations'), icon: <ClipboardList size={14} />, style: 'bg-amber-500/10 text-amber-200 border-amber-500/20 hover:bg-amber-400 hover:text-black' },
+          { label: 'Kanban da Semana', onClick: () => setAdminTab('kanban'), icon: <ClipboardList size={14} />, style: 'bg-orange-500/10 text-orange-300 border-orange-500/20 hover:bg-orange-500 hover:text-white' },
+          { label: 'Agenda', onClick: () => setAdminTab('agenda'), icon: <CalendarDays size={14} />, style: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20 hover:bg-indigo-500 hover:text-white' }
+      ];
 
   const studentHeroMetrics = [
       { label: 'Nivel', value: studentCurrentLevel?.name || 'Equipe', helper: 'faixa de XP da temporada', icon: <Trophy size={16} />, tone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-300' },
@@ -5552,11 +5572,12 @@ const handleDeleteRound = async (id) => {
   ];
 
   const adminWorkspaceTabs = [
+      { id: 'students', label: 'Alunos', icon: <Users size={16} />, description: 'Cadastro, estações e acompanhamento individual da equipe.', pill: `${students.length} alunos`, badge: incompleteStudentRecords.length || null, pillTone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200', activeClass: 'bg-emerald-400 text-black shadow-lg shadow-emerald-900/20', inactiveClass: 'text-gray-300 hover:text-emerald-200 hover:bg-emerald-500/10' },
+      { id: 'rotation', label: 'Rodízio', icon: <LayoutDashboard size={16} />, description: 'Escala semanal e distribuição planejada para o rodízio da equipe.', pill: currentWeekData?.weekName || 'Escala semanal', pillTone: 'border-blue-400/20 bg-blue-400/10 text-blue-100', activeClass: 'bg-blue-400 text-black shadow-lg shadow-blue-900/20', inactiveClass: 'text-gray-400 hover:text-blue-200 hover:bg-blue-400/10' },
       { id: 'weekly_reports', label: 'Relatórios Semanais', icon: <FileText size={16} />, description: 'Pesquisas e desenvolvimentos compartilhados por toda a equipe.', badge: reportsWorkspace.unreadReports.length || null, pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
       { id: 'report_recipients', label: 'Integrantes / Notificações', icon: <Users size={16} />, description: 'Gerencie os destinatários dos avisos de novos relatórios.', pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
       { id: 'sprint', label: 'Reta final', icon: <Flag size={16} />, description: 'Frentes de trabalho e preparação para o torneio de dezembro.', pillTone: 'border-amber-500/20 bg-amber-500/10 text-amber-200', activeClass: 'bg-amber-400 text-black shadow-lg shadow-amber-900/20', inactiveClass: 'text-gray-400 hover:text-amber-300 hover:bg-amber-500/10' },
       { id: 'evaluations', label: 'Avaliações', icon: <ClipboardList size={16} />, description: 'Avalie a semana às sextas e acompanhe a preparação para o torneio.', badge: pendingWeeklyEvaluationCount > 0 ? pendingWeeklyEvaluationCount : null, pillTone: 'border-rose-500/20 bg-rose-500/10 text-rose-200', activeClass: 'bg-rose-400 text-black shadow-lg shadow-rose-900/20', inactiveClass: 'text-gray-400 hover:text-rose-300 hover:bg-rose-500/10' },
-      { id: 'rotation', label: 'Rodízio', icon: <LayoutDashboard size={16} />, description: 'Configuração do rodízio para retomar quando a equipe voltar às estações.', pill: currentWeekData?.weekName || 'Rodízio', pillTone: 'border-white/10 bg-white/5 text-gray-200', activeClass: 'bg-white text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
       { id: 'strategy', label: 'Estrategia', icon: <Lightbulb size={16} />, description: 'Projeto, impacto, ideias e narrativa que os juizes entendem rapido.', pillTone: 'border-purple-500/20 bg-purple-500/10 text-purple-200', activeClass: 'bg-purple-500 text-white shadow-lg shadow-purple-900/20', inactiveClass: 'text-gray-400 hover:text-purple-300 hover:bg-purple-500/10' },
       { id: 'rounds', label: 'Robo', icon: <ListTodo size={16} />, description: 'Saidas, anexos, codigo e evolucao do robo em linguagem de equipe.', pillTone: 'border-blue-500/20 bg-blue-500/10 text-blue-200', activeClass: 'bg-blue-600 text-white shadow-lg shadow-blue-900/20', inactiveClass: 'text-gray-400 hover:text-blue-300 hover:bg-blue-500/10' },
       { id: 'rubrics', label: 'Rubricas', icon: <Scale size={16} />, description: 'Placar oficial da equipe com leitura simples e proximo passo.', pill: `${overallRubricAverage}/4`, pillTone: 'border-gray-400/20 bg-gray-400/10 text-gray-100', activeClass: 'bg-gray-300 text-black shadow-lg shadow-gray-900/20', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
@@ -5586,6 +5607,7 @@ const handleDeleteRound = async (id) => {
       evaluations: 'pt-10 md:pt-12',
       feedback: 'pt-10 md:pt-12',
       rotation: 'pt-10 md:pt-12',
+      students: 'pt-10 md:pt-12',
       strategy: 'pt-10 md:pt-12',
       rounds: 'pt-10 md:pt-12',
       rubrics: 'pt-10 md:pt-12',
@@ -5798,8 +5820,8 @@ const handleDeleteRound = async (id) => {
               <div className="mt-auto pt-4">
                   <p className="text-[10px] uppercase tracking-[0.18em] text-gray-500 font-bold mb-2">Controle rapido</p>
                   <div className="grid grid-cols-2 gap-2">
-                      <button onClick={handleApplyRotation} className="rounded-2xl border border-blue-500/20 bg-blue-500/10 px-3 py-3 text-xs font-bold text-blue-100 hover:bg-blue-500 hover:text-white transition-all">
-                          Aplicar rodizio
+                      <button onClick={() => setAdminTab('students')} className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 text-xs font-bold text-emerald-100 hover:bg-emerald-500 hover:text-black transition-all">
+                          Gerenciar alunos
                       </button>
                       <button onClick={openAttendanceModal} className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-xs font-bold text-white hover:bg-white/10 transition-all">
                           Chamada
@@ -7299,19 +7321,6 @@ const handleFileSelect = (e) => {
                     </div>
                 </div>
 
-                {(modal.data.competencies?.length > 0 || modal.data.interests?.length > 0) && (
-                  <section className="mb-6 grid gap-4 sm:grid-cols-2">
-                    <div className="rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-4">
-                      <h3 className="text-xs font-bold uppercase text-emerald-100">Competências</h3>
-                      <div className="mt-3 flex flex-wrap gap-2">{(modal.data.competencies || []).length ? modal.data.competencies.map((item) => <span key={item} className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-[10px] font-bold text-emerald-100">{item}</span>) : <span className="text-xs text-gray-500">Ainda não informado</span>}</div>
-                    </div>
-                    <div className="rounded-xl border border-cyan-500/15 bg-cyan-500/5 p-4">
-                      <h3 className="text-xs font-bold uppercase text-cyan-100">Interesses</h3>
-                      <div className="mt-3 flex flex-wrap gap-2">{(modal.data.interests || []).length ? modal.data.interests.map((item) => <span key={item} className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-[10px] font-bold text-cyan-100">{item}</span>) : <span className="text-xs text-gray-500">Ainda não informado</span>}</div>
-                    </div>
-                  </section>
-                )}
-
                 {/* Status Grid */}
                 <div className="grid grid-cols-2 gap-4 mb-8">
                     <div className="bg-[#151520] p-4 rounded-xl border border-white/10 flex flex-col items-center justify-center relative overflow-hidden">
@@ -7379,74 +7388,63 @@ const handleFileSelect = (e) => {
           {/* ... MODAIS EXISTENTES (newStudent, expertForm, robotForm, rubric, xp, review, expertView, robotView, newRound, compliment, attendance, grades) MANTIDOS IGUAIS ... */}
 
 {modal.type === 'newStudent' && (
-  <form onSubmit={handleRegisterSubmit}>
-    <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white">
-      <UserPlus className="text-green-500"/> {modal.data ? 'Editar' : 'Novo'} Aluno
-    </h3>
+  <form onSubmit={handleRegisterSubmit} className="space-y-5">
+    <div className="relative overflow-hidden rounded-[26px] border border-emerald-400/15 bg-[linear-gradient(135deg,rgba(16,185,129,0.12),rgba(15,23,42,0.5)_55%,rgba(59,130,246,0.1))] p-5">
+      <div className="absolute -right-8 -top-10 h-32 w-32 rounded-full bg-emerald-400/10 blur-2xl" />
+      <div className="relative flex items-center gap-4">
+        <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-300/20 bg-emerald-300/10 text-emerald-200"><UserPlus size={20} /></span>
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-200/75">Cadastro da equipe</p>
+          <h3 className="mt-1 text-xl font-black text-white">{modal.data ? 'Editar aluno' : 'Novo aluno'}</h3>
+          <p className="mt-1 text-xs text-gray-300">Dados, estação e acesso em um só lugar.</p>
+        </div>
+      </div>
+    </div>
     
     {/* DADOS BÁSICOS */}
-    <div className="grid grid-cols-2 gap-4 mb-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-            <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome</label>
-            <input name="name" defaultValue={modal.data?.name} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Ana Silva" />
+            <label className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.14em] text-gray-400">Nome</label>
+            <input name="name" defaultValue={modal.data?.name} required autoFocus className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3.5 text-sm text-white outline-none transition focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/10" placeholder="Ex: Ana Silva" />
         </div>
         <div>
-            <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Turma</label>
-            <input name="turma" defaultValue={modal.data?.turma} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: 8º A" />
+            <label className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.14em] text-gray-400">Turma</label>
+            <input name="turma" defaultValue={modal.data?.turma} required className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3.5 text-sm text-white outline-none transition focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/10" placeholder="Ex: 8º A" />
         </div>
     </div>
 
-    <div className="mb-4">
-        <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Especialidade principal (fixa)</label>
-        <input name="specialty" defaultValue={modal.data?.specialty || ''} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Lideranca, inovacao e engenharia" />
-        <p className="mt-1 text-[10px] text-gray-500">Esse campo representa o melhor jogo do aluno e nao muda com o rodizio semanal.</p>
+    <div className="rounded-[24px] border border-white/10 bg-white/[0.025] p-4">
+        <label className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.14em] text-gray-400">Especialidade principal</label>
+        <input name="specialty" defaultValue={modal.data?.specialty || ''} className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3.5 text-sm text-white outline-none transition focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/10" placeholder="Ex.: engenharia, pesquisa, organização" />
+        <p className="mt-2 text-[11px] leading-relaxed text-gray-500">A área em que o aluno mais contribui. Use isso para orientar a estação fixa.</p>
     </div>
 
-    <div className="mb-4 rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-4">
-        <p className="text-xs font-bold uppercase text-emerald-100">Competências</p>
-        <p className="mb-3 mt-1 text-[10px] text-gray-400">O que você já sabe fazer e pode compartilhar com a equipe.</p>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {STUDENT_COMPETENCY_OPTIONS.map((competency) => <label key={competency} className="flex items-center gap-2 rounded-lg border border-white/5 bg-black/20 p-2 text-xs text-gray-200"><input type="checkbox" name="competencies" value={competency} defaultChecked={(modal.data?.competencies || []).includes(competency)} className="accent-emerald-400" />{competency}</label>)}
-        </div>
-        <label className="mt-3 block text-[10px] font-bold uppercase tracking-wide text-gray-400">Outras competências que você quer incluir<input name="customCompetencies" defaultValue={(modal.data?.competencies || []).filter((item) => !STUDENT_COMPETENCY_OPTIONS.includes(item)).join(', ')} className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-xs font-normal normal-case text-white outline-none focus:border-emerald-400" placeholder="Ex.: edição de vídeo, desenho 3D" /><span className="mt-1 block font-normal normal-case text-gray-500">Separe várias opções por vírgula.</span></label>
-    </div>
-
-    <div className="mb-6 rounded-xl border border-cyan-500/15 bg-cyan-500/5 p-4">
-        <p className="text-xs font-bold uppercase text-cyan-100">Interesses</p>
-        <p className="mb-3 mt-1 text-[10px] text-gray-400">O que você quer aprender, experimentar ou praticar mais.</p>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {STUDENT_INTEREST_OPTIONS.map((interest) => <label key={interest} className="flex items-center gap-2 rounded-lg border border-white/5 bg-black/20 p-2 text-xs text-gray-200"><input type="checkbox" name="interests" value={interest} defaultChecked={(modal.data?.interests || []).includes(interest)} className="accent-cyan-400" />{interest}</label>)}
-        </div>
-        <label className="mt-3 block text-[10px] font-bold uppercase tracking-wide text-gray-400">Outros assuntos que você quer explorar<input name="customInterests" defaultValue={(modal.data?.interests || []).filter((item) => !STUDENT_INTEREST_OPTIONS.includes(item)).join(', ')} className="mt-1 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2.5 text-xs font-normal normal-case text-white outline-none focus:border-cyan-400" placeholder="Ex.: inteligência artificial, sustentabilidade" /><span className="mt-1 block font-normal normal-case text-gray-500">Separe várias opções por vírgula.</span></label>
-    </div>
-
-    {/* DADOS DE LOGIN (COM FUNDO CINZA PARA ORGANIZAR) */}
-    <div className="bg-white/5 p-4 rounded-xl border border-white/10 mb-6">
-        <div className="flex items-center gap-2 mb-3 text-yellow-500">
+    <div className="rounded-[24px] border border-amber-400/10 bg-amber-400/[0.035] p-4">
+        <div className="mb-3 flex items-center gap-2 text-amber-200">
             <Lock size={14} />
-            <span className="text-xs font-bold uppercase">Acesso do Aluno</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.15em]">Acesso do aluno</span>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-                <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 block">Usuário</label>
-                <input name="username" defaultValue={modal.data?.username} required className="w-full bg-black/50 border border-white/20 rounded-lg p-2 text-white focus:border-yellow-500 outline-none" placeholder="ana.fll" />
+                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">Usuário</label>
+                <input name="username" defaultValue={modal.data?.username} required className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-300/50" placeholder="ana.fll" />
             </div>
             <div>
-                <label className="text-[10px] text-gray-400 uppercase font-bold mb-1 block">Senha</label>
-                <input name="password" defaultValue={modal.data?.password} required className="w-full bg-black/50 border border-white/20 rounded-lg p-2 text-white focus:border-yellow-500 outline-none" placeholder="1234" />
+                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400">Senha</label>
+                <input name="password" defaultValue={modal.data?.password} required className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-300/50" placeholder="1234" />
             </div>
         </div>
     </div>
 
     {/* UPLOAD DE FOTO */}
-    <div className="mb-6">
-        <label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto de Perfil</label>
-        <div className="flex items-center gap-4 bg-black/30 p-3 rounded-lg border border-white/10">
-            {modal.data?.avatarImage ? ( <img src={modal.data.avatarImage} alt="Preview" className="w-16 h-16 rounded-full object-cover border-2 border-purple-500 shadow-lg"/> ) : ( <div className="w-16 h-16 rounded-full bg-black/50 flex items-center justify-center border-2 border-dashed border-gray-600"> <UserCircle size={32} className="text-gray-500" /> </div> )}
+    <div>
+        <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.14em] text-gray-400">Foto de perfil</label>
+        <div className="flex flex-wrap items-center gap-4 rounded-[24px] border border-white/10 bg-black/25 p-4">
+            {modal.data?.avatarImage ? ( <img src={modal.data.avatarImage} alt="Preview" className="h-16 w-16 rounded-2xl border border-purple-300/20 object-cover shadow-lg"/> ) : ( <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-white/5"> <UserCircle size={32} className="text-gray-500" /> </div> )}
             <div className="flex flex-col gap-2">
                 <input type="file" onChange={handleProfilePicSelect} accept="image/*" className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-purple-500/10 file:text-purple-500 hover:file:bg-purple-500/20 cursor-pointer"/>
                 {modal.data?.avatarImage && (
-                    <button type="button" onClick={() => setModal(prev => ({ ...prev, data: { ...prev.data, avatarImage: null } }))} className="text-xs text-red-500 hover:text-red-400 font-bold self-start px-2 transition-colors">
+                    <button type="button" onClick={() => setModal(prev => ({ ...prev, data: { ...prev.data, avatarImage: null } }))} className="self-start rounded-full border border-red-400/15 bg-red-400/5 px-3 py-1.5 text-[10px] font-bold text-red-200 transition hover:bg-red-400/15">
                         Remover Foto
                     </button>
                 )}
@@ -7454,7 +7452,7 @@ const handleFileSelect = (e) => {
         </div>
     </div>
     
-    <button type="submit" className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-green-900/20 transition-all">
+    <button type="submit" className="w-full rounded-2xl border border-emerald-300/20 bg-gradient-to-r from-emerald-500 to-teal-400 py-3.5 text-sm font-black uppercase tracking-[0.12em] text-[#05221c] shadow-[0_16px_36px_rgba(16,185,129,0.16)] transition-all hover:-translate-y-0.5 hover:brightness-110">
         {modal.data ? 'Salvar Alterações' : 'Cadastrar Aluno'}
     </button>
   </form>
@@ -9508,9 +9506,10 @@ const handleFileSelect = (e) => {
               <WorkspaceHero
                 eyebrow="Temporada FLL"
                 title="Central tatica da equipe"
-                subtitle={`Semana ativa: ${currentWeekData?.weekName || 'Em sincronizacao'}. Aqui ficam rodizio, estrategia, robo e apresentacao com leitura mais direta e menos poluida.`}
+                subtitle="Acompanhe a reta final, as frentes de trabalho e a preparacao da equipe para o torneio."
                 metrics={adminHeroMetrics}
                 actions={adminHeroActions}
+                shortcutLabel="Atalhos do técnico"
                 accent="from-[#18376b] via-[#2b1559] to-[#140b2f]"
               />
             </WorkspaceCollapsible>
@@ -9587,10 +9586,36 @@ const handleFileSelect = (e) => {
   </Suspense>
 )}
           <div className="flex flex-col gap-6">
-            
+            {students.length > 0 && incompleteStudentRecords.length > 0 && (
+              <section className="flex flex-col gap-4 rounded-[24px] border border-amber-300/20 bg-[linear-gradient(120deg,rgba(120,74,10,0.22),rgba(17,20,32,0.94)_56%)] p-4 shadow-[0_18px_44px_rgba(0,0,0,0.2)] md:flex-row md:items-center md:justify-between md:px-5">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-amber-300/20 bg-amber-300/10 text-amber-200"><AlertTriangle size={18} /></span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-black text-amber-100">{incompleteStudentRecords.length} cadastro{incompleteStudentRecords.length === 1 ? '' : 's'} precisa{incompleteStudentRecords.length === 1 ? '' : 'm'} de atenção</p>
+                    <p className="mt-1 text-xs leading-relaxed text-slate-300">
+                      {incompleteStudentRecords.slice(0, 4).map((student) => `${student.name || 'Sem nome'} (${student.missingFields.join(', ')})`).join(' · ')}
+                      {incompleteStudentRecords.length > 4 ? ` · +${incompleteStudentRecords.length - 4} integrante(s)` : ''}
+                    </p>
+                  </div>
+                </div>
+                <button onClick={() => setAdminTab('students')} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full border border-amber-200/20 bg-amber-300/10 px-4 py-2.5 text-xs font-black text-amber-50 transition hover:bg-amber-300 hover:text-slate-950">
+                  <Users size={14} /> Revisar cadastros
+                </button>
+              </section>
+            )}
+
             <div className="flex flex-col gap-3">
-                
-                <div className="-mt-10 md:-mt-12">
+                <div className="-mt-10 flex flex-col gap-3 md:-mt-12">
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-white/10 bg-[linear-gradient(120deg,rgba(255,255,255,0.045),rgba(0,0,0,0.2))] px-4 py-3 shadow-[0_14px_34px_rgba(0,0,0,0.18)]">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-300/60">Foco da equipe</p>
+                      <p className="mt-1 text-sm font-bold text-white">{workspaceSeason === 'rotation' ? 'Rodízio de estações' : 'Reta final e torneio'}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {isSavingWorkspaceSeason && <span role="status" className="text-[10px] font-bold text-slate-300">Sincronizando…</span>}
+                      {currentUser?.type === 'admin' && <SeasonModeControl value={workspaceSeason} onChange={handleWorkspaceSeasonChange} disabled={isSavingWorkspaceSeason} />}
+                    </div>
+                  </div>
                   <WorkspaceTabs eyebrow="Centro de Navegacao" tabs={adminWorkspaceTabs} activeId={adminTab} onChange={setAdminTab} />
                 </div>
 
@@ -9601,13 +9626,10 @@ const handleFileSelect = (e) => {
                     {adminTab === 'report_recipients' && <ReportRecipientsView user={currentUser} workspace={reportsWorkspace} />}
                     {adminTab === 'sprint' && <FinalSprintView {...finalSprintViewProps} />}
                     {adminTab === 'evaluations' && <Suspense fallback={<LazyPanelFallback label="Carregando avaliações da reta final..." minHeightClass="min-h-[420px]" />}><FinalSprintEvaluationsView {...finalSprintEvaluationViewProps} /></Suspense>}
-                    {adminTab === 'rotation' && (
-                      <Suspense fallback={<LazyPanelFallback label="Carregando operacoes de rotacao..." minHeightClass="min-h-[420px]" />}>
-                        <RotationOperationsPanel
+                    {adminTab === 'students' && (
+                      <Suspense fallback={<LazyPanelFallback label="Carregando gerenciamento dos alunos..." minHeightClass="min-h-[420px]" />}>
+                        <StudentManagementPanel
                           students={students}
-                          tasks={tasks}
-                          missions={missions}
-                          currentWeekData={currentWeekData}
                           getCurrentLevel={getCurrentLevel}
                           canManage={currentUser?.type === 'admin'}
                           onMoveStudent={moveStudent}
@@ -9619,14 +9641,17 @@ const handleFileSelect = (e) => {
                           onToggleEnglishChallenge={toggleEnglishChallenge}
                           onDeleteStudent={handleDeleteStudent}
                           onToggleActivityStatus={toggleActivityStatus}
-                          onOpenReviewModal={openReviewModal}
                           onUpdateStudentSpecialty={updateStudentSpecialty}
-                          onHandleCloseStationWeek={handleCloseStationWeek}
-                          onUpdateMission={updateMission}
-                          onSaveMission={handleSaveStationMission}
+                        />
+                      </Suspense>
+                    )}
+                    {adminTab === 'rotation' && (
+                      <Suspense fallback={<LazyPanelFallback label="Carregando planejamento do rodizio..." minHeightClass="min-h-[420px]" />}>
+                        <RotationOperationsPanel
+                          students={students}
+                          currentWeekData={currentWeekData}
+                          canManage={currentUser?.type === 'admin'}
                           onApplyRotation={handleApplyRotation}
-                          onOpenAttendance={openAttendanceModal}
-                          onResetAllActivities={handleResetAllActivities}
                           onOpenSchedule={() => setShowFullSchedule(true)}
                         />
                       </Suspense>
@@ -9686,6 +9711,7 @@ const handleFileSelect = (e) => {
                 subtitle={`Estacao atual: ${viewAsStudent.station || 'Equipe'}. Aqui voce acompanha sua rotina da semana, entende as rubricas, treina sua fala e enxerga o time com uma energia mais viva e menos engessada.`}
                 metrics={studentHeroMetrics}
                 actions={studentHeroActions}
+                shortcutLabel="Seus atalhos"
                 accent="from-[#101f4a] via-[#2a1458] to-[#1a0d32]"
               />
             </WorkspaceCollapsible>
