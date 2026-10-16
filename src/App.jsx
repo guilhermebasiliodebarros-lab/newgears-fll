@@ -1,5 +1,5 @@
 import { Suspense, lazy, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy, limit, writeBatch, deleteField } from "firebase/firestore";
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy, limit, writeBatch, deleteField, getDocs } from "firebase/firestore";
 import { auth, db, FIREBASE_AUTH_ENABLED } from './firebase'; // Reutiliza o mesmo projeto Firebase
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { loadReportsSession } from './services/weeklyReports';
@@ -7,6 +7,7 @@ import useWeeklyReports from './hooks/useWeeklyReports';
 import WeeklyReportsView from './views/WeeklyReportsView';
 import ReportRecipientsView from './views/ReportRecipientsView';
 import WeeklyReportsSummary from './components/WeeklyReportsSummary';
+import WorkspaceActionQueue from './components/WorkspaceActionQueue';
 import Countdown from './components/Countdown';
 import LogoNewGears from './components/LogoNewGears';
 import { WorkspaceHero, WorkspaceTabs, WorkspaceScene, WorkspaceCollapsible, WorkspacePanelToolbar, SeasonModeControl } from './components/WorkspaceChrome';
@@ -17,6 +18,7 @@ import KanbanView from './views/KanbanView';
 import AgendaView from './views/AgendaView';
 import FinalSprintView, { FINAL_SPRINT_FRONTS } from './views/FinalSprintView';
 import ActivityHistoryView from './views/ActivityHistoryView';
+import SeasonHistoryView from './views/SeasonHistoryView';
 import PublicShowcaseAdminView from './views/PublicShowcaseAdminView';
 import PublicTeamView from './views/PublicTeamView';
 import PublicTvModeView from './views/PublicTvModeView';
@@ -984,6 +986,12 @@ function App() {
   const [adminTab, setAdminTab] = useState(() => new URLSearchParams(window.location.search).has('report') ? 'weekly_reports' : 'sprint');
   const [workspaceSeason, setWorkspaceSeason] = useState(() => localStorage.getItem('newgears_workspace_season') === 'rotation' ? 'rotation' : 'final');
   const [isSavingWorkspaceSeason, setIsSavingWorkspaceSeason] = useState(false);
+  const [activeTeamSeasonId, setActiveTeamSeasonId] = useState(() => localStorage.getItem('newgears_active_season_id') || null);
+  const [activeTeamSeasonName, setActiveTeamSeasonName] = useState(() => localStorage.getItem('newgears_active_season_name') || 'Temporada atual');
+  const [seasonLifecycleReady, setSeasonLifecycleReady] = useState(() => Boolean(localStorage.getItem('newgears_active_season_id')));
+  const [workspaceSeasonLoaded, setWorkspaceSeasonLoaded] = useState(false);
+  const [teamSeasons, setTeamSeasons] = useState([]);
+  const [isTransitioningSeason, setIsTransitioningSeason] = useState(false);
   const [studentTab, setStudentTab] = useState(() => new URLSearchParams(window.location.search).has('report') ? 'weekly_reports' : 'sprint');
   const openWeeklyReports = (reportId = '') => {
     setFocusedReportId(reportId);
@@ -1339,7 +1347,7 @@ function App() {
       notificationTimeoutRef.current = setTimeout(() => setNotification(null), action ? 7000 : duration); 
   }
 
-  const getFinalSprintAssignmentDocId = (studentId, frontId) => encodeURIComponent(`${studentId}__${frontId}`);
+  const getFinalSprintAssignmentDocId = (studentId, frontId, seasonId = activeTeamSeasonId || 'legacy') => encodeURIComponent(`${seasonId}__${studentId}__${frontId}`);
 
   const handleToggleFinalSprintFront = async (frontId) => {
       if (currentUser?.type === 'admin' || !viewAsStudent?.id) return;
@@ -1353,7 +1361,7 @@ function App() {
           showNotification('Você já escolheu as quatro frentes. Essas escolhas ficam registradas até o torneio.', 'error');
           return;
       }
-      const assignmentRef = doc(db, 'finalSprintAssignments', getFinalSprintAssignmentDocId(studentId, frontId));
+      const assignmentRef = doc(db, 'finalSprintAssignments', existing?.id || getFinalSprintAssignmentDocId(studentId, frontId));
       const now = new Date().toISOString();
       const nextActive = true;
 
@@ -1361,6 +1369,7 @@ function App() {
           await setDoc(assignmentRef, {
               studentId,
               studentName: viewAsStudent.name || currentUser.name || 'Aluno',
+              seasonId: activeTeamSeasonId || 'legacy',
               frontId,
               frontLabel: front.title,
               active: nextActive,
@@ -1389,9 +1398,10 @@ function App() {
       const now = new Date().toISOString();
 
       try {
-          await setDoc(doc(db, 'finalSprintAssignments', getFinalSprintAssignmentDocId(studentId, frontId)), {
+          await setDoc(doc(db, 'finalSprintAssignments', existing.id || getFinalSprintAssignmentDocId(studentId, frontId)), {
               studentId,
               studentName: viewAsStudent.name || currentUser.name || 'Aluno',
+              seasonId: activeTeamSeasonId || 'legacy',
               frontId,
               frontLabel: front.title,
               commitment: `${draft.commitment || ''}`.trim().slice(0, 240),
@@ -1409,7 +1419,7 @@ function App() {
       }
   };
 
-  const getFinalSprintEvaluationDocId = (type, studentId, periodId = '') => encodeURIComponent(`${type}__${studentId}__${periodId}`);
+  const getFinalSprintEvaluationDocId = (type, studentId, periodId = '', seasonId = activeTeamSeasonId || 'legacy') => encodeURIComponent(`${seasonId}__${type}__${studentId}__${periodId}`);
   const getFinalSprintEvaluationTotal = (ratings, criteria) => {
       if (!ratings || !criteria.every(({ id }) => ratings[id] !== null && ratings[id] !== undefined && ratings[id] !== '' && Number.isInteger(Number(ratings[id])) && Number(ratings[id]) >= 0 && Number(ratings[id]) <= 5)) return null;
       return criteria.reduce((total, { id }) => total + Number(ratings[id]), 0);
@@ -1426,8 +1436,9 @@ function App() {
       const existing = finalSprintEvaluations.find((item) => item.type === 'weekly' && String(item.studentId) === studentId && item.weekId === week.id);
       const now = new Date().toISOString();
       try {
-          await setDoc(doc(db, 'finalSprintEvaluations', getFinalSprintEvaluationDocId('weekly', studentId, week.id)), {
+          await setDoc(doc(db, 'finalSprintEvaluations', existing?.id || getFinalSprintEvaluationDocId('weekly', studentId, week.id)), {
               type: 'weekly',
+              seasonId: activeTeamSeasonId || 'legacy',
               status: 'complete',
               studentId,
               studentName: student.name || 'Aluno',
@@ -1461,8 +1472,9 @@ function App() {
       const existing = finalSprintEvaluations.find((item) => item.type === 'presentation' && String(item.studentId) === studentId);
       const now = new Date().toISOString();
       try {
-          await setDoc(doc(db, 'finalSprintEvaluations', getFinalSprintEvaluationDocId('presentation', studentId)), {
+          await setDoc(doc(db, 'finalSprintEvaluations', existing?.id || getFinalSprintEvaluationDocId('presentation', studentId)), {
               type: 'presentation',
+              seasonId: activeTeamSeasonId || 'legacy',
               status: 'complete',
               studentId,
               studentName: student.name || 'Aluno',
@@ -1496,6 +1508,7 @@ function App() {
       const now = new Date().toISOString();
       const evaluation = {
           type: 'report',
+          seasonId: activeTeamSeasonId || 'legacy',
           status: 'complete',
           studentId,
           studentName: student.name || 'Aluno',
@@ -1507,7 +1520,7 @@ function App() {
           createdAt: existing?.createdAt || now,
           updatedAt: now,
       };
-      const evaluationId = getFinalSprintEvaluationDocId('report', studentId);
+      const evaluationId = existing?.id || getFinalSprintEvaluationDocId('report', studentId);
       try {
           await setDoc(doc(db, 'finalSprintEvaluations', evaluationId), evaluation, { merge: true });
           setFinalSprintEvaluations((current) => [...current.filter((item) => !(item.type === 'report' && String(item.studentId) === studentId)), { ...evaluation, id: evaluationId }]);
@@ -1532,7 +1545,8 @@ function App() {
       }
       const now = new Date().toISOString();
       try {
-          await setDoc(doc(db, 'finalSprintSelectionScores', getFinalSprintEvaluationDocId('selection', studentId)), {
+          await setDoc(doc(db, 'finalSprintSelectionScores', existing?.id || getFinalSprintEvaluationDocId('selection', studentId)), {
+              seasonId: activeTeamSeasonId || 'legacy',
               studentId,
               studentName: student.name || 'Aluno',
               selectedForTournament: nextSelected,
@@ -2696,8 +2710,6 @@ function App() {
     };
 
     const unsubStudents = createListener("students", setStudents, normalizeStudentRecord);
-    const unsubTasks = createListener("tasks", setTasks);
-    const unsubEvents = createListener("events", setEvents);
     const unsubAttendanceSessions = createListener("attendanceSessions", setAttendanceSessions);
     const unsubXpLossRecords = createListener("xpLossRecords", setXpLossRecords);
     const unsubLeaderPenaltyRequests = createListener("leaderPenaltyRequests", setLeaderPenaltyRequests);
@@ -2743,19 +2755,26 @@ function App() {
     });
 
     const unsubWorkspaceSeason = onSnapshot(doc(db, "settings", "workspace_season"), (docSnap) => {
-        const season = docSnap.exists() ? docSnap.data().activeSeason : 'final';
+        const seasonData = docSnap.exists() ? docSnap.data() : {};
+        const season = seasonData.activeSeason || 'final';
         const normalizedSeason = season === 'rotation' ? 'rotation' : 'final';
         setWorkspaceSeason(normalizedSeason);
         localStorage.setItem('newgears_workspace_season', normalizedSeason);
+        const activeSeasonId = typeof seasonData.activeSeasonId === 'string' ? seasonData.activeSeasonId : null;
+        const activeSeasonName = typeof seasonData.activeSeasonName === 'string' && seasonData.activeSeasonName.trim() ? seasonData.activeSeasonName : 'Temporada atual';
+        setActiveTeamSeasonId(activeSeasonId);
+        setActiveTeamSeasonName(activeSeasonName);
+        setSeasonLifecycleReady(Boolean(seasonData.activeSeasonId));
+        if (activeSeasonId) localStorage.setItem('newgears_active_season_id', activeSeasonId);
+        else localStorage.removeItem('newgears_active_season_id');
+        localStorage.setItem('newgears_active_season_name', activeSeasonName);
+        setWorkspaceSeasonLoaded(true);
     });
-
     // ... e não esqueça de adicionar no return para limpar:
     // return () => { ... unsubProject(); };
     
     return () => {
         unsubStudents();
-        unsubTasks();
-        unsubEvents();
         unsubAttendanceSessions();
         unsubXpLossRecords();
         unsubLeaderPenaltyRequests();
@@ -2768,6 +2787,39 @@ function App() {
         unsubWorkspaceSeason();
     };
   }, []);
+
+  useEffect(() => {
+    if (!db || currentUser?.type !== 'admin' || !isAdmin) {
+      setTeamSeasons([]);
+      return undefined;
+    }
+    return onSnapshot(collection(db, 'teamSeasons'), (snapshot) => {
+      setTeamSeasons(snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id })).sort((left, right) => String(right.closedAt || right.startedAt || '').localeCompare(String(left.closedAt || left.startedAt || ''))));
+    }, (error) => console.error('Não foi possível carregar o histórico de temporadas:', error));
+  }, [currentUser?.type, isAdmin]);
+
+  useEffect(() => {
+    if (!db) return undefined;
+    const listenToSeasonCollection = (collectionName, setter) => {
+      const source = collection(db, collectionName);
+      const sourceQuery = seasonLifecycleReady && activeTeamSeasonId
+        ? query(source, where('seasonId', '==', activeTeamSeasonId))
+        : source;
+      return onSnapshot(sourceQuery, (snapshot) => {
+        setter(snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id })));
+      }, (error) => {
+        console.error(`Não foi possível carregar ${collectionName} da temporada:`, error);
+        showNotification('Não foi possível carregar os dados da temporada ativa.', 'error');
+      });
+    };
+
+    const unsubscribeTasks = listenToSeasonCollection('tasks', setTasks);
+    const unsubscribeEvents = listenToSeasonCollection('events', setEvents);
+    return () => {
+      unsubscribeTasks();
+      unsubscribeEvents();
+    };
+  }, [seasonLifecycleReady, activeTeamSeasonId]);
 
   useEffect(() => {
     if (!db || !shouldLoadStrategyWorkspaceData) return;
@@ -2914,7 +2966,8 @@ function App() {
     }
 
     const unsubscribe = onSnapshot(assignmentsQuery, (snapshot) => {
-      setFinalSprintAssignments(snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id })));
+      const records = snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id }));
+      setFinalSprintAssignments(seasonLifecycleReady && activeTeamSeasonId ? records.filter((record) => record.seasonId === activeTeamSeasonId) : records);
       setFinalSprintAssignmentsState({ loading: false, error: false });
     }, (error) => {
       console.error('Erro ao carregar frentes da reta final:', error);
@@ -2922,7 +2975,7 @@ function App() {
     });
 
     return () => unsubscribe();
-  }, [isFinalSprintActive, currentUser?.type, isAdmin, viewAsStudent?.id, finalSprintAssignmentsRetry]);
+  }, [isFinalSprintActive, currentUser?.type, isAdmin, viewAsStudent?.id, finalSprintAssignmentsRetry, seasonLifecycleReady, activeTeamSeasonId]);
 
   useEffect(() => {
     if (!db || !currentUser) {
@@ -2941,13 +2994,14 @@ function App() {
       return;
     }
     const unsubscribe = onSnapshot(evaluationsQuery, (snapshot) => {
-      setFinalSprintEvaluations(snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id })));
+      const records = snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id }));
+      setFinalSprintEvaluations(seasonLifecycleReady && activeTeamSeasonId ? records.filter((record) => record.seasonId === activeTeamSeasonId) : records);
     }, (error) => {
       console.error('Erro ao carregar avaliações da reta final:', error);
       showNotification('Não foi possível carregar as avaliações.', 'error');
     });
     return () => unsubscribe();
-  }, [currentUser?.type, isAdmin, viewAsStudent?.id]);
+  }, [currentUser?.type, isAdmin, viewAsStudent?.id, seasonLifecycleReady, activeTeamSeasonId]);
 
   useEffect(() => {
     if (!db || currentUser?.type !== 'admin' || !isAdmin) {
@@ -2955,13 +3009,14 @@ function App() {
       return;
     }
     const unsubscribe = onSnapshot(collection(db, 'finalSprintSelectionScores'), (snapshot) => {
-      setFinalSprintSelections(snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id })));
+      const records = snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id }));
+      setFinalSprintSelections(seasonLifecycleReady && activeTeamSeasonId ? records.filter((record) => record.seasonId === activeTeamSeasonId) : records);
     }, (error) => {
       console.error('Erro ao carregar pontuações de prontidão:', error);
       showNotification('Não foi possível carregar os dados de prontidão.', 'error');
     });
     return () => unsubscribe();
-  }, [currentUser?.type, isAdmin]);
+  }, [currentUser?.type, isAdmin, seasonLifecycleReady, activeTeamSeasonId]);
 
   useEffect(() => {
     if (!db || !isPitStopModalOpen) return;
@@ -3360,6 +3415,7 @@ function App() {
 
       const taskRef = await addDoc(collection(db, "tasks"), {
           text,
+          seasonId: activeTeamSeasonId || 'legacy',
           status: 'todo',
           createdAt: new Date().toISOString(),
           author: resolvedAuthor,
@@ -4708,6 +4764,7 @@ const handleDeleteRound = async (id) => {
       e.preventDefault();
       const fd = new FormData(e.target);
       const eventData = {
+          seasonId: activeTeamSeasonId || 'legacy',
           title: fd.get('title'),
           date: fd.get('date'),
           time: fd.get('time'),
@@ -5542,6 +5599,98 @@ const handleDeleteRound = async (id) => {
       }
   };
 
+  const handleSeasonTransition = async (event) => {
+      event.preventDefault();
+      if (currentUser?.type !== 'admin' || !db || !workspaceSeasonLoaded || isTransitioningSeason) return;
+      const formData = new FormData(event.currentTarget);
+      const currentName = String(formData.get('currentSeasonName') || '').trim().slice(0, 80);
+      const nextName = String(formData.get('nextSeasonName') || '').trim().slice(0, 80);
+      if (!currentName || !nextName) {
+          showNotification('Informe o nome da temporada que termina e da próxima temporada.', 'error');
+          return;
+      }
+
+      setIsTransitioningSeason(true);
+      const now = new Date().toISOString();
+      const oldSeasonId = activeTeamSeasonId || 'legacy';
+      const seasonCollections = ['tasks', 'events', 'finalSprintAssignments', 'finalSprintEvaluations', 'finalSprintSelectionScores'];
+
+      try {
+          const [snapshots, rosterSnapshot] = await Promise.all([
+              Promise.all(seasonCollections.map((collectionName) => getDocs(collection(db, collectionName)))),
+              getDocs(collection(db, 'students')),
+          ]);
+          const recordsToTag = snapshots.flatMap((snapshot) => snapshot.docs.filter((record) => !record.data().seasonId || record.data().seasonId === oldSeasonId));
+          const recordCounts = Object.fromEntries(seasonCollections.map((collectionName, index) => [
+              collectionName,
+              snapshots[index].docs.filter((record) => !record.data().seasonId || record.data().seasonId === oldSeasonId).length,
+          ]));
+
+          for (let start = 0; start < recordsToTag.length; start += 450) {
+              const batch = writeBatch(db);
+              recordsToTag.slice(start, start + 450).forEach((record) => batch.update(record.ref, { seasonId: oldSeasonId }));
+              await batch.commit();
+          }
+
+          const archivedSeason = {
+              name: currentName,
+              status: 'archived',
+              startedAt: teamSeasons.find((season) => season.id === oldSeasonId)?.startedAt || null,
+              closedAt: now,
+              recordCounts,
+              teamSnapshot: rosterSnapshot.docs.map((studentDoc) => {
+                  const student = studentDoc.data();
+                  return {
+                      id: studentDoc.id,
+                      name: student.name || 'Aluno',
+                      turma: student.turma || '',
+                      station: student.station || '',
+                      specialty: student.specialty || '',
+                      xp: Number(student.xp) || 0,
+                      badges: Array.isArray(student.badges) ? student.badges : [],
+                  };
+              }),
+              weeklyStatsSnapshot: teamSeasonStats,
+          };
+          const nextSeasonRef = doc(collection(db, 'teamSeasons'));
+          const nextSeason = {
+              name: nextName,
+              status: 'active',
+              startedAt: now,
+              createdBy: adminProfile?.name || currentUser.name || 'Técnico',
+              previousSeasonId: oldSeasonId,
+              recordCounts: {},
+          };
+          const transitionBatch = writeBatch(db);
+          transitionBatch.set(doc(db, 'teamSeasons', oldSeasonId), archivedSeason, { merge: true });
+          transitionBatch.set(nextSeasonRef, nextSeason);
+          transitionBatch.set(doc(db, 'settings', 'workspace_season'), {
+              activeSeason: 'rotation',
+              activeSeasonId: nextSeasonRef.id,
+              activeSeasonName: nextName,
+              startedAt: now,
+          }, { merge: true });
+          transitionBatch.set(doc(db, 'settings', 'team_stats'), { successfulWeekIds: [], successfulWeeks: 0 });
+          await transitionBatch.commit();
+
+          setActiveTeamSeasonId(nextSeasonRef.id);
+          setActiveTeamSeasonName(nextName);
+          setSeasonLifecycleReady(true);
+          localStorage.setItem('newgears_active_season_id', nextSeasonRef.id);
+          localStorage.setItem('newgears_active_season_name', nextName);
+          setWorkspaceSeason('rotation');
+          localStorage.setItem('newgears_workspace_season', 'rotation');
+          setAdminTab('rotation');
+          setModal({ type: null, data: null });
+          showNotification(`Temporada ${nextName} iniciada. Os registros anteriores estão arquivados e preservados.`);
+      } catch (error) {
+          console.error('Falha ao encerrar/iniciar temporada:', error);
+          showNotification('Não foi possível concluir a transição. Os dados não foram apagados; tente novamente após verificar a conexão.', 'error');
+      } finally {
+          setIsTransitioningSeason(false);
+      }
+  };
+
   const adminHeroActions = workspaceSeason === 'rotation'
       ? [
           { label: 'Gerenciar alunos', onClick: () => setAdminTab('students'), icon: <Users size={14} />, style: 'bg-emerald-500/10 text-emerald-200 border-emerald-500/20 hover:bg-emerald-400 hover:text-black' },
@@ -5586,8 +5735,9 @@ const handleDeleteRound = async (id) => {
       { id: 'logbook', label: 'Diario', icon: <Book size={16} />, description: 'Memoria viva do time com testes, aprendizados e mini vitorias.', pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
       { id: 'agenda', label: 'Agenda', icon: <CalendarDays size={16} />, description: 'Prazos, encontros e checkpoints da equipe em modo missao.', badge: urgentEventsCount > 0 ? urgentEventsCount : null, pillTone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200', activeClass: 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20', inactiveClass: 'text-gray-400 hover:text-indigo-300 hover:bg-indigo-500/10' },
       { id: 'showcase', label: 'Vitrine', icon: <MonitorPlay size={16} />, description: 'Curadoria das fotos, torneio e QR Codes exibidos para a escola.', pill: `${galleryPhotos.length} fotos`, pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
-      { id: 'history', label: 'Historico', icon: <History size={16} />, description: 'Registro coletivo com autor, data e alteracoes feitas no sistema.', pillTone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200', activeClass: 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-900/20', inactiveClass: 'text-gray-400 hover:text-cyan-300 hover:bg-cyan-500/10' }
-  ].filter((tab) => !['history', 'report_recipients'].includes(tab.id) || currentUser?.type === 'admin');
+      { id: 'history', label: 'Historico', icon: <History size={16} />, description: 'Registro coletivo com autor, data e alteracoes feitas no sistema.', pillTone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200', activeClass: 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-900/20', inactiveClass: 'text-gray-400 hover:text-cyan-300 hover:bg-cyan-500/10' },
+      { id: 'season_history', label: 'Temporadas', icon: <History size={16} />, description: 'Consulte tarefas, agenda e avaliações de ciclos anteriores.', pill: `${teamSeasons.filter((season) => season.status === 'archived').length} arquivos`, pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-slate-950 shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' }
+  ].filter((tab) => !['history', 'report_recipients', 'season_history'].includes(tab.id) || currentUser?.type === 'admin');
 
   const studentWorkspaceTabs = [
       { id: 'weekly_reports', label: 'Relatórios Semanais', icon: <FileText size={16} />, description: 'Compartilhe seu relatório e consulte os registros da equipe.', badge: reportsWorkspace.unreadReports.length || null, pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
@@ -5608,6 +5758,7 @@ const handleDeleteRound = async (id) => {
       feedback: 'pt-10 md:pt-12',
       rotation: 'pt-10 md:pt-12',
       students: 'pt-10 md:pt-12',
+      season_history: 'pt-10 md:pt-12',
       strategy: 'pt-10 md:pt-12',
       rounds: 'pt-10 md:pt-12',
       rubrics: 'pt-10 md:pt-12',
@@ -5712,6 +5863,14 @@ const handleDeleteRound = async (id) => {
       urgentTasksCount > 0 && { title: 'Resolver gargalos do Kanban', detail: `${urgentTasksCount} tarefa(s) venceram ou vencem agora.`, actionLabel: 'Abrir Kanban', onClick: () => setAdminTab('kanban'), tone: 'border-orange-500/20 bg-orange-500/10 text-orange-100' },
       urgentEventsCount > 0 && { title: 'Blindar compromissos da agenda', detail: `${urgentEventsCount} marco(s) exigem preparacao proxima.`, actionLabel: 'Ver Agenda', onClick: () => setAdminTab('agenda'), tone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-100' }
   ].filter(Boolean).slice(0, 3);
+
+  const adminActionQueueItems = [
+      urgentTasksCount > 0 && { id: 'tasks', title: 'Tarefas vencidas ou para hoje', count: urgentTasksCount, detail: 'Revise o Kanban e combine o próximo passo.', onClick: () => setAdminTab('kanban'), icon: <ClipboardList size={15} />, tone: 'border-orange-300/20 bg-orange-300/10 text-orange-100' },
+      urgentEventsCount > 0 && { id: 'events', title: 'Compromissos próximos', count: urgentEventsCount, detail: 'Há eventos hoje ou amanhã na agenda.', onClick: () => setAdminTab('agenda'), icon: <CalendarDays size={15} />, tone: 'border-indigo-300/20 bg-indigo-300/10 text-indigo-100' },
+      incompleteStudentRecords.length > 0 && { id: 'students', title: 'Cadastros incompletos', count: incompleteStudentRecords.length, detail: 'Faltam dados básicos ou acesso de integrantes.', onClick: () => setAdminTab('students'), icon: <Users size={15} />, tone: 'border-amber-300/20 bg-amber-300/10 text-amber-100' },
+      pendingWeeklyEvaluationCount > 0 && { id: 'evaluations', title: 'Avaliações semanais pendentes', count: pendingWeeklyEvaluationCount, detail: 'Registre o acompanhamento desta semana.', onClick: () => setAdminTab('evaluations'), icon: <ClipboardList size={15} />, tone: 'border-rose-300/20 bg-rose-300/10 text-rose-100' },
+      reportsWorkspace.unreadReports.length > 0 && { id: 'reports', title: 'Relatórios não lidos', count: reportsWorkspace.unreadReports.length, detail: 'Há aprendizados novos enviados pela equipe.', onClick: () => openWeeklyReports(), icon: <FileText size={15} />, tone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100' },
+  ].filter(Boolean);
 
   const adminHeroFooter = (
       <div className="grid items-stretch gap-3 md:grid-cols-2 xl:auto-rows-fr xl:grid-cols-[1.05fr,1.1fr,1fr,1fr]">
@@ -7213,7 +7372,9 @@ const handleFileSelect = (e) => {
 
     if (!modal.type) return null;
     const isScrollableModal = modal.type !== 'attendance';
-    const modalFrameClass = modal.type === 'imageView'
+    const modalFrameClass = modal.type === 'seasonTransition'
+      ? 'max-w-3xl max-h-[92vh] p-6 overflow-y-auto custom-scrollbar'
+      : modal.type === 'imageView'
       ? 'max-w-4xl h-auto p-6 overflow-y-auto custom-scrollbar'
       : modal.type === 'expertContactForm'
         ? 'max-w-2xl max-h-[92vh] p-6 overflow-y-auto custom-scrollbar'
@@ -7382,6 +7543,63 @@ const handleFileSelect = (e) => {
           )}
 
           {modal.type === 'confirm' && <><h3 className="text-xl font-bold text-white mb-2">{modal.data.title}</h3><p className="text-gray-400 mb-6">{modal.data.msg}</p><div className="flex gap-3"><button onClick={closeModal} className="flex-1 py-3 rounded-lg text-gray-400 bg-white/5 hover:bg-white/10">Cancelar</button><button onClick={modal.data.onConfirm} className="flex-1 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600">Confirmar</button></div></>}
+
+          {modal.type === 'seasonTransition' && (
+            <div className="space-y-5">
+              <div className="rounded-[24px] border border-cyan-300/15 bg-[linear-gradient(135deg,rgba(8,145,178,0.13),rgba(15,23,42,0.5)_58%,rgba(16,185,129,0.08))] p-5">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-200/75">Ciclo da equipe</p>
+                <h2 className="mt-2 text-2xl font-black text-white">Encerrar e iniciar temporada</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-300">Os registros de tarefas, agenda, rodízio da reta final e avaliações serão marcados como histórico. A próxima temporada começa no modo Rodízio.</p>
+              </div>
+
+              <form onSubmit={handleSeasonTransition} className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Temporada que termina
+                    <input name="currentSeasonName" required maxLength={80} defaultValue={activeTeamSeasonName} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold normal-case text-white outline-none focus:border-cyan-300/40" />
+                  </label>
+                  <label className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Próxima temporada
+                    <input name="nextSeasonName" required maxLength={80} defaultValue={`Temporada ${new Date().getFullYear() + 1}`} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold normal-case text-white outline-none focus:border-emerald-300/40" />
+                  </label>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-[18px] border border-white/10 bg-white/[0.035] p-4">
+                    <p className="text-xs font-black text-white">Será arquivado por temporada</p>
+                    <p className="mt-2 text-xs leading-relaxed text-slate-400">Tarefas, eventos, frentes da reta final, avaliações e seleções de torneio. Os dados não serão apagados.</p>
+                  </div>
+                  <div className="rounded-[18px] border border-emerald-300/10 bg-emerald-300/[0.035] p-4">
+                    <p className="text-xs font-black text-emerald-100">Continua com a equipe</p>
+                    <p className="mt-2 text-xs leading-relaxed text-slate-400">Cadastros, XP, conquistas e diário permanecem. O resumo de semanas bem-sucedidas começa novamente.</p>
+                  </div>
+                </div>
+
+                <div className="rounded-[18px] border border-white/10 bg-black/20 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-black text-white">Histórico de temporadas</p>
+                    <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold text-slate-300">{teamSeasons.filter((season) => season.status === 'archived').length} arquivadas</span>
+                  </div>
+                  {teamSeasons.filter((season) => season.status === 'archived').length ? (
+                    <div className="mt-3 space-y-2">
+                      {teamSeasons.filter((season) => season.status === 'archived').slice(0, 4).map((season) => (
+                        <div key={season.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/6 bg-white/[0.025] px-3 py-2 text-xs">
+                          <span className="font-bold text-slate-200">{season.name}<span className="ml-2 font-normal text-slate-500">{season.teamSnapshot?.length || 0} alunos · {Object.values(season.recordCounts || {}).reduce((sum, count) => sum + Number(count || 0), 0)} registros</span></span>
+                          <span className="text-slate-500">{season.closedAt ? new Date(season.closedAt).toLocaleDateString('pt-BR') : 'Arquivo histórico'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="mt-2 text-xs text-slate-500">Ainda não há temporadas encerradas por este fluxo.</p>}
+                </div>
+
+                <div className="flex flex-wrap justify-end gap-2 pt-1">
+                  <button type="button" onClick={() => { closeModal(); setAdminTab('season_history'); }} disabled={isTransitioningSeason} className="mr-auto rounded-full border border-cyan-300/15 bg-cyan-300/[0.06] px-4 py-3 text-xs font-bold text-cyan-100 transition hover:bg-cyan-300/10 disabled:opacity-50">Abrir histórico completo</button>
+                  <button type="button" onClick={closeModal} disabled={isTransitioningSeason} className="rounded-full border border-white/10 bg-white/5 px-5 py-3 text-xs font-bold text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-50">Agora não</button>
+                  <button type="submit" disabled={isTransitioningSeason || !workspaceSeasonLoaded} className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-cyan-300 to-emerald-300 px-5 py-3 text-xs font-black text-slate-950 shadow-lg shadow-cyan-950/20 transition hover:brightness-110 disabled:cursor-wait disabled:opacity-60">
+                    {isTransitioningSeason ? <><Loader2 size={15} className="animate-spin" /> Arquivando…</> : !workspaceSeasonLoaded ? 'Carregando temporada…' : <><RotateCcw size={15} /> Arquivar e iniciar Rodízio</>}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
 
           
 
@@ -9523,6 +9741,7 @@ const handleFileSelect = (e) => {
           <WorkspaceCollapsible isOpen={adminPanelState.dashboard}>
             <div className="flex flex-col gap-6 mb-6">
               <WeeklyReportsSummary workspace={reportsWorkspace} onOpen={openWeeklyReports} />
+              <WorkspaceActionQueue items={adminActionQueueItems} />
               <WorkspacePanelToolbar
                 eyebrow="Painel Tatico"
                 panels={adminDashboardPanels}
@@ -9609,11 +9828,12 @@ const handleFileSelect = (e) => {
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-white/10 bg-[linear-gradient(120deg,rgba(255,255,255,0.045),rgba(0,0,0,0.2))] px-4 py-3 shadow-[0_14px_34px_rgba(0,0,0,0.18)]">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-300/60">Foco da equipe</p>
-                      <p className="mt-1 text-sm font-bold text-white">{workspaceSeason === 'rotation' ? 'Rodízio de estações' : 'Reta final e torneio'}</p>
+                      <p className="mt-1 text-sm font-bold text-white">{activeTeamSeasonName} · {workspaceSeason === 'rotation' ? 'Rodízio de estações' : 'Reta final e torneio'}</p>
                     </div>
                     <div className="flex items-center gap-3">
                       {isSavingWorkspaceSeason && <span role="status" className="text-[10px] font-bold text-slate-300">Sincronizando…</span>}
                       {currentUser?.type === 'admin' && <SeasonModeControl value={workspaceSeason} onChange={handleWorkspaceSeasonChange} disabled={isSavingWorkspaceSeason} />}
+                      {currentUser?.type === 'admin' && db && <button type="button" disabled={!workspaceSeasonLoaded || isTransitioningSeason} onClick={() => setModal({ type: 'seasonTransition', data: null })} className="rounded-full border border-white/10 bg-white/[0.045] px-4 py-2.5 text-[11px] font-bold text-slate-300 transition hover:border-cyan-200/25 hover:bg-cyan-200/10 hover:text-cyan-50 disabled:cursor-wait disabled:opacity-50">{workspaceSeasonLoaded ? 'Encerrar temporada' : 'Carregando temporada…'}</button>}
                     </div>
                   </div>
                   <WorkspaceTabs eyebrow="Centro de Navegacao" tabs={adminWorkspaceTabs} activeId={adminTab} onChange={setAdminTab} />
@@ -9691,6 +9911,7 @@ const handleFileSelect = (e) => {
                       />
                     )}
                     {adminTab === 'history' && currentUser?.type === 'admin' && <ActivityHistoryView activityLogs={activityLogs} />}
+                    {adminTab === 'season_history' && currentUser?.type === 'admin' && <SeasonHistoryView db={db} seasons={teamSeasons} />}
                   </WorkspaceScene>
                 </div>
             </div>
