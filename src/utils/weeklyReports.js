@@ -119,3 +119,14 @@ export function filterWeeklyReports(reports, filters) {
       && (!filters.year || date.slice(0, 4) === filters.year);
   });
 }
+
+export function buildWeeklyDeliveries({ students, reports, weekStart, dueDay = 5, exemptions = {}, today = localReportDate() }) {
+  const end = new Date(`${weekStart}T12:00:00Z`); end.setUTCDate(end.getUTCDate() + 6);
+  const due = new Date(`${weekStart}T12:00:00Z`); due.setUTCDate(due.getUTCDate() + ((Number(dueDay) + 6) % 7));
+  const dueDate = due.toISOString().slice(0, 10);
+  const endDate = end.toISOString().slice(0, 10);
+  return students.filter((student) => (!student.joinedAt || student.joinedAt.slice(0, 10) <= endDate) && (student.status !== 'inactive' || student.archivedAt?.slice(0, 10) > endDate)).map((student) => {
+    const report = reports.find((item) => item.studentId === student.id && (item.weekStart || weekStartFor(item.reportDate)) === weekStart);
+    return { student, report, exemption: exemptions[student.id], dueDate, status: report ? 'Entregue' : exemptions[student.id] ? 'Dispensado' : today > dueDate ? 'Atrasado' : 'A entregar' };
+  });
+}

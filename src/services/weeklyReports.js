@@ -17,6 +17,12 @@ async function api(path, options = {}) {
 }
 
 export const loadReportsSession = () => api('/session');
+export const loadReminderInbox = () => api('/reminders/inbox');
+export const loadReminderSettings = () => api('/reminders/settings');
+export const saveReminderSettings = (config) => api('/reminders/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
+export const loadBackupPrivateData = (scope) => api(`/backup?${new URLSearchParams({ scope })}`);
+export const loadReportExpectations = (seasonId, weekStart) => api(`/expectations?${new URLSearchParams({ seasonId, weekStart })}`);
+export const saveReportExemption = (data) => api('/expectations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
 export const deleteWeeklyReport = (id) => api(`/${encodeURIComponent(id)}`, { method: 'DELETE' });
 export const notifyWeeklyReport = (id) => api(`/${encodeURIComponent(id)}/notify`, { method: 'POST' });
 export const markWeeklyReportRead = (id) => api(`/${encodeURIComponent(id)}/read`, { method: 'POST' });

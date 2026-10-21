@@ -1,5 +1,5 @@
 import { Suspense, lazy, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy, limit, writeBatch, deleteField, getDocs } from "firebase/firestore";
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy, limit, writeBatch, deleteField, runTransaction } from "firebase/firestore";
 import { auth, db, FIREBASE_AUTH_ENABLED } from './firebase'; // Reutiliza o mesmo projeto Firebase
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { loadReportsSession } from './services/weeklyReports';
@@ -8,6 +8,15 @@ import WeeklyReportsView from './views/WeeklyReportsView';
 import ReportRecipientsView from './views/ReportRecipientsView';
 import WeeklyReportsSummary from './components/WeeklyReportsSummary';
 import WorkspaceActionQueue from './components/WorkspaceActionQueue';
+import SeasonPlanningPanel from './components/SeasonPlanningPanel';
+import AttendancePanel from './components/AttendancePanel';
+import TaskReviewForm from './components/TaskReviewForm';
+import SeasonTransitionChecklist from './components/SeasonTransitionChecklist';
+import { changeTaskStage, updateTaskPeople, setTaskBlock } from './services/taskWorkflow';
+import TaskBlockForm from './components/TaskBlockForm';
+import ReminderInbox from './components/ReminderInbox';
+import { applyRotation, undoRotation, saveAttendance, assertActiveSeason, transitionSeason } from './services/teamProcesses';
+import { buildRotationSchedule, defaultPlanning, validatePlanning, isActiveStudent, SEASON_COLLECTIONS, validDate, dateKey } from './utils/teamProcesses';
 import Countdown from './components/Countdown';
 import LogoNewGears from './components/LogoNewGears';
 import { WorkspaceHero, WorkspaceTabs, WorkspaceScene, WorkspaceCollapsible, WorkspacePanelToolbar, SeasonModeControl } from './components/WorkspaceChrome';
@@ -142,6 +151,7 @@ import {
   Palette,
 } from 'lucide-react';
 
+const TeamOperationsView = lazy(() => import('./views/TeamOperationsView'));
 const PitStopModal = lazy(() => import('./components/PitStopModal'));
 const RankingPanel = lazy(() => import('./components/RankingPanel'));
 const TeamCheckInModal = lazy(() => import('./components/TeamCheckInModal'));
@@ -547,7 +557,6 @@ const XP_SOURCE_LABELS = {
   station_week: 'Fechamento de semana',
   undo: 'Desfazer',
 };
-const WEEKLY_CAPTAIN_NAMES = ['Heloise', 'Sofia'];
 const WEEKLY_STATION_KEYS = [STATION_KEYS.ENGINEERING, STATION_KEYS.INNOVATION, STATION_KEYS.MANAGEMENT];
 const getXpSourceLabel = (source) => XP_SOURCE_LABELS[source] || 'Manual';
 
@@ -585,7 +594,6 @@ const getXpLossDeleteState = (notice, now = new Date()) => {
   return { canDelete: false, label: `Libera em ${remainingDays} dia(s)` };
 };
 
-const isWeeklyCaptainName = (name) => WEEKLY_CAPTAIN_NAMES.some((captainName) => studentNamesMatch(captainName, name));
 
 const getNoticeTime = (notice) => {
   const date = getXpLossDate(notice?.date || notice?.createdAt);
@@ -992,6 +1000,7 @@ function App() {
   const [workspaceSeasonLoaded, setWorkspaceSeasonLoaded] = useState(false);
   const [teamSeasons, setTeamSeasons] = useState([]);
   const [isTransitioningSeason, setIsTransitioningSeason] = useState(false);
+  const [seasonTransitionLock, setSeasonTransitionLock] = useState(null);
   const [studentTab, setStudentTab] = useState(() => new URLSearchParams(window.location.search).has('report') ? 'weekly_reports' : 'sprint');
   const openWeeklyReports = (reportId = '') => {
     setFocusedReportId(reportId);
@@ -1008,7 +1017,21 @@ function App() {
   const [missionsList, setMissionsList] = useState([]);
   const [decisionMatrix, setDecisionMatrix] = useState([]);
   const [prototypeIterations, setPrototypeIterations] = useState([]);
-  const [students, setStudents] = useState([]);
+  const [allStudents, setStudents] = useState([]);
+  const students = useMemo(() => allStudents.filter(isActiveStudent), [allStudents]);
+  useEffect(() => {
+    if (currentUser?.type !== 'student') return;
+    const studentId = currentUser.studentId || currentUser.data?.id;
+    if (!allStudents.some((student) => student.id === studentId && student.status === 'inactive')) return;
+    setCurrentUser(null); setViewAsStudent(null); setIsAdmin(false); localStorage.removeItem('roboquest_user');
+    setLoginError('Seu cadastro foi arquivado. Peça ao técnico para reativá-lo.');
+    if (FIREBASE_AUTH_ENABLED) void signOut(auth);
+  }, [allStudents, currentUser]);
+  const [planningConfig, setPlanningConfig] = useState(null);
+  const effectivePlanning = useMemo(() => planningConfig || defaultPlanning(students, !activeTeamSeasonId), [planningConfig, students, activeTeamSeasonId]);
+  const [rotationApplications, setRotationApplications] = useState([]);
+  const [isProcessingRotation, setIsProcessingRotation] = useState(false);
+  const [isSavingPlanning, setIsSavingPlanning] = useState(false);
   const [tasks, setTasks] = useState([]);
   const [finalSprintAssignments, setFinalSprintAssignments] = useState([]);
   const [finalSprintAssignmentsState, setFinalSprintAssignmentsState] = useState({ loading: true, error: false });
@@ -1272,6 +1295,7 @@ function App() {
 
       try {
           await addDoc(collection(db, "activityLogs"), {
+              seasonId: activeTeamSeasonId || 'legacy',
               action,
               category,
               title: `${title || ''}`.trim(),
@@ -1306,6 +1330,7 @@ function App() {
 
       try {
           return await addDoc(collection(db, "xpRecords"), {
+              seasonId: activeTeamSeasonId || 'legacy',
               studentId: student.id,
               studentName: student.name || 'Aluno',
               amount: Number(amount) || 0,
@@ -1938,10 +1963,10 @@ function App() {
       const q = query(collection(db, "dailyMoods"), where("date", "==", today));
       const unsubscribe = onSnapshot(q, (snapshot) => {
           const moods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setTeamMoods(moods);
+          setTeamMoods(moods.filter((mood) => (!seasonLifecycleReady || !mood.seasonId || mood.seasonId === activeTeamSeasonId) && students.some((student) => student.id === mood.studentId)));
       });
       return () => unsubscribe();
-  }, [db]);
+  }, [activeTeamSeasonId, seasonLifecycleReady, students]);
 
   // Função para Salvar o Humor
   const handleMoodSubmit = async (level) => {
@@ -1949,8 +1974,8 @@ function App() {
 
       // Trava 1: Apenas dias de treino (Segunda=1, Quarta=3)
       const dayOfWeek = new Date().getDay();
-      if (dayOfWeek !== 1 && dayOfWeek !== 3) {
-          alert("Check-in bloqueado. Votação permitida apenas às segundas e quartas.");
+      if (!effectivePlanning.trainingDays.includes(dayOfWeek)) {
+          alert("Check-in liberado nos dias de treino configurados.");
           return;
       }
 
@@ -1961,11 +1986,12 @@ function App() {
           return;
       }
 
-      const today = new Date().toISOString().split('T')[0];
+      const today = getTodayMoodDate();
       
       try {
           // Salva no banco
           await addDoc(collection(db, "dailyMoods"), {
+              seasonId: activeTeamSeasonId || 'legacy',
               studentId: viewAsStudent.id,
               studentName: viewAsStudent.name,
               level: level, // 100, 75, 50, 25
@@ -2059,7 +2085,7 @@ function App() {
     // 2. Tenta logar como Aluno (busca no array 'students' que já existe no seu código)
     // Nota: Certifique-se de que o cadastro de aluno salva 'username' e 'password'
     const studentFound = students.find(s => 
-        s.username && s.username.toLowerCase().trim() === userClean && s.password === passClean
+        isActiveStudent(s) && s.username && s.username.toLowerCase().trim() === userClean && s.password === passClean
     );
 
     if (studentFound) {
@@ -2207,7 +2233,7 @@ function App() {
   const localTomorrowObj = new Date();
   localTomorrowObj.setDate(localTodayObj.getDate() + 1);
   const localTomorrowStr = getLocalYYYYMMDD(localTomorrowObj);
-  const officialStudentDeadlineObj = getNextOrSameWeekday(localTodayObj, 3);
+  const officialStudentDeadlineObj = getNextOrSameWeekday(localTodayObj, [...effectivePlanning.trainingDays].sort((a, b) => ((b + 6) % 7) - ((a + 6) % 7))[0] ?? 3);
   const officialStudentDeadlineStr = getLocalYYYYMMDD(officialStudentDeadlineObj);
   const localTodayStart = new Date(localTodayObj.getFullYear(), localTodayObj.getMonth(), localTodayObj.getDate());
 
@@ -2544,109 +2570,12 @@ function App() {
       );
   };
 
-  const formatLocalDateValue = (dateObj) => {
-      const year = dateObj.getFullYear();
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const day = String(dateObj.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-  };
-
-  const rotationSchedule = useMemo(() => { 
-      const schedule = []; 
-      const totalScheduleWeeks = 36;
-      let currentDate = buildLocalDate(2026, 2, 22);
-
-      // 1. CAPITÃS (Sempre Fixas em Gestão - Tarde)
-      const capitasNames = WEEKLY_CAPTAIN_NAMES;
-
-      // 2. APRENDIZES (Sexto Ano): Antônio, Heloisa, Helena (Rodízio Simplificado)
-
-      // 3. POOL DO RODÍZIO (7 Alunos da Manhã)
-      // Estes rodam nas vagas: 3 Eng, 3 Inov, 1 Gestão (Líder da Manhã)
-      // Ciclo de 7 semanas para dar a volta completa
-      const morningPool = [
-          "Enzo", "Mariana", 
-          "Lívia", "Arthur Silva", 
-          "Benjamim", "Davi Miguel", 
-          "Antônio Yamaguchi" 
-      ];
-
-      // Função auxiliar para criar objetos visuais (evita o "Vago")
-      const getStudentObjects = (namesList) => {
-          return namesList.map(nameStr => {
-              // Compara sem acentos e com aliases de cadastro.
-              const found = students.find(s => studentNamesMatch(s.name, nameStr));
-              if (found) return found; 
-              // Cria objeto temporário se não achar no banco
-              return { id: `fake-${normalizeStudentNameLookupValue(nameStr) || nameStr}`, name: nameStr, avatarType: 'robot' };
-          });
-      };
-
-      for (let i = 1; i <= totalScheduleWeeks; i++) { 
-          const endDate = new Date(currentDate); 
-          endDate.setDate(currentDate.getDate() + 6); // Agora a semana vai de Domingo a Sábado
-          
-          // --- LÓGICA DE ROTAÇÃO (CICLO DE 7) ---
-          // A cada semana, giramos a lista dos 7 alunos uma posição
-          // Assim, todos passam por Eng -> Inov -> Gestão
-          const shift = (i - 1) % 7;
-          const currentRotation = [...morningPool];
-          
-          // Realiza a rotação do array
-          for(let k = 0; k < shift; k++) {
-              currentRotation.push(currentRotation.shift());
-          }
-
-          // DISTRIBUIÇÃO INTERCALADA (EVITA REPETIÇÕES SEGUIDAS)
-          // Para alternar e não ficar 3 semanas na mesma área:
-          // Eng: Pega índices 0, 3, 5
-          // Inov: Pega índices 2, 4, 6
-          // Gestão: Pega índice 1
-          const engTeam = [currentRotation[0], currentRotation[3], currentRotation[5]];
-          const inovTeam = [currentRotation[2], currentRotation[4], currentRotation[6]];
-          const morningLeader = [currentRotation[1]];
-
-          // ONDE ENTRAM OS TRAINEES (6º ANO)?
-          // Ciclo de 6 semanas: Rotaciona as duplas e as áreas para misturar bem (Todos trabalham com todos)
-          const tList = ["Antônio Echenique", "Helena", "Heloisa"];
-          const cycle = (i - 1) % 6; 
-          
-          let pair, solo;
-          if (cycle < 2) { pair = [tList[0], tList[1]]; solo = tList[2]; }      // Ant & Hel
-          else if (cycle < 4) { pair = [tList[1], tList[2]]; solo = tList[0]; } // Hel & Helo
-          else { pair = [tList[2], tList[0]]; solo = tList[1]; }                // Helo & Ant
-
-          if (cycle % 2 === 0) {
-             engTeam.push(...pair);
-             inovTeam.push(solo);
-          } else {
-             inovTeam.push(...pair);
-             engTeam.push(solo);
-          }
-
-          // GESTÃO FINAL = Capitãs (Tarde) + Líder da Manhã
-          const gestaoFinal = [...capitasNames, ...morningLeader];
-
-          schedule.push({ 
-              id: i, 
-              weekName: `Semana ${i}`, 
-              startDate: formatLocalDateValue(currentDate), 
-              endDate: formatLocalDateValue(endDate), 
-              assignments: { 
-                  [STATION_KEYS.ENGINEERING]: getStudentObjects(engTeam), 
-                  [STATION_KEYS.INNOVATION]: getStudentObjects(inovTeam),
-                  [STATION_KEYS.MANAGEMENT]: getStudentObjects(gestaoFinal) // Capitãs + Alunos
-              } 
-          }); 
-          currentDate.setDate(currentDate.getDate() + 7); 
-      } 
-      return schedule;
-  }, [students]); // <--- A mágica acontece aqui: atualiza quando "students" muda
+  const rotationSchedule = useMemo(() => buildRotationSchedule(students, effectivePlanning), [students, effectivePlanning]);
 
   // --- 1. CÁLCULO DA SEMANA ATUAL (CÓDIGO NOVO) ---
   useEffect(() => {
     // Se não tiver cronograma, não faz nada
-    if (!rotationSchedule || rotationSchedule.length === 0) return;
+    if (!rotationSchedule.length) { setCurrentWeekData(null); return; }
     
     const calculateCurrentWeek = () => {
         const now = new Date();
@@ -2661,13 +2590,13 @@ function App() {
 
         if (found) {
             // Atualiza apenas se mudou de semana para não causar re-renders atoa
-            setCurrentWeekData(prev => prev?.id !== found.id ? found : prev);
+            setCurrentWeekData(found);
         } else {
             const firstWeek = rotationSchedule[0];
             const lastWeek = rotationSchedule[rotationSchedule.length - 1];
             const firstWeekStart = parseLocalDateValue(firstWeek?.startDate);
-            const fallbackWeek = firstWeekStart && now < firstWeekStart ? firstWeek : lastWeek;
-            setCurrentWeekData(prev => prev?.id !== fallbackWeek?.id ? fallbackWeek : prev);
+            const fallbackWeek = firstWeekStart && now < firstWeekStart ? firstWeek : rotationSchedule.find((week) => parseLocalDateValue(week.startDate) > now) || lastWeek;
+            setCurrentWeekData(fallbackWeek);
         }
     };
 
@@ -2699,10 +2628,12 @@ function App() {
 
     // Função auxiliar para criar ouvintes seguros
     const createListener = (colName, setter, mapRecord = (record) => record) => {
-        return onSnapshot(collection(db, colName), (snapshot) => {
+        const source = collection(db, colName);
+        const scoped = source;
+        return onSnapshot(scoped, (snapshot) => {
             const data = snapshot.docs.map((docSnap) => mapRecord({ ...docSnap.data(), id: docSnap.id }));
             console.log(`✅ ${colName} carregados com sucesso:`, data.length);
-            setter(data);
+            setter(SEASON_COLLECTIONS.includes(colName) && seasonLifecycleReady ? data.filter((record) => !record.seasonId || record.seasonId === activeTeamSeasonId) : data);
         }, (error) => {
             console.error(`❌ ERRO CRÍTICO em ${colName}:`, error);
             showNotification(`Erro de conexão: ${error.code}`, "error");
@@ -2710,7 +2641,7 @@ function App() {
     };
 
     const unsubStudents = createListener("students", setStudents, normalizeStudentRecord);
-    const unsubAttendanceSessions = createListener("attendanceSessions", setAttendanceSessions);
+
     const unsubXpLossRecords = createListener("xpLossRecords", setXpLossRecords);
     const unsubLeaderPenaltyRequests = createListener("leaderPenaltyRequests", setLeaderPenaltyRequests);
     const unsubGalleryPhotos = createListener("publicGalleryPhotos", setGalleryPhotos);
@@ -2757,6 +2688,8 @@ function App() {
     const unsubWorkspaceSeason = onSnapshot(doc(db, "settings", "workspace_season"), (docSnap) => {
         const seasonData = docSnap.exists() ? docSnap.data() : {};
         const season = seasonData.activeSeason || 'final';
+        setPlanningConfig(seasonData.planningConfig || null);
+        setSeasonTransitionLock(seasonData.transitionLock || null);
         const normalizedSeason = season === 'rotation' ? 'rotation' : 'final';
         setWorkspaceSeason(normalizedSeason);
         localStorage.setItem('newgears_workspace_season', normalizedSeason);
@@ -2775,7 +2708,7 @@ function App() {
     
     return () => {
         unsubStudents();
-        unsubAttendanceSessions();
+
         unsubXpLossRecords();
         unsubLeaderPenaltyRequests();
         unsubGalleryPhotos();
@@ -2786,7 +2719,7 @@ function App() {
         unsubPublicShowcase();
         unsubWorkspaceSeason();
     };
-  }, []);
+  }, [seasonLifecycleReady, activeTeamSeasonId]);
 
   useEffect(() => {
     if (!db || currentUser?.type !== 'admin' || !isAdmin) {
@@ -2802,11 +2735,11 @@ function App() {
     if (!db) return undefined;
     const listenToSeasonCollection = (collectionName, setter) => {
       const source = collection(db, collectionName);
-      const sourceQuery = seasonLifecycleReady && activeTeamSeasonId
+      const sourceQuery = !['attendanceSessions', 'rotationApplications'].includes(collectionName) && seasonLifecycleReady && activeTeamSeasonId
         ? query(source, where('seasonId', '==', activeTeamSeasonId))
         : source;
       return onSnapshot(sourceQuery, (snapshot) => {
-        setter(snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id })));
+        setter(snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id })).filter((record) => !seasonLifecycleReady || !record.seasonId || record.seasonId === activeTeamSeasonId));
       }, (error) => {
         console.error(`Não foi possível carregar ${collectionName} da temporada:`, error);
         showNotification('Não foi possível carregar os dados da temporada ativa.', 'error');
@@ -2815,9 +2748,13 @@ function App() {
 
     const unsubscribeTasks = listenToSeasonCollection('tasks', setTasks);
     const unsubscribeEvents = listenToSeasonCollection('events', setEvents);
+    const unsubscribeAttendance = listenToSeasonCollection('attendanceSessions', setAttendanceSessions);
+    const unsubscribeRotations = listenToSeasonCollection('rotationApplications', setRotationApplications);
     return () => {
       unsubscribeTasks();
       unsubscribeEvents();
+      unsubscribeAttendance();
+      unsubscribeRotations();
     };
   }, [seasonLifecycleReady, activeTeamSeasonId]);
 
@@ -2825,9 +2762,11 @@ function App() {
     if (!db || !shouldLoadStrategyWorkspaceData) return;
 
     const createListener = (colName, setter) => {
-        return onSnapshot(collection(db, colName), (snapshot) => {
+        const source = collection(db, colName);
+        const scoped = source;
+        return onSnapshot(scoped, (snapshot) => {
             const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-            setter(data);
+            setter(SEASON_COLLECTIONS.includes(colName) && seasonLifecycleReady ? data.filter((record) => !record.seasonId || record.seasonId === activeTeamSeasonId) : data);
         }, (error) => {
             console.error(`Erro critico em ${colName}:`, error);
             showNotification(`Erro de conexao: ${error.code}`, "error");
@@ -2871,15 +2810,17 @@ function App() {
         unsubProjectMain();
         unsubProjectFallback();
     };
-  }, [shouldLoadStrategyWorkspaceData]);
+  }, [shouldLoadStrategyWorkspaceData, seasonLifecycleReady, activeTeamSeasonId]);
 
   useEffect(() => {
     if (!db || !shouldLoadRobotWorkspaceData) return;
 
     const createListener = (colName, setter) => {
-        return onSnapshot(collection(db, colName), (snapshot) => {
+        const source = collection(db, colName);
+        const scoped = source;
+        return onSnapshot(scoped, (snapshot) => {
             const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-            setter(data);
+            setter(SEASON_COLLECTIONS.includes(colName) && seasonLifecycleReady ? data.filter((record) => !record.seasonId || record.seasonId === activeTeamSeasonId) : data);
         }, (error) => {
             console.error(`Erro critico em ${colName}:`, error);
             showNotification(`Erro de conexao: ${error.code}`, "error");
@@ -2906,7 +2847,7 @@ function App() {
         unsubScoreHistory();
         unsubMissions();
     };
-  }, [shouldLoadRobotWorkspaceData]);
+  }, [shouldLoadRobotWorkspaceData, seasonLifecycleReady, activeTeamSeasonId]);
 
   useEffect(() => {
     if (!db || !isLogbookViewActive) return;
@@ -2917,33 +2858,33 @@ function App() {
         const logbookQuery = query(collectionGroup(db, 'logbook'));
         unsubLogbook = onSnapshot(logbookQuery, (snapshot) => {
             const entries = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, refPath: doc.ref.path }));
-            setLogbookEntries(entries.sort((a, b) => (b.weekId || 0) - (a.weekId || 0)));
+            setLogbookEntries(entries.filter((entry) => !seasonLifecycleReady || !entry.seasonId || entry.seasonId === activeTeamSeasonId).sort((a, b) => (b.weekId || 0) - (a.weekId || 0)));
         });
     } else if (viewAsStudent?.id) {
         const logbookQuery = query(collection(db, 'students', viewAsStudent.id, 'logbook'));
         unsubLogbook = onSnapshot(logbookQuery, (snapshot) => {
             const entries = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, refPath: doc.ref.path }));
-            setLogbookEntries(entries.sort((a, b) => (b.weekId || 0) - (a.weekId || 0)));
+            setLogbookEntries(entries.filter((entry) => !seasonLifecycleReady || !entry.seasonId || entry.seasonId === activeTeamSeasonId).sort((a, b) => (b.weekId || 0) - (a.weekId || 0)));
         });
     }
 
     return () => {
         if (unsubLogbook) unsubLogbook();
     };
-  }, [isAdmin, isLogbookViewActive, viewAsStudent?.id]);
+  }, [isAdmin, isLogbookViewActive, viewAsStudent?.id, seasonLifecycleReady, activeTeamSeasonId]);
 
   useEffect(() => {
     if (!db || !isActivityHistoryActive) return;
 
     const historyQuery = query(collection(db, "activityLogs"), orderBy("createdAt", "desc"), limit(160));
     const unsubscribe = onSnapshot(historyQuery, (snapshot) => {
-        setActivityLogs(snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id })));
+        setActivityLogs(snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id })).filter((record) => !seasonLifecycleReady || !record.seasonId || record.seasonId === activeTeamSeasonId));
     }, (error) => {
         console.error("Erro ao carregar historico de alteracoes:", error);
     });
 
     return () => unsubscribe();
-  }, [isActivityHistoryActive]);
+  }, [isActivityHistoryActive, seasonLifecycleReady, activeTeamSeasonId]);
 
   useEffect(() => {
     if (!isFinalSprintActive) return;
@@ -3260,8 +3201,8 @@ function App() {
       if (!viewAsStudent) return;
 
       const dayOfWeek = new Date().getDay();
-      if (dayOfWeek !== 1 && dayOfWeek !== 3) {
-          showNotification("Check-in liberado apenas nas segundas e quartas.", "error");
+      if (!effectivePlanning.trainingDays.includes(dayOfWeek)) {
+          showNotification("Check-in liberado nos dias de treino configurados.", "error");
           return;
       }
 
@@ -3276,6 +3217,7 @@ function App() {
 
       try {
           await addDoc(collection(db, "dailyMoods"), {
+              seasonId: activeTeamSeasonId || 'legacy',
               studentId: viewAsStudent.id,
               studentName: viewAsStudent.name,
               level,
@@ -3413,16 +3355,24 @@ function App() {
 
       const resolvedAuthor = author || (isAdmin ? "Tecnico" : (viewAsStudent?.name || "Equipe"));
 
-      const taskRef = await addDoc(collection(db, "tasks"), {
+      const taskRef = doc(collection(db, "tasks"));
+      const taskData = {
           text,
           seasonId: activeTeamSeasonId || 'legacy',
           status: 'todo',
           createdAt: new Date().toISOString(),
           author: resolvedAuthor,
+          createdBy: isAdmin ? adminProfile?.name || 'Técnico' : viewAsStudent?.name || 'Equipe',
+          createdById: currentUser?.uid || viewAsStudent?.id || '',
+          participants: students.filter((student) => resolvedAuthor.split(',').map((name) => name.trim()).includes(student.name)).map((student) => ({ id: student.id, name: student.name })),
           dueDate,
           tag,
           priority,
           ...extraData
+      };
+      await runTransaction(db, async (transaction) => {
+        await assertActiveSeason(transaction, db, activeTeamSeasonId || 'legacy');
+        transaction.set(taskRef, taskData);
       });
       void recordActivity({
           action: 'criou uma tarefa',
@@ -3528,6 +3478,7 @@ function App() {
           }
 
           await addDoc(collection(db, "leaderPenaltyRequests"), {
+              seasonId: activeTeamSeasonId || 'legacy',
               studentId: targetStudent.id,
               studentName: targetStudent.name,
               amount: LEADER_PENALTY_XP,
@@ -3632,6 +3583,7 @@ function App() {
           });
 
           await addDoc(collection(db, "xpLossRecords"), {
+              seasonId: activeTeamSeasonId || 'legacy',
               noticeId: xpLossNotice.id,
               leaderPenaltyRequestId: request.id,
               studentId: previousStudent.id,
@@ -3851,49 +3803,18 @@ function App() {
       }
   };
 
+  const persistTaskStage = async (task, status, details = {}) => {
+    await changeTaskStage({ db, id: task.id, status, expectedStatus: task.status, isAdmin, actor: isAdmin ? adminProfile?.name || 'Técnico' : viewAsStudent?.name || 'Equipe', actorId: currentUser?.uid || viewAsStudent?.id || '', seasonId: activeTeamSeasonId || 'legacy', details });
+    void recordActivity({ action: 'atualizou uma tarefa', category: 'kanban', title: task.text, detail: 'Novo status: ' + status, entityId: task.id });
+    showNotification('Etapa da tarefa atualizada.');
+  };
   const moveTask = async (id, newStatus) => {
-      // --- TRAVA PARA MOVER PARA FEITO (SÓ TÉCNICO) ---
-      if (newStatus === 'done' && !isAdmin) {
-          alert("Acesso bloqueado!\n\nApenas o Tecnico pode mover tarefas para 'Feito' depois de aprova-las na coluna 'Em Revisao'.");
-          return;
-      }
-
-      // --- TRAVA DE 3 HORAS (SÓ PARA ALUNOS) ---
-      if (newStatus === 'review' && !isAdmin) {
-          const task = tasks.find(t => t.id === id);
-          if (task && task.createdAt) {
-              const createdTime = new Date(task.createdAt).getTime();
-              const now = new Date().getTime();
-              const hoursDiff = (now - createdTime) / (1000 * 60 * 60);
-              
-              if (hoursDiff < 3) {
-                  const hoursLeft = (3 - hoursDiff).toFixed(1);
-                  alert(`🛑 Acesso Bloqueado!\n\nAs tarefas precisam de pelo menos 3 horas desde a criação para irem para "Em Revisão". Isso garante que vocês planejem ANTES de executar.\n\nAguarde mais ${hoursLeft} hora(s) para avançar.`);
-                  return; // Cancela a movimentação
-              }
-          }
-      }
-
-      try {
-          const task = tasks.find(t => t.id === id);
-          const updateData = { status: newStatus };
-          if (newStatus === 'done') {
-              updateData.completedAt = new Date().toISOString(); // Salva quando terminou
-          } else {
-              updateData.completedAt = null; // Limpa se voltar pra Fazendo/A Fazer
-          }
-          await updateDoc(doc(db, "tasks", id), updateData);
-          void recordActivity({
-              action: 'moveu uma tarefa no Kanban',
-              category: 'kanban',
-              title: task?.text || 'Tarefa da equipe',
-              detail: `Novo status: ${newStatus}`,
-              entityId: id
-          });
-      } catch (error) {
-          console.error("Erro ao mover tarefa:", error);
-      }
-  }
+    const task = tasks.find((item) => item.id === id);
+    if (!task || task.status === newStatus) return;
+    if (!isAdmin && (newStatus === 'done' || task.status === 'review' || task.status === 'done')) { showNotification('Apenas o técnico pode aprovar, devolver ou reabrir tarefas revisadas.', 'error'); return; }
+    if (newStatus === 'review' || (task.status === 'review' && newStatus === 'doing')) { setModal({ type: 'taskTransition', data: { task, status: newStatus } }); return; }
+    try { await persistTaskStage(task, newStatus); } catch (error) { showNotification(error.message, 'error'); }
+  };
 
   const removeTask = async (id) => {
       if(window.confirm("Excluir tarefa permanentemente?")) {
@@ -3908,78 +3829,21 @@ function App() {
       }
   }
 
-      const takeoverTask = async (id) => {
-          if (!viewAsStudent) return;
-          try {
-              await updateDoc(doc(db, "tasks", id), { author: viewAsStudent.name });
-              showNotification("Você assumiu a responsabilidade desta tarefa!");
-          } catch (error) {
-              console.error("Erro ao assumir:", error);
-          }
-      }
-
-    const joinTask = async (id) => {
-        if (!viewAsStudent) return;
-        try {
-            const task = tasks.find(t => t.id === id);
-            if (!task) return;
-            
-            let newAuthor = viewAsStudent.name;
-            if (task.author) {
-                if (task.author.includes(viewAsStudent.name)) return;
-                
-                const authorsArray = task.author.split(',').map(a => a.trim());
-                if (authorsArray.length >= 3) {
-                    showNotification("Esta tarefa já atingiu o limite de 3 participantes.", "error");
-                    return;
-                }
-                
-                newAuthor = `${task.author}, ${viewAsStudent.name}`;
-            }
-            
-            await updateDoc(doc(db, "tasks", id), { author: newAuthor });
-            showNotification("Você entrou na tarefa!");
-        } catch (error) {
-            console.error("Erro ao participar da tarefa:", error);
-        }
-    };
-
-    const leaveTask = async (id) => {
-        if (!viewAsStudent) return;
-        try {
-            const task = tasks.find(t => t.id === id);
-            if (!task || !task.author) return;
-            
-            let authorsArray = task.author.split(',').map(a => a.trim());
-            authorsArray = authorsArray.filter(a => a !== viewAsStudent.name);
-            
-            const newAuthor = authorsArray.length > 0 ? authorsArray.join(', ') : null;
-            
-            await updateDoc(doc(db, "tasks", id), { author: newAuthor });
-            showNotification("Você saiu da tarefa!");
-        } catch (error) {
-            console.error("Erro ao sair da tarefa:", error);
-        }
-    };
-
-    const assignTaskToStudent = async (taskId, studentName) => {
-        if (!isAdmin) return;
-        
-        // Se o valor for vazio, desatribui (author: null). Senão, atribui.
-        const newAuthor = studentName === "" ? null : studentName;
-
-        try {
-            await updateDoc(doc(db, "tasks", taskId), { author: newAuthor });
-            if (newAuthor) {
-              showNotification(`Tarefa atribuída para ${studentName}!`);
-            } else {
-              showNotification(`Tarefa agora é da equipe.`);
-            }
-        } catch (error) {
-            console.error("Erro ao atribuir tarefa:", error);
-            showNotification("Erro ao atribuir tarefa.", "error");
-        }
-    };
+  const handleTaskPeople = async (id, mode, person) => {
+    try {
+      await updateTaskPeople({ db, id, mode, person, students: allStudents, seasonId: activeTeamSeasonId || 'legacy', isAdmin });
+      showNotification('Responsáveis atualizados. A autoria original foi preservada.');
+    } catch (error) { showNotification(error.message, 'error'); }
+  };
+  const currentTaskPerson = () => viewAsStudent ? { id: viewAsStudent.id, name: viewAsStudent.name } : null;
+  const takeoverTask = (id) => viewAsStudent && window.confirm('Assumir esta tarefa e substituir os participantes atuais?') && handleTaskPeople(id, 'takeover', currentTaskPerson());
+  const joinTask = (id) => viewAsStudent && handleTaskPeople(id, 'join', currentTaskPerson());
+  const leaveTask = (id) => viewAsStudent && handleTaskPeople(id, 'leave', currentTaskPerson());
+  const assignTaskToStudent = (id, name) => {
+    if (!isAdmin) return;
+    const student = students.find((item) => item.name === name);
+    return handleTaskPeople(id, 'assign', student ? { id: student.id, name: student.name } : null);
+  };
 
   // --- FUNÇÃO PARA SALVAR DIÁRIO DE BORDO ---
   const handleLogbookSubmit = async (e) => {
@@ -4003,6 +3867,8 @@ function App() {
           const wordCount = text.split(/\s+/).filter(Boolean).length;
 
           const newEntry = {
+              seasonId: activeTeamSeasonId || 'legacy',
+              studentId: viewAsStudent.id,
               // Ainda salvamos o nome para a visualização consolidada do técnico
               studentName: viewAsStudent.name, 
               text: text,
@@ -4047,22 +3913,16 @@ function App() {
 
  // 2. A função de excluir:
 const handleDeleteStudent = async (studentId) => {
-    // Confirmação para o técnico não excluir sem querer esbarrando no botão
-    if (window.confirm("Tem certeza que deseja excluir este aluno do banco de dados? A ação não pode ser desfeita.")) {
-        try {
-            // A. Deleta o documento lá no Firebase
-            const studentRef = doc(db, "students", studentId);
-            await deleteDoc(studentRef);
-
-            // B. Atualiza a tela (remove da lista local sem precisar atualizar a página)
-            setStudents(prevStudents => prevStudents.filter(s => s.id !== studentId));
-
-            alert("Aluno excluído com sucesso! 🗑️");
-        } catch (error) {
-            console.error("Erro ao excluir aluno no Firebase:", error);
-            alert("Erro ao excluir. Verifique sua conexão ou regras do Firebase.");
-        }
-    }
+    if (!isAdmin) return;
+    const student = allStudents.find((item) => item.id === studentId);
+    if (!student) return;
+    const inactive = student.status === 'inactive';
+    if (!window.confirm((inactive ? 'Reativar ' : 'Arquivar ') + student.name + '? Seu histórico será preservado.')) return;
+    try {
+      await updateDoc(doc(db, 'students', studentId), { status: inactive ? 'active' : 'inactive', archivedAt: inactive ? null : new Date().toISOString(), archivedBy: inactive ? null : adminProfile?.name || 'Técnico' });
+      void recordActivity({ action: inactive ? 'reativou um integrante' : 'arquivou um integrante', category: 'team', title: student.name, entityId: studentId });
+      showNotification(inactive ? 'Aluno reativado. Inclua-o no planejamento quando desejar.' : 'Aluno arquivado com histórico preservado.');
+    } catch (error) { showNotification(error.message, 'error'); }
 };
 
 const handleDeleteRound = async (id) => {
@@ -4205,13 +4065,8 @@ const handleDeleteRound = async (id) => {
           password: fd.get('password'), 
           avatarImage: avatarImage, // Novo campo para a foto
           // Mantém os outros campos se estiver editando
-          xp: modal.data?.xp ?? 0,
-          totalClasses: modal.data?.totalClasses ?? 0,
-          attendedClasses: modal.data?.attendedClasses ?? 0,
-          station: modal.data?.station ?? null,
-          submission: modal.data?.submission ?? null,
-          badges: modal.data?.badges ?? [],
-          englishChallengeUnlocked: modal.data?.englishChallengeUnlocked ?? false,
+          ...(!isEditing ? { status: 'active', xp: 0, totalClasses: 0, attendedClasses: 0, station: null, submission: null, badges: [], englishChallengeUnlocked: false, joinedAt: new Date().toISOString() } : {}),
+
       };
 
       try {
@@ -4282,6 +4137,7 @@ const handleDeleteRound = async (id) => {
       const fd = new FormData(e.target);
 
       const outreachData = {
+              seasonId: activeTeamSeasonId || 'legacy',
           name: fd.get('name'),
           type: fd.get('type'),
           people: parseInt(fd.get('people')),
@@ -4318,72 +4174,13 @@ const handleDeleteRound = async (id) => {
       }
   }
 
-  const handleAttendanceSubmit = async (e) => {
-      e.preventDefault();
-      const fd = new FormData(e.target);
-      
-      // Pega todos os IDs marcados no checkbox (agora são strings do Firebase)
-      const attendanceDate = (fd.get('attendanceDate') || localTodayStr).toString();
-      const presentIds = fd.getAll('present').map(id => String(id));
-      const existingSession = attendanceSessions.find((session) => session.date === attendanceDate || session.id === attendanceDate);
-      const previousPresentIds = new Set((existingSession?.presentIds || []).map(String));
-      const currentPresentIds = new Set(presentIds);
+  const handleAttendanceSave = async (draft) => {
+    if (!isAdmin) throw new Error('Apenas o técnico pode salvar a chamada.');
+    await saveAttendance({ db, seasonId: activeTeamSeasonId || 'legacy', ...draft, actor: adminProfile?.name || 'Técnico' });
+    void recordActivity({ action: 'registrou ou corrigiu a chamada', category: 'team', title: draft.date, entityId: draft.date });
+    showNotification('Chamada salva. Frequência atualizada em conjunto.');
+  };
 
-      try {
-          // Cria uma lista de "promessas" para atualizar todos ao mesmo tempo
-          const updates = students.map(student => {
-              const studentRef = doc(db, "students", student.id);
-              
-              const studentId = String(student.id);
-              const isPresent = currentPresentIds.has(studentId);
-              const wasPresent = previousPresentIds.has(studentId);
-              
-              // Calcula os novos valores
-              const currentTotal = student.totalClasses || 0;
-              const currentAttended = student.attendedClasses || 0;
-              const manualTotalRaw = fd.get(`manualTotal-${student.id}`);
-              const manualAttendedRaw = fd.get(`manualAttended-${student.id}`);
-              const manualTotal = manualTotalRaw === null ? NaN : Number(manualTotalRaw);
-              const manualAttended = manualAttendedRaw === null ? NaN : Number(manualAttendedRaw);
-              const baseTotal = Number.isFinite(manualTotal) ? manualTotal : currentTotal;
-              const baseAttended = Number.isFinite(manualAttended) ? manualAttended : currentAttended;
-              const totalDelta = existingSession ? 0 : 1;
-              const attendedDelta = existingSession ? Number(isPresent) - Number(wasPresent) : Number(isPresent);
-              const nextTotal = Math.max(0, baseTotal + totalDelta);
-              const nextAttended = Math.min(nextTotal, Math.max(0, baseAttended + attendedDelta));
-              
-              return updateDoc(studentRef, {
-                  totalClasses: nextTotal,
-                  attendedClasses: nextAttended
-              });
-          });
-
-          updates.push(setDoc(doc(db, "attendanceSessions", attendanceDate), {
-              date: attendanceDate,
-              presentIds,
-              absentIds: students.filter((student) => !currentPresentIds.has(String(student.id))).map((student) => student.id),
-              studentCount: students.length,
-              createdAt: existingSession?.createdAt || new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-          }));
-
-          // Espera todos serem atualizados
-          await Promise.all(updates);
-          void recordActivity({
-              action: existingSession ? 'corrigiu a chamada da equipe' : 'registrou a chamada da equipe',
-              category: 'team',
-              title: attendanceDate,
-              detail: `${presentIds.length}/${students.length} integrantes presentes`,
-              entityId: attendanceDate
-          });
-          
-          closeModal();
-          showNotification(existingSession ? "Chamada corrigida para esta data!" : "Frequencia registrada no Firebase!");
-      } catch (error) {
-          console.error("Erro na chamada:", error);
-          showNotification("Erro ao salvar frequência.", "error");
-      }
-  }
   const handleExpertSubmit = async (e) => { 
       e.preventDefault(); 
       const fd = new FormData(e.target);
@@ -4442,6 +4239,7 @@ const handleDeleteRound = async (id) => {
           }
 
           const expertContactData = {
+              seasonId: activeTeamSeasonId || 'legacy',
               name: `${fd.get('name') || ''}`.trim(),
               role: `${fd.get('role') || ''}`.trim(),
               channel: `${fd.get('channel') || ''}`.trim(),
@@ -4735,6 +4533,7 @@ const handleDeleteRound = async (id) => {
       const fd = new FormData(e.target);
 
       const ideaData = {
+              seasonId: activeTeamSeasonId || 'legacy',
           name: fd.get('name'),
           impact: parseInt(fd.get('impact')),
           cost: parseInt(fd.get('cost')),
@@ -4902,42 +4701,39 @@ const handleDeleteRound = async (id) => {
 
   // --- FUNÇÃO PARA APLICAR O RODÍZIO AUTOMATICAMENTE ---
   const handleApplyRotation = async () => {
-      if (!currentWeekData) return;
-      if (!window.confirm(`Sincronizar a equipe com a ${currentWeekData.weekName}? Todos os alunos serão movidos para as suas estações.`)) return;
-      
-      try {
-          // Cria uma lista de atualizações para enviar tudo de uma vez
-          const updates = students.map(student => {
-              let targetStation = null;
-              
-              // Verifica em qual estação o aluno está escalado no cronograma
-              if (currentWeekData.assignments[STATION_KEYS.ENGINEERING].some(s => studentNamesMatch(s.name, student.name))) targetStation = STATION_KEYS.ENGINEERING;
-              else if (currentWeekData.assignments[STATION_KEYS.INNOVATION].some(s => studentNamesMatch(s.name, student.name))) targetStation = STATION_KEYS.INNOVATION;
-              else if (currentWeekData.assignments[STATION_KEYS.MANAGEMENT].some(s => studentNamesMatch(s.name, student.name))) targetStation = STATION_KEYS.MANAGEMENT;
-
-              // Atualiza o aluno no Firebase
-              return updateDoc(doc(db, "students", student.id), { station: targetStation, submission: null });
-          });
-
-          await Promise.all(updates);
-          await Promise.all(stationXpAwards.map(({ student, xpGain }) => recordXpOrigin({
-              student,
-              amount: xpGain,
-              source: 'station_week',
-              mode: 'reward',
-              reason: `${station} | ${isCompleteTeam ? 'semana completa' : 'semana parcial'}`
-          })));
-          void recordActivity({
-              action: 'aplicou o rodizio semanal',
-              category: 'team',
-              title: currentWeekData.weekName,
-              detail: 'As estacoes da equipe foram sincronizadas com o cronograma.'
-          });
-          showNotification("Rodízio automático aplicado com sucesso!", "success");
-      } catch (error) {
-          console.error("Erro ao aplicar rodízio:", error);
-          showNotification("Erro ao aplicar rodízio.", "error");
-      }
+    if (!isAdmin || !currentWeekData || isProcessingRotation) return;
+    if (!window.confirm('Aplicar ' + currentWeekData.weekName + '? As entregas atuais serão preservadas.')) return;
+    setIsProcessingRotation(true);
+    try {
+      await applyRotation({ db, seasonId: activeTeamSeasonId || 'legacy', week: currentWeekData, actor: adminProfile?.name || 'Técnico' });
+      void recordActivity({ action: 'aplicou o rodízio semanal', category: 'team', title: currentWeekData.weekName });
+      showNotification('Rodízio aplicado. Entregas preservadas.');
+    } catch (error) { showNotification(error.message, 'error'); }
+    finally { setIsProcessingRotation(false); }
+  };
+  const handleUndoRotation = async (application) => {
+    if (!isAdmin || isProcessingRotation || !window.confirm('Restaurar as estações anteriores a esta aplicação?')) return;
+    setIsProcessingRotation(true);
+    try {
+      await undoRotation({ db, applicationId: application.id, seasonId: activeTeamSeasonId || 'legacy', actor: adminProfile?.name || 'Técnico' });
+      void recordActivity({ action: 'desfez uma aplicação do rodízio', category: 'team', title: application.weekName });
+      showNotification('Distribuição anterior restaurada.');
+    } catch (error) { showNotification(error.message, 'error'); }
+    finally { setIsProcessingRotation(false); }
+  };
+  const handleSavePlanning = async (draft) => {
+    if (!isAdmin || isSavingPlanning) return;
+    setIsSavingPlanning(true);
+    try {
+      const config = validatePlanning(draft, students);
+      await runTransaction(db, async (transaction) => {
+        await assertActiveSeason(transaction, db, activeTeamSeasonId || 'legacy');
+        transaction.set(doc(db, 'settings', 'workspace_season'), { planningConfig: config }, { merge: true });
+      });
+      setPlanningConfig(config);
+      showNotification('Planejamento da temporada salvo.');
+    } catch (error) { showNotification(error.message, 'error'); }
+    finally { setIsSavingPlanning(false); }
   };
 
   // --- SALVAR PERFIL DO TECNICO ---
@@ -5266,7 +5062,7 @@ const handleDeleteRound = async (id) => {
   const isWeeklyLeader = Boolean(
       viewAsStudent?.id
       && currentWeekData?.assignments?.[STATION_KEYS.MANAGEMENT]?.some((student) => student.id === viewAsStudent.id || studentNamesMatch(student.name, viewAsStudent.name))
-      && !isWeeklyCaptainName(viewAsStudent.name)
+      && !effectivePlanning.captainIds.includes(viewAsStudent.id)
   );
   const weeklyLeaderStationStatuses = WEEKLY_STATION_KEYS.map((station) => {
       const mission = missions?.[station] || {};
@@ -5600,96 +5396,23 @@ const handleDeleteRound = async (id) => {
   };
 
   const handleSeasonTransition = async (event) => {
-      event.preventDefault();
-      if (currentUser?.type !== 'admin' || !db || !workspaceSeasonLoaded || isTransitioningSeason) return;
-      const formData = new FormData(event.currentTarget);
-      const currentName = String(formData.get('currentSeasonName') || '').trim().slice(0, 80);
-      const nextName = String(formData.get('nextSeasonName') || '').trim().slice(0, 80);
-      if (!currentName || !nextName) {
-          showNotification('Informe o nome da temporada que termina e da próxima temporada.', 'error');
-          return;
-      }
-
-      setIsTransitioningSeason(true);
-      const now = new Date().toISOString();
-      const oldSeasonId = activeTeamSeasonId || 'legacy';
-      const seasonCollections = ['tasks', 'events', 'finalSprintAssignments', 'finalSprintEvaluations', 'finalSprintSelectionScores'];
-
-      try {
-          const [snapshots, rosterSnapshot] = await Promise.all([
-              Promise.all(seasonCollections.map((collectionName) => getDocs(collection(db, collectionName)))),
-              getDocs(collection(db, 'students')),
-          ]);
-          const recordsToTag = snapshots.flatMap((snapshot) => snapshot.docs.filter((record) => !record.data().seasonId || record.data().seasonId === oldSeasonId));
-          const recordCounts = Object.fromEntries(seasonCollections.map((collectionName, index) => [
-              collectionName,
-              snapshots[index].docs.filter((record) => !record.data().seasonId || record.data().seasonId === oldSeasonId).length,
-          ]));
-
-          for (let start = 0; start < recordsToTag.length; start += 450) {
-              const batch = writeBatch(db);
-              recordsToTag.slice(start, start + 450).forEach((record) => batch.update(record.ref, { seasonId: oldSeasonId }));
-              await batch.commit();
-          }
-
-          const archivedSeason = {
-              name: currentName,
-              status: 'archived',
-              startedAt: teamSeasons.find((season) => season.id === oldSeasonId)?.startedAt || null,
-              closedAt: now,
-              recordCounts,
-              teamSnapshot: rosterSnapshot.docs.map((studentDoc) => {
-                  const student = studentDoc.data();
-                  return {
-                      id: studentDoc.id,
-                      name: student.name || 'Aluno',
-                      turma: student.turma || '',
-                      station: student.station || '',
-                      specialty: student.specialty || '',
-                      xp: Number(student.xp) || 0,
-                      badges: Array.isArray(student.badges) ? student.badges : [],
-                  };
-              }),
-              weeklyStatsSnapshot: teamSeasonStats,
-          };
-          const nextSeasonRef = doc(collection(db, 'teamSeasons'));
-          const nextSeason = {
-              name: nextName,
-              status: 'active',
-              startedAt: now,
-              createdBy: adminProfile?.name || currentUser.name || 'Técnico',
-              previousSeasonId: oldSeasonId,
-              recordCounts: {},
-          };
-          const transitionBatch = writeBatch(db);
-          transitionBatch.set(doc(db, 'teamSeasons', oldSeasonId), archivedSeason, { merge: true });
-          transitionBatch.set(nextSeasonRef, nextSeason);
-          transitionBatch.set(doc(db, 'settings', 'workspace_season'), {
-              activeSeason: 'rotation',
-              activeSeasonId: nextSeasonRef.id,
-              activeSeasonName: nextName,
-              startedAt: now,
-          }, { merge: true });
-          transitionBatch.set(doc(db, 'settings', 'team_stats'), { successfulWeekIds: [], successfulWeeks: 0 });
-          await transitionBatch.commit();
-
-          setActiveTeamSeasonId(nextSeasonRef.id);
-          setActiveTeamSeasonName(nextName);
-          setSeasonLifecycleReady(true);
-          localStorage.setItem('newgears_active_season_id', nextSeasonRef.id);
-          localStorage.setItem('newgears_active_season_name', nextName);
-          setWorkspaceSeason('rotation');
-          localStorage.setItem('newgears_workspace_season', 'rotation');
-          setAdminTab('rotation');
-          setModal({ type: null, data: null });
-          showNotification(`Temporada ${nextName} iniciada. Os registros anteriores estão arquivados e preservados.`);
-      } catch (error) {
-          console.error('Falha ao encerrar/iniciar temporada:', error);
-          showNotification('Não foi possível concluir a transição. Os dados não foram apagados; tente novamente após verificar a conexão.', 'error');
-      } finally {
-          setIsTransitioningSeason(false);
-      }
+    event.preventDefault();
+    if (!isAdmin || !workspaceSeasonLoaded || isTransitioningSeason) return;
+    const form = new FormData(event.currentTarget);
+    const options = seasonTransitionLock?.options || { currentName: String(form.get('currentSeasonName') || '').trim(), nextName: String(form.get('nextSeasonName') || '').trim(), studentIds: form.getAll('nextStudentIds').map(String), startDate: String(form.get('nextStartDate') || ''), carryTasks: form.has('carryTasks'), carryEvents: form.has('carryEvents'), carryProject: form.has('carryProject') };
+    if (!options.currentName || !options.nextName || !validDate(options.startDate) || !options.studentIds.length || !form.has('reviewedTransition')) { showNotification('Confira os nomes, a data e os integrantes da próxima equipe.', 'error'); return; }
+    if (reportsWorkspace.enabled && (reportsWorkspace.loading || reportsWorkspace.error)) { showNotification('Aguarde os relatórios carregarem antes de encerrar.', 'error'); return; }
+    setIsTransitioningSeason(true);
+    try {
+      const next = await transitionSeason({ db, seasonId: activeTeamSeasonId || 'legacy', options, actor: adminProfile?.name || 'Técnico', weeklyStats: teamSeasonStats, planningConfig: effectivePlanning, reportCount: reportsWorkspace.reports.filter((item) => (item.seasonId || 'legacy') === (activeTeamSeasonId || 'legacy')).length });
+      setActiveTeamSeasonId(next.id); setActiveTeamSeasonName(next.name); setSeasonLifecycleReady(true); setWorkspaceSeason('rotation');
+      localStorage.setItem('newgears_active_season_id', next.id); localStorage.setItem('newgears_active_season_name', next.name); localStorage.setItem('newgears_workspace_season', 'rotation');
+      setModal({ type: null, data: null }); setAdminTab('rotation'); showNotification('Temporada arquivada e próximo ciclo preparado.');
+    } catch (error) { showNotification(error.message + ' Reabra o encerramento para retomar, se necessário.', 'error'); }
+    finally { setIsTransitioningSeason(false); }
   };
+
+
 
   const adminHeroActions = workspaceSeason === 'rotation'
       ? [
@@ -5736,8 +5459,9 @@ const handleDeleteRound = async (id) => {
       { id: 'agenda', label: 'Agenda', icon: <CalendarDays size={16} />, description: 'Prazos, encontros e checkpoints da equipe em modo missao.', badge: urgentEventsCount > 0 ? urgentEventsCount : null, pillTone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200', activeClass: 'bg-indigo-500 text-white shadow-lg shadow-indigo-900/20', inactiveClass: 'text-gray-400 hover:text-indigo-300 hover:bg-indigo-500/10' },
       { id: 'showcase', label: 'Vitrine', icon: <MonitorPlay size={16} />, description: 'Curadoria das fotos, torneio e QR Codes exibidos para a escola.', pill: `${galleryPhotos.length} fotos`, pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
       { id: 'history', label: 'Historico', icon: <History size={16} />, description: 'Registro coletivo com autor, data e alteracoes feitas no sistema.', pillTone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200', activeClass: 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-900/20', inactiveClass: 'text-gray-400 hover:text-cyan-300 hover:bg-cyan-500/10' },
+      { id: 'operations', label: 'Evolução', icon: <BarChart3 size={16} />, description: 'Indicadores da equipe, backups e lembretes automáticos.', pill: 'Acompanhamento', pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-slate-950 shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-500/10' },
       { id: 'season_history', label: 'Temporadas', icon: <History size={16} />, description: 'Consulte tarefas, agenda e avaliações de ciclos anteriores.', pill: `${teamSeasons.filter((season) => season.status === 'archived').length} arquivos`, pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-slate-950 shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' }
-  ].filter((tab) => !['history', 'report_recipients', 'season_history'].includes(tab.id) || currentUser?.type === 'admin');
+  ].filter((tab) => !['history', 'report_recipients', 'season_history', 'operations'].includes(tab.id) || currentUser?.type === 'admin');
 
   const studentWorkspaceTabs = [
       { id: 'weekly_reports', label: 'Relatórios Semanais', icon: <FileText size={16} />, description: 'Compartilhe seu relatório e consulte os registros da equipe.', badge: reportsWorkspace.unreadReports.length || null, pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
@@ -5865,6 +5589,7 @@ const handleDeleteRound = async (id) => {
   ].filter(Boolean).slice(0, 3);
 
   const adminActionQueueItems = [
+      tasks.some((task) => task.block && !task.block.resolvedAt && task.status !== 'done') && { id: 'blocked', title: 'Tarefas bloqueadas', count: tasks.filter((task) => task.block && !task.block.resolvedAt && task.status !== 'done').length, detail: 'Confira os impedimentos e quem precisa de ajuda.', onClick: () => setAdminTab('kanban'), icon: <AlertTriangle size={15} />, tone: 'border-amber-300/20 bg-amber-300/10 text-amber-100' },
       urgentTasksCount > 0 && { id: 'tasks', title: 'Tarefas vencidas ou para hoje', count: urgentTasksCount, detail: 'Revise o Kanban e combine o próximo passo.', onClick: () => setAdminTab('kanban'), icon: <ClipboardList size={15} />, tone: 'border-orange-300/20 bg-orange-300/10 text-orange-100' },
       urgentEventsCount > 0 && { id: 'events', title: 'Compromissos próximos', count: urgentEventsCount, detail: 'Há eventos hoje ou amanhã na agenda.', onClick: () => setAdminTab('agenda'), icon: <CalendarDays size={15} />, tone: 'border-indigo-300/20 bg-indigo-300/10 text-indigo-100' },
       incompleteStudentRecords.length > 0 && { id: 'students', title: 'Cadastros incompletos', count: incompleteStudentRecords.length, detail: 'Faltam dados básicos ou acesso de integrantes.', onClick: () => setAdminTab('students'), icon: <Users size={15} />, tone: 'border-amber-300/20 bg-amber-300/10 text-amber-100' },
@@ -5873,7 +5598,7 @@ const handleDeleteRound = async (id) => {
   ].filter(Boolean);
 
   const adminHeroFooter = (
-      <div className="grid items-stretch gap-3 md:grid-cols-2 xl:auto-rows-fr xl:grid-cols-[1.05fr,1.1fr,1fr,1fr]">
+      <div className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)] [&>div]:min-w-0">
           <div className="rounded-[20px] border border-white/10 bg-black/25 p-3 backdrop-blur-sm h-full flex flex-col">
               <div className="flex items-start justify-between gap-2.5">
                   <div className="flex items-center gap-4 min-w-0">
@@ -6082,7 +5807,7 @@ const handleDeleteRound = async (id) => {
 
   const studentMissionCards = [
       { label: 'Estacao', value: viewAsStudent?.station || 'Equipe', helper: studentMissionData ? 'frente principal da semana' : 'aguardando definicao', icon: <Target size={16} />, tone: studentMissionTone.button },
-      { label: 'Prazo', value: studentMissionDeadlineLabel, helper: 'quarta-feira da semana atual', icon: <CalendarDays size={16} />, tone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-100' },
+      { label: 'Prazo', value: studentMissionDeadlineLabel, helper: officialStudentDeadlineObj.toLocaleDateString('pt-BR', { weekday: 'long' }) + ' do ciclo atual', icon: <CalendarDays size={16} />, tone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-100' },
       { label: STUDENT_TASKS_LABEL, value: studentOpenTasksCount, helper: studentOpenTasksCount > 0 ? 'tarefas abertas no seu quadro' : 'nenhuma pendencia aberta', icon: <ClipboardList size={16} />, tone: 'border-orange-500/20 bg-orange-500/10 text-orange-100' },
       { label: 'Status', value: studentSubmissionTone.label, helper: studentSubmissionTone.detail, icon: studentSubmissionTone.icon, tone: studentSubmissionTone.card }
   ];
@@ -6336,6 +6061,7 @@ const handleDeleteRound = async (id) => {
                       await updateDoc(studentRef, updateData);
                       if (xpLossNotice) {
                           xpLossRecordRef = await addDoc(collection(db, "xpLossRecords"), {
+              seasonId: activeTeamSeasonId || 'legacy',
                               noticeId: xpLossNotice.id,
                               studentId: previousStudent.id,
                               studentName: previousStudent.name,
@@ -6493,10 +6219,10 @@ const handleDeleteRound = async (id) => {
           const studentRef = doc(db, "students", id);
           
           // Atualiza o campo 'station' no Firebase
-          // Também limpamos a 'submission' anterior para ele começar zerado na nova estação
+          // A mudança manual preserva a entrega e encerra a possibilidade de desfazer uma aplicação anterior.
           await updateDoc(studentRef, { 
               station: st,
-              submission: null 
+              rotationApplicationId: null
           });
 
           // Feedback visual
@@ -6840,96 +6566,7 @@ const handleFileSelect = (e) => {
       )
   };
 
-  const AttendanceModalContent = () => {
-      const attendanceDate = modal.data?.date || localTodayStr;
-      const existingSession = attendanceSessions.find((session) => session.date === attendanceDate || session.id === attendanceDate);
-      const existingPresentIds = new Set((existingSession?.presentIds || []).map(String));
-      const totalAbsences = students.reduce((sum, student) => sum + Math.max(0, (student.totalClasses || 0) - (student.attendedClasses || 0)), 0);
-      const riskStudents = students.filter((student) => {
-          const stats = getAttendanceStats(student);
-          return stats.absences > 0 || stats.percent < 75;
-      });
-
-      return (
-          <form onSubmit={handleAttendanceSubmit} className="flex h-full min-h-0 flex-col animate-in fade-in">
-              <div className="shrink-0 border-b border-white/10 bg-[#11121d]/95 px-5 py-5 md:px-7">
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-                      <div className="max-w-3xl">
-                          <span className="inline-flex items-center gap-2 rounded-full border border-green-400/20 bg-green-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-green-100">
-                              <ListTodo size={12} /> Chamada da equipe
-                          </span>
-                          <h3 className="mt-3 text-2xl font-black text-white md:text-3xl">Chamada por data</h3>
-                          <p className="mt-2 text-sm leading-relaxed text-gray-400">Escolha o dia do treino. Se a data ja foi registrada, o sistema corrige a chamada sem somar outra aula.</p>
-                      </div>
-
-                      <div className="grid gap-3 md:grid-cols-3 xl:min-w-[620px]">
-                          <label className="rounded-2xl border border-white/10 bg-black/30 p-3">
-                              <span className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-500">Data da chamada</span>
-                              <input name="attendanceDate" type="date" value={attendanceDate} onChange={(event) => setModal(prev => ({ ...prev, data: { ...(prev.data || {}), date: event.target.value } }))} className="mt-2 w-full rounded-xl border border-white/10 bg-black/50 p-3 text-white outline-none focus:border-green-400" />
-                          </label>
-                          <div className="rounded-2xl border border-white/10 bg-black/30 p-3">
-                              <span className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-500">Modo</span>
-                              <p className={`mt-3 text-sm font-black ${existingSession ? 'text-yellow-200' : 'text-green-200'}`}>{existingSession ? 'Corrigindo data existente' : 'Nova aula no historico'}</p>
-                          </div>
-                          <div className="rounded-2xl border border-white/10 bg-black/30 p-3">
-                              <span className="text-[10px] font-black uppercase tracking-[0.16em] text-gray-500">Alertas</span>
-                              <p className="mt-3 text-sm font-black text-white">{totalAbsences} falta(s)</p>
-                          </div>
-                      </div>
-                  </div>
-
-                  {riskStudents.length > 0 && (
-                      <div className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 p-3">
-                          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-red-100">Alunos para revisar</p>
-                          <div className="mt-2 flex max-h-20 flex-wrap gap-2 overflow-y-auto custom-scrollbar pr-1">
-                              {riskStudents.map((student) => {
-                                  const stats = getAttendanceStats(student);
-                                  return <span key={student.id} className="rounded-full border border-red-400/20 bg-black/20 px-3 py-1 text-xs font-bold text-red-100">{student.name}: {stats.absences} falta(s), {stats.percent}%</span>;
-                              })}
-                          </div>
-                      </div>
-                  )}
-              </div>
-
-              <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar px-4 py-4 md:px-7">
-                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
-                  {students.map(s => {
-                      const stats = getAttendanceStats(s);
-                      const defaultChecked = existingSession ? existingPresentIds.has(String(s.id)) : true;
-
-                      return (
-                          <label key={s.id} className="flex items-center gap-3 p-3 hover:bg-white/5 border-b border-white/5 cursor-pointer">
-                              <input type="checkbox" name="present" value={s.id} defaultChecked={defaultChecked} className="accent-green-500 w-5 h-5"/>
-                              <div className="flex-1 min-w-0">
-                                  <span className="text-white font-bold block truncate">{s.name}</span>
-                                  <span className="text-xs text-gray-500">{s.turma} | Presenca: <span className={stats.percent < 75 ? 'text-red-500' : 'text-green-500'}>{stats.percent}%</span> | Faltas: {stats.absences}</span>
-                              </div>
-                              <div className="hidden grid-cols-2 gap-2 md:grid">
-                                  <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-500">
-                                      Aulas
-                                      <input name={`manualTotal-${s.id}`} type="number" min="0" defaultValue={s.totalClasses || 0} className="mt-1 w-16 rounded-lg border border-white/10 bg-black/40 p-1.5 text-center text-xs text-white outline-none focus:border-green-400" />
-                                  </label>
-                                  <label className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-500">
-                                      Pres.
-                                      <input name={`manualAttended-${s.id}`} type="number" min="0" defaultValue={s.attendedClasses || 0} className="mt-1 w-16 rounded-lg border border-white/10 bg-black/40 p-1.5 text-center text-xs text-white outline-none focus:border-green-400" />
-                                  </label>
-                              </div>
-                              <span className={`rounded-full border px-2 py-1 text-[10px] font-black ${defaultChecked ? 'border-green-500/20 bg-green-500/10 text-green-200' : 'border-red-500/20 bg-red-500/10 text-red-200'}`}>{defaultChecked ? 'Presente' : 'Faltou'}</span>
-                          </label>
-                      );
-                  })}
-                  </div>
-              </div>
-
-              <div className="shrink-0 border-t border-white/10 bg-[#11121d]/95 px-5 py-4 md:px-7">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                      <p className="text-xs font-bold text-gray-400">A lista pode rolar livremente; o botao fica sempre visivel aqui embaixo.</p>
-                      <button className="rounded-2xl bg-green-600 px-6 py-3 text-sm font-black uppercase tracking-[0.14em] text-white shadow-lg shadow-green-950/20 transition-all hover:bg-green-500 md:min-w-[280px]">{existingSession ? 'Corrigir chamada desta data' : 'Confirmar chamada'}</button>
-                  </div>
-              </div>
-          </form>
-      );
-  }
+  const AttendanceModalContent = () => <AttendancePanel students={allStudents} sessions={attendanceSessions} onSave={handleAttendanceSave} onClose={closeModal} />;
 
   const DisciplinePanel = () => {
       const topConsistency = consistencyRanking.slice(0, 5);
@@ -7544,6 +7181,8 @@ const handleFileSelect = (e) => {
 
           {modal.type === 'confirm' && <><h3 className="text-xl font-bold text-white mb-2">{modal.data.title}</h3><p className="text-gray-400 mb-6">{modal.data.msg}</p><div className="flex gap-3"><button onClick={closeModal} className="flex-1 py-3 rounded-lg text-gray-400 bg-white/5 hover:bg-white/10">Cancelar</button><button onClick={modal.data.onConfirm} className="flex-1 py-3 rounded-lg bg-red-500 text-white hover:bg-red-600">Confirmar</button></div></>}
 
+          {modal.type === 'taskBlock' && <TaskBlockForm task={modal.data.task} tasks={tasks} students={students} onSave={async (details) => { const task = modal.data.task; await setTaskBlock({ db, id: task.id, ...details, expectedStatus: task.status, expectedBlockAt: task.block?.updatedAt || '', actor: isAdmin ? adminProfile?.name || 'Técnico' : viewAsStudent?.name || '', actorStudentId: viewAsStudent?.id || '', isAdmin, seasonId: activeTeamSeasonId || 'legacy' }); void recordActivity({ action: details.blocked ? 'registrou um impedimento' : 'resolveu um impedimento', category: 'kanban', title: task.text, entityId: task.id }); closeModal(); showNotification(details.blocked ? 'Impedimento registrado.' : 'Tarefa liberada.'); }} />}
+          {modal.type === 'taskTransition' && <TaskReviewForm task={modal.data.task} status={modal.data.status} onSave={async (details) => { await persistTaskStage(modal.data.task, modal.data.status, details); closeModal(); }} />}
           {modal.type === 'seasonTransition' && (
             <div className="space-y-5">
               <div className="rounded-[24px] border border-cyan-300/15 bg-[linear-gradient(135deg,rgba(8,145,178,0.13),rgba(15,23,42,0.5)_58%,rgba(16,185,129,0.08))] p-5">
@@ -7553,23 +7192,24 @@ const handleFileSelect = (e) => {
               </div>
 
               <form onSubmit={handleSeasonTransition} className="space-y-4">
+                <SeasonTransitionChecklist key={seasonTransitionLock?.nextSeasonId || 'new-transition'} students={allStudents} tasks={tasks} events={events} lock={seasonTransitionLock} startDate={dateKey(new Date(new Date().getFullYear() + 1, 0, 1))} />
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Temporada que termina
-                    <input name="currentSeasonName" required maxLength={80} defaultValue={activeTeamSeasonName} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold normal-case text-white outline-none focus:border-cyan-300/40" />
+                    <input name="currentSeasonName" required maxLength={80} defaultValue={seasonTransitionLock?.options.currentName || activeTeamSeasonName} readOnly={Boolean(seasonTransitionLock)} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold normal-case text-white outline-none focus:border-cyan-300/40" />
                   </label>
                   <label className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Próxima temporada
-                    <input name="nextSeasonName" required maxLength={80} defaultValue={`Temporada ${new Date().getFullYear() + 1}`} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold normal-case text-white outline-none focus:border-emerald-300/40" />
+                    <input name="nextSeasonName" required maxLength={80} defaultValue={seasonTransitionLock?.options.nextName || `Temporada ${new Date().getFullYear() + 1}`} readOnly={Boolean(seasonTransitionLock)} className="mt-2 w-full rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-semibold normal-case text-white outline-none focus:border-emerald-300/40" />
                   </label>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-[18px] border border-white/10 bg-white/[0.035] p-4">
                     <p className="text-xs font-black text-white">Será arquivado por temporada</p>
-                    <p className="mt-2 text-xs leading-relaxed text-slate-400">Tarefas, eventos, frentes da reta final, avaliações e seleções de torneio. Os dados não serão apagados.</p>
+                    <p className="mt-2 text-xs leading-relaxed text-slate-400">Tarefas, agenda, avaliações, frequência, diário, treinos, evolução do protótipo e registros de XP ficam vinculados ao ciclo encerrado.</p>
                   </div>
                   <div className="rounded-[18px] border border-emerald-300/10 bg-emerald-300/[0.035] p-4">
                     <p className="text-xs font-black text-emerald-100">Continua com a equipe</p>
-                    <p className="mt-2 text-xs leading-relaxed text-slate-400">Cadastros, XP, conquistas e diário permanecem. O resumo de semanas bem-sucedidas começa novamente.</p>
+                    <p className="mt-2 text-xs leading-relaxed text-slate-400">XP e conquistas acompanham os integrantes escolhidos. Código, anexos e materiais do robô continuam disponíveis. O planejamento do novo ciclo pode ser configurado na aba Rodízio.</p>
                   </div>
                 </div>
 
@@ -8727,6 +8367,7 @@ const handleFileSelect = (e) => {
       
       try {
           await addDoc(collection(db, "score_history"), {
+              seasonId: activeTeamSeasonId || 'legacy',
               score: totalPoints,
               time: totalTime, // Salva o tempo junto!
               date: new Date().toISOString(),
@@ -8771,6 +8412,7 @@ const handleFileSelect = (e) => {
 
       try {
           await addDoc(collection(db, "score_history"), {
+              seasonId: activeTeamSeasonId || 'legacy',
               score: scoreVal,
               time: timeVal,
               date: new Date().toISOString(),
@@ -8826,6 +8468,7 @@ const handleFileSelect = (e) => {
       }
 
       const run = {
+              seasonId: activeTeamSeasonId || 'legacy',
           practiceType: 'exit_practice',
           exitNumber,
           exitName: `Saida ${exitNumber}`,
@@ -8898,6 +8541,7 @@ const handleFileSelect = (e) => {
     try {
         // 1. Salva no histórico para o gráfico
         await addDoc(collection(db, "score_history"), {
+              seasonId: activeTeamSeasonId || 'legacy',
             roundId: round.id,
             roundName: round.name,
             time: timeVal, // O tempo que levou
@@ -8959,6 +8603,7 @@ const handleFileSelect = (e) => {
 
       const now = new Date().toISOString();
       const iteration = {
+              seasonId: activeTeamSeasonId || 'legacy',
           version,
           focus,
           date: draft.date,
@@ -9095,6 +8740,7 @@ const handleFileSelect = (e) => {
   };
 
   const kanbanViewProps = {
+      onOpenBlock: (task) => setModal({ type: 'taskBlock', data: { task } }),
       assignTaskToStudent,
       currentWeekData,
       db,
@@ -9366,6 +9012,7 @@ const handleFileSelect = (e) => {
         <Notification />
         <XpLossAlertModal />
         {renderModal()}
+        {seasonTransitionLock && modal.type !== 'seasonTransition' && <div role="dialog" aria-modal="true" aria-label="Encerramento em andamento" className="fixed inset-0 z-[250] flex items-center justify-center bg-black/90 p-5"><div className="max-w-md rounded-3xl border border-white/15 bg-[#111827] p-6"><h2 className="text-xl font-bold">Encerramento em andamento</h2><p className="mt-3 text-sm text-slate-300">Aguarde a preparação da próxima temporada. Se a conexão caiu, o técnico pode retomar de onde parou.</p>{isAdmin && <button onClick={() => setModal({ type: 'seasonTransition', data: null })} className="mt-5 rounded-full bg-cyan-300 px-5 py-3 font-bold text-slate-950">Retomar encerramento</button>}</div></div>}
 
         {/* --- ALERTA DE LOGOUT POR INATIVIDADE --- */}
         {logoutCountdown !== null && (
@@ -9437,6 +9084,7 @@ const handleFileSelect = (e) => {
                 rotationSchedule={rotationSchedule}
                 currentWeekData={currentWeekData}
                 students={students}
+                captainIds={effectivePlanning.captainIds}
             />
           </Suspense>
         )}
@@ -9507,6 +9155,7 @@ const handleFileSelect = (e) => {
       {showBatteryModal && (
         <Suspense fallback={<LazyOverlayFallback label="Carregando check-in da equipe..." />}>
           <TeamCheckInModal
+                    trainingDays={effectivePlanning.trainingDays}
             isOpen={showBatteryModal}
             onClose={() => setShowBatteryModal(false)}
             teamMoods={teamMoods}
@@ -9682,6 +9331,7 @@ const handleFileSelect = (e) => {
           </div>
       </header>
 
+      <div className="px-4 pt-4 md:px-8"><ReminderInbox authenticated={reportsWorkspace.enabled} user={currentUser} seasonId={activeTeamSeasonId || 'legacy'} tasks={tasks} students={students} reportsVersion={reportsWorkspace.reports.map((report) => report.id + (report.updatedAt || '')).join('|')} onOpen={(tab) => isAdmin ? setAdminTab(tab) : setStudentTab(tab)} /></div>
       {/* --- ÁREA DO TÉCNICO (ADMIN) --- */}
       {!isAdmin && currentUser?.type === 'student' && !viewAsStudent && (
         <main className="newgears-stage p-4 md:p-8 w-full max-w-[1200px] mx-auto animate-in fade-in duration-500">
@@ -9719,7 +9369,7 @@ const handleFileSelect = (e) => {
         <main className={`newgears-stage max-w-[1600px] mx-auto animate-in fade-in duration-500 ${adminPanelState.compact ? 'p-4 md:p-6' : 'p-4 md:p-8'}`}>
           {!adminPanelState.compact && <UrgentEventsBanner />}
 
-          <div className="mb-2">
+          <div className="mb-6">
             <WorkspaceCollapsible isOpen={adminPanelState.hero}>
               <WorkspaceHero
                 eyebrow="Temporada FLL"
@@ -9824,7 +9474,7 @@ const handleFileSelect = (e) => {
             )}
 
             <div className="flex flex-col gap-3">
-                <div className="-mt-10 flex flex-col gap-3 md:-mt-12">
+                <div className="flex flex-col gap-3">
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-[22px] border border-white/10 bg-[linear-gradient(120deg,rgba(255,255,255,0.045),rgba(0,0,0,0.2))] px-4 py-3 shadow-[0_14px_34px_rgba(0,0,0,0.18)]">
                     <div>
                       <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-300/60">Foco da equipe</p>
@@ -9842,14 +9492,14 @@ const handleFileSelect = (e) => {
                 {/* CONTEÃƒÅ¡DO DA ABA SELECIONADA */}
                 <div className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(adminTab)}`}>
                   <WorkspaceScene sceneId={`admin-${adminTab}`}>
-                    {adminTab === 'weekly_reports' && <WeeklyReportsView key={focusedReportId || 'all-reports'} user={currentUser} workspace={reportsWorkspace} defaultWeek={currentWeekData?.weekName} focusedReportId={focusedReportId} />}
+                    {adminTab === 'weekly_reports' && <WeeklyReportsView key={focusedReportId || 'all-reports'} user={currentUser} workspace={reportsWorkspace} students={allStudents} seasonId={activeTeamSeasonId || 'legacy'} reportDueDay={effectivePlanning.reportDueDay} defaultWeek={currentWeekData?.weekName} focusedReportId={focusedReportId} />}
                     {adminTab === 'report_recipients' && <ReportRecipientsView user={currentUser} workspace={reportsWorkspace} />}
                     {adminTab === 'sprint' && <FinalSprintView {...finalSprintViewProps} />}
                     {adminTab === 'evaluations' && <Suspense fallback={<LazyPanelFallback label="Carregando avaliações da reta final..." minHeightClass="min-h-[420px]" />}><FinalSprintEvaluationsView {...finalSprintEvaluationViewProps} /></Suspense>}
                     {adminTab === 'students' && (
                       <Suspense fallback={<LazyPanelFallback label="Carregando gerenciamento dos alunos..." minHeightClass="min-h-[420px]" />}>
                         <StudentManagementPanel
-                          students={students}
+                          students={allStudents}
                           getCurrentLevel={getCurrentLevel}
                           canManage={currentUser?.type === 'admin'}
                           onMoveStudent={moveStudent}
@@ -9867,13 +9517,17 @@ const handleFileSelect = (e) => {
                     )}
                     {adminTab === 'rotation' && (
                       <Suspense fallback={<LazyPanelFallback label="Carregando planejamento do rodizio..." minHeightClass="min-h-[420px]" />}>
+                        <><SeasonPlanningPanel key={(activeTeamSeasonId || 'legacy') + JSON.stringify(effectivePlanning) + students.map((student) => student.id).join(',')} config={effectivePlanning} students={students} onSave={handleSavePlanning} busy={isSavingPlanning} />
                         <RotationOperationsPanel
                           students={students}
                           currentWeekData={currentWeekData}
                           canManage={currentUser?.type === 'admin'}
                           onApplyRotation={handleApplyRotation}
+                          applications={rotationApplications}
+                          busy={isProcessingRotation}
+                          onUndoRotation={handleUndoRotation}
                           onOpenSchedule={() => setShowFullSchedule(true)}
-                        />
+                        /></>
                       </Suspense>
                     )}
 
@@ -9910,8 +9564,9 @@ const handleFileSelect = (e) => {
                         onOpenTvMode={openPublicTvMode}
                       />
                     )}
+                    {adminTab === 'operations' && currentUser?.type === 'admin' && <Suspense fallback={<LazyPanelFallback label="Carregando evolução e ferramentas…" minHeightClass="min-h-[420px]" />}><TeamOperationsView db={db} user={currentUser} tasks={tasks} sessions={attendanceSessions} seasonId={activeTeamSeasonId || 'legacy'} seasons={teamSeasons} reportsEnabled={reportsWorkspace.enabled} /></Suspense>}
                     {adminTab === 'history' && currentUser?.type === 'admin' && <ActivityHistoryView activityLogs={activityLogs} />}
-                    {adminTab === 'season_history' && currentUser?.type === 'admin' && <SeasonHistoryView db={db} seasons={teamSeasons} />}
+                    {adminTab === 'season_history' && currentUser?.type === 'admin' && <SeasonHistoryView db={db} seasons={teamSeasons} reports={reportsWorkspace.reports} reportsEnabled={reportsWorkspace.enabled} />}
                   </WorkspaceScene>
                 </div>
             </div>
@@ -10081,7 +9736,7 @@ const handleFileSelect = (e) => {
                 {/* CONTEÃƒÅ¡DO DA ABA SELECIONADA */}
                 <div className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(studentTab)}`}>
                   <WorkspaceScene sceneId={`student-${studentTab}`}>
-                    {studentTab === 'weekly_reports' && <WeeklyReportsView key={focusedReportId || 'all-reports'} user={currentUser} workspace={reportsWorkspace} defaultWeek={currentWeekData?.weekName} focusedReportId={focusedReportId} />}
+                    {studentTab === 'weekly_reports' && <WeeklyReportsView key={focusedReportId || 'all-reports'} user={currentUser} workspace={reportsWorkspace} students={allStudents} seasonId={activeTeamSeasonId || 'legacy'} reportDueDay={effectivePlanning.reportDueDay} defaultWeek={currentWeekData?.weekName} focusedReportId={focusedReportId} />}
                     {studentTab === 'sprint' && <FinalSprintView {...finalSprintViewProps} />}
                     {studentTab === 'feedback' && <Suspense fallback={<LazyPanelFallback label="Carregando seu feedback..." minHeightClass="min-h-[420px]" />}><FinalSprintEvaluationsView {...finalSprintEvaluationViewProps} /></Suspense>}
                     {studentTab === 'mission' && (

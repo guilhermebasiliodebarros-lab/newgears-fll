@@ -3,13 +3,17 @@ import { runAppStructureTests } from './appStructure.test.js';
 import { runSchoolReportTests } from './schoolReport.test.js';
 import { runPublicShowcaseTests } from './publicShowcase.test.js';
 import { runWeeklyReportsTests } from './weeklyReports.test.js';
+import { runTeamProcessesTests } from './teamProcesses.test.js';
+import { runOperationsTests } from './operations.test.js';
 
 const suites = [
   { name: 'projectSummary', run: runProjectSummaryTests },
   { name: 'appStructure', run: runAppStructureTests },
   { name: 'schoolReport', run: runSchoolReportTests },
   { name: 'publicShowcase', run: runPublicShowcaseTests },
-  { name: 'weeklyReports', run: runWeeklyReportsTests }
+  { name: 'weeklyReports', run: runWeeklyReportsTests },
+  { name: 'teamProcesses', run: runTeamProcessesTests },
+  { name: 'operations', run: runOperationsTests }
 ];
 
 let failures = 0;

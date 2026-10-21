@@ -547,7 +547,7 @@ const BenchStudentManagementDrawer = ({
                   }}
                   className="w-full rounded-[20px] border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-red-100 transition-all hover:-translate-y-0.5 hover:bg-red-500 hover:text-white"
                 >
-                  Excluir aluno
+                  {student.status === 'inactive' ? 'Reativar aluno' : 'Arquivar aluno'}
                 </button>
               </div>
             </div>
@@ -579,6 +579,7 @@ export const StudentManagementPanel = ({
 }) => {
   const [search, setSearch] = useState('');
   const [stationFilter, setStationFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active');
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const normalizedSearch = normalizeValue(search);
 
@@ -595,9 +596,10 @@ export const StudentManagementPanel = ({
         || (stationFilter === 'unassigned'
           ? !STATION_CONFIGS.some((station) => station.key === student.station)
           : student.station === stationFilter);
-      return matchesSearch && matchesStation;
+      const matchesStatus = statusFilter === 'all' || (statusFilter === 'inactive' ? student.status === 'inactive' : student.status !== 'inactive');
+      return matchesSearch && matchesStation && matchesStatus;
     })
-    .sort((left, right) => left.name.localeCompare(right.name)), [students, normalizedSearch, stationFilter]);
+    .sort((left, right) => left.name.localeCompare(right.name)), [students, normalizedSearch, stationFilter, statusFilter]);
 
   const selectedStudent = students.find((student) => student.id === selectedStudentId) || null;
   const filters = [
@@ -641,6 +643,7 @@ export const StudentManagementPanel = ({
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nome, turma ou especialidade" className="w-full bg-transparent text-sm text-white outline-none placeholder:text-gray-500" />
           </label>
           <div className="flex flex-wrap gap-2">
+            <select aria-label="Situação dos alunos" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-full border border-white/10 bg-[#151b27] px-3 py-2 text-xs text-white"><option value="active">Ativos</option><option value="inactive">Arquivados</option><option value="all">Todos os cadastros</option></select>
             {filters.map((filter) => (
               <button key={filter.key} type="button" onClick={() => setStationFilter(filter.key)} className={`rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-[0.1em] transition-colors ${stationFilter === filter.key ? 'border-emerald-400/40 bg-emerald-400/15 text-emerald-100' : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'}`}>
                 {filter.label}<span className="ml-2 opacity-70">{filter.count}</span>
@@ -664,7 +667,7 @@ export const StudentManagementPanel = ({
                     <StudentAvatar student={student} />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-sm font-black text-white">{student.name}</p>
+                        <p className="truncate text-sm font-black text-white">{student.name}{student.status === 'inactive' ? ' · Arquivado' : ''}</p>
                         <span className={`rounded-full border px-2 py-1 text-[9px] font-bold ${submissionMeta.badgeClass}`}>{submissionMeta.label}</span>
                       </div>
                       <p className="mt-1 truncate text-[11px] text-gray-400">{student.turma || 'Turma nao informada'} · {level.name} · {student.xp || 0} XP</p>
@@ -672,7 +675,7 @@ export const StudentManagementPanel = ({
                   </div>
                   <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.1em] text-gray-500 lg:block">
                     <span className="lg:hidden">Estacao:</span>
-                    <select value={student.station || ''} disabled={!canManage} onChange={(event) => onMoveStudent(student.id, event.target.value || null)} className="min-w-0 flex-1 rounded-full border border-white/10 bg-[#151b27] px-3.5 py-2.5 text-xs font-bold text-white outline-none transition focus:border-emerald-400/40 disabled:opacity-50 lg:mt-1 lg:w-full">
+                    <select value={student.station || ''} disabled={!canManage || student.status === 'inactive'} onChange={(event) => onMoveStudent(student.id, event.target.value || null)} className="min-w-0 flex-1 rounded-full border border-white/10 bg-[#151b27] px-3.5 py-2.5 text-xs font-bold text-white outline-none transition focus:border-emerald-400/40 disabled:opacity-50 lg:mt-1 lg:w-full">
                       <option value="">Sem estacao</option>
                       {STATION_CONFIGS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
                     </select>
@@ -731,9 +734,10 @@ const formatDate = (value) => {
   return year && month && day ? `${day}/${month}/${year}` : value;
 };
 
-const RotationOperationsPanel = ({ students, currentWeekData, canManage, onApplyRotation, onOpenSchedule }) => {
+const RotationOperationsPanel = ({ students, currentWeekData, canManage, onApplyRotation, onOpenSchedule, applications = [], busy, onUndoRotation }) => {
   const assignments = currentWeekData?.assignments || {};
   const totalAssigned = STATION_CONFIGS.reduce((total, station) => total + (assignments[station.key] || []).filter((entry) => resolveAssignmentName(entry) !== 'Vago').length, 0);
+  const applied = applications.find((item) => item.startDate === currentWeekData?.startDate && item.status === 'applied');
 
   return (
     <div className="space-y-5 animate-in fade-in duration-300">
@@ -746,7 +750,7 @@ const RotationOperationsPanel = ({ students, currentWeekData, canManage, onApply
           </div>
           <div className="flex flex-wrap gap-2">
             <button onClick={onOpenSchedule} className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-3 text-xs font-black uppercase tracking-[0.1em] text-white hover:bg-white/10">Ver cronograma completo</button>
-            {canManage && <button onClick={onApplyRotation} disabled={!currentWeekData} className="rounded-[16px] border border-blue-400/20 bg-blue-400/10 px-4 py-3 text-xs font-black uppercase tracking-[0.1em] text-blue-100 hover:bg-blue-400 hover:text-black disabled:cursor-not-allowed disabled:opacity-50">Aplicar rodizio</button>}
+            {canManage && <button onClick={onApplyRotation} disabled={!currentWeekData || busy || Boolean(applied)} className="rounded-[16px] border border-blue-400/20 bg-blue-400/10 px-4 py-3 text-xs font-black uppercase tracking-[0.1em] text-blue-100 hover:bg-blue-400 hover:text-black disabled:cursor-not-allowed disabled:opacity-50">{busy ? 'Salvando…' : applied ? 'Semana já aplicada' : 'Aplicar rodízio'}</button>}
           </div>
         </div>
         <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -756,6 +760,7 @@ const RotationOperationsPanel = ({ students, currentWeekData, canManage, onApply
         </div>
       </section>
 
+      <p className="rounded-2xl border border-white/10 p-4 text-sm text-slate-300">Prévia da distribuição. As entregas atuais serão preservadas. {Math.max(0, students.length - totalAssigned)} integrante(s) fora da escala manterão sua estação atual.</p>
       <section className="grid gap-4 xl:grid-cols-3">
         {STATION_CONFIGS.map((station) => {
           const stationAssignments = assignments[station.key] || [];
@@ -777,6 +782,7 @@ const RotationOperationsPanel = ({ students, currentWeekData, canManage, onApply
           );
         })}
       </section>
+      <section className="rounded-2xl border border-white/10 p-4"><h3 className="font-bold text-white">Aplicações do rodízio</h3><div className="mt-3 space-y-2">{applications.length ? [...applications].sort((a, b) => String(b.appliedAt).localeCompare(String(a.appliedAt))).map((item) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white/5 p-3 text-sm text-slate-300"><span>{item.weekName} · {formatDate(item.startDate)} · {item.status === 'applied' ? 'Aplicada' : 'Desfeita'} por {item.appliedBy}</span>{canManage && item.status === 'applied' && <button disabled={busy} onClick={() => onUndoRotation(item)} className="rounded-full border border-white/20 px-3 py-2 disabled:opacity-50">Desfazer distribuição</button>}</div>) : <p className="text-sm text-slate-400">Nenhuma aplicação registrada nesta temporada.</p>}</div></section>
     </div>
   );
 };

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, Check, Download, FileText, LoaderCircle, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react';
 import { canManageReport, filterWeeklyReports, formatReportSize, localReportDate, validateReportDetails, validateReportFile, weekStartFor } from '../utils/weeklyReports';
 import { deleteWeeklyReport, getWeeklyReportFile, markWeeklyReportRead, notifyWeeklyReport, saveWeeklyReport } from '../services/weeklyReports';
+import WeeklyDeliveryPanel from '../components/WeeklyDeliveryPanel';
 
 const fieldClass = 'w-full rounded-xl border border-white/15 bg-[#101520] p-3 text-sm text-white outline-none focus:border-cyan-300';
 const dateLabel = (value, includeTime = false) => value ? new Date(value.length === 10 ? `${value}T12:00:00Z` : value).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', ...(includeTime ? { hour: '2-digit', minute: '2-digit' } : {}) }) : '';
@@ -73,8 +74,11 @@ function ReportForm({ report, user, defaultWeek, onClose, onSaved }) {
   );
 }
 
-export default function WeeklyReportsView({ user, workspace, defaultWeek, focusedReportId = '' }) {
-  const { reports, readIds, loading, error, enabled, retry } = workspace;
+export default function WeeklyReportsView({ user, workspace, defaultWeek, focusedReportId = '', students = [], seasonId = 'legacy', reportDueDay = 5 }) {
+  const { readIds, loading, error, enabled, retry } = workspace;
+  const focusedReport = focusedReportId ? workspace.reports.find((report) => report.id === focusedReportId) : null;
+  const viewedSeasonId = focusedReport ? focusedReport.seasonId || 'legacy' : seasonId;
+  const reports = workspace.reports.filter((report) => (report.seasonId || 'legacy') === viewedSeasonId);
   const [filters, setFilters] = useState(emptyFilters);
   const [onlyUnread, setOnlyUnread] = useState(false);
   const [formReport, setFormReport] = useState(undefined);
@@ -122,6 +126,8 @@ export default function WeeklyReportsView({ user, workspace, defaultWeek, focuse
         <select aria-label="Filtrar por mês" value={filters.month} onChange={(event) => setFilters({ ...filters, month: event.target.value })} className={fieldClass}><option value="">Todos os meses</option>{Array.from({ length: 12 }, (_, index) => { const month = String(index + 1).padStart(2, '0'); return <option key={month} value={month}>{new Date(2020, index, 1).toLocaleDateString('pt-BR', { month: 'long' })}</option>; })}</select>
         <select aria-label="Filtrar por ano" value={filters.year} onChange={(event) => setFilters({ ...filters, year: event.target.value })} className={fieldClass}><option value="">Todos os anos</option>{options.years.map((year) => <option key={year}>{year}</option>)}</select>
       </div><div className="mt-4 flex flex-wrap items-center justify-between gap-3"><label className="flex items-center gap-2 text-xs text-gray-300"><input type="checkbox" checked={onlyUnread} onChange={(event) => setOnlyUnread(event.target.checked)} className="accent-cyan-300" /><Bell size={13} /> Apenas não lidos</label><button onClick={() => { setFilters(emptyFilters); setOnlyUnread(false); }} className="text-xs text-cyan-200 hover:underline">Limpar filtros</button></div></section>
+      {viewedSeasonId !== seasonId && <p className="rounded-xl border border-amber-300/20 p-3 text-sm text-amber-100">Você está consultando um relatório de uma temporada anterior.</p>}
+      {user.type === 'admin' && viewedSeasonId === seasonId && !loading && !error && <WeeklyDeliveryPanel students={students} reports={reports} seasonId={seasonId} dueDay={reportDueDay} />}
       <p className="text-xs text-gray-400">{filtered.length} relatório(s) · mais recentes primeiro</p>
       {focusedReportId && !loading && !error && !reports.some((report) => report.id === focusedReportId) && <p role="status" className="rounded-xl border border-amber-300/20 bg-amber-300/5 p-3 text-sm text-amber-100">O relatório deste link não foi encontrado. Ele pode ter sido excluído; os demais registros da equipe estão abaixo.</p>}
       {loading ? <p role="status" className="flex items-center gap-2 p-6 text-sm text-gray-300"><LoaderCircle size={18} className="animate-spin" />Carregando relatórios…</p> : !filtered.length && !error ? <div className="rounded-2xl border border-dashed border-white/15 p-8 text-center"><FileText size={28} className="mx-auto text-cyan-200" /><h3 className="mt-3 font-bold text-white">{reports.length ? 'Nenhum relatório encontrado' : 'Compartilhe o primeiro relatório da equipe'}</h3><p className="mt-2 text-sm text-gray-400">{reports.length ? 'Ajuste a busca ou os filtros.' : 'Publique uma pesquisa, um teste ou um desenvolvimento para todos acompanharem.'}</p></div> : null}

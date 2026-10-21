@@ -3,9 +3,11 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { AlertTriangle, BarChart3, Calendar, CheckCircle, ChevronDown, ChevronLeft, ChevronRight, Clock, ListTodo, Loader2, Pencil, Search, Tag, Target, Timer, Trash2, UserCheck, UserCircle, UserPlus, Users, UserX, X, Zap } from 'lucide-react';
 import { STATION_KEYS } from '../constants/workspace';
 import { buildInitialKanbanTaskDraft, resolveTaskTagFromStation } from '../utils/kanban';
+import { taskParticipants } from '../utils/teamProcesses';
 
 export default function KanbanView({
   assignTaskToStudent,
+  onOpenBlock,
   currentWeekData,
   db,
   handleAddTask,
@@ -25,6 +27,7 @@ export default function KanbanView({
   getLocalYYYYMMDD
 }) {
       const [searchTerm, setSearchTerm] = useState("");
+      const [onlyBlocked, setOnlyBlocked] = useState(false);
       const deferredSearchTerm = useDeferredValue(searchTerm);
       const normalizedSearchTerm = deferredSearchTerm.trim().toLowerCase();
       const kanbanLayout = 'swimlanes';
@@ -234,7 +237,7 @@ export default function KanbanView({
           const stageProgress = getStageProgress(t.status);
           const cardEntranceClass = isPulsing ? '' : 'animate-in fade-in slide-in-from-bottom-2';
           // Logica de exibicao de autores
-          const authors = t.author ? t.author.split(',').map(a => a.trim()) : [];
+          const authors = taskParticipants(t, students).map((person) => person.name);
           const isMultiAuthor = authors.length > 1;
           let displayAuthor = t.author || "Equipe";
           if (isMultiAuthor) {
@@ -323,6 +326,12 @@ export default function KanbanView({
                   ) : (
                       <>
                           <p className="text-sm text-gray-200 leading-relaxed">{t.text}</p>
+                          {t.block && !t.block.resolvedAt && <div className="rounded-xl border border-amber-300/25 bg-amber-300/10 p-3 text-xs text-amber-100"><p className="font-bold">Avanço bloqueado</p><p className="mt-1 whitespace-pre-wrap break-words">{t.block.reason}</p>{t.block.helpFromId && <p className="mt-2">Apoio: {students.find((student) => student.id === t.block.helpFromId)?.name || 'Integrante da equipe'}</p>}{t.block.dependencyId && <p className="mt-1">Depende de: {tasks.find((task) => task.id === t.block.dependencyId)?.text || 'Tarefa anterior'}</p>}</div>}
+                          {t.blockHistory?.length > 0 && <details className="text-[10px] text-slate-400"><summary className="cursor-pointer">Histórico de impedimentos</summary>{t.blockHistory.slice().reverse().map((entry, index) => <p key={index} className="mt-1">{entry.action === 'blocked' ? 'Bloqueada' : 'Liberada'} por {entry.actor} · {new Date(entry.date).toLocaleString('pt-BR')} · {entry.reason}</p>)}</details>}
+                          {t.createdBy && <p className="mt-2 text-[10px] text-slate-500">Criada por {t.createdBy}</p>}
+                          {t.evidence && <details className="mt-2 rounded-xl border border-white/10 p-2 text-xs text-slate-300"><summary className="cursor-pointer font-bold">Resultado e evidências</summary><p className="mt-2 whitespace-pre-wrap break-words">{t.evidence}</p>{/^https?:\/\//i.test(t.evidenceUrl || '') && <a href={t.evidenceUrl} target="_blank" rel="noopener noreferrer" className="mt-2 block text-cyan-200 underline">Abrir evidência</a>}</details>}
+                          {t.feedback && <p className="mt-2 rounded-xl bg-amber-300/10 p-2 text-xs text-amber-100">Ajustes solicitados: {t.feedback}</p>}
+                          {t.history?.length > 0 && <details className="mt-2 text-[10px] text-slate-400"><summary className="cursor-pointer">Histórico da revisão</summary>{t.history.slice().reverse().map((entry, index) => <p key={index} className="mt-1">{entry.actor} · {({ todo: 'A fazer', doing: 'Fazendo', review: 'Em revisão', done: 'Feito' })[entry.to]} · {new Date(entry.date).toLocaleString('pt-BR')}{entry.feedback ? ` · ${entry.feedback}` : ''}</p>)}</details>}
                           <div className="flex flex-wrap items-center gap-2 text-[10px] text-gray-500">
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/5">
                                   <Clock size={10}/> criada ha {ageLabel}
@@ -346,8 +355,9 @@ export default function KanbanView({
                           </div>
                       </>
                   )}
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-between pt-2 border-t border-white/5 mt-1">
+                  <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity justify-between pt-2 border-t border-white/5 mt-1">
                       <div className="flex gap-1 flex-wrap">
+                          {t.status !== 'done' && (isAdmin || authors.includes(viewAsStudent?.name)) && <button onClick={() => onOpenBlock(t)} className="rounded px-2 py-1 text-[10px] font-bold text-amber-200 hover:bg-amber-300/10">{t.block && !t.block.resolvedAt ? 'Impedimento' : 'Bloquear'}</button>}
                           {isAdmin && editingTaskId !== t.id && (
                               <button onClick={() => { setEditingTaskId(t.id); setEditingTaskText(t.text); }} className="text-blue-400 hover:bg-blue-500/20 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition-colors" title="Editar Tarefa">
                                   <Pencil size={14}/> Editar
@@ -398,7 +408,7 @@ export default function KanbanView({
               || (focusFilter === 'overdue' && isTaskOverdue(task))
               || (focusFilter === 'unassigned' && authors.length === 0);
 
-          return matchesSearch && matchesTag && matchesOwner && matchesFocus;
+          return matchesSearch && matchesTag && matchesOwner && matchesFocus && (!onlyBlocked || (task.block && !task.block.resolvedAt && task.status !== 'done'));
       });
 
       const todoTasks = filteredTasks.filter(t => t.status === 'todo')
@@ -412,7 +422,7 @@ export default function KanbanView({
       const doneTasks = filteredTasks.filter(t => t.status === 'done')
           .sort((a, b) => new Date(b.completedAt || b.createdAt) - new Date(a.completedAt || a.createdAt));
 
-      const hasActiveFilters = Boolean(normalizedSearchTerm);
+      const hasActiveFilters = Boolean(normalizedSearchTerm || onlyBlocked);
 
       const displayedTodoTasks = (showAllTodo || hasActiveFilters) ? todoTasks : todoTasks.slice(0, 10);
       const displayedDoingTasks = (showAllDoing || hasActiveFilters) ? doingTasks : doingTasks.slice(0, 10);
@@ -609,6 +619,7 @@ export default function KanbanView({
                   <div>
                       <p className="text-[10px] uppercase tracking-[0.22em] text-gray-500 font-bold">Quadro de tarefas</p>
                       <h2 className="text-2xl md:text-3xl font-black text-white mt-2 leading-tight">Busca e leitura rapida do kanban</h2>
+                      <label className="mt-4 flex items-center gap-2 text-sm text-amber-100"><input type="checkbox" checked={onlyBlocked} onChange={(event) => setOnlyBlocked(event.target.checked)} />Somente bloqueadas ({tasks.filter((task) => task.block && !task.block.resolvedAt && task.status !== 'done').length})</label>
                       <p className="text-sm text-gray-300 mt-3 max-w-3xl">{boardMessage}</p>
 
                       <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-6">

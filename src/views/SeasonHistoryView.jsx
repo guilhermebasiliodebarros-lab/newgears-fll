@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, collectionGroup, getDocs, query, where } from 'firebase/firestore';
+import { getWeeklyReportFile } from '../services/weeklyReports';
 import { Archive, CalendarDays, CheckCircle2, ClipboardList, FileText, Loader2, RotateCcw, Users } from 'lucide-react';
 
 const ARCHIVED_COLLECTIONS = [
@@ -8,6 +9,15 @@ const ARCHIVED_COLLECTIONS = [
   { id: 'finalSprintAssignments', label: 'Frentes da reta final', icon: RotateCcw },
   { id: 'finalSprintEvaluations', label: 'Avaliações', icon: CheckCircle2 },
   { id: 'finalSprintSelectionScores', label: 'Seleções de torneio', icon: Users },
+  { id: 'studentSubmissions', label: 'Entregas dos integrantes', icon: ClipboardList },
+  { id: 'workspaceSnapshots', label: 'Projeto, metas e rubricas', icon: FileText },
+  ...[
+    ['attendanceSessions', 'Chamadas'], ['rotationApplications', 'Aplicações do rodízio'],
+    ['logbook', 'Diário de bordo'], ['score_history', 'Treinos e pontuações'],
+    ['prototypeIterations', 'Evolução do protótipo'], ['expertContacts', 'Contatos com especialistas'],
+    ['outreach', 'Divulgação'], ['decisionMatrix', 'Decisões'], ['xpRecords', 'Movimentações de XP'],
+    ['xpLossRecords', 'Perdas de XP'], ['leaderPenaltyRequests', 'Solicitações de revisão'], ['dailyMoods', 'Check-ins'], ['activityLogs', 'Histórico de ações'],
+  ].map(([id, label]) => ({ id, label, icon: FileText })),
 ];
 
 const formatArchiveDate = (value) => {
@@ -22,6 +32,11 @@ const formatArchiveDate = (value) => {
 
 const getRecordDate = (record) => record.updatedAt || record.createdAt || record.date || '';
 
+const snapshotLabels = { title: 'Título', name: 'Nome', problem: 'Problema', solution: 'Solução', description: 'Descrição', impact: 'Impacto', text: 'Conteúdo', updatedAt: 'Atualização', createdAt: 'Criação', target: 'Meta', evidence: 'Evidência' };
+function SnapshotDetails({ data }) {
+  return <dl className="space-y-2">{Object.entries(data).filter(([key]) => key !== 'id').map(([key, value]) => <div key={key}><dt className="font-semibold text-slate-200">{snapshotLabels[key] || key.replace(/([a-z])([A-Z])/g, '$1 $2').replaceAll('_', ' ')}</dt><dd className="ml-2 mt-1 whitespace-pre-wrap break-words">{value && typeof value === 'object' ? <SnapshotDetails data={value} /> : typeof value === 'boolean' ? value ? 'Sim' : 'Não' : String(value ?? 'Não informado').startsWith('data:') ? 'Arquivo preservado' : String(value ?? 'Não informado')}</dd></div>)}</dl>;
+}
+
 const formatStatus = (status) => ({
   todo: 'A fazer',
   in_progress: 'Em andamento',
@@ -35,14 +50,17 @@ const formatStatus = (status) => ({
 })[status] || status;
 
 const getRecordSummary = (collectionId, record) => {
+  if (collectionId === 'workspaceSnapshots') return { title: record.title, detail: record.data?.title || record.data?.name || 'Retrato dos dados coletivos ao encerrar a temporada', status: 'Preservado' };
+  if (collectionId === 'studentSubmissions') return { title: record.name || 'Integrante', detail: record.submission?.text || 'Sem entrega ao encerrar o ciclo', status: ({ pending: 'Pendente', approved: 'Aprovada', rejected: 'Devolvida' })[record.submission?.status] || '' };
   if (collectionId === 'tasks') return { title: record.text || 'Tarefa sem título', detail: [record.author, record.dueDate ? `Prazo ${formatArchiveDate(record.dueDate)}` : null].filter(Boolean).join(' · '), status: formatStatus(record.status || 'todo') };
   if (collectionId === 'events') return { title: record.title || 'Evento sem título', detail: [record.date ? formatArchiveDate(record.date) : null, record.time, record.location].filter(Boolean).join(' · '), status: formatStatus(record.status || record.type || 'confirmado') };
   if (collectionId === 'finalSprintAssignments') return { title: `${record.studentName || 'Aluno'} · ${record.frontLabel || 'Frente'}`, detail: record.commitment || record.progressNote || 'Sem atualização registrada', status: formatStatus(record.status || 'planned') };
   if (collectionId === 'finalSprintEvaluations') return { title: `${record.studentName || 'Aluno'} · ${record.type === 'weekly' ? record.weekLabel || 'Avaliação semanal' : record.type === 'presentation' ? 'Apresentação' : 'Relatório'}`, detail: record.improvement || record.strengths || 'Avaliação registrada', status: record.total === undefined ? 'Concluída' : `Nota ${record.total}` };
-  return { title: record.studentName || 'Aluno', detail: record.selectionNote || 'Seleção de torneio registrada', status: record.selectedForTournament ? 'Selecionado' : 'Não selecionado' };
+  if (collectionId === 'finalSprintSelectionScores') return { title: record.studentName || 'Aluno', detail: record.selectionNote || 'Seleção de torneio registrada', status: record.selectedForTournament ? 'Selecionado' : 'Não selecionado' };
+  return { title: record.title || record.studentName || record.weekName || record.name || record.date || 'Registro da temporada', detail: record.text || record.reason || record.note || record.description || record.updatedBy || record.appliedBy || (record.score !== undefined ? `${record.score} pontos` : record.studentCount !== undefined ? `${record.studentCount} integrantes` : 'Registro preservado'), status: formatStatus(record.status || '') };
 };
 
-export default function SeasonHistoryView({ db, seasons = [] }) {
+export default function SeasonHistoryView({ db, seasons = [], reports = [], reportsEnabled = false }) {
   const archivedSeasons = useMemo(() => seasons.filter((season) => season.status === 'archived'), [seasons]);
   const [selectedSeasonId, setSelectedSeasonId] = useState('');
   const [recordsByCollection, setRecordsByCollection] = useState({});
@@ -66,8 +84,9 @@ export default function SeasonHistoryView({ db, seasons = [] }) {
     setError('');
     setRecordsByCollection({});
     Promise.all(ARCHIVED_COLLECTIONS.map(async ({ id }) => {
-      const snapshot = await getDocs(query(collection(db, id), where('seasonId', '==', selectedSeason.id)));
-      const records = snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id }));
+      const source = id === 'workspaceSnapshots' ? collection(db, 'teamSeasons', selectedSeason.id, 'workspace') : id === 'studentSubmissions' ? collection(db, 'teamSeasons', selectedSeason.id, 'students') : id === 'logbook' ? collectionGroup(db, 'logbook') : query(collection(db, id), where('seasonId', '==', selectedSeason.id));
+      const snapshot = await getDocs(source);
+      const records = snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id })).filter((record) => (record.seasonId || 'legacy') === selectedSeason.id);
       records.sort((left, right) => String(getRecordDate(right)).localeCompare(String(getRecordDate(left))));
       return [id, records];
     })).then((entries) => {
@@ -140,6 +159,8 @@ export default function SeasonHistoryView({ db, seasons = [] }) {
                             <span className="shrink-0 rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[9px] font-bold text-slate-300">{summary.status}</span>
                           </div>
                           <p className="mt-2 flex items-center gap-1 text-[9px] text-slate-500"><FileText size={11} />{formatArchiveDate(getRecordDate(record))}</p>
+                          {(record.text || record.evidence || record.description || record.submission?.text) && <details className="mt-2 text-xs text-slate-300"><summary className="cursor-pointer text-cyan-200">Ler conteúdo completo</summary><p className="mt-2 whitespace-pre-wrap break-words">{record.text || record.evidence || record.description || record.submission?.text}</p></details>}
+                          {record.data && <details className="mt-2 text-xs text-slate-300"><summary className="cursor-pointer text-cyan-200">Consultar retrato completo</summary><div className="mt-3"><SnapshotDetails data={record.data} /></div></details>}
                         </article>
                       );
                     })}
@@ -164,6 +185,7 @@ export default function SeasonHistoryView({ db, seasons = [] }) {
           </div>
         </section>
       )}
+      <section className="rounded-[22px] border border-white/10 bg-[#121722] p-5"><h3 className="font-bold text-white">Relatórios da temporada</h3>{!reportsEnabled ? <p className="mt-2 text-sm text-slate-400">Entre pelo acesso autenticado para consultar os arquivos dos relatórios.</p> : <div className="mt-3 space-y-2">{reports.filter((report) => (report.seasonId || 'legacy') === selectedSeason?.id).map((report) => <div key={report.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white/5 p-3 text-sm text-slate-300"><span>{report.studentName} · {report.title}</span><button className="rounded-full border border-white/15 px-3 py-2 text-xs" onClick={async () => { const tab = window.open('', '_blank'); if (!tab) { setError('Permita a abertura de uma nova aba para visualizar o arquivo.'); return; } tab.opener = null; try { const result = await getWeeklyReportFile(report.id); tab.location.href = result.url; } catch (issue) { tab.close(); setError(issue.message); } }}>Abrir arquivo</button></div>)}</div>}</section>
     </div>
   );
 }

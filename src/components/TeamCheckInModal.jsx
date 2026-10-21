@@ -62,7 +62,6 @@ const MOOD_OPTIONS = [
   },
 ];
 
-const TRAINING_DAYS = new Set([1, 3]);
 
 const formatDateLabel = (date) =>
   new Intl.DateTimeFormat('pt-BR', {
@@ -78,12 +77,12 @@ const startOfLocalDate = (dateString) => {
 
 const getMoodMeta = (level) => MOOD_OPTIONS.find((option) => option.level === level) || MOOD_OPTIONS[MOOD_OPTIONS.length - 1];
 
-const getNextTrainingDate = (baseDate) => {
+const getNextTrainingDate = (baseDate, trainingDays) => {
   const next = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 12, 0, 0, 0);
 
   for (let offset = 1; offset <= 7; offset += 1) {
     next.setDate(baseDate.getDate() + offset);
-    if (TRAINING_DAYS.has(next.getDay())) {
+    if (trainingDays.includes(next.getDay())) {
       return new Date(next);
     }
   }
@@ -151,11 +150,12 @@ const TeamCheckInModal = ({
   onSubmit,
   localTodayStr,
   rewardXp = 2,
+  trainingDays = [1, 3],
 }) => {
   const todayDate = useMemo(() => startOfLocalDate(localTodayStr), [localTodayStr]);
   const dayOfWeek = todayDate.getDay();
-  const isTrainingDay = TRAINING_DAYS.has(dayOfWeek);
-  const nextTrainingDate = useMemo(() => getNextTrainingDate(todayDate), [todayDate]);
+  const isTrainingDay = trainingDays.includes(dayOfWeek);
+  const nextTrainingDate = useMemo(() => getNextTrainingDate(todayDate, trainingDays), [todayDate, trainingDays]);
 
   const sortedMoods = useMemo(
     () =>

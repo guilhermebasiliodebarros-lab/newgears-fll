@@ -1,5 +1,6 @@
 import { ApiError, authenticate, firestoreRequest, getRecord, listRecords, writeRecord } from './firebase.js';
 import { MAX_REPORT_FILE_SIZE, REPORT_FILE_TYPES, validateReportBytes, validateReportDetails, validateReportFile } from '../../src/utils/weeklyReports.js';
+import { handleReminderRequest } from './reminders.js';
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 const validId = (id) => /^[a-zA-Z0-9_-]{1,128}$/.test(id || '');
@@ -78,9 +79,11 @@ async function saveReport(request, env, user, id) {
   if (!previous && !file) throw new ApiError(400, 'Selecione um arquivo para publicar.');
   const reportId = id || crypto.randomUUID();
   const now = new Date().toISOString();
+  const workspace = await getRecord(env, 'settings/workspace_season');
+  if (workspace?.transitionLock) throw new ApiError(409, 'A temporada está sendo encerrada. Aguarde para publicar.');
   const record = previous ? { ...cleanRecord(previous), ...details, updatedAt: now } : {
     ...details, userId: user.uid, studentId: user.studentId, studentName: user.name, studentEmail: user.email,
-    createdAt: now, updatedAt: now, emailStatus: 'pending',
+    createdAt: now, updatedAt: now, emailStatus: 'pending', seasonId: workspace?.activeSeasonId || 'legacy',
   };
   let uploadedPath;
   try {
@@ -110,7 +113,7 @@ async function fileLink(env, report, download) {
   if (!signed) throw new ApiError(503, 'O armazenamento não retornou um link para o arquivo.');
   const url = new URL(`${storage.base}${signed}`);
   if (download) url.searchParams.set('download', report.fileName);
-  return json({ url: url.href, expiresIn: 300 });
+  return json({ url: url.href, expiresIn: 300, reportUpdatedAt: report.updatedAt || '', fileSize: report.fileSize });
 }
 
 export function validateRecipient(input) {
@@ -184,8 +187,42 @@ export async function handleReportsRequest(request, env) {
     const segments = url.pathname.replace(/^\/api\/reports\/?/, '').split('/').filter(Boolean);
     const [id, action] = segments;
     const method = request.method;
+    if (id === 'reminders') return await handleReminderRequest(request, env, user, segments);
+    if (id === 'backup' && segments.length === 1 && method === 'GET') {
+      assertAdmin(user);
+      const scope = url.searchParams.get('scope') || 'all'; if (scope !== 'all') assertId(scope);
+      const documents = [];
+      for (const name of ['weeklyReportExpectations', 'weeklyReportRecipients']) {
+        const records = await listRecords(env, name, 20000);
+        records.filter((item) => name === 'weeklyReportRecipients' || scope === 'all' || (item.seasonId || 'legacy') === scope).forEach(({ id: recordId, ...item }) => documents.push({ path: `${name}/${recordId}`, data: cleanRecord(item) }));
+      }
+      const preferences = await getRecord(env, 'settings/automatic_reminders');
+      if (preferences) documents.push({ path: 'settings/automatic_reminders', data: cleanRecord(preferences) });
+      return json({ documents });
+    }
     if (id === 'session' && segments.length === 1 && method === 'GET') return json({ user });
-    if (id === 'recipients') {
+    if (id === 'expectations') {
+      assertAdmin(user);
+      const data = method === 'POST' ? await readJson(request) : Object.fromEntries(url.searchParams);
+      const { seasonId, weekStart } = data;
+      assertId(seasonId);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart || '') || !Number.isFinite(Date.parse(weekStart)) || new Date(`${weekStart}T12:00:00Z`).toISOString().slice(0, 10) !== weekStart || new Date(`${weekStart}T12:00:00Z`).getUTCDay() !== 1) throw new ApiError(400, 'Informe uma semana válida iniciada na segunda-feira.');
+      const path = `weeklyReportExpectations/${seasonId}__${weekStart}`;
+      const previous = await getRecord(env, path);
+      if (method === 'GET') return json({ exemptions: previous?.exemptions || {} });
+      if (method === 'POST') {
+        assertId(data.studentId);
+        if (typeof data.exempt !== 'boolean' || (data.exempt && (typeof data.reason !== 'string' || !data.reason.trim() || data.reason.length > 300))) throw new ApiError(400, 'Informe o motivo da dispensa em até 300 caracteres.');
+        if (!await getRecord(env, `students/${data.studentId}`)) throw new ApiError(404, 'Integrante não encontrado.');
+        const workspace = await getRecord(env, 'settings/workspace_season');
+        if (workspace?.transitionLock || (workspace?.activeSeasonId || 'legacy') !== seasonId) throw new ApiError(409, 'A temporada mudou ou está sendo encerrada. Atualize a página.');
+        const exemptions = { ...(previous?.exemptions || {}) };
+        if (data.exempt) exemptions[data.studentId] = { reason: data.reason.trim(), by: user.name, updatedAt: new Date().toISOString() };
+        else delete exemptions[data.studentId];
+        await writeRecord(env, path, { seasonId, weekStart, exemptions }, previous ? { updateTime: previous._updateTime } : { create: true });
+        return json({ exemptions });
+      }
+    } else if (id === 'recipients') {
       assertAdmin(user);
       if (method === 'POST' && segments.length === 1) {
         const data = validateRecipient(await readJson(request));

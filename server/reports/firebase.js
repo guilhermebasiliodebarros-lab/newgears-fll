@@ -118,14 +118,14 @@ export async function writeRecord(env, path, data, { create = false, updateTime,
   return result;
 }
 
-export async function listRecords(env, collectionPath) {
+export async function listRecords(env, collectionPath, maxRecords = 500) {
   const records = [];
   let pageToken = '';
   do {
     const data = await firestoreRequest(env, `${collectionPath}?${new URLSearchParams({ pageSize: '100', ...(pageToken ? { pageToken } : {}) })}`);
     records.push(...(data?.documents || []).map(decodeDocument));
     pageToken = data?.nextPageToken || '';
-    if (records.length > 500) throw new ApiError(400, 'Limite de 500 destinatários excedido.');
+    if (records.length > maxRecords) throw new ApiError(400, `Limite de ${maxRecords} registros excedido. Reduza o período consultado.`);
   } while (pageToken);
   return records;
 }
@@ -147,5 +147,9 @@ export async function authenticate(request, env) {
   if (!member || member.active !== true || !['admin', 'student'].includes(member.role)
     || !account.email || member.email?.toLowerCase() !== account.email.toLowerCase()
     || !member.name || (member.role === 'student' && !member.studentId)) throw new ApiError(403, 'Sua conta ainda não está vinculada a um integrante ativo da equipe. Peça ao técnico para conferir o cadastro.');
+  if (member.role === 'student') {
+    const student = await getRecord(env, `students/${encodeURIComponent(member.studentId)}`);
+    if (student?.status === 'inactive') throw new ApiError(403, 'Seu cadastro foi arquivado. Peça ao técnico para reativá-lo.');
+  }
   return { uid: claims.sub, role: member.role, name: member.name, email: account.email, studentId: member.studentId || '' };
 }

@@ -1,0 +1,65 @@
+# Processos da equipe
+
+## Planejamento e rodízio
+
+Na aba **Rodízio**, abra **Configurar planejamento da temporada** para escolher data inicial, quantidade de semanas, dias de treino, prazo dos relatórios e papéis dos integrantes. Capitãs e capitães ficam em Gestão; aprendizes alternam Engenharia e Inovação. Alunos fora da escala mantêm a estação atual.
+
+Para férias e pausas, informe uma data de cada semana sem atividade. O calendário pula essas semanas sem avançar o ciclo da distribuição. Os dias de treino configurados também são usados no check-in.
+
+A distribuição exibida é uma prévia. **Aplicar rodízio** atualiza os escalados em uma transação e preserva suas entregas. Uma semana aplicada não pode ser reaplicada. O histórico oferece **Desfazer distribuição**, que só restaura estações se nenhum aluno tiver recebido outra distribuição ou alteração manual depois.
+
+Os cadastros anteriores continuam ativos por padrão. O planejamento legado é convertido para referências por ID ao salvar, mantendo a distribuição conhecida de 2026 como ponto de partida.
+
+## Chamada
+
+A chamada registra Presente, Atraso, Falta ou Falta justificada, com observação. Uma justificativa exige motivo. Atraso conta como presença; falta justificada não entra no denominador do percentual. Os totais de frequência existentes são preservados como base.
+
+Corrigir uma data altera apenas a diferença em relação à chamada anterior, sem adicionar outra aula. Presenças e totais são confirmados juntos; falhas não deixam uma gravação parcial. O resumo por período mostra presenças, atrasos, faltas e justificativas registrados nas sessões do ciclo atual.
+
+## Tarefas
+
+Autoria original e participantes passam a ser campos separados. A autoria permanece quando alguém entra, sai ou assume a tarefa. Nomes antigos são interpretados de forma compatível ao atualizar um registro legado.
+
+Ao enviar para revisão, o aluno descreve o resultado e como o verificou; um link HTTP/HTTPS é opcional. A espera fixa de três horas foi removida. O técnico aprova ou devolve com um motivo, e as mudanças ficam no histórico da tarefa. Alterações simultâneas de etapa são detectadas.
+
+## Relatórios
+
+No acesso autenticado, o técnico encontra **Entregas esperadas da semana** em Relatórios Semanais. Selecione uma data para consultar a semana correspondente. O painel compara integrantes e relatórios pelo ID do aluno e início da semana, mostrando Entregue, A entregar, Atrasado ou Dispensado.
+
+Dispensas exigem motivo e podem ser removidas pelo técnico. Elas são gravadas pela API autenticada; falhas no carregamento não são interpretadas como falta de entrega. Novos relatórios recebem a temporada ativa no servidor. Arquivos antigos sem temporada pertencem ao ciclo legado e continuam consultáveis no histórico e por seus links.
+
+## Arquivar e reativar alunos
+
+Em **Alunos**, o filtro alterna Ativos, Arquivados e Todos os cadastros. **Arquivar aluno** preserva seus registros, remove o integrante dos fluxos ativos e impede o login. **Reativar aluno** devolve o cadastro à equipe; inclua-o novamente na escala quando desejar. Editar o perfil não sobrescreve XP, presença ou entregas com valores antigos do formulário.
+
+## Encerrar temporada
+
+Confira os nomes do ciclo atual e seguinte, data de início, integrantes e pendências. Escolha se tarefas abertas, compromissos pendentes e o projeto de inovação devem continuar. Se desmarcar o projeto, o próximo ciclo começa com o formulário inicial; o projeto anterior permanece no arquivo. Os não selecionados são arquivados; XP, conquistas e frequência acumulada acompanham os escolhidos. As entregas são preservadas no arquivo da temporada e limpas para o próximo ciclo.
+
+Tarefas, agenda, avaliações, chamadas, aplicações do rodízio, diário, treinos, evolução do protótipo, contatos, divulgação, decisões, XP e check-ins ficam associados ao ciclo encerrado. Relatórios recebem a temporada pela API. Código, anexos, versões do robô e materiais compartilhados continuam como acervo reutilizável.
+
+O encerramento grava uma trava no banco. A equipe aguarda a conclusão e o técnico pode **Retomar encerramento** após uma queda de conexão. As escolhas originais e o ID da próxima temporada são reaproveitados. Cópias de pendências usam IDs determinísticos para evitar duplicação na retomada.
+
+## Bloqueios de tarefas
+
+O Kanban oferece **Bloquear** para o técnico e para os participantes de cada tarefa. Registre o motivo, a categoria e, se necessário, quem pode ajudar ou qual tarefa precisa terminar primeiro. A tarefa permanece em sua etapa e recebe destaque; o filtro **Somente bloqueadas** ajuda a localizar impedimentos.
+
+O avanço é recusado enquanto o bloqueio estiver aberto. Para liberar, registre a solução. Dependências precisam estar concluídas e ciclos entre tarefas são recusados. As ações ficam em um histórico separado das revisões.
+
+## Indicadores e backup
+
+A aba **Evolução** reúne **Indicadores**, **Backup** e **Lembretes**. Nos indicadores, selecione até 366 dias para comparar com o período anterior de mesma duração. Pontualidade considera apenas tarefas concluídas com prazo; retrabalho considera devoluções da revisão. Sem registros suficientes, o painel mostra **Sem base**. A tabela semanal pode ser exportada em CSV.
+
+O backup exporta um ZIP com `dados.json`, `manifesto.json` e, se selecionados, os PDFs e documentos dos relatórios. Escolha a temporada ativa, uma arquivada ou todas. Cadastros e materiais compartilhados acompanham os registros; senhas, contas de autenticação e filas privadas ficam fora. Cada arquivo listado no manifesto tem tamanho e SHA-256.
+
+Arquivos referenciados por links externos não são baixados. No acesso legado, os relatórios privados ficam de fora e essa omissão é registrada. Um backup sem PDFs/Word é uma cópia de dados e referências, não dos documentos. Falhas ao baixar arquivos selecionados interrompem a exportação. Há um limite de 250 MB para esses arquivos por exportação. Os dados são lidos durante o intervalo informado no backup, sem uma trava sobre edições normais da equipe; uma mudança de temporada durante a leitura interrompe o processo.
+
+A restauração é manual. Guarde o ZIP em um local independente do site. Para ativar e conferir os e-mails automáticos, consulte [configuração dos lembretes](reminders-setup.md).
+
+## Publicação e validação dos processos
+
+Publique frontend e funções da API juntos para disponibilizar o novo endpoint de dispensas. Integre os blocos de `firestore.weekly-reports.rules` às regras do ambiente, incluindo a verificação de aluno arquivado. O arquivo é um complemento às regras existentes, não uma substituição das permissões das demais abas.
+
+As novas transações precisam das permissões de leitura e gravação nas coleções `rotationApplications`, `attendanceSessions`, `teamSeasons` e suas subcoleções `students` e `workspace`, além de `settings/workspace_season`. As dispensas são acessadas somente pelo servidor em `weeklyReportExpectations`.
+
+Execute `npm test` e `npm run build`. A suíte `teamProcesses` usa um adaptador de transações em memória e cobre repetição, rollback, revisão e retomada. Ela não valida as regras efetivamente publicadas no Firebase; essa conferência exige o ambiente configurado.

@@ -291,6 +291,11 @@ button:active {
   clip-path: polygon(0 18px, 18px 0, calc(100% - 24px) 0, 100% 24px, 100% calc(100% - 18px), calc(100% - 18px) 100%, 18px 100%, 0 calc(100% - 18px));
 }
 
+/* Keep the sticky inset from becoming a relative offset over the page controls. */
+.newgears-tabs-shell {
+  position: sticky;
+}
+
 .newgears-topbar::before,
 .newgears-logo-hub::before,
 .newgears-login-card::before,

@@ -122,6 +122,8 @@ O servidor Vite sozinho não executa Pages Functions. Após configurar os servi�
 
 ## Arquivos e dados
 
+Lembretes de prazos e relatórios atrasados agora têm um agendador separado: [configuração dos lembretes automáticos](reminders-setup.md). O aviso de um relatório recém-publicado continua seguindo o fluxo de envio da API descrito neste guia.
+
 - `src/views/WeeklyReportsView.jsx`: formulário com clique/arraste, progresso, edição, substituição, filtros, visualização/download e estados de leitura.
 - `src/views/ReportRecipientsView.jsx`: administração dos destinatários.
 - `src/components/WeeklyReportsSummary.jsx`: resumo semanal e avisos de não lidos.
