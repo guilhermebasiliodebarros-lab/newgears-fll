@@ -35,7 +35,7 @@ export async function createBackupArchive({ documents, files = [], scope, starte
   const encoder = new TextEncoder();
   const dataset = { format: 'newgears-backup', version: 1, scope, startedAt, completedAt: new Date().toISOString(), documents: documents.map((entry) => ({ path: entry.path, data: backupValue(entry.data) })) };
   const allFiles = [{ name: 'dados.json', bytes: encoder.encode(JSON.stringify(dataset, null, 2)) }, ...files];
-  const manifest = { format: dataset.format, version: 1, scope, createdAt: dataset.completedAt, documentCount: dataset.documents.length, reportFilesIncluded: filesIncluded, omissions, excluded: ['Senhas e credenciais', 'Contas de autenticação', 'Filas privadas de e-mail', 'Estados individuais de leitura', 'Arquivos de links externos fora dos relatórios'], files: [] };
+  const manifest = { format: dataset.format, version: 1, scope, createdAt: dataset.completedAt, documentCount: dataset.documents.length, reportFilesIncluded: filesIncluded, teamPdfIncluded: files.some((file) => file.name === 'relatorio-da-equipe.pdf'), omissions, excluded: ['Senhas e credenciais', 'Contas de autenticação', 'Filas privadas de e-mail', 'Estados individuais de leitura', 'Arquivos de links externos fora dos relatórios'], files: [] };
   for (const file of allFiles) {
     const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', file.bytes));
     manifest.files.push({ name: file.name, size: file.bytes.length, sha256: [...hash].map((byte) => byte.toString(16).padStart(2, '0')).join('') });

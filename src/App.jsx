@@ -110,6 +110,8 @@ import {
   TrendingUp,  // <--- Provavelmente vai pedir em seguida (Tendência de alta)
   Flag,
   Tag,
+  MailCheck,
+  Ghost,
   MessageSquare, // <--- O Culpado de agora (Comentários)
   Share2,        // <--- Provavelmente usado para compartilhar estratégia
   Download,      // <--- Provavelmente usado para baixar PDF
@@ -450,6 +452,12 @@ const BADGE_TOKEN_ALIASES = {
   bateria_dois_por_cento: 'battery_two_percent',
   decorative_presence: 'decorative_presence',
   presenca_decorativa: 'decorative_presence',
+  secretary: 'secretary',
+  secretario: 'secretary',
+  secretaria: 'secretary',
+  ghost: 'ghost',
+  fantasma: 'ghost',
+  fantamas: 'ghost',
 };
 
 const normalizeBadgeToken = (value) => {
@@ -1690,6 +1698,8 @@ function App() {
     { id: 'maybe_master', name: 'Mestre do Talvez', icon: <HelpCircle size={20}/>, color: 'text-blue-200', desc: 'Prometeu ajudar daqui a pouco, em algum momento, talvez.', xpBonus: 0 },
     { id: 'battery_two_percent', name: 'Bateria 2%', icon: <BatteryWarning size={20}/>, color: 'text-red-200', desc: 'Chegou no treino com energia suficiente para respirar e reclamar.', xpBonus: 0 },
     { id: 'decorative_presence', name: 'Presenca Decorativa', icon: <UserCircle size={20}/>, color: 'text-gray-300', desc: 'Esteve presente no ambiente. A produtividade ainda esta em analise.', xpBonus: 0 },
+    { id: 'secretary', name: 'Secretário', icon: <MailCheck size={20}/>, color: 'text-sky-200', desc: 'Se tem pendência, já mandou e-mail. Cobra, questiona e acompanha tudo: a caixa de entrada que lute!', xpBonus: 0 },
+    { id: 'ghost', name: 'Fantasma', icon: <Ghost size={20}/>, color: 'text-violet-200', desc: 'Entrou na call no modo invisível e se apresentou: “Oi, eu sou o fantasma.” Câmera misteriosa, presença confirmada!', xpBonus: 0 },
   ];
 
   // --- DESAFIO DE INGLÊS: Função do Técnico ---

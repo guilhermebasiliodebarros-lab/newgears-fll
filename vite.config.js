@@ -9,6 +9,7 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined
+          if (id.includes('pdf-lib') || id.includes('/pako/')) return 'vendor-pdf'
           if (id.includes('firebase')) return 'vendor-firebase'
           if (id.includes('react-confetti')) return 'vendor-confetti'
           if (id.includes('konva') || id.includes('react-konva') || id.includes('use-image')) return 'vendor-konva'
