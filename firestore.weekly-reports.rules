@@ -24,6 +24,115 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;
     }
+    match /finalSprintTournamentDrafts/{seasonId} {
+      allow read, write: if isReportAdmin();
+    }
+    // Giro: carteira privada, catálogo fixo e recibos únicos por contribuição.
+    function isGearOwner(studentId) {
+      return isReportMember()
+        && get(/databases/$(database)/documents/weeklyReportMembers/$(request.auth.uid)).data.role == 'student'
+        && get(/databases/$(database)/documents/weeklyReportMembers/$(request.auth.uid)).data.studentId == studentId;
+    }
+    function gearBefore(studentId) {
+      return exists(/databases/$(database)/documents/studentGearProfiles/$(studentId))
+        ? get(/databases/$(database)/documents/studentGearProfiles/$(studentId)).data
+        : {'balance': 40, 'earned': 40, 'spent': 0,
+           'owned': ['skin-nebula', 'frame-none', 'accessory-none', 'title-team'],
+           'equipped': {'skin': 'skin-nebula', 'frame': 'frame-none', 'accessory': 'accessory-none', 'title': 'title-team'},
+           'rewardDay': '', 'rewardDayIndex': -1, 'dayEarned': 0, 'dayCounts': {}};
+    }
+    function gearPrice(id) {
+      return {'skin-nebula': 0, 'skin-solar': 25, 'skin-emerald': 35, 'skin-rose': 45, 'skin-arctic': 65, 'skin-lava': 85,
+              'frame-none': 0, 'frame-orbit': 20, 'frame-hex': 40, 'frame-stars': 60, 'frame-champion': 100,
+              'accessory-none': 0, 'accessory-antenna': 20, 'accessory-visor': 45, 'accessory-headphones': 55, 'accessory-crown': 90,
+              'title-team': 0, 'title-code': 20, 'title-ideas': 30, 'title-voice': 40, 'title-teamwork': 60}.get(id, -1);
+    }
+    function gearCategory(id) {
+      return id.matches('skin-.*') ? 'skin' : id.matches('frame-.*') ? 'frame' : id.matches('accessory-.*') ? 'accessory' : 'title';
+    }
+    function gearEquipmentChange(data, before) {
+      let category = gearCategory(data.lastAction.id);
+      return gearPrice(data.lastAction.id) >= 0 && data.equipped[category] == data.lastAction.id
+        && data.equipped.diff(before.equipped).affectedKeys().hasOnly([category]);
+    }
+    function gearSameDaily(data, before) {
+      return data.rewardDay == before.rewardDay && data.rewardDayIndex == before.rewardDayIndex
+        && data.dayEarned == before.dayEarned && data.dayCounts == before.dayCounts;
+    }
+    function gearReceiptValid(studentId, receiptId, receipt) {
+      let before = gearBefore(studentId);
+      let config = {'code': ['codeSnippets', 'title', 12, 2], 'expert': ['experts', 'name', 20, 2],
+        'contact': ['expertContacts', 'name', 8, 2], 'robot': ['robotVersions', 'version', 12, 2],
+        'attachment': ['attachments', 'name', 10, 2], 'outreach': ['outreach', 'name', 15, 2],
+        'logbook': ['logbook', 'text', 5, 1], 'prototype': ['prototypeIterations', 'improvement', 15, 2]}[receipt.type];
+      let collectionName = config[0];
+      let source = receipt.type == 'logbook'
+        ? get(/databases/$(database)/documents/students/$(studentId)/logbook/$(receipt.sourceId)).data
+        : get(/databases/$(database)/documents/$(collectionName)/$(receipt.sourceId)).data;
+      let sameDay = before.rewardDayIndex == receipt.dayIndex;
+      let count = sameDay ? before.dayCounts.get(receipt.type, 0) : 0;
+      let earned = sameDay ? before.dayEarned : 0;
+      let amount = count >= config[3] ? 0 : config[2] < 60 - earned ? config[2] : 60 - earned;
+      return receipt.keys().hasOnly(['studentId', 'type', 'sourceId', 'sourcePath', 'day', 'dayIndex', 'coins', 'createdAt'])
+        && receipt.studentId == studentId && receipt.sourceId is string && receipt.sourceId.matches('[^/]+')
+        && receiptId == studentId + '__' + receipt.type + '__' + receipt.sourceId
+        && receipt.day is string && receipt.dayIndex == int((request.time.toMillis() - 10800000) / 86400000)
+        && receipt.coins is int && receipt.coins == amount && receipt.coins >= 0
+        && receipt.sourcePath == (receipt.type == 'logbook' ? 'students/' + studentId + '/logbook/' + receipt.sourceId : collectionName + '/' + receipt.sourceId)
+        && source.get('createdByStudentId', source.get('studentId', '')) == studentId
+        && source.get(config[1], '') is string && source.get(config[1], '').size() > 0;
+    }
+    function gearRewardChange(studentId, data, before) {
+      let receiptId = data.lastAction.id;
+      let receipt = getAfter(/databases/$(database)/documents/studentGearRewards/$(receiptId)).data;
+      let sameDay = before.rewardDayIndex == receipt.dayIndex;
+      let counts = sameDay ? before.dayCounts : {};
+      return !exists(/databases/$(database)/documents/studentGearRewards/$(receiptId))
+        && gearReceiptValid(studentId, receiptId, receipt)
+        && data.lastAction.coins == receipt.coins && data.balance == before.balance + receipt.coins
+        && data.earned == before.earned + receipt.coins && data.spent == before.spent
+        && data.owned == before.owned && data.equipped == before.equipped
+        && data.rewardDay == receipt.day && data.rewardDayIndex == receipt.dayIndex
+        && data.dayEarned == (sameDay ? before.dayEarned : 0) + receipt.coins
+        && data.dayCounts.diff(counts).affectedKeys().hasOnly([receipt.type])
+        && data.dayCounts[receipt.type] == counts.get(receipt.type, 0) + 1;
+    }
+    function validGearProfile(studentId) {
+      let data = request.resource.data;
+      let before = gearBefore(studentId);
+      let price = gearPrice(data.lastAction.id);
+      return data.keys().hasOnly(['studentId', 'balance', 'earned', 'spent', 'owned', 'equipped', 'rewardDay', 'rewardDayIndex', 'dayEarned', 'dayCounts', 'updatedAt', 'lastAction'])
+        && data.studentId == studentId && data.balance is int && data.balance >= 0
+        && data.earned is int && data.spent is int && data.spent >= 0 && data.earned == data.balance + data.spent
+        && data.owned is list && data.owned.size() <= 21
+        && data.equipped.keys().hasOnly(['skin', 'frame', 'accessory', 'title'])
+        && data.owned.hasAll([data.equipped.skin, data.equipped.frame, data.equipped.accessory, data.equipped.title])
+        && data.lastAction.keys().hasOnly(['type', 'id', 'coins'])
+        && ((data.lastAction.type == 'purchase' && price > 0 && !(data.lastAction.id in before.owned)
+              && data.lastAction.coins == price && data.balance == before.balance - price && data.spent == before.spent + price
+              && data.earned == before.earned && data.owned == before.owned.concat([data.lastAction.id])
+              && gearEquipmentChange(data, before) && gearSameDaily(data, before))
+          || (data.lastAction.type == 'equip' && data.lastAction.id in before.owned && data.lastAction.coins == 0
+              && data.balance == before.balance && data.earned == before.earned && data.spent == before.spent
+              && data.owned == before.owned && gearEquipmentChange(data, before) && gearSameDaily(data, before))
+          || (data.lastAction.type == 'reward' && gearRewardChange(studentId, data, before)));
+    }
+    match /studentGearProfiles/{studentId} {
+      allow read: if isGearOwner(studentId) || isReportAdmin();
+      allow create, update: if isGearOwner(studentId) && validGearProfile(studentId);
+      allow delete: if false;
+    }
+    match /studentGearRewards/{receiptId} {
+      allow get: if isReportAdmin() || (isReportMember()
+        && (!exists(/databases/$(database)/documents/studentGearRewards/$(receiptId)) || isGearOwner(resource.data.studentId)));
+      allow list: if isGearOwner(resource.data.studentId) || isReportAdmin();
+      allow create: if isGearOwner(request.resource.data.studentId)
+        && gearReceiptValid(request.resource.data.studentId, receiptId, request.resource.data)
+        && getAfter(/databases/$(database)/documents/studentGearProfiles/$(request.resource.data.studentId)).data.lastAction.id == receiptId
+        && getAfter(/databases/$(database)/documents/studentGearProfiles/$(request.resource.data.studentId)).data.lastAction.type == 'reward'
+        && getAfter(/databases/$(database)/documents/studentGearProfiles/$(request.resource.data.studentId)).data.balance == gearBefore(request.resource.data.studentId).balance + request.resource.data.coins;
+      allow update, delete: if false;
+    }
     match /weeklyReports/{reportId} {
       allow read: if isReportMember();
       // Todas as alterações passam pela API, que verifica autor/admin e conteúdo do arquivo.

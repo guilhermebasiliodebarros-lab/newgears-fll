@@ -2,7 +2,7 @@ import { STATION_KEYS } from '../constants/workspace.js';
 
 export const ACTIVE_STATUSES = ['present', 'late'];
 export const ATTENDANCE_LABELS = { present: 'Presente', late: 'Atraso', absent: 'Falta', excused: 'Falta justificada' };
-export const SEASON_COLLECTIONS = ['tasks', 'events', 'finalSprintAssignments', 'finalSprintEvaluations', 'finalSprintSelectionScores', 'attendanceSessions', 'rotationApplications', 'logbook', 'score_history', 'prototypeIterations', 'expertContacts', 'outreach', 'decisionMatrix', 'xpRecords', 'xpLossRecords', 'leaderPenaltyRequests', 'dailyMoods', 'activityLogs'];
+export const SEASON_COLLECTIONS = ['tasks', 'events', 'finalSprintAssignments', 'finalSprintEvaluations', 'finalSprintSelectionScores', 'finalSprintTournamentDrafts', 'attendanceSessions', 'rotationApplications', 'logbook', 'score_history', 'prototypeIterations', 'expertContacts', 'outreach', 'decisionMatrix', 'xpRecords', 'xpLossRecords', 'leaderPenaltyRequests', 'dailyMoods', 'activityLogs'];
 export const isActiveStudent = (student) => student.status !== 'inactive';
 export const dateKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 export const validDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && Number.isFinite(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;

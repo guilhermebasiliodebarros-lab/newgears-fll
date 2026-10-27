@@ -1,0 +1,117 @@
+.gear-mascot { display: block; width: 100%; height: 100%; overflow: visible; }
+.gear-mascot__character { transform-origin: 100px 185px; animation: gear-idle 4.8s ease-in-out infinite; }
+.gear-mascot__eyes { transform-origin: center; transform-box: fill-box; animation: gear-blink 6.2s linear infinite; }
+.gear-mascot__gaze { animation: gear-look 8s ease-in-out infinite; }
+.gear-mascot__arm { transform-origin: 48px 113px; animation: gear-wave 4.8s ease-in-out infinite; }
+.gear-mascot__arm-right { transform-origin: 151px 113px; animation: gear-arm-swing 4.8s ease-in-out infinite; }
+.gear-mascot__leg--left { transform-origin: 80px 158px; animation: gear-foot-tap 4.8s ease-in-out infinite; }
+.gear-mascot__leg--right { transform-origin: 120px 158px; }
+.gear-mascot__teeth { transform-origin: 100px 108px; animation: gear-orbit 24s linear infinite; }
+.gear-mascot__halo { transform-origin: 100px 106px; animation: gear-halo 4.8s ease-in-out infinite; }
+.gear-mascot__shadow { transform-origin: 100px 190px; animation: gear-shadow 4.8s ease-in-out infinite; }
+.gear-mascot__orbit { transform-origin: 100px 108px; animation: gear-orbit 22s linear infinite; }
+.gear-mascot--wave .gear-mascot__arm { animation: gear-hello .85s ease-in-out infinite; }
+.gear-mascot--celebrate .gear-mascot__character { animation: gear-celebrate 1.2s ease-in-out infinite; }
+.gear-mascot--celebrate .gear-mascot__arm, .gear-mascot--celebrate .gear-mascot__arm-right { animation: gear-hello .6s ease-in-out infinite alternate; }
+.gear-mascot--celebrate .gear-mascot__arm-right { animation-direction: alternate-reverse; }
+.gear-mascot--dance .gear-mascot__character { animation: gear-dance .8s ease-in-out infinite; }
+.gear-mascot--dance .gear-mascot__arm { animation: gear-hello .4s ease-in-out infinite; }
+.gear-mascot--dance .gear-mascot__arm-right { animation: gear-arm-dance .4s ease-in-out infinite; }
+.gear-mascot--dance .gear-mascot__leg { animation: gear-step .8s ease-in-out infinite; }
+.gear-mascot--dance .gear-mascot__leg--right { animation-delay: -.4s; }
+.gear-mascot--dance .gear-mascot__teeth { animation-duration: 3s; }
+.gear-mascot--speaking .gear-mascot__mouth { transform-origin: 100px 121px; animation: gear-talk .3s ease-in-out infinite; }
+.gear-mascot--speaking .gear-mascot__gaze { animation: none; }
+.gear-mascot--speaking:not(.gear-mascot--dance) .gear-mascot__character { animation: gear-talking-sway 2s ease-in-out infinite; }
+.gear-mascot__sparks { animation: gear-spark 1.3s ease-in-out infinite; }
+/* Keep the small character alive on school computers; skip ambient effects in lite mode. */
+.gear-companion--lite .gear-mascot__halo, .gear-companion--lite .gear-mascot__orbit, .gear-companion--lite .gear-mascot__sparks,
+.newgears-lite-mode .gear-mascot__halo, .newgears-lite-mode .gear-mascot__orbit, .newgears-lite-mode .gear-mascot__sparks { animation: none; }
+.gear-mascot--still * { animation: none !important; }
+@keyframes gear-idle { 0%,100% { transform: translateY(0) rotate(-3deg); } 35% { transform: translateY(-9px) rotate(3deg); } 65% { transform: translateY(-3px) rotate(-1deg); } }
+@keyframes gear-blink { 0%,43%,47%,100% { transform: scaleY(1); } 45% { transform: scaleY(0.12); } }
+@keyframes gear-look { 0%,22%,60%,100% { transform: translateX(0); } 30%,42% { transform: translateX(3px); } 72%,84% { transform: translateX(-3px); } }
+@keyframes gear-wave { 0%,55%,100% { transform: rotate(0); } 65%,85% { transform: rotate(24deg); } 75%,95% { transform: rotate(-17deg); } }
+@keyframes gear-hello { 0%,100% { transform: rotate(-15deg); } 50% { transform: rotate(29deg); } }
+@keyframes gear-arm-swing { 0%,100% { transform: rotate(-8deg); } 50% { transform: rotate(15deg); } }
+@keyframes gear-foot-tap { 0%,50%,75%,100% { transform: rotate(0); } 60%,85% { transform: rotate(-18deg) translateY(-3px); } }
+@keyframes gear-orbit { to { transform: rotate(360deg); } }
+@keyframes gear-halo { 0%,100% { transform: scale(.9); opacity: .65; } 50% { transform: scale(1.08); opacity: 1; } }
+@keyframes gear-shadow { 0%,100% { transform: scaleX(1); opacity: .45; } 40% { transform: scaleX(.8); opacity: .25; } }
+@keyframes gear-celebrate { 0%,100% { transform: translateY(0) rotate(-5deg); } 45% { transform: translateY(-18px) rotate(7deg) scale(1.04,.97); } 85% { transform: scale(1.04,.96); } }
+@keyframes gear-dance { 0%,100% { transform: translate(-5px,0) rotate(-10deg); } 25% { transform: translate(0,-12px) rotate(0); } 50% { transform: translate(5px,0) rotate(10deg); } 75% { transform: translate(0,-8px) rotate(0); } }
+@keyframes gear-arm-dance { 0%,100% { transform: rotate(-40deg); } 50% { transform: rotate(20deg); } }
+@keyframes gear-step { 0%,50%,100% { transform: rotate(0); } 25% { transform: rotate(-28deg) translateY(-5px); } }
+@keyframes gear-talk { 0%,100% { transform: scale(1,.4); } 35% { transform: scale(.85,1); } 65% { transform: scale(1.05,.65); } }
+@keyframes gear-talking-sway { 0%,100% { transform: translateY(-3px) rotate(-3deg); } 50% { transform: translateY(-6px) rotate(3deg); } }
+@keyframes gear-spark { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+.gear-companion { position: fixed; right: max(18px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); z-index: 45; width: 100px; }
+.gear-companion__button { position: relative; width: 100px; height: 108px; border: 1px solid #67e8f940; border-radius: 28px; background: linear-gradient(145deg, #17233eee, #17112af5); box-shadow: 0 10px 35px #0008, inset 0 1px #ffffff0d; padding: 2px 5px 12px; transition: border-color .2s, box-shadow .2s; }
+.gear-companion__button:hover { border-color: #67e8f9a0; box-shadow: 0 10px 35px #0008, 0 0 24px #67e8f91a; }
+.gear-companion button:focus-visible, .gear-shop__card:focus-visible { outline: 2px solid #a5f3fc; outline-offset: 4px; }
+.gear-companion__name { position: absolute; bottom: 6px; left: 0; right: 0; color: #a5f3fc; font-size: 9px; font-weight: 900; letter-spacing: .18em; text-transform: uppercase; }
+.gear-companion__badge { position: absolute; right: -4px; top: -4px; min-width: 22px; height: 22px; padding: 3px; border-radius: 20px; background: #fcd34d; color: #111827; font-size: 10px; font-weight: 900; }
+.gear-companion__bubble { position: absolute; bottom: 124px; right: 0; width: min(340px, calc(100vw - 36px)); border: 1px solid #67e8f970; border-radius: 24px; background: linear-gradient(150deg, #172b43, #17172c); padding: 20px; box-shadow: 0 20px 60px #0009, 0 0 35px #67e8f90a; animation: gear-bubble-in .3s ease-out; }
+.gear-companion__bubble::after { content: ''; position: absolute; bottom: -9px; right: 38px; width: 16px; height: 16px; background: #17182d; border-right: 1px solid #67e8f970; border-bottom: 1px solid #67e8f970; transform: rotate(45deg); }
+.gear-companion__bubble--speaking { border-color: #a5b4fccc; }
+.gear-companion__close { position: absolute; top: 12px; right: 12px; padding: 4px; border-radius: 8px; color: #94a3b8; }
+.gear-companion__eyebrow { display: flex; align-items: center; gap: 8px; padding-right: 22px; color: #a5f3fc; font-size: 10px; font-weight: 900; letter-spacing: .17em; text-transform: uppercase; }
+.gear-companion__signal { display: inline-flex; align-items: center; gap: 3px; height: 14px; }
+.gear-companion__signal i { display: block; width: 3px; height: 4px; border-radius: 2px; background: #67e8f9; }
+.gear-companion__bubble--speaking .gear-companion__signal i { animation: gear-voice-bars .55s ease-in-out infinite alternate; }
+.gear-companion__signal i:nth-child(2) { animation-delay: -.2s; }
+.gear-companion__signal i:nth-child(3) { animation-delay: -.4s; }
+.gear-companion__title { margin-top: 12px; padding-right: 8px; color: #fff; font-size: 17px; line-height: 1.35; font-weight: 900; }
+.gear-companion__message { margin-top: 10px; color: #cbd5e1; font-size: 12px; line-height: 1.7; }
+.gear-companion__reward { margin-top: 12px; color: #a5f3fc; font-size: 11px; line-height: 1.6; }
+.gear-companion__reward--earned { color: #fde68a; font-size: 14px; font-weight: 900; }
+.gear-companion__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.gear-companion__action { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; padding: 9px 11px; border: 1px solid #ffffff20; border-radius: 12px; color: #e2e8f0; background: #ffffff08; font-size: 11px; font-weight: 800; }
+.gear-companion__action:hover { background: #ffffff14; }
+.gear-companion__action--voice { border-color: #67e8f940; color: #a5f3fc; background: #67e8f90c; }
+.gear-companion__action--voice[aria-pressed='true'] { border-color: #a5b4fc90; color: #e0e7ff; background: #818cf820; }
+.gear-companion__audio-note { margin-top: 10px; color: #fde68a; font-size: 11px; line-height: 1.5; }
+.gear-companion__shop { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: 14px; padding: 6px 0; color: #94a3b8; font-size: 11px; font-weight: 700; }
+.gear-companion__shop:hover { color: #a5f3fc; }
+@keyframes gear-bubble-in { from { opacity: 0; transform: translateY(10px) scale(.95); transform-origin: bottom right; } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes gear-voice-bars { from { height: 4px; } to { height: 14px; } }
+
+.gear-avatar { position: relative; display: inline-flex; padding: 3px; border-radius: 28%; background: linear-gradient(140deg, var(--gear-accent, #67e8f9), var(--gear-secondary, #6366f1)); }
+.gear-avatar__picture { height: 100%; width: 100%; border-radius: inherit; object-fit: cover; background: #151e34; }
+.gear-avatar__initials { display: flex; align-items: center; justify-content: center; color: var(--gear-accent, #67e8f9); font-size: 1em; font-weight: 900; }
+.gear-avatar--none { padding: 1px; background: #ffffff24; }
+.gear-avatar--orbit { border-radius: 50%; box-shadow: 0 0 0 3px #121827, 0 0 0 4px var(--gear-accent, #67e8f9), 0 0 22px #67e8f92a; }
+.gear-avatar--hex { clip-path: polygon(25% 0,75% 0,100% 25%,100% 75%,75% 100%,25% 100%,0 75%,0 25%); padding: 4px; }
+.gear-avatar--stars { border: 2px dashed #fde68a; box-shadow: 0 0 18px #fde68a1a; }
+.gear-avatar--champion { padding: 4px; background: linear-gradient(140deg, #fff7d6, #f59e0b, #fde68a); box-shadow: 0 0 0 2px #78350f, 0 0 20px #fbbf242a; }
+
+.gear-shop__hero { display: grid; grid-template-columns: minmax(0,1fr) 300px; align-items: center; gap: 24px; position: relative; overflow: hidden; padding: clamp(24px, 4vw, 48px); border-radius: 30px; border: 1px solid #67e8f930; background: radial-gradient(ellipse at 85% 25%, #6366f133, transparent 65%), linear-gradient(125deg,#102132,#171a33 60%,#211633); }
+.gear-shop__hero::before { content: ''; position: absolute; inset: 0; opacity: .08; background-image: linear-gradient(#67e8f9 1px,transparent 1px),linear-gradient(90deg,#67e8f9 1px,transparent 1px); background-size: 42px 42px; mask-image: linear-gradient(90deg,transparent,#000); pointer-events: none; }
+.gear-shop__gradient-text { background: linear-gradient(100deg,#67e8f9,#a5b4fc,#f0abfc); background-clip: text; -webkit-background-clip: text; color: transparent; }
+.gear-shop__hero-mascot { position: relative; z-index: 1; width: 300px; max-width: 100%; justify-self: center; }
+.gear-shop__hero-mascot .gear-mascot { height: 280px; }
+.gear-shop__orbit-label { color: #a5f3fc; font-size: 9px; font-weight: 900; letter-spacing: .3em; text-align: center; }
+.gear-shop__wallet { display: flex; align-items: center; gap: 14px; padding: 14px 22px; border-radius: 18px; border: 1px solid #fcd34d40; background: linear-gradient(120deg,#fcd34d12,#fbbf2404); }
+.gear-shop__card { position: relative; overflow: hidden; border-radius: 22px; border: 1px solid #ffffff12; background: linear-gradient(145deg,#172035,#111722); padding: 16px; text-align: left; transition: border-color .2s, background .2s; }
+.gear-shop__card:hover { border-color: #67e8f960; background: linear-gradient(145deg,#1b2b40,#17192d); }
+.gear-shop__card--selected { border-color: #67e8f9aa; box-shadow: inset 0 0 0 1px #67e8f926, 0 8px 30px #02061750; }
+.gear-shop__item-art { display: flex; height: 145px; align-items: center; justify-content: center; margin: 8px 0 12px; border-radius: 16px; background: radial-gradient(ellipse,#6366f11f,transparent 70%); }
+.gear-shop__item-art .gear-mascot { width: 140px; height: 145px; }
+.gear-shop__rarity { border-radius: 20px; border: 1px solid #ffffff15; padding: 4px 8px; color: #94a3b8; font-size: 9px; font-weight: 800; }
+.gear-shop__rarity--rare { color: #a5f3fc; border-color: #67e8f930; background: #67e8f908; }
+.gear-shop__rarity--epic { color: #e9d5ff; border-color: #c084fc50; background: #c084fc10; }
+.gear-shop__title-sample { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 20px; border: 1px solid #a5b4fc30; border-radius: 18px; text-align: center; font-size: 18px; font-weight: 900; color: #e0e7ff; background: linear-gradient(130deg,#6366f11f,#d946ef12); }
+.gear-shop__preview { position: sticky; top: 100px; padding: 22px; border: 1px solid #67e8f930; border-radius: 26px; background: linear-gradient(160deg,#17233b,#111722); }
+@media (max-width: 1279px) { .gear-shop__preview { position: static; grid-row: 1; } }
+@media (max-width: 639px) { .gear-shop__hero { grid-template-columns: 1fr; gap: 28px; } .gear-shop__hero-mascot { width: 210px; } .gear-shop__hero-mascot .gear-mascot { height: 210px; } .gear-companion { width: 78px; right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); } .gear-companion__button { width: 78px; height: 88px; border-radius: 23px; } .gear-companion__bubble { bottom: 104px; } .gear-companion__bubble::after { right: 29px; } }
+@media (max-height: 570px) { .gear-companion__bubble { max-height: calc(100dvh - 155px); overflow-y: auto; } .gear-companion__bubble::after { display: none; } }
+@media (prefers-reduced-motion: reduce) { .gear-mascot *, .gear-shop *, .gear-companion * { animation: none !important; transition: none !important; } }
+/* A short dance is an explicit request; ambient motion remains disabled. */
+@media (prefers-reduced-motion: reduce) {
+  .gear-companion--dancing .gear-mascot__character { animation: gear-dance .8s ease-in-out infinite !important; }
+  .gear-companion--dancing .gear-mascot__arm { animation: gear-hello .4s ease-in-out infinite !important; }
+  .gear-companion--dancing .gear-mascot__arm-right { animation: gear-arm-dance .4s ease-in-out infinite !important; }
+  .gear-companion--dancing .gear-mascot__leg { animation: gear-step .8s ease-in-out infinite !important; }
+  .gear-companion--dancing .gear-mascot__leg--right { animation-delay: -.4s !important; }
+}

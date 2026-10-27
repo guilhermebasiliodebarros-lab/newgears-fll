@@ -10,6 +10,22 @@ A distribuição exibida é uma prévia. **Aplicar rodízio** atualiza os escala
 
 Os cadastros anteriores continuam ativos por padrão. O planejamento legado é convertido para referências por ID ao salvar, mantendo a distribuição conhecida de 2026 como ponto de partida.
 
+## Avaliações e convocação para o torneio
+
+Em **Avaliações → Avaliação semanal**, use **Semana da avaliação** para escolher uma data da semana que deseja preencher ou corrigir. Os botões **Semana anterior**, **Próxima semana** e **Voltar à atual** permitem navegar sem limite de doze semanas. O resumo e as pendências acompanham a semana escolhida; as notas são gravadas por aluno e semana, sem substituir as de outro período. Quando há avaliações pendentes na semana passada, um atalho permite abri-las diretamente.
+
+O **Calendário de avaliações** mostra semanas completas, incompletas e sem avaliação desde o início da temporada, com filtro por mês ou toda a temporada. Cada semana informa os nomes pendentes e pode ser aberta por um clique. As pendências consideram os integrantes ativos que já haviam entrado na equipe no período; semanas de pausa planejadas não geram cobrança. O filtro **Mostrar somente alunos ainda não avaliados** facilita completar o período escolhido.
+
+Notas e feedbacks em preenchimento nas avaliações semanais, de apresentação e dos relatórios são guardados a cada edição no navegador, separados por técnico e temporada. Após atualizar ou fechar a aba, **Rascunhos recuperados → Continuar avaliação** reabre o aluno e o período corretos. **Descartar rascunho** remove apenas o preenchimento local. A nota só é divulgada e entra nos gráficos ao salvar a avaliação; sucesso remove o rascunho enviado, falhas mantêm a escrita, e novas edições feitas durante o envio são preservadas. Se o navegador não permitir gravar rascunhos, a tela informa a falha. Esses rascunhos não sincronizam entre dispositivos e não fazem parte do backup do banco.
+
+Em **Evolução individual**, o técnico escolhe o aluno e consulta os cinco critérios em um gráfico de 0 a 5, com filtro por critério e período, pontuação da última avaliação, variação e tabela acessível. Cada aluno encontra seu próprio gráfico em **Meu feedback**. Somente avaliações semanais completas e com notas válidas entram no gráfico. Semanas sem nota não viram zero; intervalos sem avaliação interrompem as linhas. Com uma única avaliação, não é calculada variação.
+
+Em **Prontidão para o torneio**, o técnico prepara até seis integrantes na coluna **Torneio**. Essa lista fica em `finalSprintTournamentDrafts`, carregada somente no painel técnico. Marcar ou retirar pessoas não altera a convocação oficial. Use **Divulgar convocação**, confira os nomes e selecione **Confirmar divulgação** para atualizar os participantes oficiais de uma vez. A publicação verifica a revisão da lista, a temporada ativa e a situação dos alunos; alterações concorrentes exigem nova conferência. Uma lista vazia permite retirar uma convocação existente após confirmação. Convocações já existentes continuam oficiais até a publicação de uma alteração. O CSV diferencia a lista em preparação da convocação divulgada.
+
+Após a divulgação, cada convocado recebe a mensagem ao entrar em seu painel; quem estiver conectado também recebe a atualização. A mensagem tem confetes e fogos animados pela tela durante oito segundos e pode ser fechada pelo botão ou por Escape. O modo leve usa menos partículas sem desligar a celebração. Quando o dispositivo pede menos movimento, a animação automática fica desativada e o botão **Ativar fogos** permite iniciá-la por escolha do aluno. O botão **Repetir fogos** reinicia os efeitos dentro do pop-up. Um destaque permanente no painel permite rever a convocação. Retirar alguém da convocação oficial remove o destaque, e convocações de outras temporadas não aparecem no ciclo atual.
+
+Para desfazer um teste com um único convocado, desmarque **Na lista** e use **Retirar convocação oficial → Confirmar retirada**. A remoção de uma lista já carregada e a retirada das últimas convocações usam gravações atômicas sem novas leituras, preservando integrantes adicionados por outro técnico. A tela aguarda a confirmação do banco e mantém a mensagem específica de erro quando a alteração é recusada, incluindo cota excedida ou falta de permissão.
+
 ## Chamada
 
 A chamada registra Presente, Atraso, Falta ou Falta justificada, com observação. Uma justificativa exige motivo. Atraso conta como presença; falta justificada não entra no denominador do percentual. Os totais de frequência existentes são preservados como base.
@@ -65,5 +81,7 @@ A restauração é manual. Guarde o ZIP em um local independente do site. Para a
 Publique frontend e funções da API juntos para disponibilizar o novo endpoint de dispensas. Integre os blocos de `firestore.weekly-reports.rules` às regras do ambiente, incluindo a verificação de aluno arquivado. O arquivo é um complemento às regras existentes, não uma substituição das permissões das demais abas.
 
 As novas transações precisam das permissões de leitura e gravação nas coleções `rotationApplications`, `attendanceSessions`, `teamSeasons` e suas subcoleções `students` e `workspace`, além de `settings/workspace_season`. As dispensas são acessadas somente pelo servidor em `weeklyReportExpectations`.
+
+A preparação da convocação também usa `finalSprintTournamentDrafts`, incluída no arquivo e no backup da temporada. No acesso autenticado, integre o bloco dessa coleção em `firestore.weekly-reports.rules`, com leitura e gravação exclusivas do técnico. Regras globais permissivas devem excluir essa coleção para preservar a privacidade da lista. A divulgação atualiza a coleção oficial `finalSprintSelectionScores` em uma única transação; os alunos continuam lendo somente seus próprios registros oficiais.
 
 Execute `npm test` e `npm run build`. A suíte `teamProcesses` usa um adaptador de transações em memória e cobre repetição, rollback, revisão e retomada. Ela não valida as regras efetivamente publicadas no Firebase; essa conferência exige o ambiente configurado.

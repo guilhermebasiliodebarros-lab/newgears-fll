@@ -4,6 +4,8 @@ Fluxos de rodízio, chamada, tarefas, relatórios e encerramento de temporada: [
 
 Resumo diário de prazos, impedimentos e relatórios: [configuração do agendador de lembretes](docs/reminders-setup.md).
 
+Mascote Giro, moedas virtuais e itens de perfil: [guia da loja de personalização](docs/giro-shop.md).
+
 Configuração da funcionalidade de relatórios semanais: [guia de Firebase Auth, Supabase, e-mail e Cloudflare Pages](docs/weekly-reports-setup.md). As variáveis estão em `.env.example`; os relatórios exigem ativação do acesso autenticado após preparar os serviços externos.
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

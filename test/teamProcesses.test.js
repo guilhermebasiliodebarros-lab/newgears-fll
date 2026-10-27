@@ -16,12 +16,22 @@ export function memoryStore(initial) {
   });
   const commit = (writes) => {
     if (writes.some((write) => write.requireExisting && !records.has(write.reference.path))) throw new Error('Missing document');
-    writes.forEach(({ reference, data, merge }) => records.set(reference.path, structuredClone(merge ? { ...records.get(reference.path), ...data } : data)));
+    writes.forEach(({ reference, data, merge }) => {
+      const previous = records.get(reference.path) || {};
+      const resolved = Object.fromEntries(Object.entries(data).map(([key, value]) => [key,
+        value?.testTransform === 'arrayRemove' ? (previous[key] || []).filter((item) => !value.values.includes(item))
+          : value?.testTransform === 'increment' ? (previous[key] || 0) + value.value : value,
+      ]));
+      records.set(reference.path, structuredClone(merge ? { ...previous, ...resolved } : resolved));
+    });
   };
   const store = {
     collection: (_db, ...parts) => ref(parts.join('/')),
     collectionGroup: (_db, name) => ({ group: name }),
     doc: (first, ...parts) => ref(first?.path ? `${first.path}/${parts.join('/') || `auto-${++sequence}`}` : parts.join('/')),
+    arrayRemove: (...values) => ({ testTransform: 'arrayRemove', values }),
+    increment: (value) => ({ testTransform: 'increment', value }),
+    updateDoc: async (reference, data) => commit([{ reference, data, merge: true, requireExisting: true }]),
     getDocs: async (source) => ({ docs: [...records.keys()].filter((path) => source.group ? path.split('/').at(-2) === source.group : path.split('/').slice(0, -1).join('/') === source.path).map((path) => snapshot(ref(path))) }),
     runTransaction: async (_db, action) => {
       const writes = []; const transaction = { ...mutation(writes), get: async (reference) => { assert.equal(writes.length, 0, 'All reads must precede transaction writes'); return snapshot(reference); } };

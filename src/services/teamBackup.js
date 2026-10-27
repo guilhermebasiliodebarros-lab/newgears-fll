@@ -11,6 +11,8 @@ import { getWeeklyReportFile, loadBackupPrivateData } from "./weeklyReports";
 
 const SHARED = [
   "students",
+  "studentGearProfiles",
+  "studentGearRewards",
   "teamSeasons",
   "project",
   "robotVersions",

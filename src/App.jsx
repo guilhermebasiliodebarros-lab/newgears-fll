@@ -12,6 +12,13 @@ import SeasonPlanningPanel from './components/SeasonPlanningPanel';
 import AttendancePanel from './components/AttendancePanel';
 import TaskReviewForm from './components/TaskReviewForm';
 import SeasonTransitionChecklist from './components/SeasonTransitionChecklist';
+import TournamentSelectionNotice from './components/TournamentSelectionNotice';
+import GearExperienceProvider from './components/GearExperienceProvider';
+import GearCompanion from './components/GearCompanion';
+import { GearAvatar } from './components/GearMascot';
+import { celebrateGearContribution, gearItem } from './utils/gearShop';
+import './components/GearExperience.css';
+import { publishTournamentSelection, saveTournamentCandidate, tournamentDraftId, tournamentSelectionError } from './services/tournamentSelection';
 import { changeTaskStage, updateTaskPeople, setTaskBlock } from './services/taskWorkflow';
 import TaskBlockForm from './components/TaskBlockForm';
 import ReminderInbox from './components/ReminderInbox';
@@ -34,7 +41,7 @@ import PublicTvModeView from './views/PublicTvModeView';
 import { STATION_KEYS } from './constants/workspace';
 import { DEFAULT_PROJECT_SUMMARY, PROJECT_MAIN_DOC_ID, resolveProjectSummary } from './utils/projectSummary';
 import { buildTrainingGallery, DEFAULT_PUBLIC_SHOWCASE_SETTINGS, resolvePublicShowcaseSettings } from './utils/publicShowcase';
-import { PRESENTATION_EVALUATION_CRITERIA, WEEKLY_EVALUATION_CRITERIA, getFinalSprintEvaluationWeek, parseFinalSprintReportScore } from './utils/finalSprintEvaluations';
+import { PRESENTATION_EVALUATION_CRITERIA, WEEKLY_EVALUATION_CRITERIA, getFinalSprintEvaluationWeek, getStudentTournamentSelection, parseFinalSprintReportScore } from './utils/finalSprintEvaluations';
 import {
   SCHOOL_REPORT_STAGE_CONFIG,
   SCHOOL_REPORT_SUBJECTS,
@@ -168,6 +175,7 @@ const InnovationStrategyPanel = lazy(() => import('./components/InnovationStrate
 const RobotDesignStrategyPanel = lazy(() => import('./components/RobotDesignStrategyPanel'));
 const RobotRoundsPanel = lazy(() => import('./components/RobotRoundsPanel'));
 const ConfettiBurst = lazy(() => import('react-confetti'));
+const GearShopView = lazy(() => import('./views/GearShopView'));
 const RotationOperationsPanel = lazy(() => import('./components/RotationOperationsPanel'));
 const StudentManagementPanel = lazy(() => import('./components/RotationOperationsPanel').then((module) => ({ default: module.StudentManagementPanel })));
 const FinalSprintEvaluationsView = lazy(() => import('./views/FinalSprintEvaluationsView'));
@@ -1046,6 +1054,10 @@ function App() {
   const [finalSprintAssignmentsRetry, setFinalSprintAssignmentsRetry] = useState(0);
   const [finalSprintEvaluations, setFinalSprintEvaluations] = useState([]);
   const [finalSprintSelections, setFinalSprintSelections] = useState([]);
+  const [finalSprintSelectionsReady, setFinalSprintSelectionsReady] = useState(false);
+  const [tournamentDraftState, setTournamentDraftState] = useState({ seasonId: '', loading: true, error: false, record: null });
+  const tournamentDraftReady = finalSprintSelectionsReady && tournamentDraftState.seasonId === (activeTeamSeasonId || 'legacy') && !tournamentDraftState.loading && !tournamentDraftState.error;
+  const ownTournamentSelection = getStudentTournamentSelection({ user: currentUser, studentId: viewAsStudent?.id, selections: finalSprintSelections, seasonId: activeTeamSeasonId || 'legacy' });
   const [logbookEntries, setLogbookEntries] = useState([]);
   const [events, setEvents] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
@@ -1288,6 +1300,8 @@ function App() {
       }
   };
 
+  const gearActorId = currentUser?.type === 'student' && !isAdmin ? String(currentUser.studentId || currentUser.data?.id || viewAsStudent?.id || '') : '';
+
   const recordActivity = async ({
       action,
       category = 'default',
@@ -1469,7 +1483,7 @@ function App() {
       const existing = finalSprintEvaluations.find((item) => item.type === 'weekly' && String(item.studentId) === studentId && item.weekId === week.id);
       const now = new Date().toISOString();
       try {
-          await setDoc(doc(db, 'finalSprintEvaluations', existing?.id || getFinalSprintEvaluationDocId('weekly', studentId, week.id)), {
+          const evaluation = {
               type: 'weekly',
               seasonId: activeTeamSeasonId || 'legacy',
               status: 'complete',
@@ -1484,7 +1498,10 @@ function App() {
               evaluatorName: currentUser.name || 'Perfil técnico',
               createdAt: existing?.createdAt || now,
               updatedAt: now,
-          }, { merge: true });
+          };
+          const evaluationId = existing?.id || getFinalSprintEvaluationDocId('weekly', studentId, week.id);
+          await setDoc(doc(db, 'finalSprintEvaluations', evaluationId), evaluation, { merge: true });
+          setFinalSprintEvaluations((current) => [...current.filter((item) => !(item.type === 'weekly' && String(item.studentId) === studentId && item.weekId === week.id)), { ...evaluation, id: evaluationId }]);
           showNotification(`Avaliação semanal de ${student.name || 'aluno'} salva.`, 'success');
           return true;
       } catch (error) {
@@ -1505,7 +1522,7 @@ function App() {
       const existing = finalSprintEvaluations.find((item) => item.type === 'presentation' && String(item.studentId) === studentId);
       const now = new Date().toISOString();
       try {
-          await setDoc(doc(db, 'finalSprintEvaluations', existing?.id || getFinalSprintEvaluationDocId('presentation', studentId)), {
+          const evaluation = {
               type: 'presentation',
               seasonId: activeTeamSeasonId || 'legacy',
               status: 'complete',
@@ -1519,7 +1536,10 @@ function App() {
               evaluatorName: currentUser.name || 'Perfil técnico',
               createdAt: existing?.createdAt || now,
               updatedAt: now,
-          }, { merge: true });
+          };
+          const evaluationId = existing?.id || getFinalSprintEvaluationDocId('presentation', studentId);
+          await setDoc(doc(db, 'finalSprintEvaluations', evaluationId), evaluation, { merge: true });
+          setFinalSprintEvaluations((current) => [...current.filter((item) => !(item.type === 'presentation' && String(item.studentId) === studentId)), { ...evaluation, id: evaluationId }]);
           showNotification(`Avaliação da apresentação de ${student.name || 'aluno'} salva.`, 'success');
           return true;
       } catch (error) {
@@ -1567,40 +1587,28 @@ function App() {
   };
 
   const handleSaveFinalSprintSelection = async ({ student, draft }) => {
-      if (currentUser?.type !== 'admin' || !isAdmin || !student?.id) return false;
-      const studentId = String(student.id);
-      const existing = finalSprintSelections.find((item) => String(item.studentId) === studentId);
-      const nextSelected = draft.selectedForTournament === true;
-      const selectedCount = finalSprintSelections.filter((item) => item.selectedForTournament === true).length;
-      if (nextSelected && existing?.selectedForTournament !== true && selectedCount >= 6) {
-          showNotification('O limite de seis alunos selecionados já foi atingido.', 'error');
-          return false;
-      }
-      const now = new Date().toISOString();
+      if (currentUser?.type !== 'admin' || !isAdmin || !student?.id || !tournamentDraftReady) return false;
       try {
-          await setDoc(doc(db, 'finalSprintSelectionScores', existing?.id || getFinalSprintEvaluationDocId('selection', studentId)), {
-              seasonId: activeTeamSeasonId || 'legacy',
-              studentId,
-              studentName: student.name || 'Aluno',
-              selectedForTournament: nextSelected,
-              selectionNote: `${draft.selectionNote || ''}`.trim().slice(0, 500),
-              updatedAt: now,
-              createdAt: existing?.createdAt || now,
-          }, { merge: true });
-          setFinalSprintSelections((current) => [...current.filter((item) => String(item.studentId) !== studentId), {
-              ...existing,
-              ...draft,
-              studentId,
-              studentName: student.name || 'Aluno',
-              selectedForTournament: nextSelected,
-              updatedAt: now,
-          }]);
-          showNotification(nextSelected ? `${student.name || 'Aluno'} marcado para o torneio.` : 'Dados de prontidão salvos.', 'success');
+          await saveTournamentCandidate({ db, seasonId: activeTeamSeasonId || 'legacy', studentId: student.id, selected: draft.selectedForTournament === true, selections: finalSprintSelections, expectedRevision: tournamentDraftState.record?.revision || 0, knownDraft: tournamentDraftState.record, actor: currentUser.name || 'Técnico' });
+          showNotification('Lista em preparação salva. Os alunos serão avisados após a divulgação.', 'success');
           return true;
       } catch (error) {
-          console.error('Erro ao salvar dados de prontidão para o torneio:', error);
-          showNotification('Não foi possível salvar os dados de prontidão.', 'error');
-          return false;
+          const message = tournamentSelectionError(error);
+          showNotification(message, 'error');
+          throw new Error(message);
+      }
+  };
+
+  const handlePublishTournamentSelection = async ({ studentIds, revision }) => {
+      if (currentUser?.type !== 'admin' || !isAdmin || !tournamentDraftReady) return false;
+      try {
+          await publishTournamentSelection({ db, seasonId: activeTeamSeasonId || 'legacy', selections: finalSprintSelections, expectedRevision: revision, expectedStudentIds: studentIds, knownDraft: tournamentDraftState.record, actor: currentUser.name || 'Técnico' });
+          showNotification(studentIds.length ? 'Convocação divulgada! Os participantes já podem receber a mensagem.' : 'Convocação retirada. Os avisos dos participantes foram removidos.', 'success');
+          return true;
+      } catch (error) {
+          const message = tournamentSelectionError(error);
+          showNotification(message, 'error');
+          throw new Error(message);
       }
   };
 
@@ -2955,19 +2963,39 @@ function App() {
   }, [currentUser?.type, isAdmin, viewAsStudent?.id, seasonLifecycleReady, activeTeamSeasonId]);
 
   useEffect(() => {
-    if (!db || currentUser?.type !== 'admin' || !isAdmin) {
+    const selectionsRef = db ? collection(db, 'finalSprintSelectionScores') : null;
+    const selectionsQuery = currentUser?.type === 'admin' && isAdmin
+      ? selectionsRef
+      : currentUser?.type === 'student' && viewAsStudent?.id
+        ? selectionsRef && query(selectionsRef, where('studentId', '==', String(viewAsStudent.id)))
+        : null;
+    if (!selectionsQuery) {
       setFinalSprintSelections([]);
+      setFinalSprintSelectionsReady(false);
       return;
     }
-    const unsubscribe = onSnapshot(collection(db, 'finalSprintSelectionScores'), (snapshot) => {
+    const unsubscribe = onSnapshot(selectionsQuery, (snapshot) => {
       const records = snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id }));
       setFinalSprintSelections(seasonLifecycleReady && activeTeamSeasonId ? records.filter((record) => record.seasonId === activeTeamSeasonId) : records);
+      setFinalSprintSelectionsReady(true);
     }, (error) => {
+      setFinalSprintSelections([]);
+      setFinalSprintSelectionsReady(false);
       console.error('Erro ao carregar pontuações de prontidão:', error);
       showNotification('Não foi possível carregar os dados de prontidão.', 'error');
     });
     return () => unsubscribe();
-  }, [currentUser?.type, isAdmin, seasonLifecycleReady, activeTeamSeasonId]);
+  }, [currentUser?.type, isAdmin, viewAsStudent?.id, seasonLifecycleReady, activeTeamSeasonId]);
+
+  useEffect(() => {
+    if (!db || currentUser?.type !== 'admin' || !isAdmin) return;
+    const seasonId = activeTeamSeasonId || 'legacy';
+    return onSnapshot(doc(db, 'finalSprintTournamentDrafts', tournamentDraftId(seasonId)), (snapshot) => {
+      setTournamentDraftState({ seasonId, loading: false, error: false, record: snapshot.exists() ? snapshot.data() : null });
+    }, () => {
+      setTournamentDraftState({ seasonId, loading: false, error: true, record: null });
+    });
+  }, [currentUser?.type, isAdmin, activeTeamSeasonId]);
 
   useEffect(() => {
     if (!db || !isPitStopModalOpen) return;
@@ -3674,7 +3702,8 @@ function App() {
           if (modal.data?.id) {
               await updateDoc(doc(db, "attachments", modal.data.id), attachmentData);
           } else {
-              await addDoc(collection(db, "attachments"), attachmentData);
+              const attachmentRef = await addDoc(collection(db, "attachments"), { ...attachmentData, createdByStudentId: gearActorId });
+              celebrateGearContribution({ type: 'attachment', sourceId: attachmentRef.id, studentId: gearActorId });
           }
           void recordActivity({
               action: modal.data?.id ? 'atualizou um anexo do robo' : 'registrou um novo anexo do robo',
@@ -3741,8 +3770,11 @@ function App() {
           } else {
               const newSnippetRef = await addDoc(collection(db, "codeSnippets"), {
                   ...codeData,
+                  createdByStudentId: gearActorId,
                   applied: false
               });
+
+              celebrateGearContribution({ type: 'code', sourceId: newSnippetRef.id, studentId: gearActorId });
 
               if (shouldSetAsOfficial) {
                   const updates = [
@@ -3889,7 +3921,8 @@ function App() {
               wordCount
           };
 
-          await addDoc(logbookRef, newEntry);
+          const entryRef = await addDoc(logbookRef, newEntry);
+          celebrateGearContribution({ type: 'logbook', sourceId: entryRef.id, studentId: gearActorId });
           void recordActivity({
               action: 'registrou uma entrada no diario',
               category: 'team',
@@ -4156,7 +4189,8 @@ const handleDeleteRound = async (id) => {
       };
 
       try {
-          const outreachRef = await addDoc(collection(db, "outreach"), outreachData);
+          const outreachRef = await addDoc(collection(db, "outreach"), { ...outreachData, createdByStudentId: gearActorId });
+          celebrateGearContribution({ type: 'outreach', sourceId: outreachRef.id, studentId: gearActorId });
           void recordActivity({
               action: 'registrou uma acao de impacto',
               category: 'team',
@@ -4215,7 +4249,8 @@ const handleDeleteRound = async (id) => {
               await updateDoc(doc(db, "experts", modal.data.id), expertData);
           } else {
               // Se não tem ID, cria novo (Salvar)
-              await addDoc(collection(db, "experts"), expertData);
+              const expertRef = await addDoc(collection(db, "experts"), { ...expertData, createdByStudentId: gearActorId });
+              celebrateGearContribution({ type: 'expert', sourceId: expertRef.id, studentId: gearActorId });
           }
           void recordActivity({
               action: modal.data?.id ? 'atualizou um especialista' : 'registrou um especialista',
@@ -4269,7 +4304,8 @@ const handleDeleteRound = async (id) => {
           if (isEditing) {
               await updateDoc(doc(db, "expertContacts", modal.data.id), expertContactData);
           } else {
-              const contactRef = await addDoc(collection(db, "expertContacts"), expertContactData);
+              const contactRef = await addDoc(collection(db, "expertContacts"), { ...expertContactData, createdByStudentId: gearActorId });
+              celebrateGearContribution({ type: 'contact', sourceId: contactRef.id, studentId: gearActorId });
               entityId = contactRef.id;
           }
           void recordActivity({
@@ -4306,7 +4342,8 @@ const handleDeleteRound = async (id) => {
           if (modal.data?.id) {
               await updateDoc(doc(db, "robotVersions", modal.data.id), robotData);
           } else {
-              await addDoc(collection(db, "robotVersions"), robotData);
+              const robotRef = await addDoc(collection(db, "robotVersions"), { ...robotData, createdByStudentId: gearActorId });
+              celebrateGearContribution({ type: 'robot', sourceId: robotRef.id, studentId: gearActorId });
           }
           void recordActivity({
               action: modal.data?.id ? 'atualizou uma versao do robo' : 'registrou uma versao do robo',
@@ -5116,13 +5153,7 @@ const handleDeleteRound = async (id) => {
           >
               <div className="flex items-start gap-4">
                   <div className="relative shrink-0">
-                      {viewAsStudent.avatarImage ? (
-                          <img src={viewAsStudent.avatarImage} alt={viewAsStudent.name} className="w-20 h-20 rounded-[22px] object-cover border border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.24)]" />
-                      ) : (
-                          <div className="w-20 h-20 rounded-[22px] bg-white/5 border border-white/10 flex items-center justify-center">
-                              <UserCircle size={38} className="text-gray-400" />
-                          </div>
-                      )}
+                      <GearAvatar student={viewAsStudent} className="h-20 w-20" />
 
                       <div className={`absolute -bottom-2 -right-2 flex h-10 w-10 items-center justify-center rounded-[16px] border ${studentPrimarySeal.stampClass}`}>
                           <StudentPrimarySealIcon size={16} />
@@ -5134,6 +5165,7 @@ const handleDeleteRound = async (id) => {
                           <div className="min-w-0">
                               <p className="text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">Passaporte FLL</p>
                               <h3 className="text-lg font-black text-white leading-tight mt-2 truncate">{viewAsStudent.name}</h3>
+                              {viewAsStudent.gearAppearance?.title ? <p className="mt-1 text-[10px] font-bold text-cyan-200">{gearItem(viewAsStudent.gearAppearance.title)?.name}</p> : null}
                               <p className={`mt-2 text-xs font-semibold leading-relaxed ${viewAsStudent?.station === STATION_KEYS.ENGINEERING ? 'text-cyan-200' : viewAsStudent?.station === STATION_KEYS.INNOVATION ? 'text-fuchsia-200' : viewAsStudent?.station === STATION_KEYS.MANAGEMENT ? 'text-violet-200' : 'text-slate-200'}`}>
                                   {studentProfileSpecialty}
                               </p>
@@ -5454,6 +5486,7 @@ const handleDeleteRound = async (id) => {
   ];
 
   const adminWorkspaceTabs = [
+      { id: 'shop', label: 'Loja New Gears', icon: <Sparkles size={16} />, description: 'Conheça o Giro e personalize seu perfil com Gears conquistados nas contribuições.', pill: 'Giro', pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-slate-950 shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
       { id: 'students', label: 'Alunos', icon: <Users size={16} />, description: 'Cadastro, estações e acompanhamento individual da equipe.', pill: `${students.length} alunos`, badge: incompleteStudentRecords.length || null, pillTone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200', activeClass: 'bg-emerald-400 text-black shadow-lg shadow-emerald-900/20', inactiveClass: 'text-gray-300 hover:text-emerald-200 hover:bg-emerald-500/10' },
       { id: 'rotation', label: 'Rodízio', icon: <LayoutDashboard size={16} />, description: 'Escala semanal e distribuição planejada para o rodízio da equipe.', pill: currentWeekData?.weekName || 'Escala semanal', pillTone: 'border-blue-400/20 bg-blue-400/10 text-blue-100', activeClass: 'bg-blue-400 text-black shadow-lg shadow-blue-900/20', inactiveClass: 'text-gray-400 hover:text-blue-200 hover:bg-blue-400/10' },
       { id: 'weekly_reports', label: 'Relatórios Semanais', icon: <FileText size={16} />, description: 'Pesquisas e desenvolvimentos compartilhados por toda a equipe.', badge: reportsWorkspace.unreadReports.length || null, pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
@@ -5474,6 +5507,7 @@ const handleDeleteRound = async (id) => {
   ].filter((tab) => !['history', 'report_recipients', 'season_history', 'operations'].includes(tab.id) || currentUser?.type === 'admin');
 
   const studentWorkspaceTabs = [
+      { id: 'shop', label: 'Loja New Gears', icon: <Sparkles size={16} />, description: 'Conheça o Giro e personalize seu perfil com Gears conquistados nas contribuições.', pill: 'Giro', pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-slate-950 shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
       { id: 'weekly_reports', label: 'Relatórios Semanais', icon: <FileText size={16} />, description: 'Compartilhe seu relatório e consulte os registros da equipe.', badge: reportsWorkspace.unreadReports.length || null, pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
       { id: 'sprint', label: 'Reta final', icon: <Flag size={16} />, description: 'Escolha onde contribuir e mantenha seus próximos passos registrados.', pillTone: 'border-amber-500/20 bg-amber-500/10 text-amber-200', activeClass: 'bg-amber-400 text-black shadow-lg shadow-amber-900/20', inactiveClass: 'text-gray-400 hover:text-amber-300 hover:bg-amber-500/10' },
       { id: 'feedback', label: 'Meu feedback', icon: <MessageSquare size={16} />, description: 'Consulte seus pontos fortes e o próximo passo recomendado.', pillTone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200', activeClass: 'bg-cyan-300 text-black shadow-lg shadow-cyan-900/20', inactiveClass: 'text-gray-400 hover:text-cyan-300 hover:bg-cyan-500/10' },
@@ -5487,6 +5521,7 @@ const handleDeleteRound = async (id) => {
   ];
 
   const workspaceSceneTopPaddingMap = {
+      shop: 'pt-10 md:pt-12',
       sprint: 'pt-10 md:pt-12',
       evaluations: 'pt-10 md:pt-12',
       feedback: 'pt-10 md:pt-12',
@@ -7102,15 +7137,10 @@ const handleFileSelect = (e) => {
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-pink-500/20 blur-xl rounded-full opacity-50"></div>
                     <div className="relative z-10 flex flex-col items-center">
                         <div className="relative mb-4">
-     {modal.data.avatarImage ? (
-         <img src={modal.data.avatarImage} alt="Avatar" className="w-28 h-28 rounded-full object-cover border-4 border-purple-500 shadow-lg mx-auto" />
-     ) : (
-         <div className="w-28 h-28 rounded-full bg-black/50 flex items-center justify-center border-4 border-gray-600 mx-auto">
-             <UserCircle size={80} className="text-gray-500" />
-         </div>
-     )}
+     <GearAvatar student={students.find((item) => item.id === modal.data.id) || modal.data} className="h-28 w-28" />
  </div>
                         <h2 className="text-3xl font-black text-white uppercase tracking-wider">{modal.data.name}</h2>
+                        {(students.find((item) => item.id === modal.data.id) || modal.data).gearAppearance?.title ? <p className="mt-2 text-xs font-bold text-cyan-200">{gearItem((students.find((item) => item.id === modal.data.id) || modal.data).gearAppearance.title)?.name}</p> : null}
                         <p className="text-gray-400 font-mono text-sm bg-white/5 px-3 py-1 rounded-full mt-2 border border-white/10">{modal.data.turma} • {modal.data.station || "Membro da Equipe"}</p>
                         {(modal.data.specialty || modal.data.station) && (
                             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
@@ -8630,7 +8660,8 @@ const handleFileSelect = (e) => {
       };
 
       try {
-          const savedRecord = await addDoc(collection(db, 'prototypeIterations'), iteration);
+          const savedRecord = await addDoc(collection(db, 'prototypeIterations'), { ...iteration, createdByStudentId: gearActorId });
+          celebrateGearContribution({ type: 'prototype', sourceId: savedRecord.id, studentId: gearActorId });
           void recordActivity({
               action: 'registrou uma versão do protótipo',
               category: 'innovation',
@@ -8705,13 +8736,20 @@ const handleFileSelect = (e) => {
       onRetryAssignments: () => setFinalSprintAssignmentsRetry((attempt) => attempt + 1),
   };
 
+  const evaluationDraftScope = `${activeTeamSeasonId || 'legacy'}:${currentUser?.uid || currentUser?.email || currentUser?.name || currentUser?.type}`;
   const finalSprintEvaluationViewProps = {
       isTechnicalProfile: currentUser?.type === 'admin' && isAdmin,
       student: viewAsStudent,
       students,
       evaluations: finalSprintEvaluations,
       selections: finalSprintSelections,
-      pendingWeeklyCount: pendingWeeklyEvaluationCount,
+      draftScope: evaluationDraftScope,
+      evaluationStartDate: teamSeasons.find((season) => season.id === activeTeamSeasonId)?.startDate || effectivePlanning.startDate,
+      pauseWeeks: effectivePlanning.pauseWeeks || [],
+      selectionDraft: tournamentDraftReady ? tournamentDraftState.record : null,
+      selectionReady: tournamentDraftReady,
+      selectionLoadingError: tournamentDraftState.error,
+      onPublishSelection: handlePublishTournamentSelection,
       onSaveWeekly: handleSaveWeeklyEvaluation,
       onSavePresentation: handleSavePresentationEvaluation,
       onSaveReport: handleSaveReportEvaluation,
@@ -8996,6 +9034,7 @@ const handleFileSelect = (e) => {
 
   // --- RENDER PRINCIPAL (SÓ CHEGA AQUI SE ESTIVER LOGADO) ---
   return (
+    <GearExperienceProvider key={`${currentUser.type}:${currentUser.studentId || currentUser.data?.id || currentUser.uid || currentUser.name}`} db={db} user={currentUser} student={viewAsStudent} isLiteMode={isLiteMode} onOpenShop={() => isAdmin ? setAdminTab('shop') : setStudentTab('shop')}>
     <div className={`newgears-shell min-h-screen text-white selection:bg-yellow-300 selection:text-slate-950 pb-20 relative overflow-hidden ${isLiteMode ? 'newgears-lite-mode' : ''}`}>
       {/* Estilo da Animação de Fundo */}
       <div className="newgears-floating-layer">
@@ -9019,6 +9058,7 @@ const handleFileSelect = (e) => {
           </div>
         )}
 
+        <GearCompanion />
         <Notification />
         <XpLossAlertModal />
         {renderModal()}
@@ -9504,8 +9544,9 @@ const handleFileSelect = (e) => {
                   <WorkspaceScene sceneId={`admin-${adminTab}`}>
                     {adminTab === 'weekly_reports' && <WeeklyReportsView key={focusedReportId || 'all-reports'} user={currentUser} workspace={reportsWorkspace} students={allStudents} seasonId={activeTeamSeasonId || 'legacy'} reportDueDay={effectivePlanning.reportDueDay} defaultWeek={currentWeekData?.weekName} focusedReportId={focusedReportId} />}
                     {adminTab === 'report_recipients' && <ReportRecipientsView user={currentUser} workspace={reportsWorkspace} />}
+                    {adminTab === 'shop' && <Suspense fallback={<LazyPanelFallback label="Carregando a loja do Giro…" />}><GearShopView /></Suspense>}
                     {adminTab === 'sprint' && <FinalSprintView {...finalSprintViewProps} />}
-                    {adminTab === 'evaluations' && <Suspense fallback={<LazyPanelFallback label="Carregando avaliações da reta final..." minHeightClass="min-h-[420px]" />}><FinalSprintEvaluationsView {...finalSprintEvaluationViewProps} /></Suspense>}
+                    {adminTab === 'evaluations' && <Suspense fallback={<LazyPanelFallback label="Carregando avaliações da reta final..." minHeightClass="min-h-[420px]" />}><FinalSprintEvaluationsView key={`${currentUser?.type}:${evaluationDraftScope}`} {...finalSprintEvaluationViewProps} /></Suspense>}
                     {adminTab === 'students' && (
                       <Suspense fallback={<LazyPanelFallback label="Carregando gerenciamento dos alunos..." minHeightClass="min-h-[420px]" />}>
                         <StudentManagementPanel
@@ -9588,6 +9629,8 @@ const handleFileSelect = (e) => {
       {!isAdmin && viewAsStudent && (
         <main className="newgears-stage p-4 md:p-8 w-full max-w-[1800px] mx-auto animate-in slide-in-from-bottom-8">
           <UrgentEventsBanner />
+
+          {ownTournamentSelection ? <TournamentSelectionNotice key={`${viewAsStudent.id}__${activeTeamSeasonId || 'legacy'}__${ownTournamentSelection.selectedAt || ownTournamentSelection.createdAt || 'selected'}`} studentName={viewAsStudent.name || 'Integrante'} seasonName={activeTeamSeasonName} isLiteMode={isLiteMode} /> : null}
 
           <div className="mb-2">
             <WorkspaceCollapsible isOpen={studentPanelState.hero}>
@@ -9747,8 +9790,9 @@ const handleFileSelect = (e) => {
                 <div className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(studentTab)}`}>
                   <WorkspaceScene sceneId={`student-${studentTab}`}>
                     {studentTab === 'weekly_reports' && <WeeklyReportsView key={focusedReportId || 'all-reports'} user={currentUser} workspace={reportsWorkspace} students={allStudents} seasonId={activeTeamSeasonId || 'legacy'} reportDueDay={effectivePlanning.reportDueDay} defaultWeek={currentWeekData?.weekName} focusedReportId={focusedReportId} />}
+                    {studentTab === 'shop' && <Suspense fallback={<LazyPanelFallback label="Carregando a loja do Giro…" />}><GearShopView /></Suspense>}
                     {studentTab === 'sprint' && <FinalSprintView {...finalSprintViewProps} />}
-                    {studentTab === 'feedback' && <Suspense fallback={<LazyPanelFallback label="Carregando seu feedback..." minHeightClass="min-h-[420px]" />}><FinalSprintEvaluationsView {...finalSprintEvaluationViewProps} /></Suspense>}
+                    {studentTab === 'feedback' && <Suspense fallback={<LazyPanelFallback label="Carregando seu feedback..." minHeightClass="min-h-[420px]" />}><FinalSprintEvaluationsView key={`${currentUser?.type}:${evaluationDraftScope}`} {...finalSprintEvaluationViewProps} /></Suspense>}
                     {studentTab === 'mission' && (
                         <>
                           {viewAsStudent.station ? (
@@ -10227,6 +10271,7 @@ const handleFileSelect = (e) => {
       )}
     </div>
     </div>
+    </GearExperienceProvider>
   );
 }
 

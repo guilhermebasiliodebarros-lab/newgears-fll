@@ -134,3 +134,56 @@ export const getFinalSprintEvaluationWeek = (offset = 0, referenceDate = new Dat
     isFriday: offset === 0 && referenceDate.getDay() === 5,
   };
 };
+
+export const getFinalSprintEvaluationWeekForDate = (value, referenceDate = new Date()) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return null;
+  const date = new Date(`${value}T12:00:00`);
+  if (!Number.isFinite(date.getTime()) || dateKey(date) !== value) return null;
+  const week = getFinalSprintEvaluationWeek(0, date);
+  const current = getFinalSprintEvaluationWeek(0, referenceDate);
+  return { ...week, isCurrent: week.id === current.id, isFriday: week.id === current.id && referenceDate.getDay() === 5 };
+};
+
+export const getStudentTournamentSelection = ({ user, studentId, selections = [], seasonId = 'legacy' }) => {
+  const authenticatedId = user?.studentId || user?.data?.id || user?.student?.id;
+  if (user?.type !== 'student' || !authenticatedId || String(authenticatedId) !== String(studentId)) return null;
+  return selections.find((record) => String(record.studentId) === String(authenticatedId)
+    && (record.seasonId || 'legacy') === seasonId && record.selectedForTournament === true) || null;
+};
+
+export const getWeeklyEvaluationHistory = (evaluations = [], studentId) => {
+  const weeks = new Map();
+  for (const record of evaluations) {
+    if (record.type !== 'weekly' || record.status !== 'complete' || String(record.studentId) !== String(studentId)) continue;
+    const week = getFinalSprintEvaluationWeekForDate(record.weekId);
+    if (!week || WEEKLY_EVALUATION_CRITERIA.some(({ id }) => record.ratings?.[id] === null || record.ratings?.[id] === undefined || record.ratings?.[id] === '' || !Number.isInteger(Number(record.ratings[id])) || Number(record.ratings[id]) < 0 || Number(record.ratings[id]) > 5)) continue;
+    const previous = weeks.get(week.id);
+    if (previous && `${previous.updatedAt || ''}` > `${record.updatedAt || ''}`) continue;
+    const ratings = Object.fromEntries(WEEKLY_EVALUATION_CRITERIA.map(({ id }) => [id, Number(record.ratings[id])]));
+    weeks.set(week.id, { ...record, weekId: week.id, label: week.label, ratings, total: Object.values(ratings).reduce((sum, score) => sum + score, 0) });
+  }
+  return [...weeks.values()].sort((left, right) => left.weekId.localeCompare(right.weekId));
+};
+
+export const buildEvaluationCalendar = ({ students = [], evaluations = [], startDate, pauseWeeks = [], includeWeekId, referenceDate = new Date() }) => {
+  const current = getFinalSprintEvaluationWeek(0, referenceDate);
+  const records = evaluations.filter((item) => item.type === 'weekly' && getFinalSprintEvaluationWeekForDate(item.weekId));
+  const candidates = [getFinalSprintEvaluationWeekForDate(startDate)?.id, ...records.map((item) => getFinalSprintEvaluationWeekForDate(item.weekId).id), getFinalSprintEvaluationWeekForDate(includeWeekId)?.id].filter((id) => id && id <= current.id);
+  const first = candidates.sort()[0] || getFinalSprintEvaluationWeek(-11, referenceDate).id;
+  const paused = new Set(pauseWeeks.map((value) => getFinalSprintEvaluationWeekForDate(value)?.id));
+  const activeStudents = students.filter((item) => item?.id && item.status !== 'inactive');
+  const weeks = [];
+  for (let cursor = first; cursor <= current.id;) {
+    const week = getFinalSprintEvaluationWeekForDate(cursor, referenceDate);
+    const weekRecords = records.filter((item) => getFinalSprintEvaluationWeekForDate(item.weekId).id === week.id);
+    if (!paused.has(week.id) || weekRecords.length) {
+      const eligible = activeStudents.filter((item) => !item.joinedAt || `${item.joinedAt}`.slice(0, 10) <= week.endDate);
+      const completed = new Set(weekRecords.filter((item) => item.status === 'complete').map((item) => String(item.studentId)));
+      const pending = paused.has(week.id) ? [] : eligible.filter((item) => !completed.has(String(item.id)));
+      const completeCount = eligible.filter((item) => completed.has(String(item.id))).length;
+      weeks.push({ ...week, completeCount, total: eligible.length, pending, status: paused.has(week.id) ? 'paused' : !pending.length && eligible.length ? 'complete' : completeCount ? 'partial' : 'empty' });
+    }
+    cursor = getFinalSprintEvaluationWeek(1, new Date(`${cursor}T12:00:00`)).id;
+  }
+  return weeks.reverse();
+};

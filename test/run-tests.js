@@ -5,6 +5,8 @@ import { runPublicShowcaseTests } from './publicShowcase.test.js';
 import { runWeeklyReportsTests } from './weeklyReports.test.js';
 import { runTeamProcessesTests } from './teamProcesses.test.js';
 import { runOperationsTests } from './operations.test.js';
+import { runFinalSprintEvaluationsTests } from './finalSprintEvaluations.test.js';
+import { runGearShopTests } from './gearShop.test.js';
 
 const suites = [
   { name: 'projectSummary', run: runProjectSummaryTests },
@@ -13,7 +15,9 @@ const suites = [
   { name: 'publicShowcase', run: runPublicShowcaseTests },
   { name: 'weeklyReports', run: runWeeklyReportsTests },
   { name: 'teamProcesses', run: runTeamProcessesTests },
-  { name: 'operations', run: runOperationsTests }
+  { name: 'operations', run: runOperationsTests },
+  { name: 'finalSprintEvaluations', run: runFinalSprintEvaluationsTests },
+  { name: 'gearShop', run: runGearShopTests }
 ];
 
 let failures = 0;
