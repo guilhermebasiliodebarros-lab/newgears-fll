@@ -14,7 +14,7 @@ const getDesktop = () => window.matchMedia(desktopQuery).matches;
 const groups = [
   { label: 'Principal', ids: ['overview'] },
   { label: 'Minha rotina', ids: ['mission', 'feedback', 'sprint', 'kanban', 'agenda', 'weekly_reports', 'logbook'] },
-  { label: 'Projeto e robô', ids: ['strategy', 'rounds', 'rubrics'] },
+  { label: 'Projeto e robô', ids: ['strategy', 'rounds', 'rubrics', 'giro_knowledge'] },
   { label: 'Equipe', ids: ['students', 'rotation', 'evaluations', 'discipline', 'showcase'] },
   { label: 'Conquistas e personalização', ids: ['shop'] },
   { label: 'Gestão', ids: ['operations', 'history', 'season_history', 'report_recipients'] },

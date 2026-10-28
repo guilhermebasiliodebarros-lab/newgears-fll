@@ -18,6 +18,7 @@ export const GEAR_SHOP_COLLECTIONS = [
   { id: 'space', name: 'Exploração Espacial', description: 'Uma estação entre as estrelas para descobertas de outro mundo.', accent: '#a5b4fc', equipment: { skin: 'skin-arctic', frame: 'frame-stars', accessory: 'accessory-helmet', title: 'title-ideas', room: 'room-orbit', bench: 'bench-holo', light: 'light-cosmic', decor: 'decor-planet', animation: 'animation-default' } },
   { id: 'neon', name: 'Circuito Neon', description: 'Luzes, circuitos e um palco para o Giro mostrar seu ritmo.', accent: '#22d3ee', equipment: { skin: 'skin-emerald', frame: 'frame-orbit', accessory: 'accessory-headphones', title: 'title-voice', room: 'room-neon', bench: 'bench-holo', light: 'light-neon', decor: 'decor-planet', animation: 'animation-stage' } },
   { id: 'tournament', name: 'Espírito de Torneio', description: 'Uma arena para celebrar o caminho construído com a equipe.', accent: '#fcd34d', equipment: { skin: 'skin-solar', frame: 'frame-champion', accessory: 'accessory-medal', title: 'title-teamwork', room: 'room-arena', bench: 'bench-podium', light: 'light-solar', decor: 'decor-trophy', animation: 'animation-trophy' } },
+  { id: 'racing', name: 'Oficina de Corrida', description: 'Prepare o motor, confira os circuitos e dê a largada com o Giro.', accent: '#fb7185', equipment: { skin: 'skin-lava', frame: 'frame-orbit', accessory: 'accessory-visor', title: 'title-code', room: 'room-arena', bench: 'bench-engineer', light: 'light-neon', decor: 'decor-trophy', animation: 'animation-gears' } },
 ];
 
 export const GEAR_SHOP_ITEMS = [

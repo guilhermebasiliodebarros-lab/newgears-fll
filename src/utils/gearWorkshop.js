@@ -39,7 +39,7 @@ export const giroExpression = (mood, preference = 'auto') => {
   if (GIRO_EXPRESSIONS.some((entry) => entry.id === preference) && preference !== 'auto') return preference;
   if (['work', 'pending'].includes(mood)) return 'focused';
   if (['surprised', 'discover'].includes(mood)) return 'surprised';
-  if (['celebrate', 'dance', 'stage', 'hop'].includes(mood)) return 'happy';
+  if (['celebrate', 'dance', 'stage', 'hop', 'salute'].includes(mood)) return 'happy';
   return mood === 'idle' ? 'neutral' : 'curious';
 };
 // Only these fields are supplied to the workshop gallery; wallets and school data stay outside it.

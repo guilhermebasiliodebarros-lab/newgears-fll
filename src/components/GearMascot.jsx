@@ -8,7 +8,7 @@ const TEETH = Array.from({ length: 96 }, (_, index) => {
   return `${index ? 'L' : 'M'}${100 + Math.cos(angle) * radius},${108 + Math.sin(angle) * radius}`;
 }).join(' ') + ' Z';
 
-export default function GearMascot({ equipment, level = 1, mood = 'idle', expression = 'auto', speaking = false, className = '', label = 'Giro, a engrenagem da New Gears', decorative = false, still = false }) {
+export default function GearMascot({ equipment, level = 1, mood = 'idle', expression = 'auto', speaking = false, className = '', label = 'Giro, a engrenagem da New Gears', decorative = false, still = false, heldItem = '' }) {
   const uid = useId();
   const selected = resolveGearEquipment(equipment);
   const colors = gearItem(selected.skin).colors;
@@ -46,7 +46,11 @@ export default function GearMascot({ equipment, level = 1, mood = 'idle', expres
       <g className="gear-mascot__leg gear-mascot__leg--left"><path d="M80 158v20" stroke="#45516e" strokeWidth="10" strokeLinecap="round" /><path d="M72 180h17" stroke={colors[0]} strokeWidth="11" strokeLinecap="round" /></g>
       <g className="gear-mascot__leg gear-mascot__leg--right"><path d="M120 158v20" stroke="#45516e" strokeWidth="10" strokeLinecap="round" /><path d="M111 180h17" stroke={colors[0]} strokeWidth="11" strokeLinecap="round" /></g>
       <g className="gear-mascot__arm"><path d="M49 113 30 113 23 95" fill="none" stroke={colors[1]} strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" /><path d="m17 89 4-7m4 7 5-6" stroke={colors[0]} strokeWidth="6" strokeLinecap="round" /></g>
-      <g className="gear-mascot__arm-right"><path d="m151 113 18 9 6-5" fill="none" stroke={colors[1]} strokeWidth="8" strokeLinecap="round" /><circle cx="178" cy="116" r="6" fill={colors[0]} /></g>
+      <g className="gear-mascot__arm-right"><path d="m151 113 18 9 6-5" fill="none" stroke={colors[1]} strokeWidth="8" strokeLinecap="round" /><circle cx="178" cy="116" r="6" fill={colors[0]} />
+        {heldItem === 'wrench' && <g className="gear-mascot__held-item" fill="none" stroke="#cbd5e1" strokeWidth="5" strokeLinecap="round"><path d="m176 120 11-27m-5-11-1 9 7 4 8-5 1-8" /><path d="m177 119-3 8" stroke="#fb923c" /></g>}
+        {heldItem === 'trophy' && <g className="gear-mascot__held-item" fill="#fcd34d" stroke="#fef3c7" strokeWidth="1.5"><path d="M164 83h28l-3 19q-11 14-22 0Z" /><path d="M176 110v10m-9 2h20m-23-35h-6v8q0 8 10 9m24-17h6v8q0 8-10 9" fill="none" strokeWidth="3" /></g>}
+        {heldItem === 'flag' && <g className="gear-mascot__held-item"><path d="M178 120V77" stroke="#cbd5e1" strokeWidth="3" /><path d="M180 78h18v22h-18Z" fill="#f8fafc" /><path d="M180 78h9v7h-9m9 0h9v8h-9m-9 0h9v7h-9" fill="#111827" /></g>}
+      </g>
       <g className="gear-mascot__shell">
         <path className="gear-mascot__depth" d={TEETH} transform="translate(5 8)" fill={`url(#${uid}-edge)`} stroke="#111c32" strokeWidth="2.5" strokeLinejoin="round" />
         <path d={TEETH} transform="translate(2 4)" fill={`url(#${uid}-edge)`} stroke={colors[1]} strokeWidth="1" strokeLinejoin="round" />

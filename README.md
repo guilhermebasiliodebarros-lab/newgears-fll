@@ -6,6 +6,8 @@ Resumo diário de prazos, impedimentos e relatórios: [configuração do agendad
 
 Mascote Giro, moedas virtuais e itens de perfil: [guia da loja de personalização](docs/giro-shop.md).
 
+Conversa com DeepSeek pela NVIDIA e biblioteca da equipe: [ativação do Giro IA](docs/giro-ai.md).
+
 Configuração da funcionalidade de relatórios semanais: [guia de Firebase Auth, Supabase, e-mail e Cloudflare Pages](docs/weekly-reports-setup.md). As variáveis estão em `.env.example`; os relatórios exigem ativação do acesso autenticado após preparar os serviços externos.
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

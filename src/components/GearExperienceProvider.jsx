@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { GearShopContext } from '../hooks/useGearShopContext';
 import { equipGearItem, gearShopError, purchaseGearItem, rewardGearContribution } from '../services/gearShop';
@@ -7,6 +7,8 @@ import { gearContributionTip, gearEvolution } from '../utils/gearEvolution';
 import { getGearHistoryStatus, reconcileGearHistory } from '../services/gearHistory';
 import { saveGearWorkshop } from '../services/gearWorkshop';
 import { resolveGearWorkshop } from '../utils/gearWorkshop';
+import { sanitizeGiroContext } from '../utils/giroAI';
+import useGiroKnowledge from '../hooks/useGiroKnowledge';
 
 const readPending = (key) => {
   try {
@@ -15,7 +17,9 @@ const readPending = (key) => {
   } catch { return []; }
 };
 
-export default function GearExperienceProvider({ children, db, user, student, teamMembers = [], seasonId = 'legacy', onOpenShop, isLiteMode }) {
+export default function GearExperienceProvider({ children, db, user, student, teamMembers = [], seasonId = 'legacy', onOpenShop, onOpenKnowledge, isLiteMode, aiContext = {} }) {
+  const technicalContext = useMemo(() => sanitizeGiroContext(aiContext), [aiContext]);
+  const knowledge = useGiroKnowledge({ db, seasonId, user, context: technicalContext });
   const studentId = user?.type === 'student' ? String(user.studentId || user.data?.id || student?.id || '') : '';
   const storageKey = `newgears_pending_gears_v1:${studentId}`;
   const [wallet, setWallet] = useState({ loading: Boolean(studentId), error: '', profile: gearProfile(studentId) });
@@ -127,5 +131,5 @@ export default function GearExperienceProvider({ children, db, user, student, te
     finally { setBusy(''); }
   };
 
-  return <GearShopContext.Provider value={{ account: wallet.profile, evolution, draftScope, history, syncHistory, loading: wallet.loading, walletError: wallet.error, reloadWallet: () => setRetryCount((value) => value + 1), student, isStudent: Boolean(studentId), isLiteMode, pending, retrying, retryPending, reaction, busy, operationError, activateItem, onOpenShop, db, user, teamMembers, workshop: workshopState.data, workshopLoading: workshopState.loading, workshopError: workshopState.error, workshopSaving, saveWorkshop }}>{children}</GearShopContext.Provider>;
+  return <GearShopContext.Provider value={{ account: wallet.profile, evolution, draftScope, aiContext: technicalContext, knowledge, onOpenKnowledge, history, syncHistory, loading: wallet.loading, walletError: wallet.error, reloadWallet: () => setRetryCount((value) => value + 1), student, isStudent: Boolean(studentId), isLiteMode, pending, retrying, retryPending, reaction, busy, operationError, activateItem, onOpenShop, db, user, teamMembers, workshop: workshopState.data, workshopLoading: workshopState.loading, workshopError: workshopState.error, workshopSaving, saveWorkshop }}>{children}</GearShopContext.Provider>;
 }

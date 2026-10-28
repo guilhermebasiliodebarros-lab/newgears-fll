@@ -41,6 +41,7 @@ import FinalSprintView, { FINAL_SPRINT_FRONTS } from './views/FinalSprintView';
 import ActivityHistoryView from './views/ActivityHistoryView';
 import SeasonHistoryView from './views/SeasonHistoryView';
 import PublicShowcaseAdminView from './views/PublicShowcaseAdminView';
+import GiroKnowledgeView from './views/GiroKnowledgeView';
 import PublicTeamView from './views/PublicTeamView';
 import PublicTvModeView from './views/PublicTvModeView';
 import { STATION_KEYS } from './constants/workspace';
@@ -5401,6 +5402,7 @@ const handleDeleteRound = async (id) => {
   ];
 
   const adminWorkspaceTabs = [
+      { id: 'giro_knowledge', label: 'Biblioteca do Giro', icon: <BookOpen size={16} />, description: 'Cadastre rúbricas, orientações do torneio e materiais para o Giro consultar.', pill: 'Materiais', pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-slate-950 shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
       { id: 'overview', label: 'Visão geral', icon: <LayoutDashboard size={16} />, description: 'Resumo da equipe, indicadores e preparação para o torneio.' },
       { id: 'shop', label: 'Loja New Gears', icon: <Sparkles size={16} />, description: 'Conheça o Giro e personalize seu perfil com Gears conquistados nas contribuições.', pill: 'Giro', pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-slate-950 shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
       { id: 'students', label: 'Alunos', icon: <Users size={16} />, description: 'Cadastro, estações e acompanhamento individual da equipe.', pill: `${students.length} alunos`, badge: incompleteStudentRecords.length || null, pillTone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200', activeClass: 'bg-emerald-400 text-black shadow-lg shadow-emerald-900/20', inactiveClass: 'text-gray-300 hover:text-emerald-200 hover:bg-emerald-500/10' },
@@ -5420,7 +5422,7 @@ const handleDeleteRound = async (id) => {
       { id: 'history', label: 'Historico', icon: <History size={16} />, description: 'Registro coletivo com autor, data e alteracoes feitas no sistema.', pillTone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200', activeClass: 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-900/20', inactiveClass: 'text-gray-400 hover:text-cyan-300 hover:bg-cyan-500/10' },
       { id: 'operations', label: 'Evolução', icon: <BarChart3 size={16} />, description: 'Indicadores da equipe, backups e lembretes automáticos.', pill: 'Acompanhamento', pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-slate-950 shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-500/10' },
       { id: 'season_history', label: 'Temporadas', icon: <History size={16} />, description: 'Consulte tarefas, agenda e avaliações de ciclos anteriores.', pill: `${teamSeasons.filter((season) => season.status === 'archived').length} arquivos`, pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-slate-950 shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' }
-  ].filter((tab) => !['history', 'report_recipients', 'season_history', 'operations'].includes(tab.id) || currentUser?.type === 'admin');
+  ].filter((tab) => !['history', 'report_recipients', 'season_history', 'operations', 'giro_knowledge'].includes(tab.id) || currentUser?.type === 'admin');
 
   const studentWorkspaceTabs = [
       { id: 'overview', label: 'Visão geral', icon: <LayoutDashboard size={16} />, description: 'Seu perfil, conquistas, progresso e resumo da equipe.' },
@@ -8974,7 +8976,7 @@ const handleFileSelect = (e) => {
 
   // --- RENDER PRINCIPAL (SÓ CHEGA AQUI SE ESTIVER LOGADO) ---
   return (
-    <GearExperienceProvider key={`${currentUser.type}:${currentUser.studentId || currentUser.data?.id || currentUser.uid || currentUser.name}`} db={db} user={currentUser} student={viewAsStudent} teamMembers={students.filter(isActiveStudent).map(workshopMember)} seasonId={activeTeamSeasonId || 'legacy'} isLiteMode={isLiteMode} onOpenShop={() => isAdmin ? setAdminTab('shop') : setStudentTab('shop')}>
+    <GearExperienceProvider key={`${currentUser.type}:${currentUser.studentId || currentUser.data?.id || currentUser.uid || currentUser.name}`} db={db} user={currentUser} student={viewAsStudent} teamMembers={students.filter(isActiveStudent).map(workshopMember)} seasonId={activeTeamSeasonId || 'legacy'} isLiteMode={isLiteMode} aiContext={{ season: activeTeamSeasonName, project: projectSummary, robots: robotVersions, attachments, codes: codeSnippets }} onOpenKnowledge={() => setAdminTab('giro_knowledge')} onOpenShop={() => isAdmin ? setAdminTab('shop') : setStudentTab('shop')}>
     <div className={`newgears-shell newgears-workspace min-h-screen text-white selection:bg-yellow-300 selection:text-slate-950 pb-20 relative overflow-hidden ${isLiteMode ? 'newgears-lite-mode' : ''}`}>
       {/* Estilo da Animação de Fundo */}
       <div className="newgears-floating-layer">
@@ -9499,6 +9501,7 @@ const handleFileSelect = (e) => {
                 {/* CONTEÃƒÅ¡DO DA ABA SELECIONADA */}
                 <div hidden={adminTab === 'overview'} className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(adminTab)}`}>
                   <WorkspaceScene sceneId={`admin-${adminTab}`}>
+                    {adminTab === 'giro_knowledge' && currentUser?.type === 'admin' && <GiroKnowledgeView key={activeTeamSeasonId || 'legacy'} seasonName={activeTeamSeasonName} />}
                     {adminTab === 'weekly_reports' && <WeeklyReportsView key={focusedReportId || 'all-reports'} user={currentUser} workspace={reportsWorkspace} students={allStudents} seasonId={activeTeamSeasonId || 'legacy'} reportDueDay={effectivePlanning.reportDueDay} defaultWeek={currentWeekData?.weekName} focusedReportId={focusedReportId} />}
                     {adminTab === 'report_recipients' && <ReportRecipientsView user={currentUser} workspace={reportsWorkspace} />}
                     {adminTab === 'shop' && <Suspense fallback={<LazyPanelFallback label="Carregando a loja do Giro…" />}><GearShopView /></Suspense>}

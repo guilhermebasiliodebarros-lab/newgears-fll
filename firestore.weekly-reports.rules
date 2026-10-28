@@ -20,9 +20,44 @@ service cloud.firestore {
       return isReportMember()
         && get(/databases/$(database)/documents/weeklyReportMembers/$(request.auth.uid)).data.role == 'admin';
     }
+    // Biblioteca do Giro: a equipe lê somente publicados; técnicos gerenciam os materiais.
+    function validGiroMaterial(data) {
+      return data.keys().hasOnly(['title', 'category', 'status', 'tags', 'sourceURL', 'pages', 'textLength', 'fileName', 'version', 'seasonId', 'createdAt', 'updatedAt', 'revision'])
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 180
+        && data.category in ['rubric', 'tournament', 'season', 'robot', 'project', 'general']
+        && data.status in ['draft', 'published', 'archived']
+        && data.tags is string && data.tags.size() <= 500
+        && data.sourceURL is string && data.sourceURL.size() <= 2000
+        && (data.sourceURL == '' || data.sourceURL.matches('https?://.*'))
+        && data.pages is list && data.pages.size() >= 1 && data.pages.size() <= 200
+        && data.textLength is int && data.textLength >= 20 && data.textLength <= 120000
+        && data.fileName is string && data.fileName.size() <= 220 && data.version == 1
+        && data.seasonId is string && data.createdAt is string && data.updatedAt is string
+        && data.revision is int && data.revision >= 1;
+    }
+    function giroSeasonWritable(seasonId) {
+      let settings = exists(/databases/$(database)/documents/settings/workspace_season)
+        ? get(/databases/$(database)/documents/settings/workspace_season).data : {};
+      return settings.get('activeSeasonId', 'legacy') == seasonId && settings.get('transitionLock', null) == null;
+    }
+    match /giroKnowledgeMaterials/{materialId} {
+      allow read: if isReportAdmin() || (isReportMember() && resource.data.status == 'published');
+      allow create: if isReportAdmin() && validGiroMaterial(request.resource.data)
+        && request.resource.data.revision == 1 && giroSeasonWritable(request.resource.data.seasonId);
+      allow update: if isReportAdmin() && validGiroMaterial(request.resource.data)
+        && request.resource.data.seasonId == resource.data.seasonId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.revision == resource.data.revision + 1
+        && giroSeasonWritable(resource.data.seasonId);
+      allow delete: if false;
+    }
     match /weeklyReportMembers/{uid} {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;
+    }
+    // Contador do Giro IA: somente o servidor pode reservar o uso da API.
+    match /giroAiUsage/{uid} {
+      allow read, write: if false;
     }
     match /finalSprintTournamentDrafts/{seasonId} {
       allow read, write: if isReportAdmin();

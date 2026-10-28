@@ -1,0 +1,61 @@
+.giro-ai { position: fixed; inset: 0; margin: auto; width: min(860px, calc(100vw - 36px)); height: min(850px, calc(100dvh - 40px)); max-width: none; max-height: none; padding: 0; border: 1px solid #67e8f94d; border-radius: 25px; background: #101a2b; color: #e3ecfa; box-shadow: 0 30px 110px #0009; overflow: hidden; }
+.giro-ai[open] { display: flex; flex-direction: column; }
+.giro-ai::backdrop { background: #020617c9; backdrop-filter: blur(6px); }
+.giro-ai button:focus-visible, .giro-ai textarea:focus-visible, .giro-ai a:focus-visible { outline: 2px solid #67e8f9; outline-offset: 3px; }
+.giro-ai__header { display: flex; align-items: center; gap: 13px; padding: 18px 24px; border-bottom: 1px solid #ffffff12; background: radial-gradient(ellipse at top left, #164e6366, transparent 65%), #142039; }
+.giro-ai__mascot { width: 65px; height: 72px; flex-shrink: 0; }
+.giro-ai__header > div > p { display: flex; align-items: center; gap: 6px; color: #a5f3fc; font-size: 10px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
+.giro-ai__header h2 { font-size: 28px; font-weight: 900; line-height: 1.25; }
+.giro-ai__header span { color: #a7b7d0; font-size: 12px; }
+.giro-ai__header > button { display: grid; place-items: center; margin-left: auto; border: 1px solid #ffffff17; border-radius: 12px; width: 38px; height: 38px; color: #b5c3d9; background: #ffffff05; }
+.giro-ai__toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 12px 24px; border-bottom: 1px solid #ffffff0c; font-size: 11px; color: #a6bbd9; }
+.giro-ai__toolbar label, .giro-ai__toolbar button { display: inline-flex; align-items: center; gap: 7px; }
+.giro-ai__toolbar input { accent-color: #67e8f9; }
+.giro-ai__conversation { flex: 1; min-height: 0; padding: 25px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.giro-ai__welcome { padding: 20px 15px; max-width: 600px; margin: 0 auto; }
+.giro-ai__welcome > div:first-child { display: grid; place-items: center; width: 58px; height: 58px; border: 1px solid #67e8f926; border-radius: 18px; background: #67e8f909; color: #a5f3fc; }
+.giro-ai__welcome h3 { margin-top: 18px; font-size: 26px; font-weight: 800; }
+.giro-ai__welcome > p { margin-top: 11px; font-size: 13px; line-height: 1.8; color: #9fb1ca; }
+.giro-ai__suggestions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 22px; }
+.giro-ai__suggestions button { padding: 14px; border: 1px solid #ffffff14; border-radius: 13px; background: #ffffff04; text-align: left; color: #b9cce4; font-size: 12px; line-height: 1.6; }
+.giro-ai__suggestions button:hover { border-color: #67e8f944; background: #67e8f908; }
+.giro-ai__message { padding: 18px; margin-bottom: 18px; border: 1px solid #ffffff0d; border-radius: 18px; overflow-wrap: anywhere; font-size: 13px; line-height: 1.8; background: #0a1222; }
+.giro-ai__message--user { margin-left: 12%; border-color: #67e8f91c; background: #67e8f909; white-space: pre-wrap; }
+.giro-ai__author { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 9px; font-size: 10px; font-weight: 900; color: #a5f3fc; }
+.giro-ai__author > span { display: flex; align-items: center; gap: 5px; color: #8fa7c6; font-weight: 500; }
+.giro-ai-markdown p + p, .giro-ai-markdown ul, .giro-ai-markdown ol { margin-top: 12px; }
+.giro-ai-markdown h4 { margin: 18px 0 10px; font-size: 15px; font-weight: 800; color: #e2eafb; }
+.giro-ai-markdown a { color: #67e8f9; text-decoration: underline; text-underline-offset: 3px; }
+.giro-ai-markdown strong { color: #f0f5ff; font-weight: 800; }
+.giro-ai-markdown ul { list-style: disc; padding-left: 22px; }
+.giro-ai-markdown ol { list-style: decimal; padding-left: 22px; }
+.giro-ai-markdown li + li { margin-top: 6px; }
+.giro-ai-markdown p code { border-radius: 5px; padding: 2px 5px; background: #67e8f90b; color: #a5f3fc; font-size: 12px; }
+.giro-ai-code { margin: 14px 0; border: 1px solid #ffffff14; border-radius: 12px; overflow: hidden; }
+.giro-ai-code figcaption { padding: 7px 12px; background: #ffffff05; font-size: 10px; color: #8ea6c7; }
+.giro-ai-code pre { padding: 14px; overflow-x: auto; max-width: 100%; background: #050c18; white-space: pre; font-size: 12px; line-height: 1.7; }
+.giro-ai__sources { margin-top: 18px; padding-top: 12px; border-top: 1px solid #ffffff12; }
+.giro-ai__sources p { color: #a3b5cf; font-size: 10px; font-weight: 800; }
+.giro-ai__sources a { display: block; margin-top: 7px; color: #91d6e8; font-size: 11px; line-height: 1.6; }
+.giro-ai__message-actions { display: flex; flex-wrap: wrap; gap: 15px; margin-top: 16px; }
+.giro-ai__message-actions button { display: inline-flex; align-items: center; gap: 5px; color: #8da5c4; font-size: 10px; }
+.giro-ai__thinking { display: flex; align-items: center; gap: 9px; padding: 10px 0 24px; color: #a5f3fc; font-size: 12px; }
+.giro-ai__thinking > svg { flex-shrink: 0; animation: giro-ai-thinking 1.4s linear infinite; }
+.giro-ai__error { padding: 12px; margin: 14px 0; border: 1px solid #fda4af33; border-radius: 12px; color: #fecdd3; background: #fda4af08; font-size: 12px; line-height: 1.7; }
+.giro-ai__footer { padding: 16px 24px 18px; border-top: 1px solid #ffffff14; background: #111d31; }
+.giro-ai__footer form { display: flex; align-items: flex-end; gap: 9px; padding: 9px; border: 1px solid #67e8f92e; border-radius: 16px; background: #070f1f; }
+.giro-ai__footer textarea { flex: 1; min-width: 0; max-height: 140px; padding: 6px 8px; resize: vertical; outline: none; background: transparent; color: #e4ecf9; font-size: 13px; line-height: 1.7; }
+.giro-ai__footer .giro-ai__send { display: grid; place-items: center; flex-shrink: 0; width: 41px; height: 41px; border-radius: 12px; background: #67e8f9; color: #082f49; }
+.giro-ai button:disabled { opacity: .4; cursor: not-allowed; }
+.giro-ai__hint { margin-top: 9px; text-align: right; color: #7189aa; font-size: 9px; }
+.giro-ai__connection { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding-bottom: 14px; color: #fcd89b; font-size: 11px; line-height: 1.6; }
+.giro-ai__connection button { display: inline-flex; align-items: center; gap: 5px; color: #a5f3fc; }
+.giro-ai__storage { margin-bottom: 12px; color: #fcd89b; font-size: 11px; }
+.gear-companion__ai-entry { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 8px; padding: 8px 4px; border: 1px solid #67e8f944; border-radius: 11px; background: #102b3eee; color: #a5f3fc; font-size: 10px; font-weight: 800; box-shadow: 0 5px 15px #0004; }
+.gear-companion .gear-companion__bubble { bottom: 163px; }
+.gear-companion .gear-companion__bubble-content { max-height: calc(100dvh - 210px); }
+.gear-companion__ai-action { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin: 13px 0 5px; padding: 11px; border: 1px solid #67e8f944; border-radius: 12px; background: #67e8f90a; color: #a5f3fc; font-size: 12px; font-weight: 800; }
+@keyframes giro-ai-thinking { to { transform: rotate(360deg); } }
+@media (max-width: 600px) { .giro-ai { width: calc(100vw - 16px); height: calc(100dvh - 16px); border-radius: 18px; } .giro-ai__header { padding: 13px 15px; } .giro-ai__header h2 { font-size: 24px; } .giro-ai__toolbar { padding: 11px 15px; } .giro-ai__conversation { padding: 17px 12px; } .giro-ai__welcome { padding: 12px 7px; } .giro-ai__suggestions { grid-template-columns: 1fr; } .giro-ai__footer { padding: 13px; padding-bottom: max(13px, env(safe-area-inset-bottom)); } .giro-ai__message { padding: 14px; } .giro-ai__message--user { margin-left: 5%; } .giro-ai__mascot { width: 54px; height: 61px; } .giro-ai__hint { font-size: 8px; } }
+@media (prefers-reduced-motion: reduce) { .giro-ai *, .giro-ai__thinking > svg { animation: none !important; transition: none !important; } }
+@media (max-width: 639px) { .gear-companion .gear-companion__bubble { bottom: 143px; } .gear-companion .gear-companion__bubble-content { max-height: calc(100dvh - 180px); } }

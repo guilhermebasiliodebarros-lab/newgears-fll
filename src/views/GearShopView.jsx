@@ -7,6 +7,7 @@ import GearHistoryPanel from '../components/GearHistoryPanel';
 import GearWorkshop, { GearWorkshopScene } from '../components/GearWorkshop';
 import GearCelebration from '../components/GearCelebration';
 import GearWorkshopGallery from '../components/GearWorkshopGallery';
+import GearCollectionCard from '../components/GearCollectionCard';
 import { gearEvolution } from '../utils/gearEvolution';
 import { GEAR_CONTRIBUTIONS, GEAR_SHOP_CATEGORIES, GEAR_SHOP_COLLECTIONS, GEAR_SHOP_ITEMS, GEAR_WORKSHOP_CATEGORIES, gearCollectionItems, gearItem, WELCOME_GEARS } from '../utils/gearShop';
 
@@ -77,19 +78,12 @@ export default function GearShopView() {
       {[{ id: 'workshop', label: 'Minha oficina', icon: <Wrench size={17} /> }, { id: 'catalog', label: 'Loja', icon: <ShoppingBag size={17} /> }, { id: 'collections', label: 'Coleções', icon: <Layers3 size={17} /> }, { id: 'team', label: 'Visitar oficinas', icon: <Users size={17} /> }].map(({ id, label, icon }) => <button type="button" key={id} aria-pressed={tab === id} onClick={() => { setTab(id); setPreviewEffect(null); }}>{icon}{label}</button>)}
     </div>
 
-    {tab === 'workshop' && <GearWorkshop account={account} student={student} level={evolution.level} onCustomize={(category) => browse(category)} workshop={workshop} onSave={saveWorkshop} saving={workshopSaving} loading={workshopLoading} error={workshopError} canSave={isStudent} />}
+    {tab === 'workshop' && <GearWorkshop account={account} student={student} level={evolution.level} onCustomize={(category) => browse(category)} onCollections={() => setTab('collections')} workshop={workshop} onSave={saveWorkshop} saving={workshopSaving} loading={workshopLoading} error={workshopError} canSave={isStudent} walletReady={!loading && !walletError} />}
     {tab === 'team' && <GearWorkshopGallery />}
 
     {tab === 'collections' && <section>
-      <div className="giro-studio-heading"><div><p className="giro-studio-eyebrow"><Layers3 size={14} />Coleções temáticas</p><h2>Quatro mundos. O mesmo Giro.</h2><p>Combine peças da mesma coleção ou misture os estilos que você mais gosta.</p></div></div>
-      <div className="giro-collections">{GEAR_SHOP_COLLECTIONS.map((entry) => {
-        const collectionItems = gearCollectionItems(entry.id);
-        const count = collectionItems.filter((item) => account.owned.includes(item.id)).length;
-        return <article key={entry.id} className="giro-collection" style={{ '--collection-accent': entry.accent }}>
-          <GearWorkshopScene equipment={entry.equipment} compact still />
-          <div className="giro-collection__body"><h3>{entry.name}</h3><p>{entry.description}</p><div className="giro-collection__progress" role="progressbar" aria-label={`Coleção ${entry.name}`} aria-valuemin={0} aria-valuemax={collectionItems.length} aria-valuenow={count}><span style={{ width: `${count / collectionItems.length * 100}%` }} /></div><p>{count} de {collectionItems.length} peças na sua coleção</p><button type="button" className="giro-studio-button mt-4 w-full" onClick={() => browse('all', entry.id)}>Explorar {entry.name}</button></div>
-        </article>;
-      })}</div>
+      <div className="giro-studio-heading"><div><p className="giro-studio-eyebrow"><Layers3 size={14} />Coleções temáticas</p><h2>Cinco mundos. Cinco novas interações.</h2><p>Complete os conjuntos para liberar os bônus do Giro. As peças já compradas contam e você pode continuar misturando seus estilos favoritos.</p></div></div>
+      <div className="giro-collections">{GEAR_SHOP_COLLECTIONS.map((entry) => <GearCollectionCard key={entry.id} collection={entry} owned={account.owned} ready={!loading && !walletError} onExplore={(itemId) => { setOnlyOwned(false); browse('all', entry.id); setPreviewId(itemId || gearCollectionItems(entry.id)[0].id); }} />)}</div>
     </section>}
 
     {tab === 'catalog' && <div className="giro-store-layout">
