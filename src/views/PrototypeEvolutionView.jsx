@@ -1,3 +1,4 @@
+import DraftForm from '../components/DraftForm';
 import { useEffect, useMemo, useState } from 'react';
 import { Camera, CheckCircle2, Clock3, GitBranch, Image as ImageIcon, Lightbulb, LoaderCircle, MessageSquareQuote, Plus, RefreshCw, Sparkles, Target, TrendingUp } from 'lucide-react';
 
@@ -70,13 +71,13 @@ export default function PrototypeEvolutionView({ iterations = [], onSave }) {
     event.target.value = '';
   };
 
-  const handleSubmit = async (event) => {
+  const handleSubmit = async (event, options) => {
     event.preventDefault();
     setSaving(true);
     setSaveError('');
     setSaveSuccess(false);
     try {
-      const saved = await onSave({ ...draft, photo });
+      const saved = await onSave({ ...draft, photo }, options);
       if (!saved) {
         setSaveError('Não foi possível salvar esta versão. Confira a conexão e tente novamente.');
         return;
@@ -85,6 +86,7 @@ export default function PrototypeEvolutionView({ iterations = [], onSave }) {
       setPhoto(null);
       setPreviewUrl('');
       setSaveSuccess(true);
+      return true;
     } catch {
       setSaveError('Não foi possível salvar esta versão. Confira a conexão e tente novamente.');
     } finally {
@@ -110,7 +112,7 @@ export default function PrototypeEvolutionView({ iterations = [], onSave }) {
       </section>
 
       <section className="grid gap-5 xl:grid-cols-[0.9fr,1.1fr]">
-        <form onSubmit={handleSubmit} className="h-fit space-y-4 rounded-[24px] border border-white/10 bg-[#141925] p-5 md:p-6">
+        <DraftForm kind="prototype" values={draft} onDiscard={() => { setPhoto(null); setPreviewUrl(''); }} onSubmit={handleSubmit} className="h-fit space-y-4 rounded-[24px] border border-white/10 bg-[#141925] p-5 md:p-6">
           <div className="mb-1 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 text-emerald-200"><Plus size={19} /></div><div><h3 className="text-lg font-black text-white">Registrar uma versão</h3><p className="text-[11px] text-gray-500">Um registro para cada mudança importante.</p></div></div>
           <div className="grid gap-3 sm:grid-cols-[1fr,170px]">
             <Field label="Versão" name="version" value={draft.version} onChange={updateDraft} required placeholder="Ex.: Protótipo 2" />
@@ -131,7 +133,7 @@ export default function PrototypeEvolutionView({ iterations = [], onSave }) {
           {saveError ? <div role="alert" className="flex items-center gap-2 rounded-xl border border-red-400/20 bg-red-400/5 p-3 text-xs text-red-100"><RefreshCw size={14} />{saveError}</div> : null}
           {saveSuccess ? <div role="status" className="flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3 text-xs text-emerald-100"><CheckCircle2 size={14} />Versão registrada na linha do tempo.</div> : null}
           <button type="submit" disabled={saving} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-3 text-sm font-black text-[#07110d] transition hover:bg-emerald-300 disabled:cursor-wait disabled:opacity-60">{saving ? <><LoaderCircle size={16} className="animate-spin" />Salvando versão…</> : <><Plus size={16} />Adicionar à evolução</>}</button>
-        </form>
+        </DraftForm>
 
         <section className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-200/70">Histórico visual</p><h3 className="mt-1 text-xl font-black text-white">Versões e melhorias</h3></div><span className="text-xs text-gray-500">{iterationCount} registro(s)</span></div>

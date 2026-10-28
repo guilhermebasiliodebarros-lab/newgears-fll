@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { memoryStore } from './teamProcesses.test.js';
 import { equipGearItem, purchaseGearItem, rewardGearContribution } from '../src/services/gearShop.js';
-import { DAILY_GEARS_LIMIT, gearDay, gearItem, GEAR_SHOP_ITEMS, newGearProfile } from '../src/utils/gearShop.js';
+import { gearDay, gearItem, GEAR_SHOP_ITEMS, newGearProfile } from '../src/utils/gearShop.js';
 
 export async function runGearShopTests() {
   assert.equal(new Set(GEAR_SHOP_ITEMS.map((item) => item.id)).size, GEAR_SHOP_ITEMS.length);
@@ -20,11 +20,11 @@ export async function runGearShopTests() {
   await assert.rejects(rewardGearContribution({ ...context, type: 'code', sourceId: 'missing' }), /seu nome/);
   await assert.rejects(rewardGearContribution({ ...context, type: 'code', sourceId: 'bad/path' }), /inválida/);
   await rewardGearContribution({ ...context, type: 'code', sourceId: 'c2', referenceDate: now });
-  assert.equal((await rewardGearContribution({ ...context, type: 'code', sourceId: 'c3', referenceDate: now })).coins, 0, 'Repeated registrations respect the category daily limit');
+  assert.equal((await rewardGearContribution({ ...context, type: 'code', sourceId: 'c3', referenceDate: now })).coins, 12, 'Distinct records receive the full reward without category limits');
   await rewardGearContribution({ ...context, type: 'expert', sourceId: 'e1', referenceDate: now });
   await rewardGearContribution({ ...context, type: 'expert', sourceId: 'e2', referenceDate: now });
-  assert.equal(memory.records.get('studentGearProfiles/a').dayEarned, DAILY_GEARS_LIMIT, 'The last reward is capped at the remaining daily amount');
-  assert.equal((await rewardGearContribution({ ...context, type: 'expert', sourceId: 'e3', referenceDate: now })).coins, 0);
+  assert.equal(memory.records.get('studentGearProfiles/a').dayEarned, 76, 'Full rewards continue beyond the old 60-Gears cap');
+  assert.equal((await rewardGearContribution({ ...context, type: 'expert', sourceId: 'e3', referenceDate: now })).coins, 20);
   const beforePurchase = structuredClone(memory.records.get('studentGearProfiles/a'));
   const bought = await purchaseGearItem({ ...context, itemId: 'skin-solar' });
   assert.equal(bought.balance, beforePurchase.balance - gearItem('skin-solar').price);
@@ -49,7 +49,7 @@ export async function runGearShopTests() {
   await assert.rejects(purchaseGearItem({ ...context, store: interrupted, itemId: 'accessory-visor' }), /interrupted/);
   assert.deepEqual([...memory.records], beforeFailure, 'Failed purchases never charge coins or equip partial items');
   const tomorrow = new Date('2026-10-28T15:00:00Z');
-  assert.equal((await rewardGearContribution({ ...context, type: 'code', sourceId: 'c3', referenceDate: tomorrow })).duplicate, true, 'Capped records cannot be replayed on another day');
+  assert.equal((await rewardGearContribution({ ...context, type: 'code', sourceId: 'c3', referenceDate: tomorrow })).duplicate, true, 'Paid records cannot be rewarded again on another day');
   memory.records.set('codeSnippets/new-day', source);
   assert.equal((await rewardGearContribution({ ...context, type: 'code', sourceId: 'new-day', referenceDate: tomorrow })).coins, 12);
   memory.records.set('students/a/logbook/l1', { studentId: 'a', text: 'Hoje aprendemos a comparar os resultados dos testes.' });

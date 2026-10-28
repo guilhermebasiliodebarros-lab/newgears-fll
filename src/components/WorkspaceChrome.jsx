@@ -126,6 +126,13 @@ export const WorkspaceHero = ({
   </section>
 );
 
+export const WorkspaceSectionHeading = ({ tab }) => tab ? (
+  <div className="workspace-section-heading">
+    <span aria-hidden="true">{tab.icon}</span>
+    <div><h2>{tab.label}</h2><p>{tab.description}</p></div>
+  </div>
+) : null;
+
 export const WorkspaceTabs = ({ eyebrow, tabs, activeId, onChange }) => {
   const activeTab = tabs.find((tab) => tab.id === activeId) || tabs[0];
 

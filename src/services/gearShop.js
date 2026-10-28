@@ -1,5 +1,6 @@
 import { doc, runTransaction } from 'firebase/firestore';
-import { contributionPath, DAILY_GEARS_LIMIT, gearDay, gearDayIndex, gearItem, gearProfile, GEAR_CONTRIBUTIONS } from '../utils/gearShop.js';
+import { contributionPath, gearDay, gearDayIndex, gearItem, gearProfile, gearReceiptId, GEAR_CONTRIBUTIONS } from '../utils/gearShop.js';
+import { gearEvolution, growGearProfile } from '../utils/gearEvolution.js';
 
 const adapter = { doc, runTransaction };
 const assertStudent = (user, studentId) => {
@@ -21,35 +22,38 @@ export async function rewardGearContribution({ db, user, studentId, type, source
   assertStudent(user, studentId);
   const sourcePath = contributionPath(type, sourceId, studentId);
   const rule = GEAR_CONTRIBUTIONS[type];
-  const receiptId = `${studentId}__${type}__${sourceId}`;
   const day = gearDay(referenceDate);
   const dayIndex = gearDayIndex(referenceDate);
   return store.runTransaction(db, async (transaction) => {
     const accountRef = store.doc(db, 'studentGearProfiles', String(studentId));
-    const receiptRef = store.doc(db, 'studentGearRewards', receiptId);
-    const [student, source, accountSnapshot, receipt] = await Promise.all([
+    const [student, source, accountSnapshot] = await Promise.all([
       transaction.get(store.doc(db, 'students', String(studentId))), transaction.get(store.doc(db, ...sourcePath.split('/'))),
-      transaction.get(accountRef), transaction.get(receiptRef),
+      transaction.get(accountRef),
     ]);
     assertActive(student);
-    if (receipt.exists()) return { coins: 0, duplicate: true, label: rule.label };
     const record = source.data();
     if (!source.exists() || String(record.createdByStudentId || record.studentId || '') !== String(studentId) || !`${record[rule.required] || ''}`.trim()) throw new Error('O registro precisa estar salvo no seu nome para receber Gears.');
+    const receiptId = gearReceiptId(studentId, type, sourceId, record);
+    const receiptRef = store.doc(db, 'studentGearRewards', receiptId);
+    const receipt = await transaction.get(receiptRef);
+    if (receipt.exists()) return { coins: 0, duplicate: true, label: rule.label };
     const account = gearProfile(studentId, accountSnapshot.data());
     assertWallet(account);
     const sameDay = account.rewardDayIndex === dayIndex;
     const dayEarned = sameDay ? Number(account.dayEarned) || 0 : 0;
     const dayCounts = sameDay ? { ...account.dayCounts } : {};
     const count = Number(dayCounts[type]) || 0;
-    const coins = count >= rule.limit ? 0 : Math.max(0, Math.min(rule.coins, DAILY_GEARS_LIMIT - dayEarned));
+    const coins = rule.coins;
     const updatedAt = referenceDate.toISOString();
+    const growth = growGearProfile(account, type);
+    const nextEvolution = gearEvolution({ ...account, ...growth });
     transaction.set(accountRef, {
-      ...account, balance: account.balance + coins, earned: account.earned + coins, rewardDay: day, rewardDayIndex: dayIndex,
+      ...account, ...growth, balance: account.balance + coins, earned: account.earned + coins, rewardDay: day, rewardDayIndex: dayIndex,
       dayEarned: dayEarned + coins, dayCounts: { ...dayCounts, [type]: count + 1 }, updatedAt,
       lastAction: { type: 'reward', id: receiptId, coins },
     });
-    transaction.set(receiptRef, { studentId: String(studentId), type, sourceId, sourcePath, day, dayIndex, coins, createdAt: updatedAt });
-    return { coins, capped: coins === 0, label: rule.label };
+    transaction.set(receiptRef, { studentId: String(studentId), type, sourceId, sourcePath, day, dayIndex, coins, growthPoints: rule.coins, createdAt: updatedAt });
+    return { coins, label: rule.label, levelUp: nextEvolution.level > gearEvolution(account).level ? { name: nextEvolution.name, unlock: nextEvolution.unlock } : null };
   });
 }
 

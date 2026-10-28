@@ -3,6 +3,8 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { GearShopContext } from '../hooks/useGearShopContext';
 import { equipGearItem, gearShopError, purchaseGearItem, rewardGearContribution } from '../services/gearShop';
 import { GEAR_CONTRIBUTIONS, GEAR_CONTRIBUTION_EVENT, gearProfile } from '../utils/gearShop';
+import { gearContributionTip, gearEvolution } from '../utils/gearEvolution';
+import { getGearHistoryStatus, reconcileGearHistory } from '../services/gearHistory';
 
 const readPending = (key) => {
   try {
@@ -11,7 +13,7 @@ const readPending = (key) => {
   } catch { return []; }
 };
 
-export default function GearExperienceProvider({ children, db, user, student, onOpenShop, isLiteMode }) {
+export default function GearExperienceProvider({ children, db, user, student, seasonId = 'legacy', onOpenShop, isLiteMode }) {
   const studentId = user?.type === 'student' ? String(user.studentId || user.data?.id || student?.id || '') : '';
   const storageKey = `newgears_pending_gears_v1:${studentId}`;
   const [wallet, setWallet] = useState({ loading: Boolean(studentId), error: '', profile: gearProfile(studentId) });
@@ -23,6 +25,31 @@ export default function GearExperienceProvider({ children, db, user, student, on
   const [busy, setBusy] = useState('');
   const [operationError, setOperationError] = useState('');
   const [retrying, setRetrying] = useState(false);
+  const [history, setHistory] = useState({ loading: false, error: '', summary: null });
+  const historyRunning = useRef(false);
+  const draftScope = JSON.stringify([user?.type, studentId || user?.uid || user?.name || 'tecnico', seasonId]);
+  const evolution = gearEvolution(wallet.profile);
+
+  const syncHistory = useCallback(async () => {
+    if (user?.type !== 'admin' || historyRunning.current || !db) return;
+    historyRunning.current = true;
+    setHistory((current) => ({ ...current, loading: true, error: '' }));
+    try {
+      const summary = await reconcileGearHistory({ db, user, onProgress: (summary) => setHistory({ loading: true, error: '', summary }) });
+      setHistory({ loading: false, error: '', summary });
+    } catch (error) { setHistory((current) => ({ ...current, loading: false, error: gearShopError(error) })); }
+    finally { historyRunning.current = false; }
+  }, [db, user]);
+
+  useEffect(() => {
+    if (user?.type !== 'admin' || !db) return;
+    let active = true;
+    getGearHistoryStatus({ db }).then((snapshot) => {
+      if (!active) return;
+      if (snapshot.exists()) setHistory({ loading: false, error: '', summary: snapshot.data() });
+    }).catch((error) => { if (active) setHistory((current) => ({ ...current, error: gearShopError(error) })); });
+    return () => { active = false; };
+  }, [db, user?.type]);
 
   useEffect(() => {
     if (!studentId || !db) return;
@@ -44,11 +71,11 @@ export default function GearExperienceProvider({ children, db, user, student, on
     updateQueue((current) => current.some((item) => `${item.type}:${item.sourceId}` === id) ? current : [...current, { type: contribution.type, sourceId: contribution.sourceId, studentId }]);
     const reactionId = ++sequence.current;
     const rule = GEAR_CONTRIBUTIONS[contribution.type];
-    setReaction({ id: reactionId, mood: 'celebrate', title: 'Mais uma engrenagem em movimento!', message: rule.message, status: 'pending', coins: 0 });
+    setReaction({ id: reactionId, mood: 'celebrate', title: 'Mais uma engrenagem em movimento!', message: rule.message, tip: gearContributionTip(contribution.type, contribution.record), status: 'pending', coins: 0 });
     try {
       const result = await rewardGearContribution({ db, user, studentId, type: contribution.type, sourceId: contribution.sourceId });
       updateQueue((current) => current.filter((item) => `${item.type}:${item.sourceId}` !== id));
-      setReaction((current) => current?.id === reactionId ? { ...current, status: result.capped ? 'capped' : result.duplicate ? 'duplicate' : 'earned', coins: result.coins } : current);
+      setReaction((current) => current?.id === reactionId ? { ...current, ...(result.levelUp ? { title: `Giro evoluiu para ${result.levelUp.name}!`, message: `${rule.message} Você desbloqueou: ${result.levelUp.unlock.toLowerCase()}.` } : {}), status: result.duplicate ? 'duplicate' : 'earned', coins: result.coins } : current);
     } catch (error) {
       setReaction((current) => current?.id === reactionId ? { ...current, status: 'retry', detail: gearShopError(error) } : current);
     }
@@ -78,5 +105,5 @@ export default function GearExperienceProvider({ children, db, user, student, on
     finally { setBusy(''); }
   };
 
-  return <GearShopContext.Provider value={{ account: wallet.profile, loading: wallet.loading, walletError: wallet.error, reloadWallet: () => setRetryCount((value) => value + 1), student, isStudent: Boolean(studentId), isLiteMode, pending, retrying, retryPending, reaction, busy, operationError, activateItem, onOpenShop }}>{children}</GearShopContext.Provider>;
+  return <GearShopContext.Provider value={{ account: wallet.profile, evolution, draftScope, history, syncHistory, loading: wallet.loading, walletError: wallet.error, reloadWallet: () => setRetryCount((value) => value + 1), student, isStudent: Boolean(studentId), isLiteMode, pending, retrying, retryPending, reaction, busy, operationError, activateItem, onOpenShop }}>{children}</GearShopContext.Provider>;
 }

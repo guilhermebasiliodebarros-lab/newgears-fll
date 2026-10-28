@@ -13,6 +13,7 @@ const SHARED = [
   "students",
   "studentGearProfiles",
   "studentGearRewards",
+  "gearHistoryMigrations",
   "teamSeasons",
   "project",
   "robotVersions",

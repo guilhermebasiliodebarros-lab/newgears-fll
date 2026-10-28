@@ -1,3 +1,4 @@
+import DraftForm from './DraftForm';
 import React from 'react';
 import StrategyBoard from './StrategyBoard';
 import {
@@ -768,7 +769,7 @@ const RobotRoundsPanel = ({
                         </div>
 
                         {!readonly ? (
-                          <form onSubmit={(event) => onSaveRoundRun(event, round)} className="mt-5 flex flex-wrap items-center gap-2 border-t border-white/10 pt-4">
+                          <DraftForm key={round.id} kind="round-test" recordId={round.id} values={roundFormValues[round.id]} onSubmit={(event, options) => onSaveRoundRun(event, round, options)} className="mt-5 flex flex-wrap items-center gap-2 border-t border-white/10 pt-4">
                             <div className="relative min-w-[120px] flex-1">
                               <input
                                 name="time"
@@ -792,7 +793,7 @@ const RobotRoundsPanel = ({
                             <button className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2.5 text-xs font-bold text-white transition-all hover:bg-blue-500">
                               <Check size={14} /> Salvar tempo
                             </button>
-                          </form>
+                          </DraftForm>
                         ) : null}
                       </div>
                     </div>
@@ -849,13 +850,14 @@ const RobotRoundsPanel = ({
                 </div>
 
                 {!readonly ? (
-                  <form onSubmit={onSaveFullRoundRun} className="mt-5 rounded-[24px] border border-white/10 bg-black/20 p-4">
+                  <DraftForm kind="full-round-test" values={[fullRoundScoreValue, fullRoundTimeValue]} onSubmit={onSaveFullRoundRun} className="mt-5 rounded-[24px] border border-white/10 bg-black/20 p-4">
                     <div className="grid gap-3 md:grid-cols-[0.9fr,0.9fr,auto,auto]">
                       <label className="space-y-2">
                         <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Pontos do round</span>
                         <input
                           type="number"
                           min="0"
+                          name="score"
                           value={fullRoundScoreValue}
                           onChange={(event) => onFullRoundFieldChange('__full_round_score__', event.target.value)}
                           className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-center text-sm text-white outline-none transition-colors focus:border-yellow-400"
@@ -868,6 +870,7 @@ const RobotRoundsPanel = ({
                           <input
                             type="number"
                             min="0"
+                            name="time"
                             value={fullRoundTimeValue}
                             onChange={(event) => onFullRoundFieldChange('__full_round_time__', event.target.value)}
                             className={`w-full rounded-xl border bg-black/30 px-3 py-3 pr-10 text-center text-sm text-white outline-none transition-colors ${fullRoundTimerActive ? 'border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'border-white/10 focus:border-blue-500'}`}
@@ -891,7 +894,7 @@ const RobotRoundsPanel = ({
                     <p className="mt-3 text-xs leading-relaxed text-gray-400">
                       Meta competitiva: acertar tudo em ate 2:30 pelo menos 7 vezes a cada 10 tentativas.
                     </p>
-                  </form>
+                  </DraftForm>
                 ) : (
                   <div className="mt-5 rounded-[24px] border border-white/10 bg-black/20 p-4 text-xs leading-relaxed text-gray-400">
                     O tecnico pode usar este bloco para registrar o round inteiro e alimentar o grafico com a consistencia real da equipe.
@@ -1079,7 +1082,7 @@ const RobotRoundsPanel = ({
               return <article key={row.exitNumber} className="rounded-[24px] border border-white/10 bg-[#151a25] p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-200">Saida {row.exitNumber} de 8</p><h4 className="mt-1 text-xl font-black text-white">Teste individual</h4></div><div className="flex items-center gap-2"><MetaChip>{row.runs.length} teste(s)</MetaChip><button type="button" onClick={() => { setSelectedExitChart(row.exitNumber); document.getElementById('exit-practice-chart')?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }} className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1.5 text-[10px] font-bold text-emerald-200 hover:bg-emerald-500/20">Ver grafico</button></div></div>
                 <div className="mt-4 grid grid-cols-3 gap-2"><div className="rounded-xl border border-white/5 bg-black/20 p-3"><p className="text-[9px] uppercase text-gray-500">Melhor</p><p className="mt-1 font-black text-white">{row.bestScore ?? '--'} pts</p></div><div className="rounded-xl border border-white/5 bg-black/20 p-3"><p className="text-[9px] uppercase text-gray-500">Mais rapido</p><p className="mt-1 font-black text-white">{row.bestTime === null ? '--' : formatSeconds(row.bestTime)}</p></div><div className="rounded-xl border border-white/5 bg-black/20 p-3"><p className="text-[9px] uppercase text-gray-500">Ultima variacao</p><p className="mt-1 font-black text-white">{scoreDelta === null ? '--' : `${scoreDelta >= 0 ? '+' : ''}${scoreDelta} pts / ${timeDelta > 0 ? '+' : ''}${timeDelta}s`}</p></div></div>
-                {!readonly ? <form className="mt-4 space-y-3" onSubmit={(event) => onSaveExitPractice(event, row.exitNumber)}>
+                {!readonly ? <DraftForm key={row.exitNumber} kind="exit-test" recordId={row.exitNumber} values={roundFormValues[timerKey]} className="mt-4 space-y-3" onSubmit={(event, options) => onSaveExitPractice(event, row.exitNumber, options)}>
                   <div className="grid gap-3 sm:grid-cols-2"><label className="space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Pontuacao<input name="score" type="number" min="0" required className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white" placeholder="Pontos desta saida" /></label><label className="space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Tempo (segundos)<input name="time" type="number" min="1" required value={roundFormValues[timerKey] ?? ''} onChange={(event) => onRoundFormValueChange(timerKey, event.target.value)} className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white" placeholder="Cronometre ou informe" /></label></div>
                   <div className="grid gap-3 sm:grid-cols-2"><label className="space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Tentativas de confiabilidade<input name="attempts" type="number" min="1" defaultValue="1" required className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white" /></label><label className="space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Acertos (opcional)<input name="successes" type="number" min="0" className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white" placeholder="Deixe vazio se nao mediu" /></label></div>
                   <label className="block space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">O que estavamos testando<textarea name="testGoal" rows="2" className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-xs text-white" placeholder="Ex.: alinhar o sensor antes de empurrar o modelo" /></label>
@@ -1091,7 +1094,7 @@ const RobotRoundsPanel = ({
                   <label className="block space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">O que mudou no robo ou no codigo<textarea name="adjustment" rows="2" className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-xs text-white" placeholder="Peca, anexo, posicao, potencia ou bloco ajustado" /></label>
                   <label className="block space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Aprendizado / proximo passo<textarea name="learning" rows="2" className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-xs text-white" placeholder="O resultado confirmou a hipotese? O que testar depois?" /></label>
                   <div className="flex flex-wrap gap-2"><button type="button" onClick={() => onToggleTimer({ id: timerKey, name: `Saida ${row.exitNumber}` })} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold ${timerActive ? 'bg-red-500 text-white' : 'border border-white/10 bg-white/5 text-gray-200'}`}>{timerActive ? <Square size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}{timerActive ? 'Parar cronometro' : 'Cronometrar'}</button><button className="inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-4 py-2.5 text-xs font-black text-black"><Check size={13} /> Salvar teste</button></div>
-                </form> : <p className="mt-4 text-xs text-gray-400">Registro em modo de consulta.</p>}
+                </DraftForm> : <p className="mt-4 text-xs text-gray-400">Registro em modo de consulta.</p>}
                 {latest ? <div className="mt-4 border-t border-white/10 pt-3 text-xs text-gray-400"><p><span className="font-bold text-white">Ultimo teste:</span> {formatDateTime(latest.date)} por {latest.author || 'Equipe'}.</p>{latest.robotVersionLabel ? <p className="mt-2"><span className="font-bold text-cyan-200">Versao usada:</span> {latest.robotVersionLabel}</p> : null}{latest.strategy ? <p className="mt-2"><span className="font-bold text-yellow-200">Estrategia:</span> {latest.strategy}</p> : null}{latest.contributors ? <p className="mt-2"><span className="font-bold text-emerald-200">Participantes:</span> {latest.contributors}</p> : null}{latest.attachmentUse ? <p className="mt-2"><span className="font-bold text-cyan-200">Anexo:</span> {latest.attachmentUse}</p> : null}{latest.programmingUse ? <p className="mt-2"><span className="font-bold text-blue-200">Codigo/sensor:</span> {latest.programmingUse}</p> : null}{latest.adjustment ? <p className="mt-2"><span className="font-bold text-cyan-200">Ajuste:</span> {latest.adjustment}</p> : null}{latest.learning ? <p className="mt-2"><span className="font-bold text-purple-200">Aprendizado:</span> {latest.learning}</p> : null}</div> : null}
               </article>;
             })}

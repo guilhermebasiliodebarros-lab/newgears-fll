@@ -39,7 +39,7 @@ service cloud.firestore {
         : {'balance': 40, 'earned': 40, 'spent': 0,
            'owned': ['skin-nebula', 'frame-none', 'accessory-none', 'title-team'],
            'equipped': {'skin': 'skin-nebula', 'frame': 'frame-none', 'accessory': 'accessory-none', 'title': 'title-team'},
-           'rewardDay': '', 'rewardDayIndex': -1, 'dayEarned': 0, 'dayCounts': {}};
+           'rewardDay': '', 'rewardDayIndex': -1, 'dayEarned': 0, 'dayCounts': {}, 'growthPoints': 0, 'contributionCounts': {}};
     }
     function gearPrice(id) {
       return {'skin-nebula': 0, 'skin-solar': 25, 'skin-emerald': 35, 'skin-rose': 45, 'skin-arctic': 65, 'skin-lava': 85,
@@ -59,28 +59,39 @@ service cloud.firestore {
       return data.rewardDay == before.rewardDay && data.rewardDayIndex == before.rewardDayIndex
         && data.dayEarned == before.dayEarned && data.dayCounts == before.dayCounts;
     }
+    function gearPoints(type) {
+      return {'code': 12, 'expert': 20, 'contact': 8, 'robot': 12, 'attachment': 10, 'outreach': 15, 'logbook': 5, 'prototype': 15, 'test': 6, 'checkin': 5}[type];
+    }
+    function gearSameGrowth(data, before) {
+      return data.growthPoints == before.get('growthPoints', 0)
+        && data.contributionCounts == before.get('contributionCounts', {});
+    }
+    function gearGrowthChange(data, before, type) {
+      let counts = before.get('contributionCounts', {});
+      return data.growthPoints == before.get('growthPoints', 0) + gearPoints(type)
+        && data.contributionCounts.diff(counts).affectedKeys().hasOnly([type])
+        && data.contributionCounts[type] == counts.get(type, 0) + 1;
+    }
     function gearReceiptValid(studentId, receiptId, receipt) {
-      let before = gearBefore(studentId);
-      let config = {'code': ['codeSnippets', 'title', 12, 2], 'expert': ['experts', 'name', 20, 2],
-        'contact': ['expertContacts', 'name', 8, 2], 'robot': ['robotVersions', 'version', 12, 2],
-        'attachment': ['attachments', 'name', 10, 2], 'outreach': ['outreach', 'name', 15, 2],
-        'logbook': ['logbook', 'text', 5, 1], 'prototype': ['prototypeIterations', 'improvement', 15, 2]}[receipt.type];
+      let config = {'code': ['codeSnippets', 'title', 12], 'expert': ['experts', 'name', 20],
+        'contact': ['expertContacts', 'name', 8], 'robot': ['robotVersions', 'version', 12],
+        'attachment': ['attachments', 'name', 10], 'outreach': ['outreach', 'name', 15],
+        'logbook': ['logbook', 'text', 5], 'prototype': ['prototypeIterations', 'improvement', 15], 'test': ['score_history', 'date', 6], 'checkin': ['dailyMoods', 'date', 5]}[receipt.type];
       let collectionName = config[0];
       let source = receipt.type == 'logbook'
         ? get(/databases/$(database)/documents/students/$(studentId)/logbook/$(receipt.sourceId)).data
         : get(/databases/$(database)/documents/$(collectionName)/$(receipt.sourceId)).data;
-      let sameDay = before.rewardDayIndex == receipt.dayIndex;
-      let count = sameDay ? before.dayCounts.get(receipt.type, 0) : 0;
-      let earned = sameDay ? before.dayEarned : 0;
-      let amount = count >= config[3] ? 0 : config[2] < 60 - earned ? config[2] : 60 - earned;
-      return receipt.keys().hasOnly(['studentId', 'type', 'sourceId', 'sourcePath', 'day', 'dayIndex', 'coins', 'createdAt'])
+      let amount = config[2];
+      return receipt.keys().hasOnly(['studentId', 'type', 'sourceId', 'sourcePath', 'day', 'dayIndex', 'coins', 'growthPoints', 'createdAt'])
         && receipt.studentId == studentId && receipt.sourceId is string && receipt.sourceId.matches('[^/]+')
-        && receiptId == studentId + '__' + receipt.type + '__' + receipt.sourceId
+        && receiptId == studentId + '__' + receipt.type + '__' + (receipt.type == 'checkin' ? source.date : receipt.sourceId)
         && receipt.day is string && receipt.dayIndex == int((request.time.toMillis() - 10800000) / 86400000)
         && receipt.coins is int && receipt.coins == amount && receipt.coins >= 0
+        && receipt.growthPoints == config[2]
         && receipt.sourcePath == (receipt.type == 'logbook' ? 'students/' + studentId + '/logbook/' + receipt.sourceId : collectionName + '/' + receipt.sourceId)
         && source.get('createdByStudentId', source.get('studentId', '')) == studentId
-        && source.get(config[1], '') is string && source.get(config[1], '').size() > 0;
+        && source.get(config[1], '') is string && source.get(config[1], '').size() > 0
+        && (receipt.type != 'checkin' || (source.level in [25, 50, 75, 100] && source.date.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')));
     }
     function gearRewardChange(studentId, data, before) {
       let receiptId = data.lastAction.id;
@@ -91,19 +102,54 @@ service cloud.firestore {
         && gearReceiptValid(studentId, receiptId, receipt)
         && data.lastAction.coins == receipt.coins && data.balance == before.balance + receipt.coins
         && data.earned == before.earned + receipt.coins && data.spent == before.spent
+        && gearGrowthChange(data, before, receipt.type)
         && data.owned == before.owned && data.equipped == before.equipped
         && data.rewardDay == receipt.day && data.rewardDayIndex == receipt.dayIndex
         && data.dayEarned == (sameDay ? before.dayEarned : 0) + receipt.coins
         && data.dayCounts.diff(counts).affectedKeys().hasOnly([receipt.type])
         && data.dayCounts[receipt.type] == counts.get(receipt.type, 0) + 1;
     }
+    // Historical recognition is a technician operation; students cannot claim a
+    // legacy author name themselves.
+    function gearHistorySourceValid(studentId, receiptId, receipt) {
+      let config = {'code': ['codeSnippets', 'title'], 'expert': ['experts', 'name'], 'contact': ['expertContacts', 'name'],
+        'robot': ['robotVersions', 'version'], 'attachment': ['attachments', 'name'], 'outreach': ['outreach', 'name'],
+        'logbook': ['logbook', 'text'], 'prototype': ['prototypeIterations', 'improvement'], 'test': ['score_history', 'date'], 'checkin': ['dailyMoods', 'date']}[receipt.type];
+      let source = receipt.type == 'logbook'
+        ? get(/databases/$(database)/documents/students/$(studentId)/logbook/$(receipt.sourceId)).data
+        : get(/databases/$(database)/documents/$(config[0])/$(receipt.sourceId)).data;
+      return isReportAdmin() && receipt.studentId == studentId
+        && receiptId == studentId + '__' + receipt.type + '__' + (receipt.type == 'checkin' ? source.date : receipt.sourceId)
+        && receipt.sourceId is string && receipt.sourceId.matches('[^/]+')
+        && receipt.sourcePath == (receipt.type == 'logbook' ? 'students/' + studentId + '/logbook/' + receipt.sourceId : config[0] + '/' + receipt.sourceId)
+        && receipt.growthPoints == gearPoints(receipt.type)
+        && source.get(config[1], '') is string && source.get(config[1], '').size() > 0
+        && get(/databases/$(database)/documents/students/$(studentId)).data.get('status', 'active') != 'inactive';
+    }
+    function gearHistoryChange(studentId, data, before) {
+      let receiptId = data.lastAction.id;
+      let receiptPath = /databases/$(database)/documents/studentGearRewards/$(receiptId);
+      let receipt = getAfter(receiptPath).data;
+      let previous = exists(receiptPath) ? get(receiptPath).data : {};
+      let coins = gearPoints(receipt.type) - previous.get('coins', 0);
+      return gearHistorySourceValid(studentId, receiptId, receipt)
+        && (!('growthPoints' in previous) || coins > 0)
+        && coins >= 0 && receipt.coins == gearPoints(receipt.type)
+        && (exists(receiptPath) || receipt.mode == 'history')
+        && data.lastAction.coins == coins && data.balance == before.balance + coins
+        && data.earned == before.earned + coins && data.spent == before.spent
+        && data.owned == before.owned && data.equipped == before.equipped
+        && gearSameDaily(data, before)
+        && ('growthPoints' in previous ? gearSameGrowth(data, before) : gearGrowthChange(data, before, receipt.type));
+    }
     function validGearProfile(studentId) {
       let data = request.resource.data;
       let before = gearBefore(studentId);
       let price = gearPrice(data.lastAction.id);
-      return data.keys().hasOnly(['studentId', 'balance', 'earned', 'spent', 'owned', 'equipped', 'rewardDay', 'rewardDayIndex', 'dayEarned', 'dayCounts', 'updatedAt', 'lastAction'])
+      return data.keys().hasOnly(['studentId', 'balance', 'earned', 'spent', 'owned', 'equipped', 'rewardDay', 'rewardDayIndex', 'dayEarned', 'dayCounts', 'growthPoints', 'contributionCounts', 'updatedAt', 'lastAction'])
         && data.studentId == studentId && data.balance is int && data.balance >= 0
         && data.earned is int && data.spent is int && data.spent >= 0 && data.earned == data.balance + data.spent
+        && data.growthPoints is int && data.growthPoints >= 0 && data.contributionCounts is map
         && data.owned is list && data.owned.size() <= 21
         && data.equipped.keys().hasOnly(['skin', 'frame', 'accessory', 'title'])
         && data.owned.hasAll([data.equipped.skin, data.equipped.frame, data.equipped.accessory, data.equipped.title])
@@ -111,27 +157,44 @@ service cloud.firestore {
         && ((data.lastAction.type == 'purchase' && price > 0 && !(data.lastAction.id in before.owned)
               && data.lastAction.coins == price && data.balance == before.balance - price && data.spent == before.spent + price
               && data.earned == before.earned && data.owned == before.owned.concat([data.lastAction.id])
-              && gearEquipmentChange(data, before) && gearSameDaily(data, before))
+              && gearEquipmentChange(data, before) && gearSameDaily(data, before) && gearSameGrowth(data, before))
           || (data.lastAction.type == 'equip' && data.lastAction.id in before.owned && data.lastAction.coins == 0
               && data.balance == before.balance && data.earned == before.earned && data.spent == before.spent
-              && data.owned == before.owned && gearEquipmentChange(data, before) && gearSameDaily(data, before))
-          || (data.lastAction.type == 'reward' && gearRewardChange(studentId, data, before)));
+              && data.owned == before.owned && gearEquipmentChange(data, before) && gearSameDaily(data, before) && gearSameGrowth(data, before))
+          || (data.lastAction.type == 'reward' && gearRewardChange(studentId, data, before))
+          || (data.lastAction.type == 'history' && gearHistoryChange(studentId, data, before)));
     }
     match /studentGearProfiles/{studentId} {
       allow read: if isGearOwner(studentId) || isReportAdmin();
-      allow create, update: if isGearOwner(studentId) && validGearProfile(studentId);
+      allow create, update: if (isGearOwner(studentId) || (isReportAdmin() && request.resource.data.lastAction.type == 'history')) && validGearProfile(studentId);
       allow delete: if false;
     }
     match /studentGearRewards/{receiptId} {
       allow get: if isReportAdmin() || (isReportMember()
         && (!exists(/databases/$(database)/documents/studentGearRewards/$(receiptId)) || isGearOwner(resource.data.studentId)));
       allow list: if isGearOwner(resource.data.studentId) || isReportAdmin();
-      allow create: if isGearOwner(request.resource.data.studentId)
+      allow create: if ((isGearOwner(request.resource.data.studentId)
         && gearReceiptValid(request.resource.data.studentId, receiptId, request.resource.data)
+        && getAfter(/databases/$(database)/documents/studentGearProfiles/$(request.resource.data.studentId)).data.lastAction.type == 'reward')
+        || (gearHistorySourceValid(request.resource.data.studentId, receiptId, request.resource.data)
+        && request.resource.data.keys().hasOnly(['studentId', 'type', 'sourceId', 'sourcePath', 'day', 'dayIndex', 'coins', 'growthPoints', 'mode', 'attribution', 'createdAt'])
+        && request.resource.data.mode == 'history' && request.resource.data.coins == gearPoints(request.resource.data.type)
+        && getAfter(/databases/$(database)/documents/studentGearProfiles/$(request.resource.data.studentId)).data.lastAction.type == 'history'))
         && getAfter(/databases/$(database)/documents/studentGearProfiles/$(request.resource.data.studentId)).data.lastAction.id == receiptId
-        && getAfter(/databases/$(database)/documents/studentGearProfiles/$(request.resource.data.studentId)).data.lastAction.type == 'reward'
         && getAfter(/databases/$(database)/documents/studentGearProfiles/$(request.resource.data.studentId)).data.balance == gearBefore(request.resource.data.studentId).balance + request.resource.data.coins;
-      allow update, delete: if false;
+      allow update: if isReportAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['coins', 'growthPoints', 'evolutionMigratedAt', 'coinsBeforeUncap', 'uncappedAt'])
+        && resource.data.coins <= gearPoints(resource.data.type)
+        && request.resource.data.coins == gearPoints(resource.data.type)
+        && (resource.data.coins == request.resource.data.coins || (request.resource.data.coinsBeforeUncap == resource.data.coins && request.resource.data.uncappedAt is string))
+        && gearHistorySourceValid(resource.data.studentId, receiptId, request.resource.data)
+        && getAfter(/databases/$(database)/documents/studentGearProfiles/$(resource.data.studentId)).data.lastAction.type == 'history'
+        && getAfter(/databases/$(database)/documents/studentGearProfiles/$(resource.data.studentId)).data.lastAction.id == receiptId
+        && gearHistoryChange(resource.data.studentId, getAfter(/databases/$(database)/documents/studentGearProfiles/$(resource.data.studentId)).data, gearBefore(resource.data.studentId));
+      allow delete: if false;
+    }
+    match /gearHistoryMigrations/{migrationId} {
+      allow read, write: if isReportAdmin();
     }
     match /weeklyReports/{reportId} {
       allow read: if isReportMember();

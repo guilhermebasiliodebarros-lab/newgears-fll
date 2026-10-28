@@ -7,6 +7,10 @@ import { runTeamProcessesTests } from './teamProcesses.test.js';
 import { runOperationsTests } from './operations.test.js';
 import { runFinalSprintEvaluationsTests } from './finalSprintEvaluations.test.js';
 import { runGearShopTests } from './gearShop.test.js';
+import { runGearEvolutionTests } from './gearEvolution.test.js';
+import { runFormDraftTests } from './formDrafts.test.js';
+import { runGearCheckInTests } from './gearCheckIn.test.js';
+import { runGiroSpeechTests } from './giroSpeech.test.js';
 
 const suites = [
   { name: 'projectSummary', run: runProjectSummaryTests },
@@ -17,7 +21,11 @@ const suites = [
   { name: 'teamProcesses', run: runTeamProcessesTests },
   { name: 'operations', run: runOperationsTests },
   { name: 'finalSprintEvaluations', run: runFinalSprintEvaluationsTests },
-  { name: 'gearShop', run: runGearShopTests }
+  { name: 'gearShop', run: runGearShopTests },
+  { name: 'gearEvolution', run: runGearEvolutionTests },
+  { name: 'formDrafts', run: runFormDraftTests },
+  { name: 'gearCheckIn', run: runGearCheckInTests },
+  { name: 'giroSpeech', run: runGiroSpeechTests }
 ];
 
 let failures = 0;

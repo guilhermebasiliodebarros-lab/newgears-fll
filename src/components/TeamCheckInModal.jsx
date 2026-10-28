@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import { GEAR_CONTRIBUTIONS } from '../utils/gearShop';
+import React, { useMemo, useState } from 'react';
 import {
   AlertTriangle,
   BatteryCharging,
@@ -152,6 +153,8 @@ const TeamCheckInModal = ({
   rewardXp = 2,
   trainingDays = [1, 3],
 }) => {
+  const [sending, setSending] = useState(false);
+  const submit = async (level) => { if (sending) return; setSending(true); try { await onSubmit(level); } finally { setSending(false); } };
   const todayDate = useMemo(() => startOfLocalDate(localTodayStr), [localTodayStr]);
   const dayOfWeek = todayDate.getDay();
   const isTrainingDay = trainingDays.includes(dayOfWeek);
@@ -277,7 +280,7 @@ const TeamCheckInModal = ({
                           <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/70">Check-in concluido</p>
                           <h4 className="mt-2 text-2xl font-black text-white">Leitura registrada com sucesso</h4>
                           <p className="mt-3 text-sm leading-relaxed text-white/80">
-                            Seu status de hoje ficou em <strong>{currentMood.level}%</strong>, no modo <strong>{currentMoodMeta.title}</strong>. Os {rewardXp} XP ja entram como incentivo de consistencia.
+                            Seu status de hoje ficou em <strong>{currentMood.level}%</strong>, no modo <strong>{currentMoodMeta.title}</strong>. Você recebe {rewardXp} XP e {GEAR_CONTRIBUTIONS.checkin.coins} Gears pelo check-in confirmado.
                           </p>
                         </div>
                         <div className={`rounded-[24px] border p-4 ${currentMoodMeta.iconWrapClass}`}>
@@ -346,7 +349,8 @@ const TeamCheckInModal = ({
                         return (
                           <button
                             key={option.level}
-                            onClick={() => onSubmit(option.level)}
+                            onClick={() => submit(option.level)}
+                            disabled={sending}
                             className={`group rounded-[24px] border p-5 text-left transition-all ${option.cardClass}`}
                           >
                             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -366,7 +370,7 @@ const TeamCheckInModal = ({
                                 </div>
                               </div>
                               <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-white">
-                                +{rewardXp} XP
+                                +{rewardXp} XP · +{GEAR_CONTRIBUTIONS.checkin.coins} Gears
                               </div>
                             </div>
                           </button>

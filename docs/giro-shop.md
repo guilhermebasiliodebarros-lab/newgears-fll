@@ -1,8 +1,10 @@
 # Giro e loja de personalização
 
-O Giro é a engrenagem animada da New Gears. Ele acompanha o painel autenticado, pode ser aberto pelo botão no canto da tela e comemora novos registros salvos pelos alunos. Ele acena, olha para os lados, mexe os pés e gira sua engrenagem; o botão **Dançar** inicia uma dança curta. No modo leve, mantém os movimentos do personagem e reduz efeitos de ambiente. A preferência do dispositivo por animações reduzidas desativa os movimentos automáticos; a dança pode ser iniciada explicitamente pelo botão e termina após 4,8 segundos. O mascote não aparece nas páginas públicas ou no modo TV independente.
+O Giro é a engrenagem animada da New Gears, com espessura, face de vidro, reflexos e perspectiva para um visual com profundidade. A inclinação acompanha o mouse; movimentos de corpo, braços, pés e boca usam transições suaves. O giro especial faz uma volta completa ao redor do corpo, sem voltar girando ao contrário. Ele acompanha o painel autenticado, pode ser aberto pelo botão no canto da tela e comemora novos registros salvos pelos alunos. Ele acena, olha para os lados, mexe os pés e gira sua engrenagem; o botão **Dançar** inicia uma dança curta. No modo leve, mantém os movimentos do personagem e reduz efeitos de ambiente. A preferência do dispositivo por animações reduzidas desativa os movimentos automáticos; a dança pode ser iniciada explicitamente pelo botão e termina após 4,8 segundos. O mascote não aparece nas páginas públicas ou no modo TV independente.
 
-As mensagens aparecem em um balão de fala. **Ouvir mensagem** lê o título, a descrição e a situação da recompensa usando a síntese de voz do navegador, com preferência por uma voz em português do Brasil. A boca e as barras do balão se animam durante a fala. **Parar áudio**, fechar o balão, trocar de mensagem ou sair da sessão interrompem a leitura. O áudio só começa por um clique; as vozes e sua disponibilidade dependem do navegador e do dispositivo, sem um serviço de áudio adicional configurado no projeto. Navegadores sem essa função exibem um aviso e mantêm as mensagens em texto.
+As mensagens aparecem em um balão de fala. **Ouvir mensagem** lê o título, a descrição e a situação da recompensa usando a síntese de voz do navegador, com preferência por uma voz em português do Brasil. A seleção automática prioriza vozes em português do Brasil e nomes que indicam opções naturais, aprimoradas ou do Google. **Voz e ritmo** permite comparar as vozes e ajustar a velocidade de 0,80× a 1,20×; a preferência fica salva por aluno neste navegador. A altura padrão é neutra, e a leitura usa blocos de frases com pequenas pausas. A boca e as barras do balão se animam durante a fala, parando nas pausas. **Parar áudio**, fechar o balão, trocar de mensagem ou sair da sessão interrompem a leitura. O áudio só começa por um clique; as vozes e sua disponibilidade dependem do navegador e do dispositivo, sem um serviço de áudio adicional configurado no projeto. Navegadores sem essa função exibem um aviso e mantêm as mensagens em texto.
+
+Depois de um registro, o balão também mostra uma **Dica do Giro** específica daquela atividade: como documentar um teste, aplicar uma descoberta da entrevista, completar o resultado do protótipo ou definir o próximo passo do diário. As dicas consideram os campos preenchidos e fazem parte da leitura em voz alta.
 
 Balões abertos manualmente permanecem até serem fechados. Os avisos automáticos dão tempo para leitura e permanecem enquanto o aluno interage com o Giro, dança ou ouve uma mensagem. A tecla **Esc** fecha o balão.
 
@@ -16,29 +18,67 @@ Selecione um item para experimentá-lo no provador. **Comprar e usar** desconta 
 
 ## Contribuições
 
-Somente novos registros confirmados e identificados com o ID do aluno geram recompensas. Edições não geram novos créditos. O Giro continua reconhecendo as contribuições mesmo quando o limite de moedas já foi alcançado.
+Registros confirmados e identificados com o ID do aluno geram recompensas integrais, sem limite diário ou por categoria. Edições e reenvios não geram novos créditos. O histórico também pode ser reconhecido pelo técnico.
 
-| Registro | Gears por registro | Registros recompensados por dia |
-| --- | ---: | ---: |
-| Programação | Até 12 | 2 |
-| Entrevista com especialista | Até 20 | 2 |
-| Contato com especialista | Até 8 | 2 |
-| Versão do robô | Até 12 | 2 |
-| Anexo do robô | Até 10 | 2 |
-| Ação de impacto | Até 15 | 2 |
-| Diário de bordo | Até 5 | 1 |
-| Evolução do protótipo | Até 15 | 2 |
+| Registro | Gears por registro confirmado |
+| --- | ---: |
+| Programação | 12 |
+| Entrevista com especialista | 20 |
+| Contato com especialista | 8 |
+| Versão do robô | 12 |
+| Anexo do robô | 10 |
+| Ação de impacto | 15 |
+| Diário de bordo | 5 |
+| Evolução do protótipo | 15 |
+| Teste do robô | 6 |
+| Check-in da equipe | 5 |
 
-O limite total é de **60 Gears por dia**, no horário de São Paulo. A última recompensa do dia pode ser parcial. Um recibo único por aluno, tipo e ID do registro impede créditos repetidos, inclusive depois da virada do dia. Registros antigos não são percorridos ou recompensados automaticamente.
+Não há teto diário de Gears nem quantidade máxima de registros recompensados por categoria. Cada contribuição recebe o valor completo uma vez. Os pontos de evolução são separados das moedas. Datas e contadores diários antigos permanecem somente como estatísticas compatíveis com as carteiras existentes.
 
 O registro da contribuição é independente da confirmação dos Gears. Se a carteira estiver indisponível, o formulário continua salvo e o Giro informa que a recompensa está pendente. Os IDs pendentes ficam guardados no navegador do aluno; a loja oferece **Tentar receber Gears**. Repetir essa tentativa não duplica recompensas. O armazenamento local de pendências não é compartilhado entre dispositivos.
 
+## Evolução e histórico
+
+O Giro evolui pelos pontos acumulados das contribuições, sem gastar XP ou perder nível ao comprar itens. O valor de evolução e o de moedas seguem o valor cheio da tabela, sem teto diário. A loja mostra a barra de progresso, os desbloqueios e marcos como primeira entrevista, primeiro código e dez contribuições.
+
+| Nível | Pontos | Desbloqueios |
+| --- | ---: | --- |
+| Faísca | 0 | Acenos e dança |
+| Aprendiz | 40 | Giro especial e luz de energia |
+| Inventor | 100 | Salto de alegria e faíscas |
+| Engenheiro | 200 | Órbita de energia e expressão confiante |
+| Mestre das Engrenagens | 400 | Estrelas e aura de mestre |
+
+O técnico encontra **Conferir histórico** na loja. A operação consulta uma vez as coleções de registros, os alunos e o histórico de atividades, considerando também temporadas anteriores. Ela reconhece ID explícito, nome de autor que corresponde a um único integrante ou evento de criação que identifica um único registro. Edições, nomes ambíguos, autoria técnica e registros sem atribuição confiável não geram crédito para um aluno por suposição. A lista de pendências aparece para conferência.
+
+Cada registro antigo ainda sem recibo recebe seu valor integral de Gears e evolução. Recompensas que foram cortadas pelo limite anterior recebem somente a diferença que faltava, preservando o valor original em `coinsBeforeUncap` e a data da correção em `uncappedAt`. Evolução já reconhecida não é contada novamente. Repetir a operação não duplica moedas nem evolução. As transações mantêm as compras, o saldo existente e os contadores estatísticos diários. Em uma falha, os créditos concluídos permanecem e uma nova conferência retoma pelos recibos.
+
+Em **28/10/2026**, a conferência foi aplicada a 256 registros: 1.572 Gears e 1.572 pontos de evolução reconhecidos. Onze registros não tinham autoria de aluno confirmada. Mariana teve nove contribuições reconhecidas: 105 pontos, nível 3 (Inventor) e saldo de 145 Gears, incluindo os 40 iniciais. Os recibos guardam a origem da atribuição; o resumo dessa primeira conferência fica em `gearHistoryMigrations/v1`. A conferência que inclui check-ins e diferenças dos limites antigos usa `gearHistoryMigrations/v2`.
+
+## Check-in da equipe
+
+O check-in rende **5 Gears e 5 pontos de evolução**, com o mesmo valor para todas as opções de energia. O incentivo existente de 2 XP é mantido para um novo check-in. A participação continua disponível nos dias de treino e é única por aluno/data; essa unicidade é uma proteção contra duplicação do mesmo registro, não um teto diário de moedas.
+
+Novos check-ins usam um ID estável por aluno/data e atualizam o check-in e os 2 XP na mesma transação. O serviço também reconhece IDs aleatórios dos check-ins antigos. O recibo de Gears é sempre `{studentId}__checkin__{date}`, impedindo crédito repetido mesmo quando há documentos antigos duplicados. A conferência retroativa considera todas as temporadas com autoria confirmada e reconhece Gears e evolução, sem conceder XP novamente.
+
+Na segunda conferência de **28/10/2026**, foram reconhecidos **480 check-ins dos 12 alunos**, totalizando **2.400 Gears e 2.400 pontos de evolução adicionais**. Nenhum XP foi reaplicado. Mariana recebeu pelos 47 check-ins reconhecidos e passou a 380 Gears, 340 pontos de evolução e nível 4. Treze registros permaneceram sem atribuição confirmada, incluindo dois check-ins vinculados a um cadastro que não está na lista atual de alunos.
+
+## Rascunhos e recuperação
+
+Entrevistas, contatos, programação, versões e anexos do robô, ações de impacto, diário, protótipo, projeto, matriz de decisão, missões, agenda e formulários de testes guardam os textos e opções no navegador enquanto são preenchidos. A separação considera conta, temporada, formulário e registro em edição; no diário, considera também a semana. Botões de sugestão e campos atualizados pelo cronômetro também persistem os valores.
+
+Ao reabrir, o formulário recupera os campos e informa **Rascunho recuperado**. O botão de lixeira descarta o rascunho. Fotos e arquivos precisam ser selecionados novamente, com um aviso dos nomes; eles não são armazenados como texto no navegador. Senhas e outros campos de autenticação não são incluídos.
+
+Sem conexão, o formulário mantém o texto e permite tentar novamente quando a internet voltar. O rascunho só é removido após confirmação do salvamento; edições feitas durante a espera ficam preservadas. Um identificador persistente de envio evita criar outro documento ao repetir o envio de uma contribuição após resposta interrompida. Um erro de armazenamento local é informado sem prometer recuperação. Rascunhos não sincronizam entre dispositivos e podem ser perdidos ao limpar os dados do navegador.
+
 ## Dados e publicação
 
-As carteiras ficam em `studentGearProfiles/{studentId}` e os recibos em `studentGearRewards/{studentId}__{type}__{sourceId}`. Essas coleções integram o backup compartilhado e permanecem entre temporadas. A aparência equipada é copiada para `students/{studentId}.gearAppearance` na mesma transação da carteira; XP e outros campos do aluno não são sobrescritos.
+As carteiras ficam em `studentGearProfiles/{studentId}` e os recibos em `studentGearRewards/{studentId}__{type}__{sourceId}`. `growthPoints` e `contributionCounts` guardam a evolução da carteira, e cada recibo também guarda seus pontos reconhecidos. Essas coleções e `gearHistoryMigrations` integram o backup compartilhado e permanecem entre temporadas. A aparência equipada é copiada para `students/{studentId}.gearAppearance` na mesma transação da carteira; XP e outros campos do aluno não são sobrescritos.
 
 Há um único ouvinte da carteira do aluno conectado. As reações partem dos formulários que acabaram de salvar, sem observar todas as coleções ou consultar o histórico para descobrir registros novos.
 
-No ambiente com Firebase Auth, integre os blocos dessas duas coleções de `firestore.weekly-reports.rules` às regras publicadas. As regras verificam o integrante ativo, a carteira do próprio aluno, os preços do catálogo, a posse dos itens, a relação entre saldo e gastos, os recibos únicos e os limites diários. Regras globais permissivas devem excluir essas coleções. As permissões existentes de `students` também devem permitir atualizar a aparência do próprio aluno e impedir mudanças indevidas de autoria dos registros. Esses blocos não foram publicados por esta alteração e precisam ser conferidos no ambiente de destino.
+No ambiente com Firebase Auth, integre os blocos dessas três coleções de `firestore.weekly-reports.rules` às regras publicadas. As regras verificam o integrante ativo, a carteira do próprio aluno, os preços do catálogo, a posse dos itens, a relação entre saldo e gastos, os recibos únicos e os valores integrais por contribuição. O reconhecimento histórico é restrito ao técnico e não autoriza compras nas carteiras de alunos. Regras globais permissivas devem excluir essas coleções. As permissões existentes de `students` também devem permitir atualizar a aparência do próprio aluno e impedir mudanças indevidas de autoria dos registros. Esses blocos não foram publicados por esta alteração e precisam ser conferidos no ambiente de destino.
 
-Ao mudar preços, catálogo ou limites, atualize juntos `src/utils/gearShop.js` e os valores correspondentes no arquivo de regras. Execute `npm test` e `npm run build`. A suíte `gearShop` usa transações em memória e cobre saldo, compras, posse, limites, repetição e falhas; ela não substitui os testes das regras publicadas no Firebase.
+Ao mudar preços, catálogo ou limites, atualize juntos `src/utils/gearShop.js` e os valores correspondentes no arquivo de regras. Execute `npm test` e `npm run build`. As suítes `gearShop`, `gearEvolution`, `formDrafts`, `gearCheckIn` e `giroSpeech` cobrem saldo, compras, limites, autoria, retroativo, repetição, recuperação e falhas. A conferência no Chrome também cobre restauração de campos controlados, isolamento por aluno, falta de rede, edição durante envio e layout móvel. Esses testes não substituem a validação das regras no ambiente Firebase.
+
+As vozes são as disponibilizadas pelo navegador e pelo dispositivo; uma voz remota pode precisar de internet. A seleção por nome é uma preferência heurística, não uma garantia de qualidade neural. Não há chave de serviço de voz externo configurada no projeto. Referência: [vozes da Web Speech API](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesisVoice).

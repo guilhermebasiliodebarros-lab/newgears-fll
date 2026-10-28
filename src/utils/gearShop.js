@@ -1,5 +1,4 @@
-export const WELCOME_GEARS = 40;
-export const DAILY_GEARS_LIMIT = 60;
+﻿export const WELCOME_GEARS = 40;
 
 export const GEAR_SHOP_CATEGORIES = [
   { id: 'all', label: 'Toda a loja' },
@@ -35,14 +34,27 @@ export const GEAR_SHOP_ITEMS = [
 
 export const DEFAULT_GEAR_EQUIPMENT = { skin: 'skin-nebula', frame: 'frame-none', accessory: 'accessory-none', title: 'title-team' };
 export const GEAR_CONTRIBUTIONS = {
-  code: { collection: 'codeSnippets', coins: 12, limit: 2, label: 'Programação', message: 'Código no cofre! Sua lógica colocou mais uma ideia em movimento.', required: 'title' },
-  expert: { collection: 'experts', coins: 20, limit: 2, label: 'Entrevista com especialista', message: 'Conhecimento de fora para fazer a equipe crescer. Boa entrevista!', required: 'name' },
-  contact: { collection: 'expertContacts', coins: 8, limit: 2, label: 'Contato com especialista', message: 'Uma nova conexão! Buscar conhecimento também faz parte da jornada.', required: 'name' },
-  robot: { collection: 'robotVersions', coins: 12, limit: 2, label: 'Versão do robô', message: 'Mais uma evolução do robô registrada. A engenharia está girando!', required: 'version' },
-  attachment: { collection: 'attachments', coins: 10, limit: 2, label: 'Anexo do robô', message: 'Nova ferramenta na oficina! Cada detalhe ajuda a equipe a avançar.', required: 'name' },
-  outreach: { collection: 'outreach', coins: 15, limit: 2, label: 'Ação de impacto', message: 'O conhecimento foi além da sala. Essa contribuição faz diferença!', required: 'name' },
-  logbook: { collection: 'logbook', coins: 5, limit: 1, label: 'Diário de bordo', message: 'Aprendizado registrado! Nossa memória de equipe ficou mais rica.', required: 'text' },
-  prototype: { collection: 'prototypeIterations', coins: 15, limit: 2, label: 'Evolução do protótipo', message: 'Uma ideia ganhou uma nova versão. Testar e melhorar é o caminho!', required: 'improvement' },
+  code: { collection: 'codeSnippets', coins: 12, label: 'Programação', message: 'Código no cofre! Sua lógica colocou mais uma ideia em movimento.', required: 'title' },
+  expert: { collection: 'experts', coins: 20, label: 'Entrevista com especialista', message: 'Conhecimento de fora para fazer a equipe crescer. Boa entrevista!', required: 'name' },
+  contact: { collection: 'expertContacts', coins: 8, label: 'Contato com especialista', message: 'Uma nova conexão! Buscar conhecimento também faz parte da jornada.', required: 'name' },
+  robot: { collection: 'robotVersions', coins: 12, label: 'Versão do robô', message: 'Mais uma evolução do robô registrada. A engenharia está girando!', required: 'version' },
+  attachment: { collection: 'attachments', coins: 10, label: 'Anexo do robô', message: 'Nova ferramenta na oficina! Cada detalhe ajuda a equipe a avançar.', required: 'name' },
+  outreach: { collection: 'outreach', coins: 15, label: 'Ação de impacto', message: 'O conhecimento foi além da sala. Essa contribuição faz diferença!', required: 'name' },
+  logbook: { collection: 'logbook', coins: 5, label: 'Diário de bordo', message: 'Aprendizado registrado! Nossa memória de equipe ficou mais rica.', required: 'text' },
+  prototype: { collection: 'prototypeIterations', coins: 15, label: 'Evolução do protótipo', message: 'Uma ideia ganhou uma nova versão. Testar e melhorar é o caminho!', required: 'improvement' },
+  test: { collection: 'score_history', coins: 6, label: 'Teste do robô', message: 'Teste registrado! Comparar resultados faz a engenharia avançar.', required: 'date' },
+  checkin: { collection: 'dailyMoods', coins: 5, label: 'Check-in da equipe', message: 'Obrigado por contar como você está! Conhecer a energia de cada pessoa ajuda a equipe a cuidar de todos.', required: 'date' },
+};
+
+export const validGearCheckIn = (record) => {
+  const date = record?.date;
+  return typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)
+    && !Number.isNaN(Date.parse(`${date}T12:00:00Z`)) && new Date(`${date}T12:00:00Z`).toISOString().startsWith(date)
+    && [25, 50, 75, 100].includes(record.level);
+};
+export const gearReceiptId = (studentId, type, sourceId, record) => {
+  if (type === 'checkin' && !validGearCheckIn(record)) throw new Error('O check-in precisa ter uma data e uma energia válidas.');
+  return `${studentId}__${type}__${type === 'checkin' ? record.date : sourceId}`;
 };
 
 export const gearItem = (id) => GEAR_SHOP_ITEMS.find((item) => item.id === id);
@@ -52,7 +64,7 @@ export const gearDay = (date = new Date()) => {
   return `${value.year}-${value.month}-${value.day}`;
 };
 export const gearDayIndex = (date = new Date()) => Math.floor((date.getTime() - 3 * 60 * 60 * 1000) / 86400000);
-export const newGearProfile = (studentId) => ({ studentId: String(studentId), balance: WELCOME_GEARS, earned: WELCOME_GEARS, spent: 0, owned: Object.values(DEFAULT_GEAR_EQUIPMENT), equipped: { ...DEFAULT_GEAR_EQUIPMENT }, rewardDay: '', rewardDayIndex: -1, dayEarned: 0, dayCounts: {} });
+export const newGearProfile = (studentId) => ({ studentId: String(studentId), balance: WELCOME_GEARS, earned: WELCOME_GEARS, spent: 0, owned: Object.values(DEFAULT_GEAR_EQUIPMENT), equipped: { ...DEFAULT_GEAR_EQUIPMENT }, rewardDay: '', rewardDayIndex: -1, dayEarned: 0, dayCounts: {}, growthPoints: 0, contributionCounts: {} });
 export const resolveGearEquipment = (equipment = {}) => Object.fromEntries(Object.entries(DEFAULT_GEAR_EQUIPMENT).map(([category, fallback]) => [category, gearItem(equipment?.[category])?.category === category ? equipment[category] : fallback]));
 export const gearProfile = (studentId, value) => {
   const initial = newGearProfile(studentId);

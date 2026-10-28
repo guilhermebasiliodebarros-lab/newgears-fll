@@ -39,7 +39,8 @@ export async function runAppStructureTests() {
   assert.match(source, /import PublicTvModeView from '\.\/views\/PublicTvModeView'/);
   assert.match(source, /import PublicShowcaseAdminView from '\.\/views\/PublicShowcaseAdminView'/);
   assert.match(source, /collection\(db,\s*"activityLogs"\)/);
-  assert.match(source, /collection\(db,\s*"expertContacts"\)/);
+  assert.match(source, /saveNewContribution\('contact',\s*expertContactData,\s*draftId\)/);
+  assert.match(await readFile(new URL('../src/utils/gearShop.js', import.meta.url), 'utf8'), /contact:\s*\{\s*collection:\s*'expertContacts'/);
   assert.match(source, /collection\(db,\s*"publicGalleryPhotos"\)/);
   assert.match(source, /doc\(db,\s*"settings",\s*"public_showcase"\)/);
   assert.match(source, /orderBy\("createdAt",\s*"desc"\)/);

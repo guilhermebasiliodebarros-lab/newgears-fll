@@ -1,4 +1,4 @@
-import { Suspense, lazy, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy, limit, writeBatch, deleteField, runTransaction } from "firebase/firestore";
 import { auth, db, FIREBASE_AUTH_ENABLED } from './firebase'; // Reutiliza o mesmo projeto Firebase
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
@@ -14,9 +14,12 @@ import TaskReviewForm from './components/TaskReviewForm';
 import SeasonTransitionChecklist from './components/SeasonTransitionChecklist';
 import TournamentSelectionNotice from './components/TournamentSelectionNotice';
 import GearExperienceProvider from './components/GearExperienceProvider';
+import DraftForm from './components/DraftForm';
+import { createDraftRecord } from './services/draftRecords';
+import { saveTeamCheckIn, CHECK_IN_REWARD_XP } from './services/teamCheckIn';
 import GearCompanion from './components/GearCompanion';
 import { GearAvatar } from './components/GearMascot';
-import { celebrateGearContribution, gearItem } from './utils/gearShop';
+import { celebrateGearContribution, gearItem, gearDay, GEAR_CONTRIBUTIONS } from './utils/gearShop';
 import './components/GearExperience.css';
 import { publishTournamentSelection, saveTournamentCandidate, tournamentDraftId, tournamentSelectionError } from './services/tournamentSelection';
 import { changeTaskStage, updateTaskPeople, setTaskBlock } from './services/taskWorkflow';
@@ -26,7 +29,8 @@ import { applyRotation, undoRotation, saveAttendance, assertActiveSeason, transi
 import { buildRotationSchedule, defaultPlanning, validatePlanning, isActiveStudent, SEASON_COLLECTIONS, validDate, dateKey } from './utils/teamProcesses';
 import Countdown from './components/Countdown';
 import LogoNewGears from './components/LogoNewGears';
-import { WorkspaceHero, WorkspaceTabs, WorkspaceScene, WorkspaceCollapsible, WorkspacePanelToolbar, SeasonModeControl } from './components/WorkspaceChrome';
+import WorkspaceSidebar from './components/WorkspaceSidebar';
+import { WorkspaceHero, WorkspaceSectionHeading, WorkspaceScene, WorkspaceCollapsible, WorkspacePanelToolbar, SeasonModeControl } from './components/WorkspaceChrome';
 import StrategyView from './views/StrategyView';
 import RoundsView from './views/RoundsView';
 import LogbookView from './views/LogbookView';
@@ -53,6 +57,8 @@ import {
 } from './utils/schoolReport';
 import { 
   User, 
+  Menu,
+  SlidersHorizontal,
   LogOut, 
   Calendar, 
   CheckCircle, 
@@ -985,6 +991,8 @@ function App() {
 
   const [logoutCountdown, setLogoutCountdown] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+  const closeWorkspaceMenu = useCallback(() => setWorkspaceMenuOpen(false), []);
   const [badgeStudent, setBadgeStudent] = useState(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [isLiteMode, setIsLiteMode] = useState(() => detectLiteMode());
@@ -1081,7 +1089,10 @@ function App() {
   const [teamSeasonStats, setTeamSeasonStats] = useState({ successfulWeekIds: [], successfulWeeks: 0 });
   const [activeTimer, setActiveTimer] = useState(null);
   const [timerDisplay, setTimerDisplay] = useState(0); 
-  const [roundFormValues, setRoundFormValues] = useState({});
+  const [roundDraftsByActor, setRoundDraftsByActor] = useState({});
+  const roundDraftIdentity = JSON.stringify([currentUser?.studentId || currentUser?.data?.id || currentUser?.name, activeTeamSeasonId]);
+  const roundFormValues = roundDraftsByActor[roundDraftIdentity] || {};
+  const setRoundFormValues = (value) => setRoundDraftsByActor((current) => ({ ...current, [roundDraftIdentity]: typeof value === 'function' ? value(current[roundDraftIdentity] || {}) : value }));
   const FULL_ROUND_TIMER_ID = '__full_round__';
   const FULL_ROUND_TIME_KEY = '__full_round_time__';
   const FULL_ROUND_SCORE_KEY = '__full_round_score__';
@@ -1112,7 +1123,15 @@ function App() {
   const [adminLogbookWeekFilter, setAdminLogbookWeekFilter] = useState('all');
   const [studentLogbookSearchQuery, setStudentLogbookSearchQuery] = useState('');
   const [studentLogbookWeekFilter, setStudentLogbookWeekFilter] = useState('all');
-  const [studentLogbookDraft, setStudentLogbookDraft] = useState('');
+  const [studentDiaryDrafts, setStudentDiaryDrafts] = useState({});
+  const diaryStudentId = currentUser?.studentId || currentUser?.data?.id || '';
+  const diaryDraftIdentity = JSON.stringify([diaryStudentId || currentUser?.name, activeTeamSeasonId, currentWeekData?.id]);
+  const studentLogbookDraft = studentDiaryDrafts[diaryDraftIdentity] ?? (() => { try { return localStorage.getItem(`newgears_logbook_draft_${diaryStudentId}`) || ''; } catch { return ''; } })();
+  const setStudentLogbookDraft = (value) => {
+      const next = typeof value === 'function' ? value(studentLogbookDraft) : value;
+      if (!next.trim()) { try { localStorage.removeItem(`newgears_logbook_draft_${diaryStudentId}`); } catch { /* The form reports browser storage failures. */ } }
+      setStudentDiaryDrafts((current) => ({ ...current, [diaryDraftIdentity]: next }));
+  };
   const [leaderTaskDraft, setLeaderTaskDraft] = useState({ text: '', studentId: '', station: STATION_KEYS.MANAGEMENT, dueDate: '' });
   const [leaderPenaltyDraft, setLeaderPenaltyDraft] = useState({ studentId: '', reason: '', evidenceFile: null });
   const [leaderPenaltyFileInputKey, setLeaderPenaltyFileInputKey] = useState(0);
@@ -1227,31 +1246,6 @@ function App() {
       };
   }, []);
 
-  useEffect(() => {
-      if (typeof window === 'undefined') return;
-
-      if (!viewAsStudent?.id) {
-          setStudentLogbookDraft('');
-          return;
-      }
-
-      const draftKey = `newgears_logbook_draft_${viewAsStudent.id}`;
-      setStudentLogbookDraft(localStorage.getItem(draftKey) || '');
-  }, [viewAsStudent?.id]);
-
-  useEffect(() => {
-      if (typeof window === 'undefined' || !viewAsStudent?.id) return;
-
-      const draftKey = `newgears_logbook_draft_${viewAsStudent.id}`;
-
-      if (studentLogbookDraft.trim()) {
-          localStorage.setItem(draftKey, studentLogbookDraft);
-          return;
-      }
-
-      localStorage.removeItem(draftKey);
-  }, [studentLogbookDraft, viewAsStudent?.id]);
-
   const openImmersiveMode = async (setter) => {
       setter(true);
       try {
@@ -1301,6 +1295,8 @@ function App() {
   };
 
   const gearActorId = currentUser?.type === 'student' && !isAdmin ? String(currentUser.studentId || currentUser.data?.id || viewAsStudent?.id || '') : '';
+
+  const saveNewContribution = (type, data, draftId) => createDraftRecord({ db, path: [GEAR_CONTRIBUTIONS[type].collection], draftId, data: { ...data, createdByStudentId: gearActorId, author: data.author || viewAsStudent?.name || adminProfile?.name || 'Técnico', createdAt: data.createdAt || new Date().toISOString() } });
 
   const recordActivity = async ({
       action,
@@ -1963,14 +1959,7 @@ function App() {
       }
   }, [isLiteMode, viewAsStudent?.xp, viewAsStudent?.id]);
 
-  const CHECK_IN_REWARD_XP = 2;
-  const getTodayMoodDate = () => {
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
-  };
+  const getTodayMoodDate = () => gearDay();
 
   // Função para carregar a bateria de hoje do banco
   useEffect(() => {
@@ -1987,61 +1976,7 @@ function App() {
   }, [activeTeamSeasonId, seasonLifecycleReady, students]);
 
   // Função para Salvar o Humor
-  const handleMoodSubmit = async (level) => {
-      if (!viewAsStudent) return;
-
-      // Trava 1: Apenas dias de treino (Segunda=1, Quarta=3)
-      const dayOfWeek = new Date().getDay();
-      if (!effectivePlanning.trainingDays.includes(dayOfWeek)) {
-          alert("Check-in liberado nos dias de treino configurados.");
-          return;
-      }
-
-      // Trava 2: Impedir Farm de XP (apenas um voto por dia)
-      const hasVotedToday = teamMoods.some(mood => mood.studentId === viewAsStudent.id);
-      if (hasVotedToday) {
-          alert("Você já respondeu hoje! Foco no treino.");
-          return;
-      }
-
-      const today = getTodayMoodDate();
-      
-      try {
-          // Salva no banco
-          await addDoc(collection(db, "dailyMoods"), {
-              seasonId: activeTeamSeasonId || 'legacy',
-              studentId: viewAsStudent.id,
-              studentName: viewAsStudent.name,
-              level: level, // 100, 75, 50, 25
-              date: today,
-              timestamp: new Date()
-          });
-          
-          // Ganha 5 XP por participar (Incentivo!)
-          // (Aqui reaproveitamos sua função de dar XP se ela existir, ou fazemos direto)
-          await updateDoc(doc(db, "students", viewAsStudent.id), {
-              xp: (viewAsStudent.xp || 0) + 2
-          });
-
-          await recordXpOrigin({
-              student: viewAsStudent,
-              amount: 2,
-              source: 'check_in',
-              mode: 'reward',
-              reason: 'Check-in de energia'
-          });
-
-          syncStudentLocally({
-              ...viewAsStudent,
-              xp: (viewAsStudent.xp || 0) + 2
-          });
-
-          setShowBatteryModal(false);
-          alert(`Obrigado por compartilhar! +5 XP ⚡`);
-      } catch (error) {
-          console.error("Erro ao salvar bateria:", error);
-      }
-  };
+  const handleMoodSubmit = (level) => handleTeamCheckInSubmit(level);
 
   // Cálculo da Média da Equipe (Para você ver)
   const teamAverage = teamMoods.length > 0 
@@ -3236,53 +3171,25 @@ function App() {
   };
 
   const handleTeamCheckInSubmit = async (level) => {
-      if (!viewAsStudent) return;
-
-      const dayOfWeek = new Date().getDay();
-      if (!effectivePlanning.trainingDays.includes(dayOfWeek)) {
-          showNotification("Check-in liberado nos dias de treino configurados.", "error");
-          return;
+      if (!viewAsStudent || currentUser?.type !== 'student') return false;
+      if (!effectivePlanning.trainingDays.includes(new Date().getDay())) {
+          showNotification('Check-in liberado nos dias de treino configurados.', 'error');
+          return false;
       }
-
-      const hasVotedToday = teamMoods.some(mood => mood.studentId === viewAsStudent.id);
-      if (hasVotedToday) {
-          showNotification("Voce ja respondeu hoje. Bora focar no treino.", "error");
-          return;
-      }
-
-      const today = getTodayMoodDate();
-      const updatedXp = (viewAsStudent.xp || 0) + CHECK_IN_REWARD_XP;
-
       try {
-          await addDoc(collection(db, "dailyMoods"), {
-              seasonId: activeTeamSeasonId || 'legacy',
-              studentId: viewAsStudent.id,
-              studentName: viewAsStudent.name,
-              level,
-              date: today,
-              timestamp: new Date()
-          });
-
-          await updateDoc(doc(db, "students", viewAsStudent.id), {
-              xp: updatedXp
-          });
-
-          await recordXpOrigin({
-              student: viewAsStudent,
-              amount: CHECK_IN_REWARD_XP,
-              source: 'check_in',
-              mode: 'reward',
-              reason: 'Check-in da equipe'
-          });
-
-          syncStudentLocally({ ...viewAsStudent, xp: updatedXp });
+          const result = await saveTeamCheckIn({ db, user: currentUser, studentId: viewAsStudent.id, level, date: getTodayMoodDate(), seasonId: activeTeamSeasonId || 'legacy' });
+          celebrateGearContribution({ type: 'checkin', sourceId: result.sourceId, studentId: gearActorId, record: result.record });
+          syncStudentLocally({ ...viewAsStudent, xp: result.xp });
           setShowBatteryModal(false);
-          showNotification(`Check-in registrado! +${CHECK_IN_REWARD_XP} XP na conta.`, "success");
+          if (!result.duplicate) await recordXpOrigin({ student: viewAsStudent, amount: CHECK_IN_REWARD_XP, source: 'check_in', mode: 'reward', reason: 'Check-in da equipe' });
+          showNotification(result.duplicate ? 'Seu check-in de hoje já estava registrado. Seus Gears foram conferidos.' : `Check-in registrado! +${CHECK_IN_REWARD_XP} XP. O Giro está confirmando seus Gears.`, 'success');
+          return true;
       } catch (error) {
-          console.error("Erro ao salvar bateria:", error);
-          showNotification("Nao foi possivel salvar o check-in.", "error");
+          console.error('Erro ao salvar check-in:', error);
+          showNotification(error.message || 'Não foi possível salvar o check-in.', 'error');
+          return false;
       }
-  }
+  };
 
   const getStudentName = (id) => { const s = students.find(stud => stud.id === id); return s ? s.name : "Vaga"; }
 
@@ -3682,7 +3589,7 @@ function App() {
   }
 
   // --- FUNÇÕES DA GARRA / ANEXO ---
-  const handleAttachmentSubmit = async (e) => { 
+  const handleAttachmentSubmit = async (e, { draftId } = {}) => {
       e.preventDefault();
       const fd = new FormData(e.target);
       
@@ -3702,8 +3609,8 @@ function App() {
           if (modal.data?.id) {
               await updateDoc(doc(db, "attachments", modal.data.id), attachmentData);
           } else {
-              const attachmentRef = await addDoc(collection(db, "attachments"), { ...attachmentData, createdByStudentId: gearActorId });
-              celebrateGearContribution({ type: 'attachment', sourceId: attachmentRef.id, studentId: gearActorId });
+              const attachmentRef = await saveNewContribution('attachment', attachmentData, draftId);
+              celebrateGearContribution({ type: 'attachment', sourceId: attachmentRef.id, studentId: gearActorId, record: attachmentData });
           }
           void recordActivity({
               action: modal.data?.id ? 'atualizou um anexo do robo' : 'registrou um novo anexo do robo',
@@ -3714,6 +3621,7 @@ function App() {
           });
           closeModal(); 
           showNotification("Garra/Anexo salva com sucesso!");
+          return true;
       } catch (error) {
           console.error("Erro ao salvar anexo:", error);
           showNotification("Erro ao salvar.", "error");
@@ -3741,7 +3649,7 @@ function App() {
   };
 
   // --- FUNÇÕES DO COFRE DE CÓDIGOS ---
-  const handleCodeSubmit = async (e) => { 
+  const handleCodeSubmit = async (e, { draftId } = {}) => {
       e.preventDefault(); 
       const fd = new FormData(e.target); 
       const shouldSetAsOfficial = isAdmin && fd.get('setAsOfficial') === 'on';
@@ -3768,13 +3676,9 @@ function App() {
                   await Promise.all(updates);
               }
           } else {
-              const newSnippetRef = await addDoc(collection(db, "codeSnippets"), {
-                  ...codeData,
-                  createdByStudentId: gearActorId,
-                  applied: false
-              });
+              const newSnippetRef = await saveNewContribution('code', { ...codeData, applied: false }, draftId);
 
-              celebrateGearContribution({ type: 'code', sourceId: newSnippetRef.id, studentId: gearActorId });
+              celebrateGearContribution({ type: 'code', sourceId: newSnippetRef.id, studentId: gearActorId, record: codeData });
 
               if (shouldSetAsOfficial) {
                   const updates = [
@@ -3793,6 +3697,7 @@ function App() {
           });
           closeModal(); 
           showNotification(shouldSetAsOfficial ? "Codigo salvo e definido como oficial!" : "Codigo salvo no cofre!");
+          return true;
       } catch (error) {
           console.error("Erro ao salvar codigo:", error);
           showNotification("Erro ao salvar.", "error");
@@ -3888,7 +3793,7 @@ function App() {
   };
 
   // --- FUNÇÃO PARA SALVAR DIÁRIO DE BORDO ---
-  const handleLogbookSubmit = async (e) => {
+  const handleLogbookSubmit = async (e, { draftId } = {}) => {
       e.preventDefault();
       const text = studentLogbookDraft.trim();
       // Se não tiver semana definida, pega a atual ou a 1
@@ -3899,7 +3804,7 @@ function App() {
 
       try {
           // O caminho agora é uma subcoleção dentro do documento do aluno
-          const logbookRef = collection(db, 'students', viewAsStudent.id, 'logbook');
+          // The draft keeps a stable document ID through connection failures.
           
           // Usamos setDoc com um ID específico para evitar duplicatas na mesma semana?
           // Ou addDoc para permitir vários registros na semana?
@@ -3921,8 +3826,8 @@ function App() {
               wordCount
           };
 
-          const entryRef = await addDoc(logbookRef, newEntry);
-          celebrateGearContribution({ type: 'logbook', sourceId: entryRef.id, studentId: gearActorId });
+          const entryRef = await createDraftRecord({ db, path: ['students', viewAsStudent.id, 'logbook'], data: newEntry, draftId });
+          celebrateGearContribution({ type: 'logbook', sourceId: entryRef.id, studentId: gearActorId, record: newEntry });
           void recordActivity({
               action: 'registrou uma entrada no diario',
               category: 'team',
@@ -3932,6 +3837,7 @@ function App() {
 
           setStudentLogbookDraft('');
           showNotification("Diário de Bordo atualizado! 📖");
+          return true;
       } catch (error) {
           console.error("Erro ao salvar diário:", error);
           showNotification("Erro ao salvar.", "error");
@@ -4168,6 +4074,7 @@ const handleDeleteRound = async (id) => {
           });
           closeModal();
           showNotification("Projeto de Inovacao atualizado!");
+          return true;
       } catch (error) {
           console.error("Erro ao salvar projeto:", error);
           showNotification("Erro ao salvar.", "error");
@@ -4175,7 +4082,7 @@ const handleDeleteRound = async (id) => {
   }
 
   // --- FUNÇÕES DE OUTREACH (IMPACTO) ---
-  const handleOutreachSubmit = async (e) => {
+  const handleOutreachSubmit = async (e, { draftId } = {}) => {
       e.preventDefault();
       const fd = new FormData(e.target);
 
@@ -4189,8 +4096,8 @@ const handleDeleteRound = async (id) => {
       };
 
       try {
-          const outreachRef = await addDoc(collection(db, "outreach"), { ...outreachData, createdByStudentId: gearActorId });
-          celebrateGearContribution({ type: 'outreach', sourceId: outreachRef.id, studentId: gearActorId });
+          const outreachRef = await saveNewContribution('outreach', outreachData, draftId);
+          celebrateGearContribution({ type: 'outreach', sourceId: outreachRef.id, studentId: gearActorId, record: outreachData });
           void recordActivity({
               action: 'registrou uma acao de impacto',
               category: 'team',
@@ -4200,6 +4107,7 @@ const handleDeleteRound = async (id) => {
           });
           closeModal();
           showNotification("Evento de impacto registrado!");
+          return true;
       } catch (error) {
           console.error("Erro ao salvar impacto:", error);
           showNotification("Erro ao salvar.", "error");
@@ -4225,7 +4133,7 @@ const handleDeleteRound = async (id) => {
     showNotification('Chamada salva. Frequência atualizada em conjunto.');
   };
 
-  const handleExpertSubmit = async (e) => { 
+  const handleExpertSubmit = async (e, { draftId } = {}) => {
       e.preventDefault(); 
       const fd = new FormData(e.target);
       
@@ -4249,8 +4157,8 @@ const handleDeleteRound = async (id) => {
               await updateDoc(doc(db, "experts", modal.data.id), expertData);
           } else {
               // Se não tem ID, cria novo (Salvar)
-              const expertRef = await addDoc(collection(db, "experts"), { ...expertData, createdByStudentId: gearActorId });
-              celebrateGearContribution({ type: 'expert', sourceId: expertRef.id, studentId: gearActorId });
+              const expertRef = await saveNewContribution('expert', expertData, draftId);
+              celebrateGearContribution({ type: 'expert', sourceId: expertRef.id, studentId: gearActorId, record: expertData });
           }
           void recordActivity({
               action: modal.data?.id ? 'atualizou um especialista' : 'registrou um especialista',
@@ -4261,13 +4169,14 @@ const handleDeleteRound = async (id) => {
           });
           closeModal(); 
           showNotification("Especialista salvo no banco!");
+          return true;
       } catch (error) {
           console.error("Erro ao salvar especialista:", error);
           showNotification("Erro ao salvar.", "error");
       }
   }
 
-  const handleExpertContactSubmit = async (e) => {
+  const handleExpertContactSubmit = async (e, { draftId } = {}) => {
       e.preventDefault();
       const fd = new FormData(e.target);
       const isEditing = Boolean(modal.data?.id);
@@ -4304,8 +4213,8 @@ const handleDeleteRound = async (id) => {
           if (isEditing) {
               await updateDoc(doc(db, "expertContacts", modal.data.id), expertContactData);
           } else {
-              const contactRef = await addDoc(collection(db, "expertContacts"), { ...expertContactData, createdByStudentId: gearActorId });
-              celebrateGearContribution({ type: 'contact', sourceId: contactRef.id, studentId: gearActorId });
+              const contactRef = await saveNewContribution('contact', expertContactData, draftId);
+              celebrateGearContribution({ type: 'contact', sourceId: contactRef.id, studentId: gearActorId, record: expertContactData });
               entityId = contactRef.id;
           }
           void recordActivity({
@@ -4317,13 +4226,14 @@ const handleDeleteRound = async (id) => {
           });
           closeModal();
           showNotification("Contato de prospeccao salvo!");
+          return true;
       } catch (error) {
           console.error("Erro ao salvar contato:", error);
           showNotification(error.message || "Erro ao salvar contato.", "error");
       }
   };
 
-  const handleRobotSubmit = async (e) => { 
+  const handleRobotSubmit = async (e, { draftId } = {}) => {
       e.preventDefault(); 
       const fd = new FormData(e.target); 
       
@@ -4342,8 +4252,8 @@ const handleDeleteRound = async (id) => {
           if (modal.data?.id) {
               await updateDoc(doc(db, "robotVersions", modal.data.id), robotData);
           } else {
-              const robotRef = await addDoc(collection(db, "robotVersions"), { ...robotData, createdByStudentId: gearActorId });
-              celebrateGearContribution({ type: 'robot', sourceId: robotRef.id, studentId: gearActorId });
+              const robotRef = await saveNewContribution('robot', robotData, draftId);
+              celebrateGearContribution({ type: 'robot', sourceId: robotRef.id, studentId: gearActorId, record: robotData });
           }
           void recordActivity({
               action: modal.data?.id ? 'atualizou uma versao do robo' : 'registrou uma versao do robo',
@@ -4354,6 +4264,7 @@ const handleDeleteRound = async (id) => {
           });
           closeModal(); 
           showNotification("Versão do robô salva!");
+          return true;
       } catch (error) {
           console.error("Erro ao salvar robô:", error);
           showNotification("Erro ao salvar.", "error");
@@ -4447,7 +4358,7 @@ const handleDeleteRound = async (id) => {
       }
   }
 
-  const handleMissionSubmit = async (e) => {
+  const handleMissionSubmit = async (e, { draftId } = {}) => {
       e.preventDefault();
       const fd = new FormData(e.target);
 
@@ -4465,7 +4376,7 @@ const handleDeleteRound = async (id) => {
           if (modal.data?.id) {
               await updateDoc(doc(db, "missions", modal.data.id), missionData);
           } else {
-              await addDoc(collection(db, "missions"), missionData);
+              await createDraftRecord({ db, path: ['missions'], data: missionData, draftId });
           }
           void recordActivity({
               action: modal.data?.id ? 'atualizou uma missao da mesa' : 'cadastrou uma missao da mesa',
@@ -4478,6 +4389,7 @@ const handleDeleteRound = async (id) => {
           setModal({ type: 'missionForm', data: null });
           setSelectedFile(null);
           showNotification("Missão salva!");
+          return true;
       } catch (error) {
           console.error("Erro ao salvar missão:", error);
           showNotification("Erro ao salvar.", "error");
@@ -4575,7 +4487,7 @@ const handleDeleteRound = async (id) => {
   
 
 
-  const handleMatrixSubmit = async (e) => {
+  const handleMatrixSubmit = async (e, { draftId } = {}) => {
       e.preventDefault();
       const fd = new FormData(e.target);
 
@@ -4589,7 +4501,7 @@ const handleDeleteRound = async (id) => {
       };
 
       try {
-          const ideaRef = await addDoc(collection(db, "decisionMatrix"), ideaData);
+          const ideaRef = await createDraftRecord({ db, path: ['decisionMatrix'], data: ideaData, draftId });
           void recordActivity({
               action: 'adicionou uma ideia na matriz',
               category: 'team',
@@ -4599,6 +4511,7 @@ const handleDeleteRound = async (id) => {
           });
           closeModal(); 
           showNotification("Ideia salva na matriz!");
+          return true;
       } catch (error) {
           console.error("Erro ao salvar ideia:", error);
           showNotification("Erro ao salvar.", "error");
@@ -4606,7 +4519,7 @@ const handleDeleteRound = async (id) => {
   }
 
   // --- FUNÇÕES DA AGENDA ---
-  const handleEventSubmit = async (e) => {
+  const handleEventSubmit = async (e, { draftId } = {}) => {
       e.preventDefault();
       const fd = new FormData(e.target);
       const eventData = {
@@ -4626,7 +4539,7 @@ const handleDeleteRound = async (id) => {
           if (modal.data?.id) {
               await updateDoc(doc(db, "events", modal.data.id), eventData);
           } else {
-              await addDoc(collection(db, "events"), eventData);
+              await createDraftRecord({ db, path: ['events'], data: eventData, draftId });
           }
           void recordActivity({
               action: modal.data?.id ? 'atualizou um evento da agenda' : 'criou um evento na agenda',
@@ -4637,6 +4550,7 @@ const handleDeleteRound = async (id) => {
           });
           closeModal();
           showNotification("Evento salvo na agenda!");
+          return true;
       } catch (error) {
           console.error("Erro ao salvar evento:", error);
           showNotification("Erro ao salvar.", "error");
@@ -5486,6 +5400,7 @@ const handleDeleteRound = async (id) => {
   ];
 
   const adminWorkspaceTabs = [
+      { id: 'overview', label: 'Visão geral', icon: <LayoutDashboard size={16} />, description: 'Resumo da equipe, indicadores e preparação para o torneio.' },
       { id: 'shop', label: 'Loja New Gears', icon: <Sparkles size={16} />, description: 'Conheça o Giro e personalize seu perfil com Gears conquistados nas contribuições.', pill: 'Giro', pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-slate-950 shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
       { id: 'students', label: 'Alunos', icon: <Users size={16} />, description: 'Cadastro, estações e acompanhamento individual da equipe.', pill: `${students.length} alunos`, badge: incompleteStudentRecords.length || null, pillTone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200', activeClass: 'bg-emerald-400 text-black shadow-lg shadow-emerald-900/20', inactiveClass: 'text-gray-300 hover:text-emerald-200 hover:bg-emerald-500/10' },
       { id: 'rotation', label: 'Rodízio', icon: <LayoutDashboard size={16} />, description: 'Escala semanal e distribuição planejada para o rodízio da equipe.', pill: currentWeekData?.weekName || 'Escala semanal', pillTone: 'border-blue-400/20 bg-blue-400/10 text-blue-100', activeClass: 'bg-blue-400 text-black shadow-lg shadow-blue-900/20', inactiveClass: 'text-gray-400 hover:text-blue-200 hover:bg-blue-400/10' },
@@ -5507,6 +5422,7 @@ const handleDeleteRound = async (id) => {
   ].filter((tab) => !['history', 'report_recipients', 'season_history', 'operations'].includes(tab.id) || currentUser?.type === 'admin');
 
   const studentWorkspaceTabs = [
+      { id: 'overview', label: 'Visão geral', icon: <LayoutDashboard size={16} />, description: 'Seu perfil, conquistas, progresso e resumo da equipe.' },
       { id: 'shop', label: 'Loja New Gears', icon: <Sparkles size={16} />, description: 'Conheça o Giro e personalize seu perfil com Gears conquistados nas contribuições.', pill: 'Giro', pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-slate-950 shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
       { id: 'weekly_reports', label: 'Relatórios Semanais', icon: <FileText size={16} />, description: 'Compartilhe seu relatório e consulte os registros da equipe.', badge: reportsWorkspace.unreadReports.length || null, pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
       { id: 'sprint', label: 'Reta final', icon: <Flag size={16} />, description: 'Escolha onde contribuir e mantenha seus próximos passos registrados.', pillTone: 'border-amber-500/20 bg-amber-500/10 text-amber-200', activeClass: 'bg-amber-400 text-black shadow-lg shadow-amber-900/20', inactiveClass: 'text-gray-400 hover:text-amber-300 hover:bg-amber-500/10' },
@@ -5539,6 +5455,18 @@ const handleDeleteRound = async (id) => {
   };
 
   const getWorkspaceSceneTopPadding = (tabId) => workspaceSceneTopPaddingMap[tabId] || 'pt-10 md:pt-12';
+
+  const currentWorkspaceTabs = isAdmin ? adminWorkspaceTabs : studentWorkspaceTabs;
+  const currentWorkspaceTab = currentWorkspaceTabs.find((tab) => tab.id === (isAdmin ? adminTab : studentTab));
+  const workspaceProfileStudent = viewAsStudent || (currentUser?.type === 'student' ? currentUser.data || { name: currentUser.name } : null);
+  const navigateWorkspace = (tabId) => {
+      if (isAdmin) setAdminTab(tabId); else setStudentTab(tabId);
+      requestAnimationFrame(() => {
+          const content = document.getElementById('workspace-content');
+          content?.focus({ preventScroll: true });
+          content?.scrollIntoView({ block: 'start', behavior: 'instant' });
+      });
+  };
 
   const isDashboardPanelVisible = isAdmin ? adminPanelState.dashboard : studentPanelState.dashboard;
 
@@ -5582,8 +5510,9 @@ const handleDeleteRound = async (id) => {
 
   const toggleDashboardPanel = () => {
       if (isAdmin) {
+          setAdminTab('overview');
           setAdminPanelState((prev) => {
-              const nextDashboard = !prev.dashboard;
+              const nextDashboard = adminTab === 'overview' ? !prev.dashboard : true;
 
               if (prev.compact && nextDashboard) {
                   return { ...prev, compact: false, dashboard: true };
@@ -5594,11 +5523,13 @@ const handleDeleteRound = async (id) => {
           return;
       }
 
-      setStudentPanelState((prev) => ({ ...prev, dashboard: !prev.dashboard }));
+      setStudentTab('overview');
+      setStudentPanelState((prev) => ({ ...prev, dashboard: studentTab === 'overview' ? !prev.dashboard : true }));
   };
 
   const toggleAdminHeroPanel = () => {
-      setAdminPanelState((prev) => ({ ...prev, hero: !prev.hero }));
+      setAdminTab('overview');
+      setAdminPanelState((prev) => ({ ...prev, hero: adminTab === 'overview' ? !prev.hero : true }));
   };
 
   const toggleStudentHeroPanel = () => {
@@ -7398,14 +7329,14 @@ const handleFileSelect = (e) => {
               <button type="submit" className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-red-900/20 transition-all">Salvar Alterações</button>
             </form>
           )}
-          {modal.type === 'expertForm' && (<form onSubmit={handleExpertSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Briefcase className="text-purple-500"/> {modal.data ? 'Editar' : 'Novo'} Especialista</h3><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome</label><input name="name" defaultValue={modal.data?.name} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div><div className="grid grid-cols-2 gap-4 mb-4"><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Cargo</label><input name="role" defaultValue={modal.data?.role} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data</label><input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Anotações</label><textarea name="notes" defaultValue={modal.data?.notes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none h-20" /></div><div className="mb-4 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Evidência (Foto)</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-purple-500/10 file:text-purple-500 hover:file:bg-purple-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}</div><div className="mb-6 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/10"><div><span className="text-sm font-bold text-white">Impactou?</span></div><select name="impact" defaultValue={modal.data?.impact} className="bg-black/50 border border-white/20 text-white p-2 rounded text-sm"><option value="Baixo">Baixo</option><option value="Médio">Médio</option><option value="Alto">Alto</option></select><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="applied" defaultChecked={modal.data?.applied} className="w-5 h-5 accent-green-500" /><span className="text-xs text-white">Aplicado</span></label></div><button className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg">Salvar Registro</button></form>)}
+          {modal.type === 'expertForm' && (<DraftForm key={JSON.stringify([currentUser?.studentId || currentUser?.data?.id || currentUser?.name, activeTeamSeasonId, modal.type, modal.data?.id])} kind="expert" recordId={modal.data?.id} onDiscard={() => setSelectedFile(null)} onSubmit={handleExpertSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Briefcase className="text-purple-500"/> {modal.data ? 'Editar' : 'Novo'} Especialista</h3><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome</label><input name="name" defaultValue={modal.data?.name} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div><div className="grid grid-cols-2 gap-4 mb-4"><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Cargo</label><input name="role" defaultValue={modal.data?.role} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data</label><input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Anotações</label><textarea name="notes" defaultValue={modal.data?.notes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none h-20" /></div><div className="mb-4 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Evidência (Foto)</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-purple-500/10 file:text-purple-500 hover:file:bg-purple-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}</div><div className="mb-6 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/10"><div><span className="text-sm font-bold text-white">Impactou?</span></div><select name="impact" defaultValue={modal.data?.impact} className="bg-black/50 border border-white/20 text-white p-2 rounded text-sm"><option value="Baixo">Baixo</option><option value="Médio">Médio</option><option value="Alto">Alto</option></select><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="applied" defaultChecked={modal.data?.applied} className="w-5 h-5 accent-green-500" /><span className="text-xs text-white">Aplicado</span></label></div><button className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg">Salvar Registro</button></DraftForm>)}
 
-          {modal.type === 'robotForm' && (<form onSubmit={handleRobotSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><GitCommit className="text-blue-500"/> {modal.data ? 'Editar' : 'Novo'} Versão</h3><div className="grid grid-cols-2 gap-4 mb-4"><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Versão</label><input name="version" defaultValue={modal.data?.version} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: V2.0" /></div><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data</label><input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Apelido</label><input name="name" defaultValue={modal.data?.name} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">O que mudou?</label><textarea name="changes" defaultValue={modal.data?.changes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none h-24" /></div><div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Evidência (Foto)</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}</div><button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar Versão</button></form>)}
+          {modal.type === 'robotForm' && (<DraftForm key={JSON.stringify([currentUser?.studentId || currentUser?.data?.id || currentUser?.name, activeTeamSeasonId, modal.type, modal.data?.id])} kind="robot" recordId={modal.data?.id} onDiscard={() => setSelectedFile(null)} onSubmit={handleRobotSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><GitCommit className="text-blue-500"/> {modal.data ? 'Editar' : 'Novo'} Versão</h3><div className="grid grid-cols-2 gap-4 mb-4"><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Versão</label><input name="version" defaultValue={modal.data?.version} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: V2.0" /></div><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data</label><input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Apelido</label><input name="name" defaultValue={modal.data?.name} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">O que mudou?</label><textarea name="changes" defaultValue={modal.data?.changes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none h-24" /></div><div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Evidência (Foto)</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}</div><button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar Versão</button></DraftForm>)}
 
         
 
           {modal.type === 'expertContactForm' && (
-            <form onSubmit={handleExpertContactSubmit}>
+            <DraftForm key={JSON.stringify([currentUser?.studentId || currentUser?.data?.id || currentUser?.name, activeTeamSeasonId, modal.type, modal.data?.id])} kind="contact" recordId={modal.data?.id} onDiscard={() => setSelectedFile(null)} onSubmit={handleExpertContactSubmit}>
               <h3 className="mb-2 flex items-center gap-2 text-xl font-bold text-white">
                 <MessageSquare className="text-cyan-400" /> {modal.data ? 'Editar' : 'Novo'} contato realizado
               </h3>
@@ -7495,7 +7426,7 @@ const handleFileSelect = (e) => {
               <div className="newgears-modal-submit-bar sticky bottom-0 -mx-1 mt-2 border-t border-white/10 px-1 pb-1 pt-3">
                 <button type="submit" className="w-full rounded-lg bg-cyan-600 py-3 font-bold text-white shadow-lg shadow-cyan-950/30 hover:bg-cyan-500">Salvar contato</button>
               </div>
-            </form>
+            </DraftForm>
           )}
 
           {modal.type === 'xp' && (
@@ -7620,7 +7551,7 @@ const handleFileSelect = (e) => {
           {modal.type === 'robotView' && (<div><div className="flex justify-between items-start mb-2"><h3 className="text-xl font-bold text-white">{modal.data.name}</h3><span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-mono font-bold">{modal.data.version}</span></div><p className="text-xs text-gray-500 mb-6">{modal.data.date}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Mudanças e Testes</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.changes}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto do Protótipo</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10" alt="Robô" /></div>)}</div>)}
 
           {modal.type === 'attachmentForm' && (
-              <form onSubmit={handleAttachmentSubmit}>
+              <DraftForm key={JSON.stringify([currentUser?.studentId || currentUser?.data?.id || currentUser?.name, activeTeamSeasonId, modal.type, modal.data?.id])} kind="attachment" recordId={modal.data?.id} onDiscard={() => setSelectedFile(null)} onSubmit={handleAttachmentSubmit}>
                   <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Wrench className="text-blue-500"/> {modal.data ? 'Editar' : 'Nova'} Garra / Anexo</h3>
                   <div className="grid grid-cols-2 gap-4 mb-4">
                       <div>
@@ -7649,13 +7580,13 @@ const handleFileSelect = (e) => {
                       {selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}
                   </div>
                   <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar Garra</button>
-              </form>
+              </DraftForm>
           )}
 
           {modal.type === 'attachmentView' && (<div><div className="flex justify-between items-start mb-2"><h3 className="text-xl font-bold text-white">{modal.data.name}</h3>{(() => { const roundName = rounds.find(r => r.id === modal.data.roundId)?.name || 'Saída Desconhecida'; return <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-mono font-bold">{roundName}</span> })()}</div><p className="text-xs text-gray-500 mb-6">{modal.data.date?.split('-').reverse().join('/')} {modal.data.author && `• Por ${modal.data.author}`}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Mudanças / Funcionalidade</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.changes}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Garra</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10 cursor-pointer hover:opacity-80 transition-opacity" alt="Garra" onClick={() => openImageModal(modal.data.image)} title="Clique para ampliar" /></div>)}</div>)}
 
           {modal.type === 'codeForm' && (
-              <form onSubmit={handleCodeSubmit}>
+              <DraftForm key={JSON.stringify([currentUser?.studentId || currentUser?.data?.id || currentUser?.name, activeTeamSeasonId, modal.type, modal.data?.id])} kind="code" recordId={modal.data?.id} onDiscard={() => setSelectedFile(null)} onSubmit={handleCodeSubmit}>
                   <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Code className="text-green-500"/> {modal.data ? 'Editar' : 'Novo'} Codigo</h3>
                   <div className="mb-4">
                       <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Titulo do Codigo</label>
@@ -7680,7 +7611,7 @@ const handleFileSelect = (e) => {
                       </label>
                   )}
                   <button className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-green-900/20">Salvar no Cofre</button>
-              </form>
+              </DraftForm>
           )}
 
           {modal.type === 'codeView' && (<div><h3 className="text-xl font-bold text-white mb-2">{modal.data.title}</h3><p className="text-xs text-gray-500 mb-6 flex items-center gap-2"><Calendar size={12}/> {modal.data.date?.split('-').reverse().join('/')} {modal.data.author && <><UserCircle size={12} className="ml-2"/> Por {modal.data.author}</>}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block flex items-center gap-1"><Lightbulb size={12}/> Lógica de Funcionamento</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.description}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block flex items-center gap-1"><ImageIcon size={12}/> Print do Código</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10 cursor-pointer hover:opacity-80 transition-opacity" alt="Código" onClick={() => openImageModal(modal.data.image)} title="Clique para ampliar" /></div>)}</div>)}
@@ -7727,7 +7658,7 @@ const handleFileSelect = (e) => {
           {/* NOVO MODAL: EDITOR DE MISSÕES */}
           {modal.type === 'missionForm' && (
              <div>
-                 <form onSubmit={handleMissionSubmit} className="mb-8 pb-8 border-b border-white/10">
+                 <DraftForm key={JSON.stringify([currentUser?.studentId || currentUser?.data?.id || currentUser?.name, activeTeamSeasonId, modal.type, modal.data?.id])} kind="mission" recordId={modal.data?.id} onDiscard={() => setSelectedFile(null)} onSubmit={handleMissionSubmit} className="mb-8 pb-8 border-b border-white/10">
                     <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Settings className="text-blue-500"/> {modal.data ? 'Editar' : 'Nova'} Missão</h3>
                     <div className="grid grid-cols-3 gap-4 mb-4">
                         <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Código</label><input name="code" defaultValue={modal.data?.code} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: M01" /></div>
@@ -7756,7 +7687,7 @@ const handleFileSelect = (e) => {
                         <button className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-colors">Salvar Missão</button>
                         {modal.data && <button type="button" onClick={() => { setModal({type: 'missionForm', data: null}); setSelectedFile(null); }} className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-colors">Cancelar</button>}
                     </div>
-                 </form>
+                 </DraftForm>
 
                  {/* LISTA GERENCIADORA DE MISSÕES */}
                  <div>
@@ -7798,7 +7729,7 @@ const handleFileSelect = (e) => {
 
           {modal.type === 'matrixForm' && (
 
-             <form onSubmit={handleMatrixSubmit}>
+             <DraftForm key={JSON.stringify([currentUser?.studentId || currentUser?.data?.id || currentUser?.name, activeTeamSeasonId, modal.type, modal.data?.id])} kind="matrix" recordId={modal.data?.id} onDiscard={() => setSelectedFile(null)} onSubmit={handleMatrixSubmit}>
 
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><BarChart3 className="text-purple-500"/> Nova Ideia</h3>
 
@@ -7820,13 +7751,13 @@ const handleFileSelect = (e) => {
 
                 <button className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg">Adicionar à Matriz</button>
 
-             </form>
+             </DraftForm>
 
           )}
 
           {/* NOVO MODAL: EDITOR DO PROJETO */}
           {modal.type === 'projectForm' && (
-             <form onSubmit={handleProjectSubmit}>
+             <DraftForm key={JSON.stringify([currentUser?.studentId || currentUser?.data?.id || currentUser?.name, activeTeamSeasonId, modal.type, modal.data?.id])} kind="project" recordId={modal.data?.id} onDiscard={() => setSelectedFile(null)} onSubmit={handleProjectSubmit}>
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white">
                     <Lightbulb className="text-yellow-500"/> Editar Projeto de Inovação
                 </h3>
@@ -7869,12 +7800,12 @@ const handleFileSelect = (e) => {
                 </div>
 
                 <button className="w-full bg-yellow-600 hover:bg-yellow-500 text-black font-bold py-3 rounded-lg">Salvar Projeto Oficial</button>
-             </form>
+             </DraftForm>
           )}
 
           {/* MODAL DE IMPACTO (OUTREACH) */}
           {modal.type === 'outreachForm' && (
-             <form onSubmit={handleOutreachSubmit}>
+             <DraftForm key={JSON.stringify([currentUser?.studentId || currentUser?.data?.id || currentUser?.name, activeTeamSeasonId, modal.type, modal.data?.id])} kind="outreach" recordId={modal.data?.id} onDiscard={() => setSelectedFile(null)} onSubmit={handleOutreachSubmit}>
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Megaphone className="text-orange-500"/> Registrar Impacto</h3>
                 
                 <div className="mb-4">
@@ -7916,12 +7847,12 @@ const handleFileSelect = (e) => {
                 </div>
 
                 <button type="submit" className="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-orange-900/20 transition-all">Salvar Registro</button>
-             </form>
+             </DraftForm>
           )}
 
           {/* NOVO MODAL: EDITOR DE AGENDA/EVENTO */}
           {modal.type === 'eventForm' && (
-             <form onSubmit={handleEventSubmit}>
+             <DraftForm key={JSON.stringify([currentUser?.studentId || currentUser?.data?.id || currentUser?.name, activeTeamSeasonId, modal.type, modal.data?.id])} kind="event" recordId={modal.data?.id} onDiscard={() => setSelectedFile(null)} onSubmit={handleEventSubmit}>
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><CalendarDays className="text-blue-500"/> {modal.data ? 'Editar' : 'Novo'} Evento</h3>
                 
                 <div className="mb-4">
@@ -7984,7 +7915,7 @@ const handleFileSelect = (e) => {
                 </div>
 
                 <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-blue-900/20">Salvar na Agenda</button>
-             </form>
+             </DraftForm>
           )}
 
         </div>
@@ -8426,7 +8357,7 @@ const handleFileSelect = (e) => {
       }
   };
 
-  const handleSaveFullRoundRun = async (e) => {
+  const handleSaveFullRoundRun = async (e, { draftId } = {}) => {
       e.preventDefault();
 
       const timeVal = parseInt(roundFormValues[FULL_ROUND_TIME_KEY], 10);
@@ -8451,7 +8382,7 @@ const handleFileSelect = (e) => {
       const withinLimitCount = upcomingWindow.filter((entry) => Number(entry.time) <= 150).length;
 
       try {
-          await addDoc(collection(db, "score_history"), {
+          const testData = {
               seasonId: activeTeamSeasonId || 'legacy',
               score: scoreVal,
               time: timeVal,
@@ -8459,7 +8390,9 @@ const handleFileSelect = (e) => {
               author: isAdmin ? 'Tecnico' : viewAsStudent?.name || 'Equipe',
               practiceType: 'full_round',
               withinLimit: timeVal <= 150,
-          });
+          };
+          const testRef = await saveNewContribution('test', testData, draftId);
+          celebrateGearContribution({ type: 'test', sourceId: testRef.id, studentId: gearActorId, record: testData });
           void recordActivity({
               action: 'registrou um round completo',
               category: 'robot',
@@ -8480,6 +8413,7 @@ const handleFileSelect = (e) => {
           }
 
           showNotification(`Round completo salvo! ${withinLimitCount}/${upcomingWindow.length} tentativas dentro de 2:30.`, "success");
+          return true;
       } catch (error) {
           console.error("Erro ao salvar round completo:", error);
           showNotification("Erro ao salvar round completo.", "error");
@@ -8487,7 +8421,7 @@ const handleFileSelect = (e) => {
   };
 
   // --- NOVA FUNÇÃO: SALVAR EXECUÇÃO DE UM ROUND ESPECÍFICO ---
-  const handleSaveExitPractice = async (e, exitNumber) => {
+  const handleSaveExitPractice = async (e, exitNumber, { draftId } = {}) => {
       e.preventDefault();
       const form = e.currentTarget;
       const formData = new FormData(form);
@@ -8530,7 +8464,8 @@ const handleFileSelect = (e) => {
       };
 
       try {
-          await addDoc(collection(db, 'score_history'), run);
+          const testRef = await saveNewContribution('test', run, draftId);
+          celebrateGearContribution({ type: 'test', sourceId: testRef.id, studentId: gearActorId, record: run });
           void recordActivity({
               action: 'registrou um teste de saida',
               category: 'robot',
@@ -8548,13 +8483,14 @@ const handleFileSelect = (e) => {
           }
           form.reset();
           showNotification(`Teste da Saida ${exitNumber} registrado.`, 'success');
+          return true;
       } catch (error) {
           console.error('Erro ao salvar teste de saida:', error);
           showNotification('Erro ao salvar teste de saida.', 'error');
       }
   };
 
-  const handleSaveRoundRun = async (e, round) => {
+  const handleSaveRoundRun = async (e, round, { draftId } = {}) => {
     e.preventDefault();
     const timeVal = parseInt(e.target.time.value);
     if(!timeVal || isNaN(timeVal)) return;
@@ -8580,14 +8516,16 @@ const handleFileSelect = (e) => {
 
     try {
         // 1. Salva no histórico para o gráfico
-        await addDoc(collection(db, "score_history"), {
+        const testData = {
               seasonId: activeTeamSeasonId || 'legacy',
             roundId: round.id,
             roundName: round.name,
             time: timeVal, // O tempo que levou
             date: new Date().toISOString(),
             author: viewAsStudent?.name || "Técnico"
-        });
+          };
+          const testRef = await saveNewContribution('test', testData, draftId);
+          celebrateGearContribution({ type: 'test', sourceId: testRef.id, studentId: gearActorId, record: testData });
 
         // 2. Atualiza o tempo estimado do round (para ficar real)
         await updateDoc(doc(db, "rounds", round.id), {
@@ -8610,14 +8548,15 @@ const handleFileSelect = (e) => {
             return next;
         });
         e.target.reset();
-    } catch (error) {
+    return true;
+      } catch (error) {
         console.error("Erro round run:", error);
         showNotification("Erro ao salvar.", "error");
     }
   };
 
 
-  const handleSavePrototypeIteration = async (draft) => {
+  const handleSavePrototypeIteration = async (draft, { draftId } = {}) => {
       const version = `${draft.version || ''}`.trim().slice(0, 100);
       const focus = `${draft.focus || ''}`.trim().slice(0, 100);
       const improvement = `${draft.improvement || ''}`.trim().slice(0, 1200);
@@ -8660,8 +8599,8 @@ const handleFileSelect = (e) => {
       };
 
       try {
-          const savedRecord = await addDoc(collection(db, 'prototypeIterations'), { ...iteration, createdByStudentId: gearActorId });
-          celebrateGearContribution({ type: 'prototype', sourceId: savedRecord.id, studentId: gearActorId });
+          const savedRecord = await saveNewContribution('prototype', iteration, draftId);
+          celebrateGearContribution({ type: 'prototype', sourceId: savedRecord.id, studentId: gearActorId, record: iteration });
           void recordActivity({
               action: 'registrou uma versão do protótipo',
               category: 'innovation',
@@ -9034,8 +8973,8 @@ const handleFileSelect = (e) => {
 
   // --- RENDER PRINCIPAL (SÓ CHEGA AQUI SE ESTIVER LOGADO) ---
   return (
-    <GearExperienceProvider key={`${currentUser.type}:${currentUser.studentId || currentUser.data?.id || currentUser.uid || currentUser.name}`} db={db} user={currentUser} student={viewAsStudent} isLiteMode={isLiteMode} onOpenShop={() => isAdmin ? setAdminTab('shop') : setStudentTab('shop')}>
-    <div className={`newgears-shell min-h-screen text-white selection:bg-yellow-300 selection:text-slate-950 pb-20 relative overflow-hidden ${isLiteMode ? 'newgears-lite-mode' : ''}`}>
+    <GearExperienceProvider key={`${currentUser.type}:${currentUser.studentId || currentUser.data?.id || currentUser.uid || currentUser.name}`} db={db} user={currentUser} student={viewAsStudent} seasonId={activeTeamSeasonId || 'legacy'} isLiteMode={isLiteMode} onOpenShop={() => isAdmin ? setAdminTab('shop') : setStudentTab('shop')}>
+    <div className={`newgears-shell newgears-workspace min-h-screen text-white selection:bg-yellow-300 selection:text-slate-950 pb-20 relative overflow-hidden ${isLiteMode ? 'newgears-lite-mode' : ''}`}>
       {/* Estilo da Animação de Fundo */}
       <div className="newgears-floating-layer">
         <div className="newgears-orb newgears-orb--cyan"></div>
@@ -9219,19 +9158,33 @@ const handleFileSelect = (e) => {
         </Suspense>
       )}
 
+      <WorkspaceSidebar
+          tabs={currentWorkspaceTabs}
+          activeId={isAdmin ? adminTab : studentTab}
+          onNavigate={navigateWorkspace}
+          open={workspaceMenuOpen}
+          onClose={closeWorkspaceMenu}
+          brand={<LogoNewGears />}
+          profile={{ name: workspaceProfileStudent?.name || adminProfile?.name || currentUser?.name || 'Integrante', role: workspaceProfileStudent ? (isAdmin ? 'Aluno · Modo capitã' : 'Painel do aluno') : 'Painel do técnico', subtitle: workspaceProfileStudent ? (workspaceProfileStudent.station || 'Equipe') : (adminProfile?.specialty || 'Gestão da equipe') }}
+          avatar={<GearAvatar student={workspaceProfileStudent || adminProfile} />}
+          meta={viewAsStudent ? <><span>{viewAsStudent.xp || 0} XP</span><span>{studentCurrentLevel?.name || 'Equipe'}</span>{viewAsStudent.turma && <span>{viewAsStudent.turma}</span>}</> : <><span>{students.length} alunos</span><span>{activeTeamSeasonName}</span></>}
+          onProfile={viewAsStudent ? () => openProfileModal(viewAsStudent) : currentUser?.type === 'admin' ? () => setModal({ type: 'editAdminProfile', data: adminProfile }) : undefined}
+          onLogout={handleLogout}
+      />
+      <div className="newgears-workspace-page" data-workspace-page>
  {/* HEADER DO SISTEMA (COMPLETO) */}
       <header className="newgears-topbar sticky top-0 z-40 px-4 md:px-6 py-4 flex justify-between items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-              <div className="newgears-logo-hub w-24 md:w-28 h-auto px-3 py-2">
-                  <LogoNewGears />
-              </div>
-              <div className="hidden xl:block">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-slate-300/55 font-black">Base da equipe</p>
-                  <p className="text-sm font-black text-white mt-1">{currentWeekData?.weekName || 'Semana da temporada'}</p>
+          <div className="flex min-w-0 items-center gap-3">
+              <button type="button" className="workspace-menu-toggle" aria-label="Abrir menu" aria-expanded={workspaceMenuOpen} aria-controls="workspace-navigation" onClick={() => setWorkspaceMenuOpen(true)}><Menu size={22} /></button>
+              <div className="workspace-topbar-heading">
+                  <small>New Gears / {isAdmin ? 'Equipe' : 'Meu painel'}</small>
+                  <h1>{currentWorkspaceTab?.label || 'Base da equipe'}</h1>
               </div>
           </div>
 
-          <div className="flex items-center gap-2 md:gap-3 flex-wrap justify-end">
+          <details className="workspace-tools" onClick={(event) => { if (event.target.closest('button')) event.currentTarget.open = false; }} onKeyDown={(event) => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); } }} onBlur={(event) => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false; }}>
+            <summary aria-label="Ferramentas da equipe"><SlidersHorizontal size={18} /><span>Ferramentas</span><ChevronDown size={14} /></summary>
+            <div className="workspace-tools__panel flex items-center gap-2 md:gap-3 flex-wrap justify-start">
               
               {/* --- CONTADOR COMPACTO --- */}
               <Countdown 
@@ -9261,7 +9214,7 @@ const handleFileSelect = (e) => {
               {/* 👇 COLE O BOTÃO DO RANKING AQUI 👇 */}
               {!viewAsStudent && (
                 <button 
-                  onClick={() => setActiveTab('ranking')} 
+                  onClick={() => { setAdminTab('overview'); setActiveTab('ranking'); }}
                   className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 p-2 rounded-full hover:bg-yellow-500/20 transition-colors md:px-4 md:py-2 md:rounded-lg flex items-center gap-2"
                 >
                   <Trophy size={18} /> <span className="hidden md:inline text-xs font-bold">Ranking XP</span>
@@ -9346,7 +9299,7 @@ const handleFileSelect = (e) => {
               )}
 {/* ÁREA DO DESAFIO DE INGLÊS (Visão do Aluno) */}
 {viewAsStudent && (
-    <div className="bg-[#151520] border border-white/10 rounded-2xl p-4 mb-6 flex items-center justify-between">
+    <div className="bg-[#151520] border border-white/10 rounded-2xl p-4 flex w-full flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
             <div className="text-3xl">🇺🇸</div>
             <div>
@@ -9378,7 +9331,8 @@ const handleFileSelect = (e) => {
               <button onClick={handleLogout} className="bg-red-500/10 border border-red-500/20 text-red-500 p-2 rounded-full hover:bg-red-500 hover:text-white transition-all" title="Sair">
                   <LogOut size={18} />
               </button>
-          </div>
+            </div>
+          </details>
       </header>
 
       <div className="px-4 pt-4 md:px-8"><ReminderInbox authenticated={reportsWorkspace.enabled} user={currentUser} seasonId={activeTeamSeasonId || 'legacy'} tasks={tasks} students={students} reportsVersion={reportsWorkspace.reports.map((report) => report.id + (report.updatedAt || '')).join('|')} onOpen={(tab) => isAdmin ? setAdminTab(tab) : setStudentTab(tab)} /></div>
@@ -9416,10 +9370,10 @@ const handleFileSelect = (e) => {
       )}
 
       {isAdmin && (
-        <main className={`newgears-stage max-w-[1600px] mx-auto animate-in fade-in duration-500 ${adminPanelState.compact ? 'p-4 md:p-6' : 'p-4 md:p-8'}`}>
+        <main id="workspace-content" tabIndex={-1} aria-label={currentWorkspaceTab?.label} className={`newgears-stage workspace-section-anchor max-w-[1600px] mx-auto animate-in fade-in duration-500 ${adminPanelState.compact ? 'p-4 md:p-6' : 'p-4 md:p-8'}`}>
           {!adminPanelState.compact && <UrgentEventsBanner />}
 
-          <div className="mb-6">
+          <div className="mb-6" hidden={adminTab !== 'overview'}>
             <WorkspaceCollapsible isOpen={adminPanelState.hero}>
               <WorkspaceHero
                 eyebrow="Temporada FLL"
@@ -9437,7 +9391,7 @@ const handleFileSelect = (e) => {
             </div>
           </div>
 
-          {!adminPanelState.compact && (
+          {adminTab === 'overview' && !adminPanelState.compact && (
           <WorkspaceCollapsible isOpen={adminPanelState.dashboard}>
             <div className="flex flex-col gap-6 mb-6">
               <WeeklyReportsSummary workspace={reportsWorkspace} onOpen={openWeeklyReports} />
@@ -9499,7 +9453,7 @@ const handleFileSelect = (e) => {
           )}
 
             {/* Dentro do seu <main> ou área de conteúdo central, junto com os outros 'ifs' de abas */}
-{activeTab === 'ranking' && (
+{adminTab === 'overview' && activeTab === 'ranking' && (
   <Suspense fallback={<LazyPanelFallback label="Carregando ranking da equipe..." minHeightClass="min-h-[340px]" />}>
     <RankingPanel students={students} setActiveTab={setActiveTab} />
   </Suspense>
@@ -9536,11 +9490,11 @@ const handleFileSelect = (e) => {
                       {currentUser?.type === 'admin' && db && <button type="button" disabled={!workspaceSeasonLoaded || isTransitioningSeason} onClick={() => setModal({ type: 'seasonTransition', data: null })} className="rounded-full border border-white/10 bg-white/[0.045] px-4 py-2.5 text-[11px] font-bold text-slate-300 transition hover:border-cyan-200/25 hover:bg-cyan-200/10 hover:text-cyan-50 disabled:cursor-wait disabled:opacity-50">{workspaceSeasonLoaded ? 'Encerrar temporada' : 'Carregando temporada…'}</button>}
                     </div>
                   </div>
-                  <WorkspaceTabs eyebrow="Centro de Navegacao" tabs={adminWorkspaceTabs} activeId={adminTab} onChange={setAdminTab} />
+                  <WorkspaceSectionHeading tab={currentWorkspaceTab} />
                 </div>
 
                 {/* CONTEÃƒÅ¡DO DA ABA SELECIONADA */}
-                <div className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(adminTab)}`}>
+                <div hidden={adminTab === 'overview'} className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(adminTab)}`}>
                   <WorkspaceScene sceneId={`admin-${adminTab}`}>
                     {adminTab === 'weekly_reports' && <WeeklyReportsView key={focusedReportId || 'all-reports'} user={currentUser} workspace={reportsWorkspace} students={allStudents} seasonId={activeTeamSeasonId || 'legacy'} reportDueDay={effectivePlanning.reportDueDay} defaultWeek={currentWeekData?.weekName} focusedReportId={focusedReportId} />}
                     {adminTab === 'report_recipients' && <ReportRecipientsView user={currentUser} workspace={reportsWorkspace} />}
@@ -9627,11 +9581,12 @@ const handleFileSelect = (e) => {
 
       {/* --- ÁREA DO ALUNO --- */}
       {!isAdmin && viewAsStudent && (
-        <main className="newgears-stage p-4 md:p-8 w-full max-w-[1800px] mx-auto animate-in slide-in-from-bottom-8">
+        <main id="workspace-content" tabIndex={-1} aria-label={currentWorkspaceTab?.label} className="newgears-stage workspace-section-anchor p-4 md:p-8 w-full max-w-[1800px] mx-auto animate-in slide-in-from-bottom-8">
           <UrgentEventsBanner />
 
           {ownTournamentSelection ? <TournamentSelectionNotice key={`${viewAsStudent.id}__${activeTeamSeasonId || 'legacy'}__${ownTournamentSelection.selectedAt || ownTournamentSelection.createdAt || 'selected'}`} studentName={viewAsStudent.name || 'Integrante'} seasonName={activeTeamSeasonName} isLiteMode={isLiteMode} /> : null}
 
+          <div hidden={studentTab !== 'overview'}>
           <div className="mb-2">
             <WorkspaceCollapsible isOpen={studentPanelState.hero}>
               <WorkspaceHero
@@ -9709,6 +9664,7 @@ const handleFileSelect = (e) => {
               )}
             </div>
           </WorkspaceCollapsible>
+          </div>
 
           {/* ALERTA DE TAREFAS ATRASADAS DO ALUNO */}
           {studentOverdueTasksCount > 0 && (
@@ -9782,12 +9738,12 @@ const handleFileSelect = (e) => {
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-3">
                 
-                <div className="-mt-10 md:-mt-12">
-                  <WorkspaceTabs eyebrow="Mapa do Aluno" tabs={studentWorkspaceTabs} activeId={studentTab} onChange={setStudentTab} />
+                <div>
+                  {studentTab !== 'overview' && <WorkspaceSectionHeading tab={currentWorkspaceTab} />}
                 </div>
 
                 {/* CONTEÃƒÅ¡DO DA ABA SELECIONADA */}
-                <div className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(studentTab)}`}>
+                <div hidden={studentTab === 'overview'} className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(studentTab)}`}>
                   <WorkspaceScene sceneId={`student-${studentTab}`}>
                     {studentTab === 'weekly_reports' && <WeeklyReportsView key={focusedReportId || 'all-reports'} user={currentUser} workspace={reportsWorkspace} students={allStudents} seasonId={activeTeamSeasonId || 'legacy'} reportDueDay={effectivePlanning.reportDueDay} defaultWeek={currentWeekData?.weekName} focusedReportId={focusedReportId} />}
                     {studentTab === 'shop' && <Suspense fallback={<LazyPanelFallback label="Carregando a loja do Giro…" />}><GearShopView /></Suspense>}
@@ -10269,6 +10225,7 @@ const handleFileSelect = (e) => {
           </div>
         </main>
       )}
+      </div>
     </div>
     </div>
     </GearExperienceProvider>
