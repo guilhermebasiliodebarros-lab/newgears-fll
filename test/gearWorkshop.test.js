@@ -1,0 +1,78 @@
+import assert from 'node:assert/strict';
+import { memoryStore } from './teamProcesses.test.js';
+import { saveGearWorkshop, reactToGearWorkshop } from '../src/services/gearWorkshop.js';
+import { clampWorkshopPoint, giroExpression, resolveGearWorkshop, validWorkshopLayout, workshopMember } from '../src/utils/gearWorkshop.js';
+import { favoritesStorageKey, normalizeFavorites, readWorkspaceFavorites, saveWorkspaceFavorites } from '../src/utils/workspaceFavorites.js';
+
+export async function runGearWorkshopTests() {
+  const defaults = resolveGearWorkshop();
+  assert.ok(validWorkshopLayout(defaults.layout));
+  assert.deepEqual(clampWorkshopPoint('bench', { x: -100, y: 999 }), { x: 120, y: 360 });
+  assert.deepEqual(clampWorkshopPoint('light', { x: 999, y: NaN }), { x: 570, y: 59 });
+  assert.equal(resolveGearWorkshop({ expression: 'unknown' }).expression, 'auto');
+  assert.equal(validWorkshopLayout({ ...defaults.layout, extra: {} }), false);
+  assert.equal(validWorkshopLayout({ ...defaults.layout, giro: { x: 400.5, y: 300 } }), false);
+  assert.equal(validWorkshopLayout({ ...defaults.layout, light: { x: 400, y: 200 } }), false);
+  assert.equal(giroExpression('work'), 'focused');
+  assert.equal(giroExpression('discover'), 'surprised');
+  assert.equal(giroExpression('celebrate'), 'happy');
+  assert.equal(giroExpression('idle'), 'neutral');
+  assert.equal(giroExpression('work', 'curious'), 'curious');
+  assert.equal(giroExpression('work', 'invalid'), 'focused');
+  const shared = workshopMember({ id: 'a', name: 'Ana', password: 'private', username: 'ana', xp: 999, grades: { math: 10 }, balance: 900, gearAppearance: { skin: 'skin-solar', privateField: 'secret' }, gearWorkshop: defaults });
+  assert.deepEqual(Object.keys(shared).sort(), ['avatarImage', 'gearAppearance', 'gearWorkshop', 'id', 'name']);
+  assert.equal(shared.gearAppearance.skin, 'skin-solar');
+  assert.equal(shared.gearAppearance.privateField, undefined);
+  assert.ok(!JSON.stringify(shared).includes('private'));
+
+  const memory = memoryStore({ 'students/a': { name: 'Ana', status: 'active', xp: 321, password: 'unchanged', gearAppearance: { skin: 'skin-solar' } }, 'students/b': { name: 'Bruno', status: 'active' }, 'studentGearProfiles/a': { balance: 120, earned: 145, spent: 25 } });
+  const user = { type: 'student', studentId: 'a' };
+  const context = { db: {}, user, store: memory.store };
+  const studentBefore = structuredClone(memory.records.get('students/a'));
+  const walletBefore = structuredClone(memory.records.get('studentGearProfiles/a'));
+  const layout = { ...defaults.layout, bench: { x: 340, y: 300 }, giro: { x: 510, y: 325 } };
+  const saved = await saveGearWorkshop({ ...context, layout, expression: 'curious' });
+  assert.deepEqual(saved.layout, layout);
+  assert.equal(saved.expression, 'curious');
+  assert.deepEqual(memory.records.get('students/a'), { ...studentBefore, gearWorkshop: saved });
+  assert.deepEqual(memory.records.get('studentGearProfiles/a'), walletBefore, 'Furniture positions and expressions do not spend or award Gears');
+  assert.equal(memory.records.get('students/b').gearWorkshop, undefined);
+  await assert.rejects(saveGearWorkshop({ ...context, layout: { ...layout, giro: { x: 10000, y: 300 } }, expression: 'happy' }), /posições/);
+  await assert.rejects(saveGearWorkshop({ ...context, layout, expression: 'not-valid' }), /expressão/);
+  await assert.rejects(saveGearWorkshop({ ...context, user: { type: 'admin' }, layout, expression: 'happy' }), /perfil de aluno/);
+  const beforeFailure = structuredClone([...memory.records]);
+  const interrupted = { ...memory.store, runTransaction: (_db, action) => memory.store.runTransaction(_db, async (transaction) => { await action(transaction); throw new Error('Network failed'); }) };
+  await assert.rejects(saveGearWorkshop({ ...context, store: interrupted, layout: defaults.layout, expression: 'happy' }), /Network/);
+  assert.deepEqual([...memory.records], beforeFailure, 'A failed save preserves the previous workshop and all account data');
+
+  await assert.rejects(reactToGearWorkshop({ ...context, store: interrupted, targetStudentId: 'b', type: 'creative' }), /Network/);
+  assert.deepEqual([...memory.records], beforeFailure, 'An interrupted reaction cannot change any workshop, account, or count');
+  const first = await reactToGearWorkshop({ ...context, targetStudentId: 'b', type: 'creative' });
+  assert.equal(first.type, 'creative');
+  assert.equal(first.actorStudentId, 'a');
+  assert.equal((await reactToGearWorkshop({ ...context, targetStudentId: 'b', type: 'style' })).type, 'style');
+  assert.equal([...memory.records.keys()].filter((path) => path.includes('/gearWorkshopReactions/')).length, 1, 'One visitor has a single replaceable reaction per workshop');
+  assert.equal((await reactToGearWorkshop({ ...context, targetStudentId: 'b', type: 'style' })).type, 'none', 'Selecting the same reaction removes it');
+  await assert.rejects(reactToGearWorkshop({ ...context, targetStudentId: 'a', type: 'creative' }), /outro integrante/);
+  await assert.rejects(reactToGearWorkshop({ ...context, targetStudentId: 'bad/path', type: 'creative' }), /outro integrante/);
+  await assert.rejects(reactToGearWorkshop({ ...context, targetStudentId: 'b', type: 'arbitrary text' }), /reações/);
+  await assert.rejects(reactToGearWorkshop({ ...context, targetStudentId: 'missing', type: 'creative' }), /ativo/);
+  await assert.rejects(reactToGearWorkshop({ ...context, user: { type: 'admin' }, targetStudentId: 'b', type: 'creative' }), /perfil de aluno/);
+  memory.records.get('students/b').status = 'inactive';
+  await assert.rejects(reactToGearWorkshop({ ...context, targetStudentId: 'b', type: 'creative' }), /ativo/);
+  memory.records.get('students/a').status = 'inactive';
+  await assert.rejects(saveGearWorkshop({ ...context, layout, expression: 'happy' }), /ativo/);
+  assert.deepEqual(memory.records.get('studentGearProfiles/a'), walletBefore);
+
+  const values = new Map();
+  const storage = { getItem: (key) => values.get(key) || null, setItem: (key, value) => values.set(key, value) };
+  saveWorkspaceFavorites(storage, 'student:a', ['rounds', 'logbook', 'rounds']);
+  saveWorkspaceFavorites(storage, 'student:b', ['mission']);
+  assert.deepEqual(readWorkspaceFavorites(storage, 'student:a'), ['rounds', 'logbook']);
+  assert.deepEqual(readWorkspaceFavorites(storage, 'student:b'), ['mission']);
+  assert.deepEqual(readWorkspaceFavorites(storage, 'admin:a'), []);
+  assert.deepEqual(normalizeFavorites(['agenda', null, '__bad/path', 2, 'agenda']), ['agenda']);
+  values.set(favoritesStorageKey('student:a'), '{bad json');
+  assert.deepEqual(readWorkspaceFavorites(storage, 'student:a'), []);
+  assert.deepEqual(readWorkspaceFavorites({ getItem: () => { throw new Error('Blocked'); } }, 'student:a'), []);
+}

@@ -23,7 +23,7 @@ function rewardMessage(reaction) {
 }
 
 export default function GearCompanion() {
-  const { account, reaction, pending, onOpenShop, isLiteMode } = useGearShopContext();
+  const { account, reaction, pending, onOpenShop, isLiteMode, workshop } = useGearShopContext();
   const evolution = gearEvolution(account);
   const bubbleId = useId();
   const [dismissed, setDismissed] = useState(null);
@@ -110,7 +110,7 @@ export default function GearCompanion() {
       </div>
     </div> : null}
     <button type="button" onClick={() => open ? close() : setManualOpen(true)} aria-expanded={open} aria-controls={open ? bubbleId : undefined} aria-label="Conversar com Giro" className="gear-companion__button">
-      <GearMascot key={dance?.sequence || celebrationId || 0} equipment={account.equipped} level={evolution.level} mood={dancing ? dance.mood || 'dance' : celebrationId ? celebrationMood : open ? reaction ? 'celebrate' : 'wave' : 'idle'} speaking={speech.speaking} decorative />
+      <GearMascot key={dance?.sequence || celebrationId || 0} equipment={account.equipped} level={evolution.level} mood={dancing ? dance.mood || 'dance' : celebrationId ? celebrationMood : open ? reaction ? 'celebrate' : 'wave' : 'idle'} expression={workshop?.expression && workshop.expression !== 'auto' ? workshop.expression : open && reaction?.status === 'pending' ? 'focused' : open && reaction?.status === 'earned' ? 'surprised' : 'auto'} speaking={speech.speaking} decorative />
       <span className="gear-companion__name">{speech.speaking ? 'Falando…' : `Giro · N${evolution.level}`}</span>
       {pending.length ? <span className="gear-companion__badge" aria-label={`${pending.length} recompensa(s) pendente(s)`}>{pending.length}</span> : null}
     </button>

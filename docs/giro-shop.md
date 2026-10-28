@@ -32,6 +32,22 @@ O provador permite **Experimentar** dentro da cena ou **Ver na tela** sem compra
 
 O catálogo e os nove espaços de equipamento também estão refletidos no arquivo de integração `firestore.weekly-reports.rules`, incluindo a normalização de carteiras antigas. Esses blocos precisam fazer parte das regras publicadas quando o projeto usar as permissões autenticadas; o arquivo é um complemento às demais abas, não um substituto integral das regras. Os testes locais conferem preços, compras atômicas, persistência do equipamento e compatibilidade, mas não substituem testes das regras no emulador.
 
+### Organização, expressões e visitas
+
+**Organizar oficina** abre um editor de posições para bancada, decoração, Giro e luminária. Os marcadores funcionam com mouse, toque e setas do teclado (Shift aumenta o passo). As posições ficam limitadas ao cenário, em coordenadas independentes da resolução. **Cancelar** descarta o rascunho; **Salvar oficina** grava posições e expressão em `students/{id}.gearWorkshop`, sem modificar moedas, XP ou outros campos. Uma falha mantém o editor aberto para tentar novamente. Compras de novos itens preservam a disposição da oficina.
+
+O aluno pode escolher as expressões **Feliz**, **Curioso**, **Concentrado**, **Surpreso** ou **Automática**. Olhos, sobrancelhas e boca mudam, e aparecem sinais de curiosidade ou descoberta. No modo automático, trabalhar na bancada indica concentração, explorar o planeta indica surpresa e comemorar indica felicidade. A escolha salva também aparece no Giro flutuante. São expressões visuais; a Giro IA ainda não foi implementada.
+
+**Visitar oficinas** lista os outros integrantes ativos e permite buscar por nome. A galeria recebe somente nome, avatar, equipamento e configuração da oficina; não consulta carteiras de colegas nem exibe senhas, notas ou XP. Cada visita mostra o arranjo e a expressão do dono, sem controles de edição.
+
+Os incentivos **Oficina criativa!**, **Gostei da combinação!** e **Me inspirou!** ficam em `students/{destinatario}/gearWorkshopReactions/{visitante}`. Cada aluno mantém uma reação por oficina: outra escolha substitui a anterior, e clicar na mesma opção a retira. Não há autorreação nem recompensa em moedas ou XP. O dono acompanha os totais em **Incentivos recebidos**; os ouvintes acompanham alterações em tempo real. O técnico pode visualizar, mas não reagir em nome de um aluno.
+
+As regras de integração incluem atualizações restritas ao campo `gearWorkshop`, limites de posição, expressões válidas e a autoria das reações. Elas precisam ser incorporadas às permissões do projeto quando a autenticação estrita estiver habilitada; não foram publicadas automaticamente.
+
+### Favoritos do menu
+
+As estrelas da barra lateral fixam atalhos na seção **Favoritos**, sem navegar ao clicar. A ordem segue a seleção e pode ser alterada removendo e adicionando o atalho. Os favoritos ficam no navegador, separados pelo identificador da conta, sobrevivem ao recarregamento e sincronizam entre abas desse navegador. Somente menus permitidos na visão atual aparecem. Uma conta não herda os favoritos de outra; se o navegador impedir a gravação, o menu informa que a seleção vale apenas para a sessão.
+
 ## Contribuições
 
 Registros confirmados e identificados com o ID do aluno geram recompensas integrais, sem limite diário ou por categoria. Edições e reenvios não geram novos créditos. O histórico também pode ser reconhecido pelo técnico.

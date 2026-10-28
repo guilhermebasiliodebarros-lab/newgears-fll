@@ -26,6 +26,12 @@
 .workspace-sidebar__group h2 { margin: 18px 12px 9px; font-size: 10px; line-height: 1.5; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #8494af; }
 .workspace-sidebar__link { display: flex; align-items: center; gap: 11px; width: 100%; min-height: 43px; padding: 10px 12px; margin: 2px 0; border-radius: 10px; border: 1px solid transparent; text-align: left; color: #c1cce0; transition: background .16s, color .16s, border-color .16s; }
 .workspace-sidebar__link:hover { background: #ffffff08; color: white; }
+.workspace-sidebar__row { display: flex; align-items: center; gap: 2px; }
+.workspace-sidebar__row .workspace-sidebar__link { flex: 1; min-width: 0; width: auto; }
+.workspace-sidebar__favorite { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 30px; height: 36px; border-radius: 8px; color: #657793; }
+.workspace-sidebar__favorite:hover, .workspace-sidebar__favorite[aria-pressed='true'] { color: #fcd34d; background: #fcd34d0c; }
+.workspace-sidebar__hint { padding: 0 12px 8px; color: #8494af; font-size: 10px; line-height: 1.6; }
+.workspace-sidebar__group h2 { display: flex; align-items: center; gap: 7px; }
 .workspace-sidebar__link[aria-current='page'] { background: #67e8f911; border-color: #67e8f925; color: #a5f3fc; box-shadow: inset 3px 0 var(--sidebar-accent); }
 .workspace-sidebar__icon { display: flex; flex-shrink: 0; }
 .workspace-sidebar__label { min-width: 0; flex: 1; font-size: 12px; line-height: 1.45; font-weight: 600; overflow-wrap: anywhere; }

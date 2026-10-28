@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import { gearItem, resolveGearEquipment } from '../utils/gearShop';
+import { giroExpression } from '../utils/gearWorkshop';
 
 const TEETH = Array.from({ length: 96 }, (_, index) => {
   const angle = index / 96 * Math.PI * 2 - Math.PI / 2;
@@ -7,12 +8,13 @@ const TEETH = Array.from({ length: 96 }, (_, index) => {
   return `${index ? 'L' : 'M'}${100 + Math.cos(angle) * radius},${108 + Math.sin(angle) * radius}`;
 }).join(' ') + ' Z';
 
-export default function GearMascot({ equipment, level = 1, mood = 'idle', speaking = false, className = '', label = 'Giro, a engrenagem da New Gears', decorative = false, still = false }) {
+export default function GearMascot({ equipment, level = 1, mood = 'idle', expression = 'auto', speaking = false, className = '', label = 'Giro, a engrenagem da New Gears', decorative = false, still = false }) {
   const uid = useId();
   const selected = resolveGearEquipment(equipment);
   const colors = gearItem(selected.skin).colors;
   const frame = gearItem(selected.frame).variant;
   const accessory = gearItem(selected.accessory).variant;
+  const face = giroExpression(mood, expression);
   const tilt = (event) => {
     if (still || event.pointerType === 'touch' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -22,7 +24,7 @@ export default function GearMascot({ equipment, level = 1, mood = 'idle', speaki
     event.currentTarget.style.setProperty('--gear-pitch', `${-y * 10}deg`);
   };
   const resetTilt = (event) => { event.currentTarget.style.removeProperty('--gear-yaw'); event.currentTarget.style.removeProperty('--gear-pitch'); };
-  return <svg viewBox="0 0 200 210" onPointerMove={tilt} onPointerLeave={resetTilt} role={decorative ? undefined : 'img'} aria-label={decorative ? undefined : label} aria-hidden={decorative || undefined} className={`gear-mascot gear-mascot--level-${level} gear-mascot--${mood} ${speaking ? 'gear-mascot--speaking' : ''} ${still ? 'gear-mascot--still' : ''} ${className}`}>
+  return <svg viewBox="0 0 200 210" onPointerMove={tilt} onPointerLeave={resetTilt} role={decorative ? undefined : 'img'} aria-label={decorative ? undefined : label} aria-hidden={decorative || undefined} data-expression={face} className={`gear-mascot gear-mascot--level-${level} gear-mascot--${mood} gear-mascot--expression-${face} ${speaking ? 'gear-mascot--speaking' : ''} ${still ? 'gear-mascot--still' : ''} ${className}`}>
     <defs>
       <linearGradient id={`${uid}-body`} x1="15%" y1="0%" x2="90%" y2="100%"><stop stopColor="#e0faff" /><stop offset=".2" stopColor={colors[0]} /><stop offset=".55" stopColor={colors[1]} /><stop offset="1" stopColor={colors[2]} /></linearGradient>
       <linearGradient id={`${uid}-edge`} x1="0%" y1="0%" x2="100%" y2="100%"><stop stopColor={colors[1]} /><stop offset=".6" stopColor="#15223e" /><stop offset="1" stopColor={colors[2]} /></linearGradient>
@@ -54,10 +56,10 @@ export default function GearMascot({ equipment, level = 1, mood = 'idle', speaki
       <circle cx="100" cy="108" r="40" fill={`url(#${uid}-face)`} stroke={colors[0]} strokeWidth="1.5" />
       <ellipse cx="94" cy="89" rx="29" ry="19" fill={`url(#${uid}-glass)`} />
       <path d="M72 80a38 38 0 0 1 47-5" stroke="white" strokeOpacity="0.35" fill="none" strokeWidth="3" strokeLinecap="round" />
-      <g className="gear-mascot__gaze"><g className="gear-mascot__eyes" fill={`url(#${uid}-eye)`}>{mood === 'celebrate' && !speaking ? <g fill="none" stroke="#e0faff" strokeWidth="4" strokeLinecap="round"><path d="m80 107 6-5 6 5m16 0 6-5 6 5" /></g> : <><ellipse cx="86" cy="105" rx="5.5" ry="7.5" /><ellipse cx="114" cy="105" rx="5.5" ry="7.5" /><circle cx="84" cy="102" r="2" fill="white" /><circle cx="112" cy="102" r="2" fill="white" /></>}</g></g>
+      <g className="gear-mascot__gaze"><g className="gear-mascot__eyes" fill={`url(#${uid}-eye)`}>{face === 'happy' ? <g fill="none" stroke="#e0faff" strokeWidth="4" strokeLinecap="round"><path d="m80 107 6-5 6 5m16 0 6-5 6 5" /></g> : face === 'focused' ? <><path d="M79 102h14v7H79Zm28 0h14v7h-14Z" /><path d="m78 96 15 2m14 0 15-2" stroke={colors[0]} strokeWidth="3" strokeLinecap="round" /></> : <><ellipse cx="86" cy="105" rx={face === 'surprised' ? 7 : 5.5} ry={face === 'surprised' ? 10 : 7.5} /><ellipse cx="114" cy="105" rx={face === 'surprised' ? 7 : 5.5} ry={face === 'curious' ? 10 : face === 'surprised' ? 10 : 7.5} /><circle cx="84" cy="102" r="2" fill="white" /><circle cx="112" cy="102" r="2" fill="white" />{face === 'curious' && <path d="m107 90 14-3" stroke={colors[0]} strokeWidth="3" strokeLinecap="round" />}</>}</g></g>
       <ellipse cx="74" cy="117" rx="6" ry="3" fill={colors[2]} opacity="0.65" /><ellipse cx="126" cy="117" rx="6" ry="3" fill={colors[2]} opacity="0.65" />
       {level >= 4 ? <path d="m80 92 10-3m20 0 10 3" fill="none" stroke={colors[0]} strokeWidth="2.5" strokeLinecap="round" /> : null}
-      <g className="gear-mascot__mouth">{speaking ? <><ellipse cx="100" cy="124" rx="9" ry="7" fill="#fda4af" stroke="#e0faff" strokeWidth="2" /><path d="M94 123h12" stroke="#fff" strokeWidth="3" strokeLinecap="round" /></> : <path d={mood === 'celebrate' ? 'M87 119Q100 140 113 119Z' : 'M90 121Q100 131 110 121'} fill={mood === 'celebrate' ? '#fda4af' : 'none'} stroke="#e0faff" strokeWidth="3" strokeLinecap="round" />}</g>
+      <g className="gear-mascot__mouth">{speaking ? <><ellipse cx="100" cy="124" rx="9" ry="7" fill="#fda4af" stroke="#e0faff" strokeWidth="2" /><path d="M94 123h12" stroke="#fff" strokeWidth="3" strokeLinecap="round" /></> : face === 'surprised' ? <ellipse cx="100" cy="126" rx="5" ry="7" fill="#0b1225" stroke="#e0faff" strokeWidth="2.5" /> : <path d={face === 'happy' ? 'M87 119Q100 140 113 119Z' : face === 'focused' ? 'M94 124h12' : face === 'curious' ? 'M94 124Q104 132 111 119' : 'M90 121Q100 131 110 121'} fill={face === 'happy' ? '#fda4af' : 'none'} stroke="#e0faff" strokeWidth="3" strokeLinecap="round" />}</g>
       <circle cx="100" cy="149" r="4" fill={colors[0]} stroke="#101a32" strokeWidth="2" />
       {accessory === 'antenna' ? <g><path d="M100 51V30m-8-5 8 5 8-5" fill="none" stroke={colors[0]} strokeWidth="4" strokeLinecap="round" /><circle cx="100" cy="23" r="7" fill={colors[2]} stroke={colors[0]} strokeWidth="2" /></g> : null}
       {accessory === 'crown' ? <path d="m76 56-6-25 20 12 10-22 10 22 20-12-6 25Z" fill="#fbbf24" stroke="#fef3c7" strokeWidth="2" /> : null}
@@ -67,6 +69,7 @@ export default function GearMascot({ equipment, level = 1, mood = 'idle', speaki
       {accessory === 'goggles' ? <g stroke="#fdba74" strokeWidth="3" fill="#164e63cc"><path d="M52 100h20m56 0h20" /><rect x="69" y="88" width="27" height="24" rx="10" /><rect x="104" y="88" width="27" height="24" rx="10" /><path d="M96 99h8m-27-4 10 9m25-9 10 9" fill="none" /></g> : null}
       {accessory === 'medal' ? <g><path d="m78 136 22 21 22-21" fill="none" stroke="#60a5fa" strokeWidth="8" /><circle cx="100" cy="160" r="13" fill="#fcd34d" stroke="#fef3c7" strokeWidth="2" /><path d="m100 151 3 6 6 1-5 4 1 6-5-3-5 3 1-6-5-4 6-1Z" fill="#b45309" /></g> : null}
     </g>
+    {['curious', 'surprised'].includes(face) && <g className="gear-mascot__expression-mark"><circle cx="164" cy="55" r="13" fill="#15233b" stroke={colors[0]} strokeOpacity=".65" /><text x="164" y="61" textAnchor="middle" fill={colors[0]} fontSize="18" fontWeight="900">{face === 'curious' ? '?' : '!'}</text></g>}
     {mood === 'celebrate' || level >= 3 ? <g className="gear-mascot__sparks" stroke={colors[0]} strokeWidth="3" strokeLinecap="round"><path d="m37 36 5 8m119-5-5 8M17 151l10-3m152 8-10-4M100 9v8" /><circle cx="47" cy="169" r="2" /><circle cx="157" cy="166" r="2" /></g> : null}
   </svg>;
 }

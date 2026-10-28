@@ -12,6 +12,7 @@ import { runFormDraftTests } from './formDrafts.test.js';
 import { runGearCheckInTests } from './gearCheckIn.test.js';
 import { runGiroSpeechTests } from './giroSpeech.test.js';
 import { runGearStudioTests } from './gearStudio.test.js';
+import { runGearWorkshopTests } from './gearWorkshop.test.js';
 
 const suites = [
   { name: 'projectSummary', run: runProjectSummaryTests },
@@ -27,7 +28,8 @@ const suites = [
   { name: 'formDrafts', run: runFormDraftTests },
   { name: 'gearCheckIn', run: runGearCheckInTests },
   { name: 'giroSpeech', run: runGiroSpeechTests },
-  { name: 'gearStudio', run: runGearStudioTests }
+  { name: 'gearStudio', run: runGearStudioTests },
+  { name: 'gearWorkshop', run: runGearWorkshopTests }
 ];
 
 let failures = 0;

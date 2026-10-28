@@ -1,6 +1,7 @@
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronRight, LogOut, X } from 'lucide-react';
+import { ChevronRight, LogOut, Star, X } from 'lucide-react';
+import { favoritesStorageKey, readWorkspaceFavorites, saveWorkspaceFavorites } from '../utils/workspaceFavorites';
 import './WorkspaceSidebar.css';
 
 const desktopQuery = '(min-width: 1100px)';
@@ -19,10 +20,23 @@ const groups = [
   { label: 'Gestão', ids: ['operations', 'history', 'season_history', 'report_recipients'] },
 ];
 
-export default function WorkspaceSidebar({ tabs, activeId, onNavigate, open, onClose, profile, avatar, meta, onProfile, onLogout, brand }) {
+export default function WorkspaceSidebar({ tabs, activeId, onNavigate, open, onClose, profile, avatar, meta, onProfile, onLogout, brand, accountKey = 'session' }) {
   const desktop = useSyncExternalStore(subscribeDesktop, getDesktop);
   const sidebarRef = useRef(null);
   const mobileOpen = open && !desktop;
+  const [favorites, setFavorites] = useState(() => { try { return readWorkspaceFavorites(localStorage, accountKey); } catch { return []; } });
+  const [favoritesError, setFavoritesError] = useState('');
+  useEffect(() => {
+    const sync = (event) => { if (event.key === favoritesStorageKey(accountKey) || event.key === null) setFavorites(readWorkspaceFavorites(localStorage, accountKey)); };
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
+  }, [accountKey]);
+  const toggleFavorite = (id) => {
+    const next = favorites.includes(id) ? favorites.filter((value) => value !== id) : [...favorites, id];
+    setFavorites(next);
+    try { saveWorkspaceFavorites(localStorage, accountKey, next); setFavoritesError(''); }
+    catch { setFavoritesError('Neste navegador, os favoritos ficam disponíveis apenas durante esta sessão.'); }
+  };
 
   // Release the drawer when crossing the desktop breakpoint, including its focus trap.
   useEffect(() => { if (desktop && open) onClose(); }, [desktop, open, onClose]);
@@ -58,11 +72,11 @@ export default function WorkspaceSidebar({ tabs, activeId, onNavigate, open, onC
 
   const select = (id) => { onClose(); onNavigate(id); };
   const renderTab = (tab) => (
-    <button key={tab.id} type="button" className="workspace-sidebar__link" aria-label={tab.label} aria-current={activeId === tab.id ? 'page' : undefined} title={tab.description} onClick={() => select(tab.id)}>
+    <div key={tab.id} className="workspace-sidebar__row"><button type="button" className="workspace-sidebar__link" aria-label={tab.label} aria-current={activeId === tab.id ? 'page' : undefined} title={tab.description} onClick={() => select(tab.id)}>
       <span className="workspace-sidebar__icon" aria-hidden="true">{tab.icon}</span>
       <span className="workspace-sidebar__label">{tab.label}</span>
       {tab.badge ? <span className="workspace-sidebar__badge" aria-label={`${tab.badge} pendências`}>{tab.badge}</span> : <ChevronRight size={14} className="workspace-sidebar__chevron" aria-hidden="true" />}
-    </button>
+    </button><button type="button" className="workspace-sidebar__favorite" aria-label={favorites.includes(tab.id) ? `Remover ${tab.label} dos favoritos` : `Favoritar ${tab.label}`} title={favorites.includes(tab.id) ? 'Remover dos favoritos' : 'Adicionar aos favoritos'} aria-pressed={favorites.includes(tab.id)} onClick={() => toggleFavorite(tab.id)}><Star size={14} fill={favorites.includes(tab.id) ? 'currentColor' : 'none'} /></button></div>
   );
   const knownIds = new Set(groups.flatMap((group) => group.ids));
   const navigation = <>
@@ -80,6 +94,7 @@ export default function WorkspaceSidebar({ tabs, activeId, onNavigate, open, onC
       </button>
       {meta && <div className="workspace-sidebar__meta">{meta}</div>}
       <nav className="workspace-sidebar__nav custom-scrollbar" aria-label="Áreas do sistema">
+        <section className="workspace-sidebar__group" aria-label="Favoritos"><h2><Star size={11} />Favoritos</h2>{favorites.map((id) => tabs.find((tab) => tab.id === id)).filter(Boolean).map(renderTab)}{!favorites.some((id) => tabs.some((tab) => tab.id === id)) && <p className="workspace-sidebar__hint">Use a estrela ao lado dos menus para criar seus atalhos.</p>}{favoritesError && <p role="status" className="workspace-sidebar__hint">{favoritesError}</p>}</section>
         {groups.map((group) => {
           const items = group.ids.map((id) => tabs.find((tab) => tab.id === id)).filter(Boolean);
           return items.length ? <section key={group.label} className="workspace-sidebar__group" aria-label={group.label}>

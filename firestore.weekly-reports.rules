@@ -33,6 +33,37 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/weeklyReportMembers/$(request.auth.uid)).data.role == 'student'
         && get(/databases/$(database)/documents/weeklyReportMembers/$(request.auth.uid)).data.studentId == studentId;
     }
+    function validWorkshopPoint(point, minX, maxX, minY, maxY) {
+      return point is map && point.keys().hasOnly(['x', 'y']) && point.x is int && point.y is int
+        && point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY;
+    }
+    function validGearWorkshop(data) {
+      return data is map && data.keys().hasOnly(['layout', 'expression', 'updatedAt'])
+        && data.expression in ['auto', 'happy', 'curious', 'focused', 'surprised']
+        && data.updatedAt is string && data.updatedAt.size() <= 40
+        && data.layout is map && data.layout.keys().hasOnly(['bench', 'decor', 'giro', 'light'])
+        && validWorkshopPoint(data.layout.bench, 120, 680, 250, 360)
+        && validWorkshopPoint(data.layout.decor, 100, 700, 190, 320)
+        && validWorkshopPoint(data.layout.giro, 135, 665, 275, 350)
+        && validWorkshopPoint(data.layout.light, 230, 570, 34, 85);
+    }
+    // Merge this narrow update with the existing student permissions.
+    match /students/{studentId} {
+      allow update: if isGearOwner(studentId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['gearWorkshop'])
+        && validGearWorkshop(request.resource.data.gearWorkshop);
+      match /gearWorkshopReactions/{actorId} {
+        allow read: if isReportMember();
+        allow create, update: if isGearOwner(actorId) && studentId != actorId
+          && exists(/databases/$(database)/documents/students/$(studentId))
+          && get(/databases/$(database)/documents/students/$(studentId)).data.get('status', 'active') != 'inactive'
+          && request.resource.data.keys().hasOnly(['actorStudentId', 'targetStudentId', 'type', 'updatedAt'])
+          && request.resource.data.actorStudentId == actorId && request.resource.data.targetStudentId == studentId
+          && request.resource.data.type in ['creative', 'style', 'inspiring', 'none']
+          && request.resource.data.updatedAt is string && request.resource.data.updatedAt.size() <= 40;
+        allow delete: if false;
+      }
+    }
     function gearBefore(studentId) {
       let previous = exists(/databases/$(database)/documents/studentGearProfiles/$(studentId))
         ? get(/databases/$(database)/documents/studentGearProfiles/$(studentId)).data : {};

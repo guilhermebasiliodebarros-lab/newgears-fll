@@ -1,11 +1,12 @@
 import { useCallback, useRef, useState } from 'react';
-import { Check, Cog, Coins, Gift, Layers3, LockKeyhole, Music2, Play, RefreshCw, ShoppingBag, Sparkles, Trophy, Wrench } from 'lucide-react';
+import { Check, Cog, Coins, Gift, Layers3, LockKeyhole, Music2, Play, RefreshCw, ShoppingBag, Sparkles, Trophy, Users, Wrench } from 'lucide-react';
 import useGearShopContext from '../hooks/useGearShopContext';
 import GearMascot, { GearAvatar } from '../components/GearMascot';
 import GearEvolutionPanel from '../components/GearEvolutionPanel';
 import GearHistoryPanel from '../components/GearHistoryPanel';
 import GearWorkshop, { GearWorkshopScene } from '../components/GearWorkshop';
 import GearCelebration from '../components/GearCelebration';
+import GearWorkshopGallery from '../components/GearWorkshopGallery';
 import { gearEvolution } from '../utils/gearEvolution';
 import { GEAR_CONTRIBUTIONS, GEAR_SHOP_CATEGORIES, GEAR_SHOP_COLLECTIONS, GEAR_SHOP_ITEMS, GEAR_WORKSHOP_CATEGORIES, gearCollectionItems, gearItem, WELCOME_GEARS } from '../utils/gearShop';
 
@@ -20,7 +21,7 @@ function ItemArt({ item, equipment }) {
 }
 
 export default function GearShopView() {
-  const { account, loading, walletError, reloadWallet, student, isStudent, pending, retrying, retryPending, busy, operationError, activateItem } = useGearShopContext();
+  const { account, loading, walletError, reloadWallet, student, isStudent, pending, retrying, retryPending, busy, operationError, activateItem, workshop, workshopLoading, workshopError, workshopSaving, saveWorkshop } = useGearShopContext();
   const [tab, setTab] = useState('workshop');
   const [category, setCategory] = useState('all');
   const [collection, setCollection] = useState('all');
@@ -65,7 +66,7 @@ export default function GearShopView() {
         </div>
         <p className="mt-4 flex items-center gap-2 text-xs text-slate-400"><Gift size={14} className="shrink-0 text-cyan-200" />A oficina inicial já é sua. Você também começa com {WELCOME_GEARS} Gears de boas-vindas.</p>
       </div>
-      <div className="gear-shop__hero-mascot"><div className="gear-shop__orbit-label">GIRO · NÍVEL {evolution.level}</div><GearMascot equipment={account.equipped} level={evolution.level} /><p className="text-center text-xs font-bold text-cyan-100">{gearItem(account.equipped.title).name}</p></div>
+      <div className="gear-shop__hero-mascot"><div className="gear-shop__orbit-label">GIRO · NÍVEL {evolution.level}</div><GearMascot equipment={account.equipped} level={evolution.level} expression={workshop.expression} /><p className="text-center text-xs font-bold text-cyan-100">{gearItem(account.equipped.title).name}</p></div>
     </section>
 
     {!isStudent && <p className="rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4 text-sm text-cyan-100">Esta é a prévia da oficina e da loja. Os alunos compram e equipam os itens ao entrar no próprio perfil.</p>}
@@ -73,10 +74,11 @@ export default function GearShopView() {
     {pending.length > 0 && <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4"><div><h3 className="text-sm font-black text-amber-100">{pending.length} contribuição(ões) com Gears pendentes</h3><p className="mt-1 text-xs text-slate-300">Seus registros já estão salvos. Tente confirmar os Gears sem cadastrar tudo outra vez.</p></div><button type="button" disabled={retrying} onClick={retryPending} className="rounded-xl bg-amber-300 px-4 py-2.5 text-xs font-black text-black disabled:opacity-50">{retrying ? 'Conferindo…' : 'Tentar receber Gears'}</button></section>}
 
     <div className="giro-studio-tabs" aria-label="Áreas da loja do Giro">
-      {[{ id: 'workshop', label: 'Minha oficina', icon: <Wrench size={17} /> }, { id: 'catalog', label: 'Loja', icon: <ShoppingBag size={17} /> }, { id: 'collections', label: 'Coleções', icon: <Layers3 size={17} /> }].map(({ id, label, icon }) => <button type="button" key={id} aria-pressed={tab === id} onClick={() => { setTab(id); setPreviewEffect(null); }}>{icon}{label}</button>)}
+      {[{ id: 'workshop', label: 'Minha oficina', icon: <Wrench size={17} /> }, { id: 'catalog', label: 'Loja', icon: <ShoppingBag size={17} /> }, { id: 'collections', label: 'Coleções', icon: <Layers3 size={17} /> }, { id: 'team', label: 'Visitar oficinas', icon: <Users size={17} /> }].map(({ id, label, icon }) => <button type="button" key={id} aria-pressed={tab === id} onClick={() => { setTab(id); setPreviewEffect(null); }}>{icon}{label}</button>)}
     </div>
 
-    {tab === 'workshop' && <GearWorkshop account={account} student={student} level={evolution.level} onCustomize={(category) => browse(category)} />}
+    {tab === 'workshop' && <GearWorkshop account={account} student={student} level={evolution.level} onCustomize={(category) => browse(category)} workshop={workshop} onSave={saveWorkshop} saving={workshopSaving} loading={workshopLoading} error={workshopError} canSave={isStudent} />}
+    {tab === 'team' && <GearWorkshopGallery />}
 
     {tab === 'collections' && <section>
       <div className="giro-studio-heading"><div><p className="giro-studio-eyebrow"><Layers3 size={14} />Coleções temáticas</p><h2>Quatro mundos. O mesmo Giro.</h2><p>Combine peças da mesma coleção ou misture os estilos que você mais gosta.</p></div></div>

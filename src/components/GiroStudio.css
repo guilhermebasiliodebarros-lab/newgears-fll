@@ -11,9 +11,7 @@
 .giro-workshop__stage { position: relative; overflow: hidden; border: 1px solid #ffffff15; border-radius: 20px; }
 .giro-room { position: relative; aspect-ratio: 800 / 460; width: 100%; isolation: isolate; overflow: hidden; border-radius: inherit; background: #0b1424; }
 .giro-room__architecture { display: block; width: 100%; height: 100%; }
-.giro-room__resident { position: absolute; left: 34%; bottom: 12%; width: 29%; height: 54%; transition: transform 1s cubic-bezier(.22,.68,.25,1), filter .5s; }
-.giro-room--work .giro-room__resident { transform: translate(-54%, -5%); }
-.giro-room--decorate .giro-room__resident { transform: translate(61%, 0); }
+.giro-room__resident { position: absolute; left: 34%; bottom: 12%; width: 29%; height: 54%; transition: left 1s cubic-bezier(.22,.68,.25,1), top 1s cubic-bezier(.22,.68,.25,1), filter .5s; }
 .giro-room--dim .giro-room__resident { filter: brightness(.65); }
 .giro-room__name { position: absolute; left: 18px; bottom: 15px; border-radius: 8px; padding: 6px 10px; border: 1px solid #ffffff15; background: #02061799; color: #c8d7ec; font-size: 10px; font-weight: 700; }
 .giro-room__spot { position: absolute; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; border: 1px solid #ffffff44; color: var(--room-light); background: #09111ecc; box-shadow: 0 0 18px #0003; transition: background .2s; }
@@ -77,9 +75,47 @@
 .gear-mascot--stage .gear-mascot__leg--right { animation-delay: -.3s; }
 .gear-shop { container-type: inline-size; }
 .gear-shop button:focus-visible, .gear-shop select:focus-visible { outline: 2px solid #67e8f9; outline-offset: 3px; }
+.giro-room--editing .giro-room__resident { transition: none; }
+.giro-room--editing::after { content: ''; position: absolute; inset: 0; pointer-events: none; border: 2px dashed #67e8f950; border-radius: inherit; background: linear-gradient(#67e8f908 1px,transparent 1px),linear-gradient(90deg,#67e8f908 1px,transparent 1px); background-size: 5% 8.7%; }
+.giro-room__drag-handle { position: absolute; z-index: 6; transform: translate(-50%,-50%); display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 46px; min-height: 42px; padding: 8px 10px; border: 1px solid #a5f3fc; border-radius: 10px; color: #d9faff; background: #102c40ed; box-shadow: 0 4px 16px #0006; cursor: grab; touch-action: none; user-select: none; font-size: 10px; font-weight: 800; }
+.giro-room__drag-handle:active { cursor: grabbing; background: #164e63; }
+.giro-room__drag-handle svg { flex-shrink: 0; }
+.giro-workshop-editor { margin-bottom: 20px; padding: 18px; border: 1px solid #67e8f92c; border-radius: 18px; background: #07132188; }
+.giro-workshop-editor__toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 15px; }
+.giro-workshop-editor__toolbar strong { color: #d4f6ff; font-size: 13px; }
+.giro-workshop-editor__toolbar p { max-width: 410px; margin-top: 6px; color: #91a8c4; font-size: 11px; line-height: 1.6; }
+.giro-workshop-editor-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 13px; }
+.giro-workshop-visit, .giro-workshop-gallery { scroll-margin-top: 95px; }
+.giro-expression-picker { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; margin-top: 20px; }
+.giro-expression-picker > p { display: flex; align-items: center; gap: 7px; grid-column: 1/-1; color: #a5b8d5; font-size: 11px; margin-bottom: 4px; }
+.giro-expression-picker button { display: flex; min-width: 0; flex-direction: column; align-items: center; gap: 5px; padding: 8px 4px 12px; border: 1px solid #ffffff12; border-radius: 12px; background: #ffffff03; color: #afbed4; font-size: 10px; font-weight: 700; }
+.giro-expression-picker button[aria-pressed='true'] { border-color: #67e8f980; color: #a5f3fc; background: #67e8f90c; }
+.giro-expression-picker .gear-mascot { width: 65px; height: 70px; max-width: 100%; }
+.giro-workshop-error { margin: 12px 0; padding: 13px; border: 1px solid #fda4af44; border-radius: 12px; background: #fda4af0c; color: #fecdd3; font-size: 12px; line-height: 1.6; }
+.giro-workshop-success { margin: 12px 0; padding: 13px; border: 1px solid #6ee7b744; border-radius: 12px; background: #6ee7b70c; color: #a7f3d0; font-size: 12px; }
+.giro-workshop-visit { padding: clamp(16px,3vw,28px); border: 1px solid #ffffff1a; border-radius: 24px; background: #111d2f; }
+.giro-workshop-reactions { margin-top: 20px; padding: 20px; border: 1px solid #ffffff12; border-radius: 17px; background: #02061733; }
+.giro-workshop-reactions h3 { color: #e4ecfb; font-size: 16px; font-weight: 800; }
+.giro-workshop-reactions p { color: #96a9c4; font-size: 11px; line-height: 1.6; margin-top: 7px; }
+.giro-workshop-reactions button:not(.giro-studio-button) { display: flex; align-items: center; gap: 8px; padding: 12px; border: 1px solid #ffffff1a; border-radius: 11px; background: #ffffff05; color: #bacbe2; font-size: 11px; }
+.giro-workshop-reactions button[aria-pressed='true'] { color: #a5f3fc; border-color: #67e8f95c; background: #67e8f910; }
+.giro-workshop-reactions strong { min-width: 22px; padding: 2px 5px; border-radius: 5px; background: #ffffff0d; text-align: center; }
+.giro-workshop-search { display: flex; align-items: center; gap: 9px; max-width: 100%; padding: 11px 14px; border: 1px solid #ffffff20; border-radius: 12px; color: #8fa7c7; background: #111d2f; }
+.giro-workshop-search input { min-width: 0; width: 170px; max-width: 100%; outline: none; background: transparent; color: #d5e2f3; font-size: 12px; }
+.giro-workshop-cheers { margin-top: 16px; padding: 16px; border: 1px solid #ffffff12; border-radius: 14px; background: #ffffff03; }
+.giro-workshop-cheers h3 { display: flex; align-items: center; gap: 8px; color: #d4c7ff; font-size: 12px; font-weight: 800; }
+.giro-workshop-cheers > div { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 12px; }
+.giro-workshop-cheers span { display: flex; align-items: center; gap: 10px; border: 1px solid #ffffff12; border-radius: 8px; padding: 8px 10px; color: #9db1cd; font-size: 10px; }
+.giro-workshop-cheers strong { color: #d8b4fe; }
+.giro-workshop-cheers p { color: #fda4af; font-size: 11px; margin-top: 10px; }
+.giro-studio-button:disabled { cursor: not-allowed; opacity: .45; }
+.gear-mascot--expression-focused .gear-mascot__gaze { animation: none; }
+.gear-mascot--expression-focused .gear-mascot__eyes { animation-duration: 10s; }
+.gear-mascot__expression-mark { transform-origin: 164px 55px; animation: giro-expression-mark 3s ease-in-out infinite; }
+@keyframes giro-expression-mark { 50% { transform: translateY(-3px) rotate(7deg); } }
 @container (min-width: 940px) { .giro-store-layout { grid-template-columns: minmax(0,1fr) 320px; } .giro-store-preview { position: sticky; top: 95px; grid-column: 2; grid-row: 1; } .giro-store-catalog { grid-column: 1; grid-row: 1; } }
 @container (min-width: 1250px) { .giro-store-grid { grid-template-columns: repeat(3,minmax(0,1fr)); } }
-@container (max-width: 680px) { .giro-collections { grid-template-columns: 1fr; } .giro-workshop__equipment { grid-template-columns: repeat(2,minmax(0,1fr)); } .giro-studio-tabs button { padding: 10px 8px; font-size: 11px; gap: 6px; } }
+@container (max-width: 680px) { .giro-collections { grid-template-columns: 1fr; } .giro-workshop__equipment { grid-template-columns: repeat(2,minmax(0,1fr)); } .giro-studio-tabs button { flex: 1 1 120px; padding: 10px 8px; font-size: 11px; gap: 6px; } .giro-expression-picker { grid-template-columns: repeat(3,minmax(0,1fr)); } .giro-room__drag-handle { flex-direction: column; gap: 3px; padding: 6px; font-size: 8px; } }
 @container (max-width: 400px) { .giro-store-grid { grid-template-columns: 1fr; } .giro-room__spot { width: 30px; height: 30px; } .giro-room__name { left: 9px; bottom: 8px; font-size: 8px; } .giro-workshop__equipment button { padding: 9px; gap: 7px; } .giro-workshop__equipment button > svg:last-child { display: none; } }
 @keyframes giro-particle-fall { 0% { opacity: 0; transform: translateY(-20px) rotate(0); } 8% { opacity: 1; } 82% { opacity: .9; } 100% { opacity: 0; transform: translate(var(--drift), 105dvh) rotate(var(--turn)); } }
 @keyframes giro-banner { 0%,100% { opacity: 0; transform: translate(-50%,-15px) scale(.95); } 15%,75% { opacity: 1; transform: translate(-50%,0) scale(1); } }

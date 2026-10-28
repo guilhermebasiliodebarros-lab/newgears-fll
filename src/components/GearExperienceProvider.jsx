@@ -5,6 +5,8 @@ import { equipGearItem, gearShopError, purchaseGearItem, rewardGearContribution 
 import { GEAR_CONTRIBUTIONS, GEAR_CONTRIBUTION_EVENT, gearProfile } from '../utils/gearShop';
 import { gearContributionTip, gearEvolution } from '../utils/gearEvolution';
 import { getGearHistoryStatus, reconcileGearHistory } from '../services/gearHistory';
+import { saveGearWorkshop } from '../services/gearWorkshop';
+import { resolveGearWorkshop } from '../utils/gearWorkshop';
 
 const readPending = (key) => {
   try {
@@ -13,7 +15,7 @@ const readPending = (key) => {
   } catch { return []; }
 };
 
-export default function GearExperienceProvider({ children, db, user, student, seasonId = 'legacy', onOpenShop, isLiteMode }) {
+export default function GearExperienceProvider({ children, db, user, student, teamMembers = [], seasonId = 'legacy', onOpenShop, isLiteMode }) {
   const studentId = user?.type === 'student' ? String(user.studentId || user.data?.id || student?.id || '') : '';
   const storageKey = `newgears_pending_gears_v1:${studentId}`;
   const [wallet, setWallet] = useState({ loading: Boolean(studentId), error: '', profile: gearProfile(studentId) });
@@ -29,6 +31,26 @@ export default function GearExperienceProvider({ children, db, user, student, se
   const historyRunning = useRef(false);
   const draftScope = JSON.stringify([user?.type, studentId || user?.uid || user?.name || 'tecnico', seasonId]);
   const evolution = gearEvolution(wallet.profile);
+  const [workshopState, setWorkshopState] = useState(() => ({ loading: Boolean(studentId), error: '', data: resolveGearWorkshop(student?.gearWorkshop) }));
+  const [workshopSaving, setWorkshopSaving] = useState(false);
+  const workshopSaveRunning = useRef(false);
+  useEffect(() => {
+    if (!studentId || !db) return;
+    return onSnapshot(doc(db, 'students', studentId), (snapshot) => {
+      setWorkshopState({ loading: false, error: '', data: resolveGearWorkshop(snapshot.data()?.gearWorkshop) });
+    }, (error) => setWorkshopState((current) => ({ ...current, loading: false, error: gearShopError(error) })));
+  }, [db, studentId, retryCount]);
+  const saveWorkshop = async (configuration) => {
+    if (!studentId || workshopState.loading || workshopSaveRunning.current) return false;
+    workshopSaveRunning.current = true; setWorkshopSaving(true);
+    setWorkshopState((current) => ({ ...current, error: '' }));
+    try {
+      const data = await saveGearWorkshop({ db, user, ...configuration });
+      setWorkshopState({ loading: false, error: '', data });
+      return true;
+    } catch (error) { setWorkshopState((current) => ({ ...current, error: gearShopError(error) })); return false; }
+    finally { workshopSaveRunning.current = false; setWorkshopSaving(false); }
+  };
 
   const syncHistory = useCallback(async () => {
     if (user?.type !== 'admin' || historyRunning.current || !db) return;
@@ -105,5 +127,5 @@ export default function GearExperienceProvider({ children, db, user, student, se
     finally { setBusy(''); }
   };
 
-  return <GearShopContext.Provider value={{ account: wallet.profile, evolution, draftScope, history, syncHistory, loading: wallet.loading, walletError: wallet.error, reloadWallet: () => setRetryCount((value) => value + 1), student, isStudent: Boolean(studentId), isLiteMode, pending, retrying, retryPending, reaction, busy, operationError, activateItem, onOpenShop }}>{children}</GearShopContext.Provider>;
+  return <GearShopContext.Provider value={{ account: wallet.profile, evolution, draftScope, history, syncHistory, loading: wallet.loading, walletError: wallet.error, reloadWallet: () => setRetryCount((value) => value + 1), student, isStudent: Boolean(studentId), isLiteMode, pending, retrying, retryPending, reaction, busy, operationError, activateItem, onOpenShop, db, user, teamMembers, workshop: workshopState.data, workshopLoading: workshopState.loading, workshopError: workshopState.error, workshopSaving, saveWorkshop }}>{children}</GearShopContext.Provider>;
 }

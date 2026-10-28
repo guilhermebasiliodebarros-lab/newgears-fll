@@ -30,6 +30,7 @@ import { buildRotationSchedule, defaultPlanning, validatePlanning, isActiveStude
 import Countdown from './components/Countdown';
 import LogoNewGears from './components/LogoNewGears';
 import WorkspaceSidebar from './components/WorkspaceSidebar';
+import { workshopMember } from './utils/gearWorkshop';
 import { WorkspaceHero, WorkspaceSectionHeading, WorkspaceScene, WorkspaceCollapsible, WorkspacePanelToolbar, SeasonModeControl } from './components/WorkspaceChrome';
 import StrategyView from './views/StrategyView';
 import RoundsView from './views/RoundsView';
@@ -8973,7 +8974,7 @@ const handleFileSelect = (e) => {
 
   // --- RENDER PRINCIPAL (SÓ CHEGA AQUI SE ESTIVER LOGADO) ---
   return (
-    <GearExperienceProvider key={`${currentUser.type}:${currentUser.studentId || currentUser.data?.id || currentUser.uid || currentUser.name}`} db={db} user={currentUser} student={viewAsStudent} seasonId={activeTeamSeasonId || 'legacy'} isLiteMode={isLiteMode} onOpenShop={() => isAdmin ? setAdminTab('shop') : setStudentTab('shop')}>
+    <GearExperienceProvider key={`${currentUser.type}:${currentUser.studentId || currentUser.data?.id || currentUser.uid || currentUser.name}`} db={db} user={currentUser} student={viewAsStudent} teamMembers={students.filter(isActiveStudent).map(workshopMember)} seasonId={activeTeamSeasonId || 'legacy'} isLiteMode={isLiteMode} onOpenShop={() => isAdmin ? setAdminTab('shop') : setStudentTab('shop')}>
     <div className={`newgears-shell newgears-workspace min-h-screen text-white selection:bg-yellow-300 selection:text-slate-950 pb-20 relative overflow-hidden ${isLiteMode ? 'newgears-lite-mode' : ''}`}>
       {/* Estilo da Animação de Fundo */}
       <div className="newgears-floating-layer">
@@ -9159,6 +9160,8 @@ const handleFileSelect = (e) => {
       )}
 
       <WorkspaceSidebar
+          key={`${currentUser.type}:${currentUser.studentId || currentUser.data?.id || currentUser.uid || currentUser.name}`}
+          accountKey={`${currentUser.type}:${currentUser.studentId || currentUser.data?.id || currentUser.uid || currentUser.name}`}
           tabs={currentWorkspaceTabs}
           activeId={isAdmin ? adminTab : studentTab}
           onNavigate={navigateWorkspace}
