@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Check, ChevronDown, Save } from 'lucide-react';
-import { buildEvaluationCalendar, FINAL_SPRINT_RANKING_CATEGORIES, PRESENTATION_EVALUATION_CRITERIA, WEEKLY_EVALUATION_CRITERIA, getPresentationEvaluationCriteria, getFinalSprintEvaluationWeek, getFinalSprintEvaluationWeekForDate, getFinalSprintReportEvaluation, getFinalSprintTournamentRanking, parseFinalSprintReportScore } from '../utils/finalSprintEvaluations';
+import { buildEvaluationCalendar, FINAL_SPRINT_RANKING_CATEGORIES, FINAL_SPRINT_REPORT_NOTE_MAX_LENGTH, PRESENTATION_EVALUATION_CRITERIA, WEEKLY_EVALUATION_CRITERIA, getPresentationEvaluationCriteria, getFinalSprintEvaluationWeek, getFinalSprintEvaluationWeekForDate, getFinalSprintReportEvaluation, getFinalSprintTournamentRanking, parseFinalSprintReportScore } from '../utils/finalSprintEvaluations';
 import useEvaluationDrafts from '../hooks/useEvaluationDrafts';
 import EvaluationCalendar from '../components/EvaluationCalendar';
 import StudentEvaluationProgress from '../components/StudentEvaluationProgress';
@@ -108,8 +108,6 @@ export default function FinalSprintEvaluationsView({
   const reportDraftFor = (studentId, persisted) => reportDrafts[studentId] || {
     score: persisted?.total ?? '',
     note: persisted?.note || '',
-    strengths: persisted?.strengths || '',
-    improvement: persisted?.improvement || '',
   };
 
   const updateWeeklyDraft = (studentId, update) => {
@@ -166,7 +164,7 @@ export default function FinalSprintEvaluationsView({
     }
     setSavingKey(`report-${studentItem.id}`);
     try {
-      const saved = await onSaveReport({ student: studentItem, draft: { ...draft, score } });
+      const saved = await onSaveReport({ student: studentItem, draft: { score, note: draft.note } });
       setReportSaveStates((current) => ({ ...current, [studentItem.id]: saved === false ? 'error' : 'saved' }));
       if (saved !== false) draftStorage.remove('report', studentItem.id, draft);
     } catch {
@@ -239,15 +237,13 @@ export default function FinalSprintEvaluationsView({
   };
   const handleExportReadinessReport = () => {
     const escapeCsvCell = (value) => `"${`${value ?? ''}`.replaceAll('"', '""').replaceAll('\r\n', '\n').replaceAll('\r', '\n')}"`;
-    const headers = ['Posição geral', 'Aluno', 'Participação', 'Nota do relatório /10', 'Análise dos relatórios', 'Pontos fortes dos relatórios', 'Melhorias dos relatórios', 'Posição no relatório', 'Soma das avaliações semanais', 'Semanas avaliadas', 'Posição nas semanais', 'Nota da apresentação final /35', 'Posição na apresentação final', 'XP atual (referência)', 'Posição em XP entre candidatos', 'Soma das posições (menor é melhor)', 'Empate na classificação', 'Empate pela sexta vaga', 'Na lista em preparação', 'Convocação divulgada'];
+    const headers = ['Posição geral', 'Aluno', 'Participação', 'Nota do relatório /10', 'Análise dos relatórios', 'Posição no relatório', 'Soma das avaliações semanais', 'Semanas avaliadas', 'Posição nas semanais', 'Nota da apresentação final /35', 'Posição na apresentação final', 'XP atual (referência)', 'Posição em XP entre candidatos', 'Soma das posições (menor é melhor)', 'Empate na classificação', 'Empate pela sexta vaga', 'Na lista em preparação', 'Convocação divulgada'];
     const rows = readinessRows.map((row) => [
       row.position,
       row.student.name || 'Aluno',
       row.eligibleForTournament ? 'Disputa por vagas' : 'Acompanhamento separado',
       row.values.report ?? '',
       row.reportEvaluation?.note || '',
-      row.reportEvaluation?.strengths || '',
-      row.reportEvaluation?.improvement || '',
       row.positions.report,
       row.values.weekly ?? '',
       row.weeklyCount,
@@ -313,13 +309,12 @@ export default function FinalSprintEvaluationsView({
               <DraftStatus draft={reportDrafts[id]} storageError={draftStorage.storageError} />
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <label className="block max-w-xs text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Nota dos relatórios · de 0 a 10 *<input type="number" required min="0" max="10" step="0.01" value={draft.score} onChange={(event) => updateReportDraft(id, 'score', event.target.value)} placeholder="Ex.: 8,5" className="mt-2 w-full rounded-xl border border-violet-300/20 bg-black/25 px-4 py-3 text-xl font-black text-white outline-none focus:border-violet-300" /></label>
-                <p className="max-w-md text-xs leading-relaxed text-gray-400">Considere o conjunto dos relatórios desse aluno. Use os campos abaixo para registrar exemplos, explicar a nota e orientar os próximos passos.</p>
+                <p className="max-w-md text-xs leading-relaxed text-gray-400">Considere o conjunto dos relatórios desse aluno. Use a análise abaixo para registrar exemplos, explicar a nota e orientar os próximos passos.</p>
               </div>
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Análise dos relatórios e evolução do aluno<textarea value={draft.note} onChange={(event) => updateReportDraft(id, 'note', event.target.value)} maxLength={6000} rows={8} placeholder="Descreva o que o aluno realizou, como registrou os aprendizados, quais mudanças apareceram entre os relatórios e que evidências sustentam a nota." className="mt-2 w-full resize-y rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-normal normal-case leading-relaxed text-white outline-none focus:border-violet-300" /></label>
-                <p className="mt-1 text-right text-[10px] text-gray-500">{draft.note.length}/6000 caracteres</p>
+                <label className="block text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Análise dos relatórios e evolução do aluno<textarea value={draft.note} onChange={(event) => updateReportDraft(id, 'note', event.target.value)} maxLength={FINAL_SPRINT_REPORT_NOTE_MAX_LENGTH} rows={8} placeholder="Descreva o que o aluno realizou, como registrou os aprendizados, quais mudanças apareceram entre os relatórios e que evidências sustentam a nota." className="mt-2 w-full resize-y rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm font-normal normal-case leading-relaxed text-white outline-none focus:border-violet-300" /></label>
+                <p className="mt-1 text-right text-[10px] text-gray-500">{draft.note.length.toLocaleString('pt-BR')}/{FINAL_SPRINT_REPORT_NOTE_MAX_LENGTH.toLocaleString('pt-BR')} caracteres</p>
               </div>
-              <FeedbackFields value={draft} onChange={(field, value) => updateReportDraft(id, field, value)} improvementRequired={false} maxLength={3000} rows={5} />
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="text-xs text-gray-400">{saveState === 'saved' ? <p role="status" className="font-bold text-emerald-200">Avaliação e feedback salvos.</p> : saveState === 'error' ? <p role="alert" className="font-bold text-red-200">Não foi possível salvar. Sua escrita foi mantida; tente novamente.</p> : saveState === 'editing' ? <p>Alterações ainda não salvas.</p> : <p>A nota e o feedback serão disponibilizados ao aluno ao salvar.</p>}</div>
                 <button type="submit" disabled={Boolean(savingKey) || score === null} className="inline-flex items-center gap-2 rounded-xl bg-violet-300 px-5 py-3 text-xs font-black text-black disabled:cursor-not-allowed disabled:opacity-40"><Save size={14} />{savingKey === key ? 'Salvando...' : 'Salvar avaliação dos relatórios'}</button>
@@ -474,8 +469,6 @@ function ReportEvaluationResultCard({ record }) {
     </div>
     <div className="mt-5 space-y-4">
       {record.note ? <section><h4 className="text-xs font-black uppercase tracking-[0.1em] text-violet-200">Análise dos relatórios</h4><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-200">{record.note}</p></section> : null}
-      {record.strengths ? <section className="rounded-xl border border-emerald-300/10 bg-emerald-300/5 p-4"><h4 className="text-xs font-black text-emerald-100">Pontos fortes</h4><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-emerald-50">{record.strengths}</p></section> : null}
-      {record.improvement ? <section className="rounded-xl border border-amber-300/10 bg-amber-300/5 p-4"><h4 className="text-xs font-black text-amber-100">Próximos passos e melhorias</h4><p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-amber-50">{record.improvement}</p></section> : null}
     </div>
     {record.evaluatorName ? <p className="mt-4 text-[10px] text-gray-500">Avaliado por {record.evaluatorName}</p> : null}
   </article>;

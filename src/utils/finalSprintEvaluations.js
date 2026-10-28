@@ -58,6 +58,8 @@ export const FINAL_SPRINT_RANKING_CATEGORIES = [
   { id: 'xp', label: 'Ranking XP' },
 ];
 
+export const FINAL_SPRINT_REPORT_NOTE_MAX_LENGTH = 20000;
+
 export const parseFinalSprintReportScore = (value) => {
   if (value === null || value === undefined || `${value}`.trim() === '') return null;
   const score = Number(`${value}`.trim().replace(',', '.'));

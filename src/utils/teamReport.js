@@ -526,7 +526,9 @@ export function buildTeamReport({
         scope === "all" ? `${title} · ${seasonName(seasonId)}` : title,
         selected.map((item, index) => {
           const record = item.data;
-          const fields = fieldsFrom(record, keys);
+          const fields = fieldsFrom(record, name === "finalSprintEvaluations" && record.type === "report"
+            ? keys.filter((key) => key !== "strengths" && key !== "improvement")
+            : keys);
           if (name === "tasks") {
             if (record.participants?.length)
               fields.push([

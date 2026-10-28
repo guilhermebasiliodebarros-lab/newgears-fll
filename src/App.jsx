@@ -46,7 +46,7 @@ import PublicTvModeView from './views/PublicTvModeView';
 import { STATION_KEYS } from './constants/workspace';
 import { DEFAULT_PROJECT_SUMMARY, PROJECT_MAIN_DOC_ID, resolveProjectSummary } from './utils/projectSummary';
 import { buildTrainingGallery, DEFAULT_PUBLIC_SHOWCASE_SETTINGS, resolvePublicShowcaseSettings } from './utils/publicShowcase';
-import { PRESENTATION_EVALUATION_CRITERIA, PRESENTATION_EVALUATION_CRITERIA_VERSION, WEEKLY_EVALUATION_CRITERIA, getFinalSprintEvaluationWeek, getStudentTournamentSelection, parseFinalSprintReportScore } from './utils/finalSprintEvaluations';
+import { FINAL_SPRINT_REPORT_NOTE_MAX_LENGTH, PRESENTATION_EVALUATION_CRITERIA, PRESENTATION_EVALUATION_CRITERIA_VERSION, WEEKLY_EVALUATION_CRITERIA, getFinalSprintEvaluationWeek, getStudentTournamentSelection, parseFinalSprintReportScore } from './utils/finalSprintEvaluations';
 import {
   SCHOOL_REPORT_STAGE_CONFIG,
   SCHOOL_REPORT_SUBJECTS,
@@ -1565,9 +1565,7 @@ function App() {
           studentId,
           studentName: student.name || 'Aluno',
           total,
-          note: `${draft.note || ''}`.trim().slice(0, 6000),
-          strengths: `${draft.strengths || ''}`.trim().slice(0, 3000),
-          improvement: `${draft.improvement || ''}`.trim().slice(0, 3000),
+          note: `${draft.note || ''}`.trim().slice(0, FINAL_SPRINT_REPORT_NOTE_MAX_LENGTH),
           evaluatorName: currentUser.name || 'Perfil técnico',
           createdAt: existing?.createdAt || now,
           updatedAt: now,
