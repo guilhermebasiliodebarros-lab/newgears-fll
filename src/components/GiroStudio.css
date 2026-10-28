@@ -1,0 +1,98 @@
+.giro-studio-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding: 7px; border: 1px solid #ffffff14; border-radius: 18px; background: #0c1525; }
+.giro-studio-tabs button { display: flex; align-items: center; justify-content: center; flex: 1; gap: 9px; min-height: 46px; padding: 11px 15px; border: 1px solid transparent; border-radius: 12px; color: #97a9c4; font-size: 12px; font-weight: 800; }
+.giro-studio-tabs button[aria-pressed='true'] { color: #a5f3fc; border-color: #67e8f933; background: #67e8f911; }
+.giro-studio-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-bottom: 22px; }
+.giro-studio-eyebrow { display: flex; align-items: center; gap: 8px; color: #a5f3fc; font-size: 10px; font-weight: 800; letter-spacing: .17em; text-transform: uppercase; }
+.giro-studio-heading h2 { margin-top: 9px; font-size: clamp(22px, 3vw, 30px); font-weight: 900; line-height: 1.2; }
+.giro-studio-heading p:not(.giro-studio-eyebrow) { margin-top: 9px; color: #9aabc4; font-size: 12px; line-height: 1.6; }
+.giro-studio-button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; border: 1px solid #67e8f944; border-radius: 12px; padding: 12px 15px; background: #67e8f90d; color: #a5f3fc; font-size: 11px; font-weight: 800; }
+.giro-studio-button:hover { background: #67e8f922; }
+.giro-workshop { padding: clamp(18px, 3vw, 28px); border: 1px solid #67e8f925; border-radius: 26px; background: linear-gradient(140deg, #142134, #111726); }
+.giro-workshop__stage { position: relative; overflow: hidden; border: 1px solid #ffffff15; border-radius: 20px; }
+.giro-room { position: relative; aspect-ratio: 800 / 460; width: 100%; isolation: isolate; overflow: hidden; border-radius: inherit; background: #0b1424; }
+.giro-room__architecture { display: block; width: 100%; height: 100%; }
+.giro-room__resident { position: absolute; left: 34%; bottom: 12%; width: 29%; height: 54%; transition: transform 1s cubic-bezier(.22,.68,.25,1), filter .5s; }
+.giro-room--work .giro-room__resident { transform: translate(-54%, -5%); }
+.giro-room--decorate .giro-room__resident { transform: translate(61%, 0); }
+.giro-room--dim .giro-room__resident { filter: brightness(.65); }
+.giro-room__name { position: absolute; left: 18px; bottom: 15px; border-radius: 8px; padding: 6px 10px; border: 1px solid #ffffff15; background: #02061799; color: #c8d7ec; font-size: 10px; font-weight: 700; }
+.giro-room__spot { position: absolute; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; border: 1px solid #ffffff44; color: var(--room-light); background: #09111ecc; box-shadow: 0 0 18px #0003; transition: background .2s; }
+.giro-room__spot:hover { background: #263d59; }
+.giro-room__spot--bench { left: 21%; top: 63%; }
+.giro-room__spot--light { left: calc(50% - 18px); top: 9%; }
+.giro-room__spot--decor { right: 18%; top: 48%; }
+.giro-room__decoration--active .giro-room__planet { transform-origin: 637px 233px; animation: giro-planet-turn 2s ease-in-out; }
+.giro-room__decoration--active { filter: drop-shadow(0 0 6px var(--room-light)); }
+.giro-room__hologram { animation: giro-holo 4s ease-in-out infinite; }
+.giro-room--compact .giro-room__hologram { animation: none; }
+.giro-workshop__controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.giro-workshop__controls button { display: flex; align-items: center; justify-content: center; gap: 8px; flex: 1 1 150px; min-height: 43px; padding: 10px 12px; border-radius: 11px; background: #ffffff06; border: 1px solid #ffffff15; color: #d8e3f2; font-size: 11px; font-weight: 700; }
+.giro-workshop__controls button:hover { background: #ffffff10; }
+.giro-workshop__status { min-height: 36px; padding: 14px 0 0; color: #9caec8; font-size: 11px; line-height: 1.6; }
+.giro-workshop__equipment { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-top: 18px; }
+.giro-workshop__equipment button { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 13px; border: 1px solid #ffffff12; border-radius: 13px; text-align: left; background: #02061733; color: #97b8d8; }
+.giro-workshop__equipment button > svg { flex-shrink: 0; }
+.giro-workshop__equipment button > span { min-width: 0; flex: 1; }
+.giro-workshop__equipment small { display: block; color: #7f96b1; font-size: 9px; }
+.giro-workshop__equipment strong { display: block; margin-top: 5px; color: #cddaea; font-size: 10px; line-height: 1.5; }
+.giro-collections { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; }
+.giro-collection { min-width: 0; overflow: hidden; border: 1px solid #ffffff1a; border-radius: 22px; background: #131e30; }
+.giro-collection__body { padding: 20px; }
+.giro-collection h3 { color: var(--collection-accent); font-size: 19px; font-weight: 900; }
+.giro-collection p { margin-top: 10px; color: #94a8c5; font-size: 12px; line-height: 1.6; }
+.giro-collection__progress { height: 5px; margin-top: 16px; border-radius: 20px; background: #ffffff0d; overflow: hidden; }
+.giro-collection__progress > span { display: block; height: 100%; background: var(--collection-accent); }
+.giro-store-layout { display: grid; gap: 20px; align-items: start; }
+.giro-store-preview { min-width: 0; padding: 21px; border: 1px solid #67e8f933; border-radius: 23px; background: linear-gradient(155deg,#19283d,#101827); scroll-margin-top: 95px; }
+.giro-store-preview__art { position: relative; min-height: 190px; overflow: hidden; border-radius: 16px; margin: 16px 0; background: #070e1a; }
+.giro-store-preview__art > .gear-mascot { width: 210px; height: 220px; max-width: 100%; margin: auto; }
+.giro-store-preview__art > .giro-room { min-height: 190px; }
+.giro-store-preview__art .giro-room__resident { bottom: 9%; }
+.giro-store-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.giro-store-card-art { display: flex; align-items: center; justify-content: center; height: 150px; margin: 10px 0 13px; overflow: hidden; border-radius: 14px; background: #070e1a66; }
+.giro-store-card-art > .gear-mascot { width: 135px; height: 145px; }
+.giro-store-card-art .giro-room { height: 100%; width: 100%; }
+.giro-animation-emblem { display: flex; flex-direction: column; align-items: center; gap: 15px; color: #a5f3fc; }
+.giro-animation-emblem > svg { width: 48px; height: 48px; }
+.giro-animation-emblem small { display: flex; align-items: center; gap: 5px; font-size: 10px; color: #8b9fc0; }
+.giro-celebration { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 65; }
+.giro-celebration--compact { position: absolute; z-index: 5; }
+.giro-celebration__particle { position: absolute; left: var(--x); top: -30px; display: block; width: var(--size); height: var(--size); opacity: 0; animation: giro-particle-fall 3.7s var(--delay) linear forwards; filter: drop-shadow(0 2px 3px #0006); }
+.giro-celebration__banner { position: absolute; top: 14%; left: 50%; display: flex; align-items: center; gap: 12px; padding: 16px 26px; border: 1px solid #d8b4fe70; border-radius: 18px; background: #1c1632dd; color: #e9d5ff; font-size: 18px; font-weight: 900; white-space: nowrap; animation: giro-banner 4s both; }
+.giro-celebration__beam { position: absolute; top: -15%; width: 28%; height: 120%; opacity: 0; background: linear-gradient(#a78bfa22,transparent); clip-path: polygon(45% 0,55% 0,100% 100%,0 100%); transform-origin: 50% 0; animation: giro-spotlight 4s ease-in-out both; }
+.giro-celebration__beam--left { left: 10%; }
+.giro-celebration__beam--right { right: 10%; animation-direction: reverse; background: linear-gradient(#67e8f922,transparent); }
+.giro-celebration__trophy { position: absolute; left: 50%; bottom: 16%; display: flex; flex-direction: column; align-items: center; gap: 14px; color: #fde68a; filter: drop-shadow(0 0 24px #fbbf2433); animation: giro-trophy-rise 4s both; }
+.giro-celebration__trophy > svg { width: clamp(100px,15vw,180px); height: clamp(100px,15vw,180px); fill: #f59e0b55; }
+.giro-celebration__trophy > span { border: 1px solid #fcd34d55; border-radius: 12px; background: #241b0de8; padding: 10px 16px; font-weight: 900; font-size: 13px; text-align: center; white-space: nowrap; }
+.giro-celebration--compact .giro-celebration__trophy { bottom: 9%; }
+.giro-celebration--compact .giro-celebration__trophy > svg { width: 78px; height: 78px; }
+.giro-celebration--compact .giro-celebration__trophy > span { font-size: 10px; }
+.giro-celebration--compact .giro-celebration__banner { font-size: 12px; padding: 10px 14px; }
+.gear-mascot--work .gear-mascot__arm-right { animation: giro-work 1s ease-in-out 4; }
+.gear-mascot--work .gear-mascot__character { animation: giro-work-body 1s ease-in-out 4; }
+.gear-mascot--stage .gear-mascot__character { animation: giro-stage-step 1.2s ease-in-out 3; }
+.gear-mascot--stage .gear-mascot__arm, .gear-mascot--stage .gear-mascot__arm-right { animation: gear-arm-dance .6s ease-in-out 6; }
+.gear-mascot--stage .gear-mascot__leg { animation: gear-step .6s ease-in-out 6; }
+.gear-mascot--stage .gear-mascot__leg--right { animation-delay: -.3s; }
+.gear-shop { container-type: inline-size; }
+.gear-shop button:focus-visible, .gear-shop select:focus-visible { outline: 2px solid #67e8f9; outline-offset: 3px; }
+@container (min-width: 940px) { .giro-store-layout { grid-template-columns: minmax(0,1fr) 320px; } .giro-store-preview { position: sticky; top: 95px; grid-column: 2; grid-row: 1; } .giro-store-catalog { grid-column: 1; grid-row: 1; } }
+@container (min-width: 1250px) { .giro-store-grid { grid-template-columns: repeat(3,minmax(0,1fr)); } }
+@container (max-width: 680px) { .giro-collections { grid-template-columns: 1fr; } .giro-workshop__equipment { grid-template-columns: repeat(2,minmax(0,1fr)); } .giro-studio-tabs button { padding: 10px 8px; font-size: 11px; gap: 6px; } }
+@container (max-width: 400px) { .giro-store-grid { grid-template-columns: 1fr; } .giro-room__spot { width: 30px; height: 30px; } .giro-room__name { left: 9px; bottom: 8px; font-size: 8px; } .giro-workshop__equipment button { padding: 9px; gap: 7px; } .giro-workshop__equipment button > svg:last-child { display: none; } }
+@keyframes giro-particle-fall { 0% { opacity: 0; transform: translateY(-20px) rotate(0); } 8% { opacity: 1; } 82% { opacity: .9; } 100% { opacity: 0; transform: translate(var(--drift), 105dvh) rotate(var(--turn)); } }
+@keyframes giro-banner { 0%,100% { opacity: 0; transform: translate(-50%,-15px) scale(.95); } 15%,75% { opacity: 1; transform: translate(-50%,0) scale(1); } }
+@keyframes giro-trophy-rise { 0% { opacity: 0; transform: translate(-50%,80px) scale(.65); } 20%,75% { opacity: 1; transform: translate(-50%,0) scale(1); } 100% { opacity: 0; transform: translate(-50%,-30px) scale(1.04); } }
+@keyframes giro-spotlight { 0%,100% { opacity: 0; transform: rotate(-20deg); } 30%,75% { opacity: 1; transform: rotate(20deg); } }
+@keyframes giro-stage-step { 0%,100% { transform: translate(-12px,0) rotate(-12deg); } 25% { transform: translate(10px,-12px) rotate(12deg); } 50% { transform: translate(20px,0) rotate(-8deg); } 75% { transform: translate(0,-15px) rotate(9deg); } }
+@keyframes giro-work { 0%,100% { transform: rotate(-30deg); } 50% { transform: rotate(30deg); } }
+@keyframes giro-work-body { 0%,100% { transform: rotate(-5deg); } 50% { transform: translateY(4px) rotate(4deg); } }
+@keyframes giro-planet-turn { 50% { transform: rotate(180deg); } 100% { transform: rotate(360deg); } }
+@keyframes giro-holo { 50% { opacity: .5; transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) {
+  .giro-room__resident { transition: none; }
+  .giro-room *, .giro-celebration *, .gear-mascot--stage *, .gear-mascot--work * { animation: none !important; }
+  .giro-celebration__particle { top: 20%; opacity: .6; }
+  .giro-celebration__trophy, .giro-celebration__banner { transform: translateX(-50%); }
+}

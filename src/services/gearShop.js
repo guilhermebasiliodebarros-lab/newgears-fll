@@ -53,7 +53,7 @@ export async function rewardGearContribution({ db, user, studentId, type, source
       lastAction: { type: 'reward', id: receiptId, coins },
     });
     transaction.set(receiptRef, { studentId: String(studentId), type, sourceId, sourcePath, day, dayIndex, coins, growthPoints: rule.coins, createdAt: updatedAt });
-    return { coins, label: rule.label, levelUp: nextEvolution.level > gearEvolution(account).level ? { name: nextEvolution.name, unlock: nextEvolution.unlock } : null };
+    return { coins, label: rule.label, animationId: account.equipped.animation, levelUp: nextEvolution.level > gearEvolution(account).level ? { name: nextEvolution.name, unlock: nextEvolution.unlock } : null };
   });
 }
 

@@ -6,6 +6,18 @@ export const GEAR_SHOP_CATEGORIES = [
   { id: 'frame', label: 'Molduras' },
   { id: 'accessory', label: 'Acessórios' },
   { id: 'title', label: 'Títulos' },
+  { id: 'room', label: 'Cenários' },
+  { id: 'bench', label: 'Bancadas' },
+  { id: 'light', label: 'Iluminação' },
+  { id: 'decor', label: 'Decoração' },
+  { id: 'animation', label: 'Comemorações' },
+];
+
+export const GEAR_SHOP_COLLECTIONS = [
+  { id: 'mechanic', name: 'Oficina Mecânica', description: 'Ferramentas à mão, bancada de trabalho e ideias saindo da forja.', accent: '#fb923c', equipment: { skin: 'skin-lava', frame: 'frame-hex', accessory: 'accessory-goggles', title: 'title-code', room: 'room-base', bench: 'bench-engineer', light: 'light-solar', decor: 'decor-tools', animation: 'animation-gears' } },
+  { id: 'space', name: 'Exploração Espacial', description: 'Uma estação entre as estrelas para descobertas de outro mundo.', accent: '#a5b4fc', equipment: { skin: 'skin-arctic', frame: 'frame-stars', accessory: 'accessory-helmet', title: 'title-ideas', room: 'room-orbit', bench: 'bench-holo', light: 'light-cosmic', decor: 'decor-planet', animation: 'animation-default' } },
+  { id: 'neon', name: 'Circuito Neon', description: 'Luzes, circuitos e um palco para o Giro mostrar seu ritmo.', accent: '#22d3ee', equipment: { skin: 'skin-emerald', frame: 'frame-orbit', accessory: 'accessory-headphones', title: 'title-voice', room: 'room-neon', bench: 'bench-holo', light: 'light-neon', decor: 'decor-planet', animation: 'animation-stage' } },
+  { id: 'tournament', name: 'Espírito de Torneio', description: 'Uma arena para celebrar o caminho construído com a equipe.', accent: '#fcd34d', equipment: { skin: 'skin-solar', frame: 'frame-champion', accessory: 'accessory-medal', title: 'title-teamwork', room: 'room-arena', bench: 'bench-podium', light: 'light-solar', decor: 'decor-trophy', animation: 'animation-trophy' } },
 ];
 
 export const GEAR_SHOP_ITEMS = [
@@ -30,9 +42,37 @@ export const GEAR_SHOP_ITEMS = [
   { id: 'title-ideas', category: 'title', name: 'Força das ideias', description: 'Curiosidade que encontra novos caminhos.', price: 30, rarity: 'Criativa' },
   { id: 'title-voice', category: 'title', name: 'Voz da inovação', description: 'Escutar, perguntar e compartilhar descobertas.', price: 40, rarity: 'Rara' },
   { id: 'title-teamwork', category: 'title', name: 'Conecto engrenagens', description: 'Uma homenagem a quem ajuda outras pessoas a avançar.', price: 60, rarity: 'Rara' },
+  { id: 'accessory-goggles', category: 'accessory', name: 'Óculos de inventor', description: 'Lentes de cobre para descobrir o que pode melhorar.', price: 45, variant: 'goggles', rarity: 'Rara' },
+  { id: 'accessory-helmet', category: 'accessory', name: 'Capacete explorador', description: 'O Giro pronto para uma missão entre as estrelas.', price: 65, variant: 'helmet', rarity: 'Épica' },
+  { id: 'accessory-medal', category: 'accessory', name: 'Medalha da equipe', description: 'Uma lembrança dourada de cada passo dado em equipe.', price: 70, variant: 'medal', rarity: 'Épica' },
+  { id: 'room-base', category: 'room', name: 'Garagem New Gears', description: 'O primeiro cantinho do Giro, pronto para receber suas ideias.', price: 0, variant: 'base', rarity: 'Essencial' },
+  { id: 'room-orbit', category: 'room', name: 'Estação orbital', description: 'Uma janela para o espaço e um horizonte de descobertas.', price: 70, variant: 'orbit', rarity: 'Rara' },
+  { id: 'room-neon', category: 'room', name: 'Laboratório neon', description: 'Circuitos luminosos atravessam as paredes da oficina.', price: 80, variant: 'neon', rarity: 'Épica' },
+  { id: 'room-arena', category: 'room', name: 'Arena da equipe', description: 'Arquibancadas e bandeiras para comemorar junto.', price: 90, variant: 'arena', rarity: 'Épica' },
+  { id: 'bench-base', category: 'bench', name: 'Bancada inicial', description: 'Uma boa base para montar a próxima ideia.', price: 0, variant: 'base', rarity: 'Essencial' },
+  { id: 'bench-engineer', category: 'bench', name: 'Bancada de engenharia', description: 'Gavetas, ferramentas e uma superfície pronta para testar.', price: 45, variant: 'engineer', rarity: 'Criativa' },
+  { id: 'bench-holo', category: 'bench', name: 'Mesa holográfica', description: 'Uma bancada iluminada com projeções de novas possibilidades.', price: 65, variant: 'holo', rarity: 'Rara' },
+  { id: 'bench-podium', category: 'bench', name: 'Pódio New Gears', description: 'Um lugar especial para celebrar o esforço da equipe.', price: 70, variant: 'podium', rarity: 'Épica' },
+  { id: 'light-base', category: 'light', name: 'Luz da garagem', description: 'Iluminação suave para começar os trabalhos.', price: 0, variant: 'base', rarity: 'Essencial' },
+  { id: 'light-neon', category: 'light', name: 'Faixa de luz neon', description: 'Azul e rosa iluminam as ideias do Giro.', price: 30, variant: 'neon', rarity: 'Criativa' },
+  { id: 'light-solar', category: 'light', name: 'Luminária solar', description: 'Uma luz dourada que deixa a oficina mais acolhedora.', price: 35, variant: 'solar', rarity: 'Criativa' },
+  { id: 'light-cosmic', category: 'light', name: 'Luz de nebulosa', description: 'Violeta e estrelas para acompanhar a próxima descoberta.', price: 40, variant: 'cosmic', rarity: 'Rara' },
+  { id: 'decor-base', category: 'decor', name: 'Placa da equipe', description: 'A assinatura New Gears no seu cantinho.', price: 0, variant: 'base', rarity: 'Essencial' },
+  { id: 'decor-tools', category: 'decor', name: 'Painel de ferramentas', description: 'O Giro pega sua chave favorita para trabalhar na bancada.', price: 35, variant: 'tools', rarity: 'Criativa' },
+  { id: 'decor-planet', category: 'decor', name: 'Mini planeta orbital', description: 'Um pequeno planeta que o Giro pode colocar para girar.', price: 40, variant: 'planet', rarity: 'Rara' },
+  { id: 'decor-trophy', category: 'decor', name: 'Troféu da cooperação', description: 'O Giro celebra com o símbolo do esforço em equipe.', price: 60, variant: 'trophy', rarity: 'Épica' },
+  { id: 'animation-default', category: 'animation', name: 'Alegria do Giro', description: 'O pulinho de felicidade que já acompanha cada conquista.', price: 0, variant: 'celebrate', rarity: 'Essencial' },
+  { id: 'animation-stage', category: 'animation', name: 'Dança de palco', description: 'Passos especiais, notas musicais e luzes para comemorar.', price: 50, variant: 'stage', rarity: 'Rara' },
+  { id: 'animation-gears', category: 'animation', name: 'Chuva de engrenagens', description: 'Engrenagens coloridas caem pela tela do navegador.', price: 60, variant: 'gears', rarity: 'Épica' },
+  { id: 'animation-trophy', category: 'animation', name: 'Troféu em festa', description: 'Um troféu dourado sobe pela tela com uma celebração especial.', price: 80, variant: 'trophy', rarity: 'Épica' },
 ];
 
-export const DEFAULT_GEAR_EQUIPMENT = { skin: 'skin-nebula', frame: 'frame-none', accessory: 'accessory-none', title: 'title-team' };
+export const DEFAULT_GEAR_EQUIPMENT = { skin: 'skin-nebula', frame: 'frame-none', accessory: 'accessory-none', title: 'title-team', room: 'room-base', bench: 'bench-base', light: 'light-base', decor: 'decor-base', animation: 'animation-default' };
+export const GEAR_WORKSHOP_CATEGORIES = ['room', 'bench', 'light', 'decor'];
+export const gearCollectionItems = (collectionId) => {
+  const collection = GEAR_SHOP_COLLECTIONS.find((entry) => entry.id === collectionId);
+  return collection ? Object.values(collection.equipment).map((id) => GEAR_SHOP_ITEMS.find((item) => item.id === id)).filter(Boolean) : [];
+};
 export const GEAR_CONTRIBUTIONS = {
   code: { collection: 'codeSnippets', coins: 12, label: 'Programação', message: 'Código no cofre! Sua lógica colocou mais uma ideia em movimento.', required: 'title' },
   expert: { collection: 'experts', coins: 20, label: 'Entrevista com especialista', message: 'Conhecimento de fora para fazer a equipe crescer. Boa entrevista!', required: 'name' },

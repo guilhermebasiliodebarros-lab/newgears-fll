@@ -75,7 +75,7 @@ export default function GearExperienceProvider({ children, db, user, student, se
     try {
       const result = await rewardGearContribution({ db, user, studentId, type: contribution.type, sourceId: contribution.sourceId });
       updateQueue((current) => current.filter((item) => `${item.type}:${item.sourceId}` !== id));
-      setReaction((current) => current?.id === reactionId ? { ...current, ...(result.levelUp ? { title: `Giro evoluiu para ${result.levelUp.name}!`, message: `${rule.message} Você desbloqueou: ${result.levelUp.unlock.toLowerCase()}.` } : {}), status: result.duplicate ? 'duplicate' : 'earned', coins: result.coins } : current);
+      setReaction((current) => current?.id === reactionId ? { ...current, ...(result.levelUp ? { title: `Giro evoluiu para ${result.levelUp.name}!`, message: `${rule.message} Você desbloqueou: ${result.levelUp.unlock.toLowerCase()}.` } : {}), status: result.duplicate ? 'duplicate' : 'earned', coins: result.coins, animationId: result.animationId } : current);
     } catch (error) {
       setReaction((current) => current?.id === reactionId ? { ...current, status: 'retry', detail: gearShopError(error) } : current);
     }
@@ -98,8 +98,8 @@ export default function GearExperienceProvider({ children, db, user, student, se
     setBusy(itemId); setOperationError('');
     try {
       const action = purchase ? purchaseGearItem : equipGearItem;
-      await action({ db, user, studentId, itemId });
-      setReaction({ id: ++sequence.current, mood: 'celebrate', title: purchase ? 'Novo visual desbloqueado!' : 'Visual equipado!', message: 'Seu Giro ficou com a sua cara. Vamos continuar construindo juntos?', status: 'style', coins: 0 });
+      const next = await action({ db, user, studentId, itemId });
+      setReaction({ id: ++sequence.current, mood: 'celebrate', title: purchase ? 'Novo item desbloqueado!' : 'Personalização equipada!', message: 'Seu Giro ficou com a sua cara. Vamos continuar construindo juntos?', status: 'style', coins: 0, animationId: next.equipped.animation });
       return true;
     } catch (error) { setOperationError(gearShopError(error)); return false; }
     finally { setBusy(''); }

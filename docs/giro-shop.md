@@ -10,11 +10,27 @@ Balões abertos manualmente permanecem até serem fechados. Os avisos automátic
 
 ## Loja
 
-A aba **Loja New Gears** reúne 21 itens entre cores do Giro, molduras de avatar, acessórios do mascote e títulos de perfil. O técnico pode consultar a loja em modo de prévia; compras e trocas são feitas pelo próprio aluno.
+A aba **Loja New Gears** reúne 44 itens entre cores do Giro, molduras de avatar, acessórios, títulos, cenários, bancadas, iluminação, decoração e comemorações. As áreas **Minha oficina**, **Loja** e **Coleções** separam o espaço do aluno, o catálogo e os conjuntos temáticos. O técnico pode consultar tudo em modo de prévia; compras e trocas são feitas pelo próprio aluno.
 
 Cada aluno começa com **40 Gears de boas-vindas**. Essa quantidade é inicializada uma única vez na carteira, junto da primeira recompensa, compra ou troca. Gears são moedas virtuais e não têm valor monetário. Comprar itens não altera XP, notas ou posições no ranking.
 
 Selecione um item para experimentá-lo no provador. **Comprar e usar** desconta o preço mostrado e equipa o item na mesma transação. Itens da coleção podem ser equipados novamente sem custo. O saldo insuficiente desativa a compra; erros mantêm o saldo e o visual anteriores. Molduras e títulos aparecem no perfil, e cores e acessórios acompanham o Giro.
+
+### Oficina e coleções
+
+Todo aluno recebe gratuitamente a Garagem New Gears, bancada inicial, luz da garagem, placa da equipe e comemoração original. A leitura de carteiras antigas completa os novos espaços de equipamento sem alterar saldo, compras, XP ou pontos de evolução. A configuração é gravada na próxima operação normal da carteira; não é necessário executar uma migração de moedas.
+
+O cenário em SVG mostra o Giro com os itens equipados. Os objetos e os botões permitem trabalhar na bancada, acender ou apagar a luz e explorar a decoração. O planeta gira durante a interação. Movimentos terminam após alguns segundos; o interruptor de luz é uma interação local, enquanto os itens equipados ficam salvos por aluno e entre dispositivos. Não há imagens externas ou um motor 3D adicional.
+
+As coleções **Oficina Mecânica**, **Exploração Espacial**, **Circuito Neon** e **Espírito de Torneio** combinam nove espaços de equipamento. São permanentes, sem contagem regressiva. Cada cartão mostra as peças já possuídas e filtra o catálogo. As peças são compradas individualmente pelo preço exibido, e os estilos podem ser misturados.
+
+### Comemorações
+
+**Dança de palco** custa 50 Gears, **Chuva de engrenagens** custa 60 e **Troféu em festa** custa 80. A comemoração básica continua gratuita, assim como os movimentos já desbloqueados por evolução.
+
+O provador permite **Experimentar** dentro da cena ou **Ver na tela** sem compra ou débito. A comemoração equipada é acionada depois que novos Gears são confirmados, ao aplicar personalizações e pelo botão **Comemorar** do balão. Recompensas pendentes, com erro ou já pagas não acionam uma nova comemoração. As partículas e o troféu usam uma camada sobre a tela do navegador, sem bloquear cliques, e desaparecem após 4,4 segundos. A preferência por movimentos reduzidos mantém uma exibição estática durante esse período.
+
+O catálogo e os nove espaços de equipamento também estão refletidos no arquivo de integração `firestore.weekly-reports.rules`, incluindo a normalização de carteiras antigas. Esses blocos precisam fazer parte das regras publicadas quando o projeto usar as permissões autenticadas; o arquivo é um complemento às demais abas, não um substituto integral das regras. Os testes locais conferem preços, compras atômicas, persistência do equipamento e compatibilidade, mas não substituem testes das regras no emulador.
 
 ## Contribuições
 

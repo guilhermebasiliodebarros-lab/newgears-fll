@@ -1,9 +1,11 @@
-﻿import { useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUp, Lightbulb, Music2, RotateCw, ShoppingBag, SlidersHorizontal, Square, Volume2, X } from 'lucide-react';
+import { ArrowUp, Lightbulb, Music2, RotateCw, ShoppingBag, SlidersHorizontal, Sparkles, Square, Volume2, X } from 'lucide-react';
 import useGearShopContext from '../hooks/useGearShopContext';
 import useGiroSpeech from '../hooks/useGiroSpeech';
 import GearMascot from './GearMascot';
+import GearCelebration from './GearCelebration';
+import { gearItem } from '../utils/gearShop';
 import { gearEvolution } from '../utils/gearEvolution';
 import { giroVoiceId } from '../utils/giroSpeech';
 
@@ -29,6 +31,13 @@ export default function GearCompanion() {
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const [dance, setDance] = useState(null);
+  const [manualCelebration, setManualCelebration] = useState(null);
+  const [finishedReaction, setFinishedReaction] = useState(null);
+  const automaticCelebration = reaction && reaction.id !== finishedReaction && (reaction.status === 'style' || (reaction.status === 'earned' && reaction.coins > 0));
+  const celebrationId = manualCelebration?.id || (automaticCelebration ? reaction.id : null);
+  const celebrationEquipment = { ...account.equipped, animation: manualCelebration?.animationId || reaction?.animationId || account.equipped.animation };
+  const celebrationMood = gearItem(celebrationEquipment.animation)?.variant === 'stage' ? 'stage' : 'celebrate';
+  const finishCelebration = useCallback(() => { setManualCelebration(null); setFinishedReaction(reaction?.id); }, [reaction?.id]);
   const open = Boolean(manualOpen || (reaction && reaction.id !== dismissed));
   const title = reaction?.title || INTRO_TITLE;
   const message = reaction?.message || INTRO_MESSAGE;
@@ -61,7 +70,7 @@ export default function GearCompanion() {
     setFocused(false);
   };
 
-  return createPortal(<aside className={`gear-companion ${isLiteMode ? 'gear-companion--lite' : ''} ${dancing ? `gear-companion--performing gear-companion--${dance.mood || 'dance'}` : ''}`} aria-label="Giro, mascote da New Gears"
+  return createPortal(<><aside className={`gear-companion ${isLiteMode ? 'gear-companion--lite' : ''} ${dancing ? `gear-companion--performing gear-companion--${dance.mood || 'dance'}` : ''}`} aria-label="Giro, mascote da New Gears"
     onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
     onFocusCapture={() => setFocused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}
     onKeyDown={(event) => { if (event.key === 'Escape' && open) { close(); event.currentTarget.querySelector('.gear-companion__button')?.focus(); } }}>
@@ -84,6 +93,7 @@ export default function GearCompanion() {
         <button type="button" onClick={() => perform()} className="gear-companion__action"><Music2 size={14} />{dancing ? 'Mais uma dança!' : 'Dançar'}</button>
         {evolution.level >= 2 ? <button type="button" onClick={() => perform('spin')} className="gear-companion__action"><RotateCw size={14} />Giro especial</button> : null}
         {evolution.level >= 3 ? <button type="button" onClick={() => perform('hop')} className="gear-companion__action"><ArrowUp size={14} />Pular</button> : null}
+        <button type="button" onClick={() => { setDance(null); setManualCelebration({ id: crypto.randomUUID(), animationId: account.equipped.animation }); }} className="gear-companion__action"><Sparkles size={14} />Comemorar</button>
       </div>
       {speech.supported ? <details className="gear-companion__voice-settings">
         <summary><SlidersHorizontal size={13} />Voz e ritmo</summary>
@@ -100,9 +110,9 @@ export default function GearCompanion() {
       </div>
     </div> : null}
     <button type="button" onClick={() => open ? close() : setManualOpen(true)} aria-expanded={open} aria-controls={open ? bubbleId : undefined} aria-label="Conversar com Giro" className="gear-companion__button">
-      <GearMascot key={dance?.sequence || 0} equipment={account.equipped} level={evolution.level} mood={dancing ? dance.mood || 'dance' : open ? reaction ? 'celebrate' : 'wave' : 'idle'} speaking={speech.speaking} decorative />
+      <GearMascot key={dance?.sequence || celebrationId || 0} equipment={account.equipped} level={evolution.level} mood={dancing ? dance.mood || 'dance' : celebrationId ? celebrationMood : open ? reaction ? 'celebrate' : 'wave' : 'idle'} speaking={speech.speaking} decorative />
       <span className="gear-companion__name">{speech.speaking ? 'Falando…' : `Giro · N${evolution.level}`}</span>
       {pending.length ? <span className="gear-companion__badge" aria-label={`${pending.length} recompensa(s) pendente(s)`}>{pending.length}</span> : null}
     </button>
-  </aside>, document.body);
+  </aside>{celebrationId && <GearCelebration key={celebrationId} equipment={celebrationEquipment} onComplete={finishCelebration} />}</>, document.body);
 }

@@ -34,21 +34,74 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/weeklyReportMembers/$(request.auth.uid)).data.studentId == studentId;
     }
     function gearBefore(studentId) {
-      return exists(/databases/$(database)/documents/studentGearProfiles/$(studentId))
-        ? get(/databases/$(database)/documents/studentGearProfiles/$(studentId)).data
-        : {'balance': 40, 'earned': 40, 'spent': 0,
-           'owned': ['skin-nebula', 'frame-none', 'accessory-none', 'title-team'],
-           'equipped': {'skin': 'skin-nebula', 'frame': 'frame-none', 'accessory': 'accessory-none', 'title': 'title-team'},
-           'rewardDay': '', 'rewardDayIndex': -1, 'dayEarned': 0, 'dayCounts': {}, 'growthPoints': 0, 'contributionCounts': {}};
+      let previous = exists(/databases/$(database)/documents/studentGearProfiles/$(studentId))
+        ? get(/databases/$(database)/documents/studentGearProfiles/$(studentId)).data : {};
+      let equipped = previous.get('equipped', {});
+      let defaults = ['skin-nebula', 'frame-none', 'accessory-none', 'title-team', 'room-base', 'bench-base', 'light-base', 'decor-base', 'animation-default'];
+      // Normalize older wallets without charging for the starter workshop.
+      return {'balance': previous.get('balance', 40), 'earned': previous.get('earned', 40), 'spent': previous.get('spent', 0),
+           'owned': defaults.concat(previous.get('owned', []).removeAll(defaults)),
+           'equipped': {'skin': equipped.get('skin', 'skin-nebula'),
+             'frame': equipped.get('frame', 'frame-none'),
+             'accessory': equipped.get('accessory', 'accessory-none'),
+             'title': equipped.get('title', 'title-team'),
+             'room': equipped.get('room', 'room-base'),
+             'bench': equipped.get('bench', 'bench-base'),
+             'light': equipped.get('light', 'light-base'),
+             'decor': equipped.get('decor', 'decor-base'),
+             'animation': equipped.get('animation', 'animation-default')},
+           'rewardDay': previous.get('rewardDay', ''), 'rewardDayIndex': previous.get('rewardDayIndex', -1),
+           'dayEarned': previous.get('dayEarned', 0), 'dayCounts': previous.get('dayCounts', {}),
+           'growthPoints': previous.get('growthPoints', 0), 'contributionCounts': previous.get('contributionCounts', {})};
     }
     function gearPrice(id) {
-      return {'skin-nebula': 0, 'skin-solar': 25, 'skin-emerald': 35, 'skin-rose': 45, 'skin-arctic': 65, 'skin-lava': 85,
-              'frame-none': 0, 'frame-orbit': 20, 'frame-hex': 40, 'frame-stars': 60, 'frame-champion': 100,
-              'accessory-none': 0, 'accessory-antenna': 20, 'accessory-visor': 45, 'accessory-headphones': 55, 'accessory-crown': 90,
-              'title-team': 0, 'title-code': 20, 'title-ideas': 30, 'title-voice': 40, 'title-teamwork': 60}.get(id, -1);
+      return {'skin-nebula': 0,
+              'skin-solar': 25,
+              'skin-emerald': 35,
+              'skin-rose': 45,
+              'skin-arctic': 65,
+              'skin-lava': 85,
+              'frame-none': 0,
+              'frame-orbit': 20,
+              'frame-hex': 40,
+              'frame-stars': 60,
+              'frame-champion': 100,
+              'accessory-none': 0,
+              'accessory-antenna': 20,
+              'accessory-visor': 45,
+              'accessory-headphones': 55,
+              'accessory-crown': 90,
+              'title-team': 0,
+              'title-code': 20,
+              'title-ideas': 30,
+              'title-voice': 40,
+              'title-teamwork': 60,
+              'accessory-goggles': 45,
+              'accessory-helmet': 65,
+              'accessory-medal': 70,
+              'room-base': 0,
+              'room-orbit': 70,
+              'room-neon': 80,
+              'room-arena': 90,
+              'bench-base': 0,
+              'bench-engineer': 45,
+              'bench-holo': 65,
+              'bench-podium': 70,
+              'light-base': 0,
+              'light-neon': 30,
+              'light-solar': 35,
+              'light-cosmic': 40,
+              'decor-base': 0,
+              'decor-tools': 35,
+              'decor-planet': 40,
+              'decor-trophy': 60,
+              'animation-default': 0,
+              'animation-stage': 50,
+              'animation-gears': 60,
+              'animation-trophy': 80}.get(id, -1);
     }
     function gearCategory(id) {
-      return id.matches('skin-.*') ? 'skin' : id.matches('frame-.*') ? 'frame' : id.matches('accessory-.*') ? 'accessory' : 'title';
+      return id.matches('skin-.*') ? 'skin' : id.matches('frame-.*') ? 'frame' : id.matches('accessory-.*') ? 'accessory' : id.matches('title-.*') ? 'title' : id.matches('room-.*') ? 'room' : id.matches('bench-.*') ? 'bench' : id.matches('light-.*') ? 'light' : id.matches('decor-.*') ? 'decor' : id.matches('animation-.*') ? 'animation' : '';
     }
     function gearEquipmentChange(data, before) {
       let category = gearCategory(data.lastAction.id);
@@ -150,9 +203,10 @@ service cloud.firestore {
         && data.studentId == studentId && data.balance is int && data.balance >= 0
         && data.earned is int && data.spent is int && data.spent >= 0 && data.earned == data.balance + data.spent
         && data.growthPoints is int && data.growthPoints >= 0 && data.contributionCounts is map
-        && data.owned is list && data.owned.size() <= 21
-        && data.equipped.keys().hasOnly(['skin', 'frame', 'accessory', 'title'])
-        && data.owned.hasAll([data.equipped.skin, data.equipped.frame, data.equipped.accessory, data.equipped.title])
+        && data.owned is list && data.owned.size() <= 44
+        && data.equipped.keys().hasOnly(['skin', 'frame', 'accessory', 'title', 'room', 'bench', 'light', 'decor', 'animation'])
+        && data.owned.hasAll([data.equipped.skin, data.equipped.frame, data.equipped.accessory, data.equipped.title, data.equipped.room, data.equipped.bench, data.equipped.light, data.equipped.decor, data.equipped.animation])
+        && gearCategory(data.equipped.skin) == 'skin' && gearCategory(data.equipped.frame) == 'frame' && gearCategory(data.equipped.accessory) == 'accessory' && gearCategory(data.equipped.title) == 'title' && gearCategory(data.equipped.room) == 'room' && gearCategory(data.equipped.bench) == 'bench' && gearCategory(data.equipped.light) == 'light' && gearCategory(data.equipped.decor) == 'decor' && gearCategory(data.equipped.animation) == 'animation'
         && data.lastAction.keys().hasOnly(['type', 'id', 'coins'])
         && ((data.lastAction.type == 'purchase' && price > 0 && !(data.lastAction.id in before.owned)
               && data.lastAction.coins == price && data.balance == before.balance - price && data.spent == before.spent + price
