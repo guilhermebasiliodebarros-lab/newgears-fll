@@ -1,5 +1,6 @@
 import { backupValue } from "./backup.js";
 import { ATTENDANCE_LABELS, sessionEntries } from "./teamProcesses.js";
+import { getPresentationEvaluationCriteria } from "./finalSprintEvaluations.js";
 
 const STATUS = {
   todo: "A fazer",
@@ -122,6 +123,14 @@ const LABELS = {
   questions: "Respostas às perguntas",
   posture: "Postura",
   inclusion: "Inclusão",
+  organization: "Organização da apresentação",
+  examples: "Uso de exemplos e evidências",
+  ideaSequence: "Sequência das ideias",
+  timeManagement: "Gestão do tempo",
+  confidence: "Segurança ao apresentar",
+  fluency: "Fluidez da fala",
+  eyeContact: "Contato visual com o público",
+  bodyExpression: "Expressão corporal",
   score1: "Critério 1",
   score2: "Critério 2",
   score3: "Critério 3",
@@ -546,7 +555,9 @@ export function buildTeamReport({
             fields.push(
               ...fieldsFrom(
                 record.ratings || {},
-                Object.keys(record.ratings || {}),
+                record.type === "presentation"
+                  ? getPresentationEvaluationCriteria(record).map(({ id }) => id)
+                  : Object.keys(record.ratings || {}),
               ),
             );
           const title =

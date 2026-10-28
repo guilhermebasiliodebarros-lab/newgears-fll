@@ -1,9 +1,38 @@
 import assert from 'node:assert/strict';
-import { buildEvaluationCalendar, getWeeklyEvaluationHistory, getFinalSprintEvaluationWeek, getFinalSprintEvaluationWeekForDate, getStudentTournamentSelection, WEEKLY_EVALUATION_CRITERIA } from '../src/utils/finalSprintEvaluations.js';
+import { buildEvaluationCalendar, getWeeklyEvaluationHistory, getFinalSprintEvaluationWeek, getFinalSprintEvaluationWeekForDate, getStudentTournamentSelection, getFinalSprintTournamentRanking, getPresentationEvaluationCriteria, PRESENTATION_EVALUATION_CRITERIA, PRESENTATION_EVALUATION_CRITERIA_VERSION, WEEKLY_EVALUATION_CRITERIA } from '../src/utils/finalSprintEvaluations.js';
+import { buildTeamReport } from '../src/utils/teamReport.js';
 import { publishTournamentSelection, saveTournamentCandidate, tournamentSelectionError } from '../src/services/tournamentSelection.js';
 import { memoryStore } from './teamProcesses.test.js';
 
 export async function runFinalSprintEvaluationsTests() {
+  const oldPresentation = { type: 'presentation', studentId: 'old', status: 'complete', ratings: { projectKnowledge: 4, communication: 3, questions: 2, posture: 5, teamwork: 1, inclusion: 0, fllValues: 3 } };
+  const newPresentation = { type: 'presentation', studentId: 'new', status: 'complete', criteriaVersion: PRESENTATION_EVALUATION_CRITERIA_VERSION, ratings: Object.fromEntries(PRESENTATION_EVALUATION_CRITERIA.map(({ id }) => [id, 4])) };
+  const previousPresentation = { ...oldPresentation, studentId: 'previous', criteriaVersion: 2, ratings: { projectKnowledge: 4, communication: 3, organization: 2, posture: 5, examples: 1, ideaSequence: 0, timeManagement: 3 } };
+  assert.equal(getPresentationEvaluationCriteria(oldPresentation).find(({ id }) => id === 'questions')?.label, 'Respostas às perguntas', 'Saved grades must not acquire the meaning of a replacement criterion');
+  assert.equal(getPresentationEvaluationCriteria(newPresentation), PRESENTATION_EVALUATION_CRITERIA);
+  assert.equal(getPresentationEvaluationCriteria({ ...newPresentation, criteriaVersion: undefined }), PRESENTATION_EVALUATION_CRITERIA, 'New ratings can also identify the current criteria');
+  assert.equal(getPresentationEvaluationCriteria(previousPresentation).find(({ id }) => id === 'timeManagement')?.label, 'Gestão do tempo', 'Version two grades keep their original meaning');
+  assert.deepEqual(getPresentationEvaluationCriteria({ ...previousPresentation, criteriaVersion: undefined }), getPresentationEvaluationCriteria(previousPresentation));
+  const presentationRanking = getFinalSprintTournamentRanking({ students: [{ id: 'old' }, { id: 'previous' }, { id: 'new' }, { id: 'partial' }, { id: 'previousPartial' }], evaluations: [oldPresentation, previousPresentation, newPresentation, { ...newPresentation, studentId: 'partial', ratings: oldPresentation.ratings }, { ...newPresentation, studentId: 'previousPartial', ratings: previousPresentation.ratings }] });
+  assert.equal(presentationRanking.find(({ student }) => student.id === 'old').values.presentation, 18, 'Historical totals still work without a stored total');
+  assert.equal(presentationRanking.find(({ student }) => student.id === 'new').values.presentation, 28);
+  assert.equal(presentationRanking.find(({ student }) => student.id === 'partial').values.presentation, null, 'Old ratings cannot complete the new evaluation');
+  assert.equal(presentationRanking.find(({ student }) => student.id === 'previous').values.presentation, 18);
+  assert.equal(presentationRanking.find(({ student }) => student.id === 'previousPartial').values.presentation, null, 'Version two ratings cannot complete the individual presentation criteria');
+
+  const report = buildTeamReport({ scope: 'legacy', startedAt: '2026-10-28T12:00:00Z', documents: [
+    { path: 'finalSprintEvaluations/old', data: oldPresentation },
+    { path: 'finalSprintEvaluations/previous', data: previousPresentation },
+    { path: 'finalSprintEvaluations/new', data: { ...newPresentation, ratings: { ...oldPresentation.ratings, ...previousPresentation.ratings, ...newPresentation.ratings } } },
+  ] });
+  const reportText = JSON.stringify(report);
+  assert.match(reportText, /Respostas às perguntas/, 'Historical exports retain their original criteria');
+  assert.match(reportText, /Uso de exemplos e evidências/, 'Version two exports retain their original criteria');
+  assert.match(reportText, /Contato visual com o público/, 'Current exports use the individual presentation criteria');
+  const currentFields = report.sections.flatMap(({ items }) => items).find(({ fields }) => fields.some(([label]) => label === 'Expressão corporal')).fields;
+  assert.equal(currentFields.some(([label]) => label === 'Respostas às perguntas'), false, 'Old map keys must not leak into exports after a reevaluation');
+  assert.equal(currentFields.some(([label]) => label === 'Gestão do tempo'), false, 'Version two map keys must not leak into current exports');
+
   const today = new Date(2026, 9, 26, 12);
   assert.equal(getFinalSprintEvaluationWeek(0, today).id, '2026-10-26');
   const previous = getFinalSprintEvaluationWeekForDate('2026-10-23', today);

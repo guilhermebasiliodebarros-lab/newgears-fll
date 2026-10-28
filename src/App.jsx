@@ -46,7 +46,7 @@ import PublicTvModeView from './views/PublicTvModeView';
 import { STATION_KEYS } from './constants/workspace';
 import { DEFAULT_PROJECT_SUMMARY, PROJECT_MAIN_DOC_ID, resolveProjectSummary } from './utils/projectSummary';
 import { buildTrainingGallery, DEFAULT_PUBLIC_SHOWCASE_SETTINGS, resolvePublicShowcaseSettings } from './utils/publicShowcase';
-import { PRESENTATION_EVALUATION_CRITERIA, WEEKLY_EVALUATION_CRITERIA, getFinalSprintEvaluationWeek, getStudentTournamentSelection, parseFinalSprintReportScore } from './utils/finalSprintEvaluations';
+import { PRESENTATION_EVALUATION_CRITERIA, PRESENTATION_EVALUATION_CRITERIA_VERSION, WEEKLY_EVALUATION_CRITERIA, getFinalSprintEvaluationWeek, getStudentTournamentSelection, parseFinalSprintReportScore } from './utils/finalSprintEvaluations';
 import {
   SCHOOL_REPORT_STAGE_CONFIG,
   SCHOOL_REPORT_SUBJECTS,
@@ -1521,6 +1521,7 @@ function App() {
       try {
           const evaluation = {
               type: 'presentation',
+              criteriaVersion: PRESENTATION_EVALUATION_CRITERIA_VERSION,
               seasonId: activeTeamSeasonId || 'legacy',
               status: 'complete',
               studentId,
@@ -1535,7 +1536,8 @@ function App() {
               updatedAt: now,
           };
           const evaluationId = existing?.id || getFinalSprintEvaluationDocId('presentation', studentId);
-          await setDoc(doc(db, 'finalSprintEvaluations', evaluationId), evaluation, { merge: true });
+          // Replace the ratings map as a whole so removed criteria do not survive a reevaluation.
+          await setDoc(doc(db, 'finalSprintEvaluations', evaluationId), evaluation, { mergeFields: Object.keys(evaluation) });
           setFinalSprintEvaluations((current) => [...current.filter((item) => !(item.type === 'presentation' && String(item.studentId) === studentId)), { ...evaluation, id: evaluationId }]);
           showNotification(`Avaliação da apresentação de ${student.name || 'aluno'} salva.`, 'success');
           return true;

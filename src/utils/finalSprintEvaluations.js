@@ -6,7 +6,7 @@ export const WEEKLY_EVALUATION_CRITERIA = [
   { id: 'fllValues', label: 'Valores FLL' },
 ];
 
-export const PRESENTATION_EVALUATION_CRITERIA = [
+const LEGACY_PRESENTATION_EVALUATION_CRITERIA = [
   { id: 'projectKnowledge', label: 'Domínio do projeto' },
   { id: 'communication', label: 'Comunicação e fala' },
   { id: 'questions', label: 'Respostas às perguntas' },
@@ -15,6 +15,39 @@ export const PRESENTATION_EVALUATION_CRITERIA = [
   { id: 'inclusion', label: 'Inclusão e participação' },
   { id: 'fllValues', label: 'Valores FLL' },
 ];
+
+const PRESENTATION_EVALUATION_CRITERIA_V2 = [
+  { id: 'projectKnowledge', label: 'Domínio do projeto' },
+  { id: 'communication', label: 'Comunicação e fala' },
+  { id: 'organization', label: 'Organização da apresentação' },
+  { id: 'posture', label: 'Postura' },
+  { id: 'examples', label: 'Uso de exemplos e evidências' },
+  { id: 'ideaSequence', label: 'Sequência das ideias' },
+  { id: 'timeManagement', label: 'Gestão do tempo' },
+];
+
+export const PRESENTATION_EVALUATION_CRITERIA_VERSION = 3;
+export const PRESENTATION_EVALUATION_CRITERIA = [
+  { id: 'projectKnowledge', label: 'Domínio do projeto' },
+  { id: 'communication', label: 'Comunicação e fala' },
+  { id: 'confidence', label: 'Segurança ao apresentar' },
+  { id: 'posture', label: 'Postura' },
+  { id: 'fluency', label: 'Fluidez da fala' },
+  { id: 'eyeContact', label: 'Contato visual com o público' },
+  { id: 'bodyExpression', label: 'Expressão corporal' },
+];
+
+// Historical scores keep their original meaning until the presentation is reevaluated.
+export const getPresentationEvaluationCriteria = (record) => {
+  if (!record || record.criteriaVersion === PRESENTATION_EVALUATION_CRITERIA_VERSION) return PRESENTATION_EVALUATION_CRITERIA;
+  if (record.criteriaVersion === 2) return PRESENTATION_EVALUATION_CRITERIA_V2;
+  if (!record.criteriaVersion) {
+    const hasRatings = (ids) => ids.some((id) => Object.hasOwn(record.ratings || {}, id));
+    if (hasRatings(['confidence', 'fluency', 'eyeContact', 'bodyExpression'])) return PRESENTATION_EVALUATION_CRITERIA;
+    if (hasRatings(['organization', 'examples', 'ideaSequence', 'timeManagement'])) return PRESENTATION_EVALUATION_CRITERIA_V2;
+  }
+  return LEGACY_PRESENTATION_EVALUATION_CRITERIA;
+};
 
 export const FINAL_SPRINT_RANKING_CATEGORIES = [
   { id: 'report', label: 'Relatório' },
@@ -73,7 +106,7 @@ export const getFinalSprintTournamentRanking = ({ students = [], evaluations = [
       values: {
         report: reportEvaluation?.status === 'complete' ? parseFinalSprintReportScore(reportEvaluation.total) : null,
         weekly: weeklyTotals.length ? weeklyTotals.reduce((sum, total) => sum + total, 0) : null,
-        presentation: getSavedEvaluationTotal(presentation, PRESENTATION_EVALUATION_CRITERIA),
+        presentation: getSavedEvaluationTotal(presentation, getPresentationEvaluationCriteria(presentation)),
         xp: Number.isFinite(xp) ? xp : 0,
       },
       positions: {},
