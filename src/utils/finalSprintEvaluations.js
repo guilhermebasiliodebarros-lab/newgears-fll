@@ -1,3 +1,5 @@
+import { isTournamentEligible } from './tournamentEligibility.js';
+
 export const WEEKLY_EVALUATION_CRITERIA = [
   { id: 'commitment', label: 'Comprometimento' },
   { id: 'teamwork', label: 'Trabalho em equipe' },
@@ -100,6 +102,7 @@ export const getFinalSprintTournamentRanking = ({ students = [], evaluations = [
     const xp = Number(student.xp);
     return {
       student,
+      eligibleForTournament: isTournamentEligible(student),
       selection,
       reportEvaluation,
       weeklyCount: weeklyTotals.length,
@@ -113,22 +116,23 @@ export const getFinalSprintTournamentRanking = ({ students = [], evaluations = [
     };
   });
 
+  const candidates = rows.filter((row) => row.eligibleForTournament);
   for (const { id } of FINAL_SPRINT_RANKING_CATEGORIES) {
-    const categoryRows = [...rows].sort((left, right) => {
+    const categoryRows = [...candidates].sort((left, right) => {
       if (left.values[id] === null && right.values[id] !== null) return 1;
       if (right.values[id] === null && left.values[id] !== null) return -1;
       return (right.values[id] ?? 0) - (left.values[id] ?? 0) || compareStudents(left, right);
     });
     let position = 0;
     categoryRows.forEach((row, index) => {
-      // XP follows the positions displayed in RankingPanel, including its name tiebreak.
+      // All category positions, including XP, consider tournament candidates only.
       // Equal evaluation grades share a rank (1, 1, 3); missing grades receive last place.
       if (id === 'xp' || index === 0 || row.values[id] !== categoryRows[index - 1].values[id]) position = index + 1;
-      row.positions[id] = row.values[id] === null ? rows.length : position;
+      row.positions[id] = row.values[id] === null ? candidates.length : position;
     });
   }
 
-  const rankedRows = rows.map((row) => ({
+  const rankedRows = candidates.map((row) => ({
     ...row,
     score: FINAL_SPRINT_RANKING_CATEGORIES.reduce((sum, { id }) => sum + row.positions[id], 0),
   })).sort((left, right) => left.score - right.score || compareStudents(left, right));
@@ -138,7 +142,7 @@ export const getFinalSprintTournamentRanking = ({ students = [], evaluations = [
   const scoreCounts = new Map();
   rankedRows.forEach(({ score }) => scoreCounts.set(score, (scoreCounts.get(score) || 0) + 1));
   let position = 0;
-  return rankedRows.map((row, index) => {
+  const ranked = rankedRows.map((row, index) => {
     if (index === 0 || row.score !== rankedRows[index - 1].score) position = index + 1;
     return {
       ...row,
@@ -148,6 +152,16 @@ export const getFinalSprintTournamentRanking = ({ students = [], evaluations = [
       inCutoffTie: hasCutoffTie && row.score === cutoffScore,
     };
   });
+  const learningOnly = rows.filter((row) => !row.eligibleForTournament).sort(compareStudents).map((row) => ({
+    ...row,
+    positions: Object.fromEntries(FINAL_SPRINT_RANKING_CATEGORIES.map(({ id }) => [id, null])),
+    score: null,
+    position: null,
+    inTopSix: false,
+    tied: false,
+    inCutoffTie: false,
+  }));
+  return [...ranked, ...learningOnly];
 };
 
 const formatDate = (date) => new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(date);

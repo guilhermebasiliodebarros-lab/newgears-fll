@@ -214,7 +214,9 @@ export default function FinalSprintEvaluationsView({
     </div>;
   }
 
-  const selectionRows = getFinalSprintTournamentRanking({ students: sortedStudents, evaluations, selections });
+  const readinessRows = getFinalSprintTournamentRanking({ students: sortedStudents, evaluations, selections });
+  const selectionRows = readinessRows.filter((row) => row.eligibleForTournament);
+  const learningOnlyRows = readinessRows.filter((row) => !row.eligibleForTournament);
   const topSixRows = selectionRows.filter((row) => row.inTopSix);
   const hasCutoffTie = selectionRows.some((row) => row.inCutoffTie);
   const draftStudentIds = selectionDraft?.studentIds || selections.filter((item) => item.selectedForTournament === true).map((item) => String(item.studentId));
@@ -223,6 +225,10 @@ export default function FinalSprintEvaluationsView({
   const hasUnpublishedChanges = JSON.stringify([...draftStudentIds].sort()) !== JSON.stringify([...publishedIds].sort());
   const selectedNames = draftStudentIds.map((id) => sortedStudents.find((item) => String(item.id) === id) || { id, name: selectionsByStudent.get(id)?.studentName || 'Aluno indisponível' });
   const publishSelection = async () => {
+    if (learningOnlyRows.some((row) => draftStudentIds.includes(String(row.student.id)))) {
+      setSelectionError('Retire os alunos do acompanhamento separado da lista em preparação antes de divulgar a convocação.');
+      return;
+    }
     setSavingKey('publish'); setSelectionError('');
     try {
       const saved = await onPublishSelection({ studentIds: draftStudentIds, revision: selectionDraft?.revision || 0 });
@@ -233,10 +239,11 @@ export default function FinalSprintEvaluationsView({
   };
   const handleExportReadinessReport = () => {
     const escapeCsvCell = (value) => `"${`${value ?? ''}`.replaceAll('"', '""').replaceAll('\r\n', '\n').replaceAll('\r', '\n')}"`;
-    const headers = ['Posição geral', 'Aluno', 'Nota do relatório /10', 'Análise dos relatórios', 'Pontos fortes dos relatórios', 'Melhorias dos relatórios', 'Posição no relatório', 'Soma das avaliações semanais', 'Semanas avaliadas', 'Posição nas semanais', 'Nota da apresentação final /35', 'Posição na apresentação final', 'XP atual (referência)', 'Posição no ranking XP', 'Soma das posições (menor é melhor)', 'Empate na classificação', 'Empate pela sexta vaga', 'Na lista em preparação', 'Convocação divulgada'];
-    const rows = selectionRows.map((row) => [
+    const headers = ['Posição geral', 'Aluno', 'Participação', 'Nota do relatório /10', 'Análise dos relatórios', 'Pontos fortes dos relatórios', 'Melhorias dos relatórios', 'Posição no relatório', 'Soma das avaliações semanais', 'Semanas avaliadas', 'Posição nas semanais', 'Nota da apresentação final /35', 'Posição na apresentação final', 'XP atual (referência)', 'Posição em XP entre candidatos', 'Soma das posições (menor é melhor)', 'Empate na classificação', 'Empate pela sexta vaga', 'Na lista em preparação', 'Convocação divulgada'];
+    const rows = readinessRows.map((row) => [
       row.position,
       row.student.name || 'Aluno',
+      row.eligibleForTournament ? 'Disputa por vagas' : 'Acompanhamento separado',
       row.values.report ?? '',
       row.reportEvaluation?.note || '',
       row.reportEvaluation?.strengths || '',
@@ -392,8 +399,8 @@ export default function FinalSprintEvaluationsView({
           <div className="flex flex-wrap items-center gap-2"><div className="rounded-xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-xs font-black text-amber-100">Selecionados: {selectedCount}/6</div><button type="button" onClick={handleExportReadinessReport} className="rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs font-bold text-emerald-100 hover:bg-emerald-400/20">Baixar relatório CSV</button></div>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-bold text-amber-100">{FINAL_SPRINT_RANKING_CATEGORIES.map(({ id, label }, index) => <span key={id} className="inline-flex items-center gap-2">{index > 0 ? <span className="text-gray-500">+</span> : null}<span className="rounded-lg border border-amber-300/15 bg-amber-300/5 px-3 py-2">Posição · {label}</span></span>)}<span className="text-gray-500">=</span><span className="rounded-lg bg-amber-300 px-3 py-2 text-black">Total de pontos ↑</span></div>
-        <p className="mt-3 text-xs leading-relaxed text-gray-300">Em cada categoria, o maior resultado fica em 1º e soma 1 ponto; o 2º soma 2 pontos, e assim por diante. Nas semanais, o resultado é a soma de todas as avaliações. No XP, entra a posição exibida no Ranking XP.</p>
-        <p className="mt-2 text-[10px] leading-relaxed text-gray-400">Notas iguais compartilham a posição na categoria (1º, 1º, 3º). Sem nota lançada, o aluno recebe a última posição daquela categoria ({sortedStudents.length} pontos). Empates no total ficam para sua decisão; os nomes apenas organizam a exibição dos empatados.</p>
+        <p className="mt-3 text-xs leading-relaxed text-gray-300">Em cada categoria, o maior resultado fica em 1º e soma 1 ponto; o 2º soma 2 pontos, e assim por diante. Nas semanais, o resultado é a soma de todas as avaliações. Todas as posições, inclusive em XP, são calculadas apenas entre os alunos que disputam vagas para o torneio.</p>
+        <p className="mt-2 text-[10px] leading-relaxed text-gray-400">Notas iguais compartilham a posição na categoria (1º, 1º, 3º). Sem nota lançada, o aluno recebe a última posição daquela categoria ({selectionRows.length} pontos). Empates no total ficam para sua decisão; os nomes apenas organizam a exibição dos empatados.</p>
         <p className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-gray-300">Exemplo: 1º no XP + 2º nas semanais + 5º na apresentação + 3º no relatório = <strong className="text-white">11 pontos</strong>.</p>
       </section>
       {selectionError ? <p role="alert" className="rounded-xl border border-red-300/20 bg-red-300/10 p-3 text-xs text-red-100">{selectionError}</p> : null}
@@ -414,10 +421,10 @@ export default function FinalSprintEvaluationsView({
             {row.inCutoffTie ? <p className="mt-2 text-[10px] font-bold text-amber-200">Empate pela vaga · decisão do técnico</p> : null}
           </li>)}
         </ol>
-        {topSixRows.length === 0 ? <p className="mt-4 text-sm text-gray-400">Cadastre alunos para acompanhar o ranking.</p> : null}
+        {topSixRows.length === 0 ? <p className="mt-4 text-sm text-gray-400">Nenhum aluno está disputando vagas para o torneio.</p> : null}
       </section>
       <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#111722]">
-        <table className="w-full min-w-[1000px] text-left text-xs">
+        <table aria-label="Classificação para o torneio" className="w-full min-w-[1000px] text-left text-xs">
           <thead className="bg-white/5 text-[9px] uppercase tracking-[0.12em] text-gray-400"><tr><th className="px-3 py-3">Pos. geral</th><th className="px-3 py-3">Aluno</th><th className="px-3 py-3">Relatório · nota /10</th><th className="px-3 py-3">Semanais · soma</th><th className="px-3 py-3">Apresentação final /35</th><th className="px-3 py-3">Ranking XP</th><th className="px-3 py-3" aria-sort="ascending">Soma das posições ↑</th><th className="px-3 py-3">Torneio</th></tr></thead>
           <tbody>{selectionRows.map((row) => {
             const id = String(row.student.id);
@@ -440,7 +447,21 @@ export default function FinalSprintEvaluationsView({
           })}</tbody>
         </table>
       </div>
-      <p className="text-[10px] text-gray-400">{sortedStudents.length} aluno(s) no ranking. Registre a nota e o feedback na aba Avaliação dos relatórios. Prepare os participantes na coluna Torneio, decida os empates e use Divulgar convocação quando a lista estiver pronta.</p>
+      <p className="text-[10px] text-gray-400">{selectionRows.length} aluno(s) na disputa por vagas. Registre a nota e o feedback na aba Avaliação dos relatórios. Prepare os participantes na coluna Torneio, decida os empates e use Divulgar convocação quando a lista estiver pronta.</p>
+      {learningOnlyRows.length ? <section aria-labelledby="learning-only-title" className="rounded-2xl border border-sky-300/20 bg-[#111722] p-4 md:p-5">
+        <h3 id="learning-only-title" className="text-lg font-black text-white">Acompanhamento separado</h3>
+        <p className="mt-2 text-xs leading-relaxed text-gray-300">Estes alunos continuam recebendo notas e feedback. Seus resultados e XP são preservados e não entram nas posições, na soma de pontos ou na disputa pelas seis vagas.</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{learningOnlyRows.map((row) => <article key={row.student.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
+          <h4 className="text-sm font-black text-white">{row.student.name || 'Aluno'}</h4>
+          <p className="mt-1 text-[10px] font-bold text-sky-200">Fora da disputa por vagas</p>
+          <dl className="mt-3 space-y-2 text-xs">
+            <div className="flex justify-between gap-3"><dt className="text-gray-400">Relatório</dt><dd className="font-bold text-gray-200">{formatGrade(row.values.report)}{row.values.report !== null ? '/10' : ''}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-gray-400">Semanais · {row.weeklyCount} avaliação(ões)</dt><dd className="font-bold text-gray-200">{formatGrade(row.values.weekly)}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-gray-400">Apresentação</dt><dd className="font-bold text-gray-200">{formatGrade(row.values.presentation)}{row.values.presentation !== null ? '/35' : ''}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-gray-400">XP</dt><dd className="font-bold text-gray-200">{formatGrade(row.values.xp)}</dd></div>
+          </dl>
+        </article>)}</div>
+      </section> : null}
     </div> : null}
   </div>;
 }

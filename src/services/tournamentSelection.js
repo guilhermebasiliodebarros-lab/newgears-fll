@@ -1,5 +1,6 @@
 import { arrayRemove, doc, increment, runTransaction, updateDoc, writeBatch } from 'firebase/firestore';
 import { assertActiveSeason } from './teamProcesses.js';
+import { isTournamentEligible } from '../utils/tournamentEligibility.js';
 
 const adapter = { arrayRemove, doc, increment, runTransaction, updateDoc, writeBatch };
 export const tournamentDraftId = (seasonId) => encodeURIComponent(seasonId);
@@ -35,6 +36,7 @@ export async function saveTournamentCandidate({ db, seasonId, studentId, selecte
     if ((draft?.revision || 0) !== expectedRevision) throw new Error('A lista mudou em outro acesso. Confira os nomes atualizados e tente novamente.');
     const studentSnapshot = await transaction.get(store.doc(db, 'students', String(studentId)));
     if (selected && (!studentSnapshot.exists() || studentSnapshot.data().status === 'inactive')) throw new Error('Este aluno não está ativo na equipe.');
+    if (selected && !isTournamentEligible(studentSnapshot.data())) throw new Error('Este aluno está no acompanhamento separado e não disputa vagas para o torneio.');
     const previous = draft?.studentIds || initialIds(selections);
     const studentIds = idsOf(selected ? [...previous, studentId] : previous.filter((id) => String(id) !== String(studentId)));
     if (studentIds.length > 6) throw new Error('O limite de seis alunos selecionados já foi atingido.');
@@ -73,6 +75,7 @@ export async function publishTournamentSelection({ db, seasonId, selections = []
     if ((!studentIds.length && !previousIds.length) || studentIds.length > 6) throw new Error('Escolha até seis integrantes para divulgar a convocação.');
     const students = await Promise.all(studentIds.map((id) => transaction.get(store.doc(db, 'students', id))));
     if (students.some((item) => !item.exists() || item.data().status === 'inactive')) throw new Error('Há aluno inativo na lista. Revise os integrantes antes de divulgar.');
+    if (students.some((item) => !isTournamentEligible(item.data()))) throw new Error('Há aluno do acompanhamento separado na lista. Retire-o da preparação antes de divulgar a convocação.');
     const allIds = idsOf([...studentIds, ...previousIds]);
     const references = allIds.map((id) => store.doc(db, 'finalSprintSelectionScores', selections.find((item) => String(item.studentId) === id)?.id || selectionId(seasonId, id)));
     const existing = await Promise.all(references.map((ref) => transaction.get(ref)));

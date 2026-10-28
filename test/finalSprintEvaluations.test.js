@@ -3,6 +3,7 @@ import { buildEvaluationCalendar, getWeeklyEvaluationHistory, getFinalSprintEval
 import { buildTeamReport } from '../src/utils/teamReport.js';
 import { publishTournamentSelection, saveTournamentCandidate, tournamentSelectionError } from '../src/services/tournamentSelection.js';
 import { memoryStore } from './teamProcesses.test.js';
+import { isTournamentEligible } from '../src/utils/tournamentEligibility.js';
 
 export async function runFinalSprintEvaluationsTests() {
   const oldPresentation = { type: 'presentation', studentId: 'old', status: 'complete', ratings: { projectKnowledge: 4, communication: 3, questions: 2, posture: 5, teamwork: 1, inclusion: 0, fllValues: 3 } };
@@ -32,6 +33,62 @@ export async function runFinalSprintEvaluationsTests() {
   const currentFields = report.sections.flatMap(({ items }) => items).find(({ fields }) => fields.some(([label]) => label === 'Expressão corporal')).fields;
   assert.equal(currentFields.some(([label]) => label === 'Respostas às perguntas'), false, 'Old map keys must not leak into exports after a reevaluation');
   assert.equal(currentFields.some(([label]) => label === 'Gestão do tempo'), false, 'Version two map keys must not leak into current exports');
+
+  const learningStudents = [{ id: 'heloisa', name: ' Heloísa ' }, { id: 'antonio', name: 'Antônio   Echenique' }, { id: 'helena', name: 'HELENA' }];
+  for (const student of learningStudents) assert.equal(isTournamentEligible(student), false);
+  assert.equal(isTournamentEligible({ name: 'Heloise' }), true, 'Heloise must not be confused with Heloisa');
+  assert.equal(isTournamentEligible({ name: 'Antônio Yamaguchi' }), true, 'Other students with the same first name remain candidates');
+  assert.equal(isTournamentEligible({ name: 'Other', tournamentEligible: false }), false);
+  const candidates = Array.from({ length: 8 }, (_, index) => ({ id: `candidate-${index}`, name: index ? `Candidate ${index}` : 'Lívia', xp: 100 - index }));
+  const candidateEvaluations = candidates.slice(0, 7).flatMap((student, index) => [
+    { studentId: student.id, type: 'presentation', status: 'complete', total: 30 - index },
+    { studentId: student.id, type: 'weekly', status: 'complete', total: 25 - index },
+    { studentId: student.id, type: 'report', status: 'complete', total: 10 - index },
+  ]);
+  const learningEvaluations = learningStudents.flatMap((student) => [
+    { studentId: student.id, type: 'presentation', status: 'complete', total: 35 },
+    { studentId: student.id, type: 'weekly', status: 'complete', total: 25 },
+    { studentId: student.id, type: 'report', status: 'complete', total: 10 },
+  ]);
+  const baseline = getFinalSprintTournamentRanking({ students: candidates, evaluations: candidateEvaluations });
+  const combinedInput = { students: [...candidates, ...learningStudents.map((student) => ({ ...student, xp: 999 }))], evaluations: [...candidateEvaluations, ...learningEvaluations] };
+  const beforeRanking = structuredClone(combinedInput);
+  const combined = getFinalSprintTournamentRanking(combinedInput);
+  assert.deepEqual(combined.filter((row) => row.eligibleForTournament), baseline, 'Learning-only students cannot change category positions, scores, overall ranks or the six-place cutoff');
+  assert.equal(combined[0].student.name, 'Lívia');
+  assert.equal(combined[0].positions.presentation, 1);
+  assert.equal(combined[0].position, 1);
+  assert.equal(combined.find((row) => row.student.id === 'candidate-7').positions.presentation, 8, 'Missing grades use the number of eligible candidates only');
+  for (const row of combined.filter((item) => !item.eligibleForTournament)) {
+    assert.equal(row.values.presentation, 35, 'Grades are preserved');
+    assert.equal(row.values.xp, 999, 'XP is preserved');
+    assert.equal(row.position, null);
+    assert.equal(row.score, null);
+    assert.equal(Object.values(row.positions).every((position) => position === null), true);
+    assert.equal(row.inTopSix || row.inCutoffTie || row.tied, false);
+  }
+  assert.deepEqual(combinedInput, beforeRanking, 'Separating the ranking must not modify student or evaluation records');
+  assert.equal(getFinalSprintTournamentRanking({ students: learningStudents }).every((row) => row.position === null), true, 'An entirely separate group must not create tournament positions');
+  const tiedCandidates = candidates.slice(0, 7).map((student, index) => ({ ...student, xp: index }));
+  const tiedEvaluations = candidateEvaluations.map((evaluation) => evaluation.type === 'report' ? { ...evaluation, total: Number(evaluation.studentId.split('-').at(-1)) } : evaluation);
+  const tiedRanking = getFinalSprintTournamentRanking({ students: tiedCandidates, evaluations: tiedEvaluations });
+  assert.equal(tiedRanking.every((row) => row.inCutoffTie), true, 'This fixture ties seven candidates for the six vacancies');
+  assert.deepEqual(getFinalSprintTournamentRanking({ students: [...tiedCandidates, ...learningStudents], evaluations: [...tiedEvaluations, ...learningEvaluations] }).filter((row) => row.eligibleForTournament), tiedRanking, 'Learning-only grades cannot affect ties at the sixth vacancy');
+
+  const excludedMemory = memoryStore({
+    'settings/workspace_season': { activeSeasonId: 'current' },
+    ...Object.fromEntries(learningStudents.map((student) => [`students/${student.id}`, { ...student, status: 'active' }])),
+    'finalSprintTournamentDrafts/current': { seasonId: 'current', studentIds: ['heloisa'], revision: 1 },
+    'finalSprintSelectionScores/test-heloisa': { studentId: 'heloisa', seasonId: 'current', reportScore: 10, selectedForTournament: true },
+  });
+  const excludedContext = { db: {}, seasonId: 'current', store: excludedMemory.store, actor: 'Coach', expectedRevision: 1 };
+  const beforeExcludedSave = structuredClone([...excludedMemory.records]);
+  for (const student of learningStudents) await assert.rejects(saveTournamentCandidate({ ...excludedContext, studentId: student.id, selected: true }), /acompanhamento separado/);
+  await assert.rejects(publishTournamentSelection({ ...excludedContext, expectedStudentIds: ['heloisa'] }), /acompanhamento separado/);
+  assert.deepEqual([...excludedMemory.records], beforeExcludedSave, 'Rejected additions and publication must not change invitations, grades or drafts');
+  await saveTournamentCandidate({ ...excludedContext, studentId: 'heloisa', selected: false });
+  assert.deepEqual(excludedMemory.records.get('finalSprintTournamentDrafts/current').studentIds, [], 'An excluded student can still be removed from an old draft');
+  assert.equal(excludedMemory.records.get('finalSprintSelectionScores/test-heloisa').reportScore, 10);
 
   const today = new Date(2026, 9, 26, 12);
   assert.equal(getFinalSprintEvaluationWeek(0, today).id, '2026-10-26');
