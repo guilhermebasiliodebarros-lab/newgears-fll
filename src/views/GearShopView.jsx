@@ -9,6 +9,7 @@ import GearCelebration from '../components/GearCelebration';
 import GearWorkshopGallery from '../components/GearWorkshopGallery';
 import GearCollectionCard from '../components/GearCollectionCard';
 import GearRefundButton from '../components/GearRefundButton';
+import GearTaskRewards from '../components/GearTaskRewards';
 import { gearEvolution } from '../utils/gearEvolution';
 import { GEAR_CONTRIBUTIONS, GEAR_SHOP_CATEGORIES, GEAR_SHOP_COLLECTIONS, GEAR_SHOP_ITEMS, GEAR_WORKSHOP_CATEGORIES, gearCollectionItems, gearItem, WELCOME_GEARS } from '../utils/gearShop';
 
@@ -76,6 +77,7 @@ export default function GearShopView() {
     {walletError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-300/25 bg-rose-300/10 p-4 text-xs text-rose-100"><p>{walletError}</p><button type="button" onClick={reloadWallet} className="inline-flex items-center gap-2 font-bold"><RefreshCw size={14} />Tentar carregar carteira</button></div>}
     {pending.length > 0 && <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4"><div><h3 className="text-sm font-black text-amber-100">{pending.length} contribuição(ões) com Gears pendentes</h3><p className="mt-1 text-xs text-slate-300">Seus registros já estão salvos. Tente confirmar os Gears sem cadastrar tudo outra vez.</p></div><button type="button" disabled={retrying} onClick={retryPending} className="rounded-xl bg-amber-300 px-4 py-2.5 text-xs font-black text-black disabled:opacity-50">{retrying ? 'Conferindo…' : 'Tentar receber Gears'}</button></section>}
 
+    <GearTaskRewards />
     <div className="giro-studio-tabs" aria-label="Áreas da loja do Giro">
       {[{ id: 'workshop', label: 'Minha oficina', icon: <Wrench size={17} /> }, { id: 'catalog', label: 'Loja', icon: <ShoppingBag size={17} /> }, { id: 'collections', label: 'Coleções', icon: <Layers3 size={17} /> }, { id: 'team', label: 'Visitar oficinas', icon: <Users size={17} /> }].map(({ id, label, icon }) => <button type="button" key={id} aria-pressed={tab === id} onClick={() => { setTab(id); setPreviewEffect(null); }}>{icon}{label}</button>)}
     </div>

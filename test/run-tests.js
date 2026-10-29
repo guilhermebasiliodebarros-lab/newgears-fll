@@ -19,6 +19,9 @@ import { runGiroNvidiaTests } from './giroNvidia.test.js';
 import { runGiroImprovementsTests } from './giroImprovements.test.js';
 import { runGearTechnicianTests } from './gearTechnician.test.js';
 import { runGearRefundsTests } from './gearRefunds.test.js';
+import { runGearGrantsTests } from './gearGrants.test.js';
+import { runTaskGearRewardsTests } from './taskGearRewards.test.js';
+import { runRobotTrajectoryTests } from './robotTrajectory.test.js';
 
 const suites = [
   { name: 'projectSummary', run: runProjectSummaryTests },
@@ -41,7 +44,10 @@ const suites = [
   { name: 'giroNvidia', run: runGiroNvidiaTests },
   { name: 'giroImprovements', run: runGiroImprovementsTests },
   { name: 'gearTechnician', run: runGearTechnicianTests },
-  { name: 'gearRefunds', run: runGearRefundsTests }
+  { name: 'gearRefunds', run: runGearRefundsTests },
+  { name: 'gearGrants', run: runGearGrantsTests },
+  { name: 'taskGearRewards', run: runTaskGearRewardsTests },
+  { name: 'robotTrajectory', run: runRobotTrajectoryTests }
 ];
 
 let failures = 0;

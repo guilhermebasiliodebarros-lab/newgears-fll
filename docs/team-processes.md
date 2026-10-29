@@ -60,6 +60,8 @@ O encerramento grava uma trava no banco. A equipe aguarda a conclusão e o técn
 
 O Kanban oferece **Bloquear** para o técnico e para os participantes de cada tarefa. Registre o motivo, a categoria e, se necessário, quem pode ajudar ou qual tarefa precisa terminar primeiro. A tarefa permanece em sua etapa e recebe destaque; o filtro **Somente bloqueadas** ajuda a localizar impedimentos.
 
+O técnico também pode definir **Gears por participante** na criação ou pelo cartão. Ao aprovar o resultado, confirma o valor e os responsáveis; cada participante cadastrado e ativo recebe o valor integral uma única vez. A aprovação e os créditos são atômicos. Zero desativa a recompensa, e reabrir uma tarefa já paga não gera novo pagamento. Veja [regras e histórico das recompensas](giro-shop.md#recompensa-automática-no-kanban).
+
 O avanço é recusado enquanto o bloqueio estiver aberto. Para liberar, registre a solução. Dependências precisam estar concluídas e ciclos entre tarefas são recusados. As ações ficam em um histórico separado das revisões.
 
 ## Indicadores e backup

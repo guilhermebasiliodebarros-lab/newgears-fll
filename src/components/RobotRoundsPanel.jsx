@@ -1,6 +1,7 @@
 import DraftForm from './DraftForm';
 import { attachmentsByRound } from '../utils/attachmentRounds';
 import React from 'react';
+const RobotTrajectoryPlanner = React.lazy(() => import('./RobotTrajectoryPlanner'));
 import StrategyBoard from './StrategyBoard';
 import {
   Activity,
@@ -337,6 +338,14 @@ const RobotRoundsPanel = ({
       inactiveClass: 'border-white/10 bg-black/20 text-gray-300 hover:bg-white/5 hover:text-white',
     },
   ];
+  robotTabs.push({
+    id: 'trajectory',
+    label: 'Simulador de trajetos',
+    description: 'Planeje movimentos, curvas e ações da garra e visualize o robô no campo.',
+    icon: <Play size={16} />,
+    tone: 'border-violet-400/20 bg-violet-400/10 text-violet-200',
+    activeClass: 'border-violet-400/30 bg-violet-600 text-white',
+  });
   const activeRobotTab = robotTabs.find((tab) => tab.id === robotSubTab) || robotTabs[0];
 
   const roundsFocusCards = [
@@ -388,7 +397,7 @@ const RobotRoundsPanel = ({
         <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-2xl">
             <p className="text-[10px] font-black uppercase tracking-[0.22em] text-gray-500">Trilha do robo</p>
-            <h3 className="newgears-display mt-2 text-2xl font-black text-white">Escolha entre rounds e mesa tatica sem apertar a leitura.</h3>
+            <h3 className="newgears-display mt-2 text-2xl font-black text-white">Planeje, visualize e teste os percursos do robô.</h3>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
               <span className={`inline-flex items-center gap-2 self-start rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] ${activeRobotTab.tone}`}>
                 {activeRobotTab.icon}
@@ -398,7 +407,7 @@ const RobotRoundsPanel = ({
             </div>
           </div>
 
-          <div className="inline-flex w-full flex-col rounded-[24px] border border-white/10 bg-black/20 p-1.5 sm:w-auto sm:min-w-[360px] sm:flex-row">
+          <div className="inline-flex w-full flex-col rounded-[24px] border border-white/10 bg-black/20 p-1.5 sm:w-auto sm:min-w-[360px] sm:flex-row sm:flex-wrap">
             {robotTabs.map((tab) => (
               <button
                 key={tab.id}
@@ -959,6 +968,10 @@ const RobotRoundsPanel = ({
             </div>
           </div>
         </>
+      ) : robotSubTab === 'trajectory' ? (
+        <React.Suspense fallback={<p role="status" className="p-6 text-sm text-slate-300">Carregando simulador de trajetos…</p>}>
+          <RobotTrajectoryPlanner rounds={rounds} readonly={readonly} />
+        </React.Suspense>
       ) : robotSubTab === 'exits' ? (
         <>
           <section className="newgears-major-panel rounded-[28px] border border-emerald-500/20 bg-gradient-to-br from-[#10251e] via-[#111820] to-[#0f1218] p-6 md:p-8">

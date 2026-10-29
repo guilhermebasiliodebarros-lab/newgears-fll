@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node ./node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5173 --clearScreen false --configLoader native",
     "build": "vite build",
+    "build:pages": "node scripts/build-pages.mjs",
     "test": "node test/run-tests.js",
     "lint": "eslint .",
     "preview": "vite preview"

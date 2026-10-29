@@ -40,6 +40,39 @@ service cloud.firestore {
         ? get(/databases/$(database)/documents/settings/workspace_season).data : {};
       return settings.get('activeSeasonId', 'legacy') == seasonId && settings.get('transitionLock', null) == null;
     }
+    // Planejador de trajetos: equipe lê; autor e técnico editam na temporada ativa.
+    function validRobotTrajectory(data) {
+      let settings = data.settings;
+      return data.keys().hasOnly(['title', 'roundId', 'notes', 'settings', 'points', 'seasonId', 'ownerId', 'author', 'createdAt', 'updatedAt', 'updatedBy', 'revision'])
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 100
+        && data.roundId is string && data.roundId.size() <= 160
+        && data.notes is string && data.notes.size() <= 2000
+        && data.points is list && data.points.size() >= 2 && data.points.size() <= 80
+        && settings is map && settings.keys().hasOnly(['width', 'height', 'robotWidth', 'robotLength', 'heading', 'map'])
+        && settings.width is number && settings.width >= 50 && settings.width <= 500
+        && settings.height is number && settings.height >= 50 && settings.height <= 500
+        && settings.robotWidth is number && settings.robotWidth >= 5 && settings.robotWidth <= 50
+        && settings.robotLength is number && settings.robotLength >= 5 && settings.robotLength <= 50
+        && settings.heading is number && settings.heading >= -180 && settings.heading <= 180
+        && settings.map in ['grid', 'bioglow']
+        && data.seasonId is string && data.ownerId is string && data.author is string && data.author.size() <= 120
+        && data.createdAt is string && data.updatedAt is string && data.updatedBy == request.auth.uid
+        && data.revision is int && data.revision >= 1;
+    }
+    match /robotTrajectories/{planId} {
+      allow read: if isReportMember();
+      allow create: if isReportMember() && validRobotTrajectory(request.resource.data)
+        && request.resource.data.ownerId == request.auth.uid && request.resource.data.revision == 1
+        && giroSeasonWritable(request.resource.data.seasonId);
+      allow update: if isReportMember() && (isReportAdmin() || resource.data.ownerId == request.auth.uid)
+        && validRobotTrajectory(request.resource.data)
+        && request.resource.data.ownerId == resource.data.ownerId && request.resource.data.author == resource.data.author
+        && request.resource.data.createdAt == resource.data.createdAt && request.resource.data.seasonId == resource.data.seasonId
+        && request.resource.data.revision == resource.data.revision + 1 && giroSeasonWritable(resource.data.seasonId);
+      // O encerramento reaplica seasonId nos registros; não permite mudar o plano.
+      allow update: if isReportAdmin() && request.resource.data == resource.data;
+      allow delete: if isReportMember() && (isReportAdmin() || resource.data.ownerId == request.auth.uid) && giroSeasonWritable(resource.data.seasonId);
+    }
     match /giroKnowledgeMaterials/{materialId} {
       allow read: if isReportAdmin() || (isReportMember() && resource.data.status == 'published');
       allow create: if isReportAdmin() && validGiroMaterial(request.resource.data)
@@ -316,6 +349,58 @@ service cloud.firestore {
         && (receipt.keepItems ? data.owned == before.owned && data.equipped == before.equipped
           : data.owned.size() == 9 && data.owned.toSet() == gearInitialEquipment().values().toSet() && data.equipped == gearInitialEquipment());
     }
+    function validGearGrantReceipt(studentId, grantId, receipt) {
+      return isReportAdmin()
+        && receipt.keys().hasOnly(['studentId', 'coins', 'reason', 'grantId', 'seasonId', 'actorId', 'actorName', 'createdAt'])
+        && receipt.studentId == studentId && receipt.grantId == grantId
+        && receipt.coins is int && receipt.coins >= 1 && receipt.coins <= 10000
+        && receipt.reason is string && receipt.reason.size() >= 3 && receipt.reason.size() <= 500
+        && receipt.actorId == request.auth.uid && receipt.actorName is string && receipt.actorName.size() <= 120
+        && receipt.createdAt is string && receipt.seasonId is string && giroSeasonWritable(receipt.seasonId)
+        && exists(/databases/$(database)/documents/students/$(studentId))
+        && get(/databases/$(database)/documents/students/$(studentId)).data.get('status', 'active') != 'inactive';
+    }
+    function gearManualGrantChange(studentId, data, before) {
+      let grantId = data.lastAction.id;
+      let receipt = getAfter(/databases/$(database)/documents/studentGearProfiles/$(studentId)/manualGrants/$(grantId)).data;
+      return validGearGrantReceipt(studentId, grantId, receipt)
+        && !exists(/databases/$(database)/documents/studentGearProfiles/$(studentId)/manualGrants/$(grantId))
+        && data.lastAction.coins == receipt.coins
+        && data.balance == before.balance + receipt.coins && data.earned == before.earned + receipt.coins
+        && data.spent == before.spent && data.owned == before.owned && data.equipped == before.equipped
+        && gearSameDaily(data, before) && gearSameGrowth(data, before);
+    }
+    function validTaskGearCreate(data) {
+      return data.get('gearReward', 0) is int && data.get('gearReward', 0) >= 0 && data.get('gearReward', 0) <= 10000
+        && (isReportAdmin() || data.get('gearReward', 0) == 0)
+        && !data.keys().hasAny(['gearRewardPaidAt', 'gearRewardPaidStudentIds', 'gearRewardPaidBy']);
+    }
+    function validTaskGearUpdate(data, before) {
+      return data.get('gearReward', 0) is int && data.get('gearReward', 0) >= 0 && data.get('gearReward', 0) <= 10000
+        && (isReportAdmin() || !data.diff(before).affectedKeys().hasAny(['gearReward', 'gearRewardUpdatedBy', 'gearRewardPaidAt', 'gearRewardPaidStudentIds', 'gearRewardPaidBy']))
+        && (before.get('gearRewardPaidAt', '') == '' || !data.diff(before).affectedKeys().hasAny(['gearReward', 'gearRewardPaidAt', 'gearRewardPaidStudentIds', 'gearRewardPaidBy']));
+    }
+    function gearTaskGrantChange(studentId, data, before) {
+      let taskId = data.lastAction.id;
+      let previous = get(/databases/$(database)/documents/tasks/$(taskId)).data;
+      let task = getAfter(/databases/$(database)/documents/tasks/$(taskId)).data;
+      let receipt = getAfter(/databases/$(database)/documents/studentGearProfiles/$(studentId)/taskGrants/$(taskId)).data;
+      let people = previous.get('participants', []);
+      return isReportAdmin() && previous.status == 'review' && task.status == 'done' && previous.get('gearRewardPaidAt', '') == ''
+        && previous.gearReward is int && previous.gearReward >= 1 && previous.gearReward <= 10000 && task.gearReward == previous.gearReward
+        && task.gearRewardPaidAt == receipt.createdAt && task.gearRewardPaidBy == request.auth.uid
+        && task.gearRewardPaidStudentIds is list && task.gearRewardPaidStudentIds.size() <= 3 && studentId in task.gearRewardPaidStudentIds
+        && ((people.size() > 0 && people[0].id == studentId) || (people.size() > 1 && people[1].id == studentId) || (people.size() > 2 && people[2].id == studentId) || (people.size() == 0 && previous.get('assigneeId', '') == studentId))
+        && receipt.keys().hasOnly(['studentId', 'taskId', 'seasonId', 'coins', 'reason', 'actorId', 'actorName', 'createdAt'])
+        && receipt.studentId == studentId && receipt.taskId == taskId && receipt.coins == task.gearReward && receipt.actorId == request.auth.uid
+        && receipt.reason is string && receipt.reason.size() >= 3 && receipt.reason.size() <= 500
+        && receipt.actorName is string && receipt.actorName.size() <= 120 && receipt.createdAt is string
+        && receipt.seasonId is string && previous.get('seasonId', receipt.seasonId) == receipt.seasonId && giroSeasonWritable(receipt.seasonId)
+        && get(/databases/$(database)/documents/students/$(studentId)).data.get('status', 'active') != 'inactive'
+        && !exists(/databases/$(database)/documents/studentGearProfiles/$(studentId)/taskGrants/$(taskId))
+        && data.lastAction.coins == receipt.coins && data.balance == before.balance + receipt.coins && data.earned == before.earned + receipt.coins
+        && data.spent == before.spent && data.owned == before.owned && data.equipped == before.equipped && gearSameDaily(data, before) && gearSameGrowth(data, before);
+    }
     function validGearProfile(studentId) {
       let data = request.resource.data;
       let before = gearBefore(studentId);
@@ -345,12 +430,30 @@ service cloud.firestore {
           || (data.lastAction.type == 'reward' && gearRewardChange(studentId, data, before))
           || (data.lastAction.type == 'history' && gearHistoryChange(studentId, data, before))
           || (data.lastAction.type == 'refund' && gearRefundChange(studentId, data, before))
-          || (data.lastAction.type == 'purchase_reset' && gearPurchaseResetChange(studentId, data, before)));
+          || (data.lastAction.type == 'purchase_reset' && gearPurchaseResetChange(studentId, data, before))
+          || (data.lastAction.type == 'manual_grant' && gearManualGrantChange(studentId, data, before))
+          || (data.lastAction.type == 'task_grant' && gearTaskGrantChange(studentId, data, before)));
     }
     match /studentGearProfiles/{studentId} {
       allow read: if isGearOwner(studentId) || isReportAdmin();
-      allow create, update: if (isGearOwner(studentId) || (isReportAdmin() && request.resource.data.lastAction.type in ['history', 'purchase_reset'])) && validGearProfile(studentId);
+      allow create, update: if (isGearOwner(studentId) || (isReportAdmin() && request.resource.data.lastAction.type in ['history', 'purchase_reset', 'manual_grant', 'task_grant'])) && validGearProfile(studentId);
       allow delete: if false;
+    }
+    match /studentGearProfiles/{studentId}/manualGrants/{grantId} {
+      allow read: if isReportAdmin() || isGearOwner(studentId);
+      allow create: if validGearGrantReceipt(studentId, grantId, request.resource.data)
+        && getAfter(/databases/$(database)/documents/studentGearProfiles/$(studentId)).data.lastAction.type == 'manual_grant'
+        && getAfter(/databases/$(database)/documents/studentGearProfiles/$(studentId)).data.lastAction.id == grantId
+        && gearManualGrantChange(studentId, getAfter(/databases/$(database)/documents/studentGearProfiles/$(studentId)).data, gearBefore(studentId));
+      allow update, delete: if false;
+    }
+    match /studentGearProfiles/{studentId}/taskGrants/{taskId} {
+      allow read: if isReportAdmin() || isGearOwner(studentId);
+      allow create: if isReportAdmin()
+        && getAfter(/databases/$(database)/documents/studentGearProfiles/$(studentId)).data.lastAction.type == 'task_grant'
+        && getAfter(/databases/$(database)/documents/studentGearProfiles/$(studentId)).data.lastAction.id == taskId
+        && gearTaskGrantChange(studentId, getAfter(/databases/$(database)/documents/studentGearProfiles/$(studentId)).data, gearBefore(studentId));
+      allow update, delete: if false;
     }
     match /studentGearRefunds/{receiptId} {
       allow get: if isReportAdmin() || (isReportMember() && (!exists(/databases/$(database)/documents/studentGearRefunds/$(receiptId)) || isGearOwner(resource.data.studentId)));

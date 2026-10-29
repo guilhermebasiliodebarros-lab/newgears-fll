@@ -5,8 +5,19 @@ import { prepareGiroAIRequest } from '../src/utils/giroConversation.js';
 import { buildGiroKnowledgeIndex } from '../src/utils/giroKnowledge.js';
 import { onRequest } from '../functions/api/giro-ai/[[path]].js';
 import { GIRO_REQUEST_MAX_BYTES } from '../src/utils/giroMedia.js';
+import { readFileSync } from 'node:fs';
+import pagesWorker from '../server/pages/worker.js';
 
 export async function runGiroNvidiaTests() {
+  const routes = JSON.parse(readFileSync(new URL('../public/_routes.json', import.meta.url), 'utf8'));
+  assert.ok(routes.include.includes('/api/giro-ai/*'), 'Pages must invoke the Worker for Giro API routes');
+  assert.ok(routes.include.includes('/api/reports/*'), 'Preserve existing report routes');
+  const deployedStatus = await pagesWorker.fetch(new Request('https://team.example/api/giro-ai/status'), {});
+  assert.match(deployedStatus.headers.get('Content-Type'), /application\/json/);
+  assert.equal((await deployedStatus.json()).ready, false);
+  assert.equal((await pagesWorker.fetch(new Request('https://team.example/api/reports/session'), {})).status, 503);
+  const assets = { ASSETS: { fetch: async () => new Response('static asset') } };
+  assert.equal(await (await pagesWorker.fetch(new Request('https://team.example/'), assets)).text(), 'static asset');
   const reference = { materialId: 'guide', title: 'Guia da temporada', page: 2, excerpt: 'Compartilhar a solução com especialistas permite receber feedback.', url: 'https://example.com/guia' };
   const privateData = { password: 'private-password', grades: [5], balance: 800, studentName: 'private-student' };
   const valid = { messages: [{ role: 'user', content: 'Como compartilhar a solução do projeto?' }], references: [reference], useKnowledge: true, seasonId: 'current', context: { season: 'Temporada atual', project: { title: 'Filtro', problem: 'Água', ...privateData }, students: [privateData] } };

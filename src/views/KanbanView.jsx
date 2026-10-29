@@ -4,6 +4,8 @@ import { AlertTriangle, BarChart3, Calendar, CheckCircle, ChevronDown, ChevronLe
 import { STATION_KEYS } from '../constants/workspace';
 import { buildInitialKanbanTaskDraft, resolveTaskTagFromStation } from '../utils/kanban';
 import { taskParticipants } from '../utils/teamProcesses';
+import TaskGearReward from '../components/TaskGearReward';
+import { GEAR_GRANT_MAX } from '../utils/gearGrants';
 
 export default function KanbanView({
   assignTaskToStudent,
@@ -326,6 +328,7 @@ export default function KanbanView({
                   ) : (
                       <>
                           <p className="text-sm text-gray-200 leading-relaxed">{t.text}</p>
+                          <TaskGearReward key={`${t.id}:${t.gearReward || 0}:${t.gearRewardPaidAt || ''}`} task={t} />
                           {t.block && !t.block.resolvedAt && <div className="rounded-xl border border-amber-300/25 bg-amber-300/10 p-3 text-xs text-amber-100"><p className="font-bold">Avanço bloqueado</p><p className="mt-1 whitespace-pre-wrap break-words">{t.block.reason}</p>{t.block.helpFromId && <p className="mt-2">Apoio: {students.find((student) => student.id === t.block.helpFromId)?.name || 'Integrante da equipe'}</p>}{t.block.dependencyId && <p className="mt-1">Depende de: {tasks.find((task) => task.id === t.block.dependencyId)?.text || 'Tarefa anterior'}</p>}</div>}
                           {t.blockHistory?.length > 0 && <details className="text-[10px] text-slate-400"><summary className="cursor-pointer">Histórico de impedimentos</summary>{t.blockHistory.slice().reverse().map((entry, index) => <p key={index} className="mt-1">{entry.action === 'blocked' ? 'Bloqueada' : 'Liberada'} por {entry.actor} · {new Date(entry.date).toLocaleString('pt-BR')} · {entry.reason}</p>)}</details>}
                           {t.createdBy && <p className="mt-2 text-[10px] text-slate-500">Criada por {t.createdBy}</p>}
@@ -757,6 +760,7 @@ export default function KanbanView({
 
                           {column.id === 'todo' && (
                               <form onSubmit={handleAddTaskSubmit} onKeyDown={stopKanbanInputKeyDown} className="mb-4 space-y-2">
+                                  {isAdmin && <label className="block text-[11px] font-bold text-amber-100">Gears por participante ao aprovar<input aria-label="Gears da nova tarefa" type="number" min="0" max={GEAR_GRANT_MAX} step="1" value={kanbanTaskDraft.gearReward} onChange={(event) => updateKanbanTaskDraft('gearReward', event.target.value)} className="mt-1 w-full rounded-lg border border-amber-200/20 bg-black/30 p-2 text-sm text-white" /><span className="mt-1 block font-normal text-slate-400">0 = sem recompensa. Cada participante recebe o valor uma única vez.</span></label>}
                                   <input
                                       name="taskText"
                                       value={kanbanTaskDraft.text}

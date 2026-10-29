@@ -17,5 +17,6 @@ export const buildInitialKanbanTaskDraft = (station, dueDate = '') => ({
   text: '',
   dueDate,
   tag: resolveTaskTagFromStation(station),
-  priority: 'normal'
+  priority: 'normal',
+  gearReward: 0,
 });

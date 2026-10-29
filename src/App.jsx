@@ -25,6 +25,7 @@ import { celebrateGearContribution, gearItem, gearDay, GEAR_CONTRIBUTIONS } from
 import './components/GearExperience.css';
 import { publishTournamentSelection, saveTournamentCandidate, tournamentDraftId, tournamentSelectionError } from './services/tournamentSelection';
 import { changeTaskStage, updateTaskPeople, setTaskBlock } from './services/taskWorkflow';
+import { validateTaskGearReward } from './services/taskGearRewards';
 import TaskBlockForm from './components/TaskBlockForm';
 import ReminderInbox from './components/ReminderInbox';
 import { applyRotation, undoRotation, saveAttendance, assertActiveSeason, transitionSeason } from './services/teamProcesses';
@@ -3299,7 +3300,7 @@ function App() {
   const deleteStudent = (id) => { setStudents(prev => prev.filter(s => s.id !== id)); }
 
   // --- FUNÇÕES DO KANBAN (TAREFAS) ---
-  const createKanbanTask = async ({ text, dueDate = '', tag = 'geral', priority = 'normal', author, ...extraData }) => {
+  const createKanbanTask = async ({ text, dueDate = '', tag = 'geral', priority = 'normal', gearReward = 0, author, ...extraData }) => {
       if (!text) return;
 
       const resolvedAuthor = author || (isAdmin ? "Tecnico" : (viewAsStudent?.name || "Equipe"));
@@ -3317,6 +3318,7 @@ function App() {
           dueDate,
           tag,
           priority,
+          gearReward: isAdmin ? validateTaskGearReward(Number(gearReward)) : 0,
           ...extraData
       };
       await runTransaction(db, async (transaction) => {
@@ -3332,7 +3334,7 @@ function App() {
       });
   };
 
-  const handleAddTask = async ({ text, dueDate = '', tag = 'geral', priority = 'normal' }) => {
+  const handleAddTask = async ({ text, dueDate = '', tag = 'geral', priority = 'normal', gearReward = 0 }) => {
       const normalizedText = text.trim();
       if (!normalizedText) return false;
 
@@ -3341,11 +3343,13 @@ function App() {
               text: normalizedText,
               dueDate,
               tag,
-              priority
+              priority,
+              gearReward,
           });
           return true;
       } catch (error) {
           console.error("Erro ao criar tarefa:", error);
+          showNotification(error.message || 'Não foi possível criar a tarefa.', 'error');
           return false;
       }
   }
@@ -3758,15 +3762,15 @@ function App() {
   };
 
   const persistTaskStage = async (task, status, details = {}) => {
-    await changeTaskStage({ db, id: task.id, status, expectedStatus: task.status, isAdmin, actor: isAdmin ? adminProfile?.name || 'Técnico' : viewAsStudent?.name || 'Equipe', actorId: currentUser?.uid || viewAsStudent?.id || '', seasonId: activeTeamSeasonId || 'legacy', details });
+    const result = await changeTaskStage({ db, id: task.id, status, expectedStatus: task.status, expectedGearReward: task.gearReward || 0, isAdmin, actor: isAdmin ? adminProfile?.name || 'Técnico' : viewAsStudent?.name || 'Equipe', actorId: currentUser?.uid || (isAdmin ? currentUser?.name || 'tecnico' : viewAsStudent?.id || ''), seasonId: activeTeamSeasonId || 'legacy', details });
     void recordActivity({ action: 'atualizou uma tarefa', category: 'kanban', title: task.text, detail: 'Novo status: ' + status, entityId: task.id });
-    showNotification('Etapa da tarefa atualizada.');
+    showNotification(result?.rewardedStudents ? `Tarefa aprovada! ${result.coinsPerStudent} Gears para cada um dos ${result.rewardedStudents} participante(s).` : 'Etapa da tarefa atualizada.');
   };
   const moveTask = async (id, newStatus) => {
     const task = tasks.find((item) => item.id === id);
     if (!task || task.status === newStatus) return;
     if (!isAdmin && (newStatus === 'done' || task.status === 'review' || task.status === 'done')) { showNotification('Apenas o técnico pode aprovar, devolver ou reabrir tarefas revisadas.', 'error'); return; }
-    if (newStatus === 'review' || (task.status === 'review' && newStatus === 'doing')) { setModal({ type: 'taskTransition', data: { task, status: newStatus } }); return; }
+    if (newStatus === 'review' || (task.status === 'review' && (newStatus === 'doing' || (newStatus === 'done' && task.gearReward > 0 && !task.gearRewardPaidAt)))) { setModal({ type: 'taskTransition', data: { task, status: newStatus } }); return; }
     try { await persistTaskStage(task, newStatus); } catch (error) { showNotification(error.message, 'error'); }
   };
 

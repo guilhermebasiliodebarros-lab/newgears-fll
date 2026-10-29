@@ -1,11 +1,12 @@
 import { doc, runTransaction } from 'firebase/firestore';
 import { taskParticipants } from '../utils/teamProcesses.js';
 import { assertActiveSeason } from './teamProcesses.js';
+import { prepareTaskGearRewards, validateTaskGearReward } from './taskGearRewards.js';
 const firestoreAdapter = { doc, runTransaction };
 
-export async function changeTaskStage({ db, id, status, expectedStatus, isAdmin, actor, actorId, seasonId, details = {}, store = firestoreAdapter }) {
+export async function changeTaskStage({ db, id, status, expectedStatus, expectedGearReward, isAdmin, actor, actorId, seasonId, details = {}, store = firestoreAdapter }) {
   const { doc, runTransaction } = store;
-  await runTransaction(db, async (transaction) => {
+  return runTransaction(db, async (transaction) => {
     await assertActiveSeason(transaction, db, seasonId, store);
     const ref = doc(db, 'tasks', id); const snapshot = await transaction.get(ref); const task = snapshot.data();
     if (!task) throw new Error('A tarefa não foi encontrada.');
@@ -20,7 +21,14 @@ export async function changeTaskStage({ db, id, status, expectedStatus, isAdmin,
     if (task.status === 'review' && status === 'doing' && (details.feedback || '').trim().length < 5) throw new Error('Informe o motivo da devolução.');
     if (details.evidenceUrl && !/^https?:\/\//i.test(details.evidenceUrl)) throw new Error('Informe um link iniciado em https:// ou http://.');
     const now = new Date().toISOString();
-    transaction.update(ref, { status, completedAt: status === 'done' ? now : null, updatedAt: now, ...(status === 'review' ? { evidence: details.evidence, evidenceUrl: details.evidenceUrl || '', submittedAt: now } : {}), ...(task.status === 'review' ? { feedback: details.feedback || '', reviewedBy: actor, reviewedAt: now } : {}), history: [...(task.history || []).slice(-99), { from: task.status, to: status, actor, actorId: actorId || '', date: now, feedback: details.feedback || '' }] });
+    const reward = validateTaskGearReward(task.gearReward || 0);
+    if (status === 'done' && reward && !task.gearRewardPaidAt && expectedGearReward !== reward) throw new Error('A recompensa mudou. Atualize a tarefa e confira os Gears antes de aprovar.');
+    const grants = status === 'done' ? await prepareTaskGearRewards({ transaction, store, db, id, task, actor, actorId, seasonId, now }) : { writes: [], studentIds: [], coins: 0 };
+    transaction.update(ref, { status, completedAt: status === 'done' ? now : null, updatedAt: now,
+      ...(grants.studentIds.length ? { gearRewardPaidAt: now, gearRewardPaidStudentIds: grants.studentIds, gearRewardPaidBy: actorId || actor || 'tecnico' } : {}),
+      ...(status === 'review' && task.status !== 'done' ? { evidence: details.evidence, evidenceUrl: details.evidenceUrl || '', submittedAt: now } : {}), ...(task.status === 'review' ? { feedback: details.feedback || '', reviewedBy: actor, reviewedAt: now } : {}), history: [...(task.history || []).slice(-99), { from: task.status, to: status, actor, actorId: actorId || '', date: now, feedback: details.feedback || '' }] });
+    for (const entry of grants.writes) { transaction.set(entry.accountRef, entry.account); transaction.set(entry.receiptRef, entry.receipt); }
+    return { rewardedStudents: grants.studentIds.length, coinsPerStudent: grants.coins };
   });
 }
 

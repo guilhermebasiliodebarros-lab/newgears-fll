@@ -77,6 +77,8 @@ O histórico e o rascunho ficam no navegador, separados por conta e temporada, c
 
 ## Publicação com Cloudflare Pages
 
+Para o site `newgears-fll.pages.dev`, siga o [passo a passo de ativação para os alunos](ativar-giro-cloudflare.md). Ele inclui o diagnóstico da publicação atual, as contas Firebase e o build `npm run build:pages` com `_worker.js` para envio pelo painel. A lista `_routes.json` precisa conter também `/api/giro-ai/*`; publicar somente arquivos estáticos sem a rota da API faz o chat receber HTML no lugar de JSON.
+
 A função `functions/api/giro-ai/[[path]].js` atende `/api/giro-ai/status` e `/api/giro-ai/chat`. Configure **no runtime das Functions**, pelo painel Cloudflare, `NVIDIA_API_KEY` e `GIRO_AI_MODEL=nvidia/nemotron-3.5-lightning-30b-a3b`. O `.env.local` do Vite não configura o ambiente publicado. Um build puramente estático não executa esta API: as Functions precisam acompanhar a publicação.
 
 Em produção, o acesso exige Firebase Auth e um vínculo ativo em `weeklyReportMembers`, reaproveitando a [validação de acesso existente](weekly-reports-setup.md). Configure `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL` e `FIREBASE_PRIVATE_KEY` no servidor e prepare as contas antes de ativar `VITE_FIREBASE_AUTH_ENABLED=true`. Papel, ID e sinalizadores locais enviados no JSON ou em cabeçalhos não autenticam usuários.

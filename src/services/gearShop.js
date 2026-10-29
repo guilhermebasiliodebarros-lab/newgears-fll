@@ -14,6 +14,7 @@ const assertWallet = (account) => {
   if (![account.balance, account.earned, account.spent].every((value) => Number.isSafeInteger(value) && value >= 0) || account.earned !== account.balance + account.spent) throw new Error('Os valores da carteira precisam ser conferidos pelo técnico antes de continuar.');
   if (!Number.isInteger(account.refundCount) || account.refundCount < 0 || account.refundCount > GEAR_REFUND_LIMIT || !Array.isArray(account.refundableItems) || new Set(account.refundableItems).size !== account.refundableItems.length || account.refundableItems.some((id) => !account.owned.includes(id) || !(gearItem(id)?.price > 0))) throw new Error('O histórico de reembolsos precisa ser conferido pelo técnico.');
 };
+export { assertWallet as assertGearWallet };
 export const gearShopError = (error) => {
   if (`${error?.code}`.includes('resource-exhausted')) return 'O banco atingiu o limite de uso. Esta operação não foi confirmada; tente novamente mais tarde.';
   if (`${error?.code}`.includes('permission-denied')) return 'Não foi possível acessar a carteira. O técnico precisa conferir as permissões da loja.';

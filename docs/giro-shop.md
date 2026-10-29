@@ -14,6 +14,30 @@ A aba **Loja New Gears** reúne 44 itens entre cores do Giro, molduras de avatar
 
 Cada aluno começa com **40 Gears de boas-vindas**. Essa quantidade é inicializada uma única vez na carteira, junto da primeira recompensa, compra ou troca. Gears são moedas virtuais e não têm valor monetário. Comprar itens não altera XP, notas ou posições no ranking.
 
+## Gears por tarefas
+
+No perfil do técnico, abra **Loja New Gears → Gears por tarefas**. Escolha um aluno ativo, informe uma quantidade inteira entre **1 e 10.000 Gears** e descreva a tarefa ou o motivo em **3 a 500 caracteres**. Clique em **Conceder Gears** para adicionar o valor à carteira. O aluno pode usar esses Gears normalmente na loja.
+
+O motivo, o valor, a data, a temporada e o técnico responsável ficam registrados em `studentGearProfiles/{studentId}/manualGrants/{grantId}`. O técnico consulta as dez concessões mais recentes do aluno selecionado, e o aluno vê as próprias concessões na loja. As consultas usam ordenação simples por data, sem índice composto adicional.
+
+O rascunho mantém o mesmo identificador ao tentar novamente depois de uma falha: se o crédito já foi confirmado, a repetição não adiciona novos Gears. Um envio com o mesmo identificador e dados diferentes é recusado. Para conceder Gears por outra tarefa, preencha um novo motivo após a confirmação. Os campos do formulário ficam guardados no navegador enquanto o envio estiver pendente.
+
+A concessão soma o valor ao saldo e ao total de Gears conquistados. Mantém intactos XP, notas, pontos de evolução, itens comprados e reembolsos disponíveis. A carteira e o recibo são gravados na mesma transação; a temporada ativa e o cadastro do aluno são conferidos novamente antes de creditar. O formulário e a concessão são exclusivos do técnico.
+
+### Recompensa automática no Kanban
+
+Ao criar uma tarefa, o técnico pode preencher **Gears por participante**. Em tarefas existentes, use **Definir Gears** ou **Alterar Gears** no cartão. O valor vai de **0 a 10.000**: zero desativa a recompensa. Alunos veem o valor combinado e não podem alterá-lo.
+
+O aluno envia o resultado para revisão. Quando o técnico aprova, uma confirmação mostra a recompensa e os participantes. Cada participante recebe o valor integral, sem divisão: 20 Gears com três participantes credita 20 para cada um. Todos precisam estar vinculados a cadastros ativos, com no máximo três participantes. Uma tarefa sem participantes cadastrados não pode ser aprovada com recompensa; atribua os responsáveis primeiro.
+
+A tarefa, todas as carteiras e os recibos `studentGearProfiles/{studentId}/taskGrants/{taskId}` são salvos em uma única transação. Uma falha impede tanto a aprovação quanto os créditos. A recompensa não concede XP ou evolução e preserva compras e reembolsos. Depois do pagamento, o valor não pode ser alterado. Reabrir e aprovar novamente não gera outro crédito, mesmo se os participantes mudarem. Tarefas concluídas anteriormente não são pagas retroativamente.
+
+O histórico da loja reúne as dez concessões mais recentes, manuais e do Kanban. As recompensas de tarefas aparecem identificadas como **Kanban**, com motivo, técnico, data e quantidade.
+
+Para Firebase Auth, integre também `taskGrants`, a ação `task_grant` e os helpers `validTaskGearCreate`/`validTaskGearUpdate` às regras existentes. Nas permissões atuais de criação de tarefas, adicione `&& validTaskGearCreate(request.resource.data)`; nas de atualização, `&& validTaskGearUpdate(request.resource.data, resource.data)`. Mantenha as condições atuais de autoria e revisão e exclua `tasks` de regras globais que ignorem essas verificações. Os helpers restringem os campos de recompensa; não substituem a autorização das tarefas. O arquivo de integração não deve substituir sozinho todas as regras do projeto.
+
+Integre também as regras de `manualGrants` e da ação `manual_grant` às regras do Firestore: somente técnicos autenticados podem conceder; alunos consultam apenas os próprios recibos; recibos não podem ser editados ou apagados. As regras atualizadas estão neste repositório e não foram publicadas automaticamente. As verificações automatizadas e de interface usam alunos fictícios, sem conceder Gears às carteiras reais.
+
 ## Reembolsos
 
 Na **Loja**, selecione um item comprado e use **Reembolsar item**. A confirmação mostra quantos Gears serão devolvidos e quantos reembolsos ainda estão disponíveis. Cada aluno tem **três reembolsos no total**, um por item devolvido; recomprar um item não recupera um uso. Itens iniciais, itens não comprados e itens já devolvidos não podem ser reembolsados.
