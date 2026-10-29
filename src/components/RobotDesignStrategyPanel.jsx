@@ -1,4 +1,5 @@
 import React from 'react';
+import { attachmentRoundIds, attachmentRoundNames } from '../utils/attachmentRounds';
 import {
   AlertTriangle,
   Calendar,
@@ -27,7 +28,7 @@ const formatFullDate = (value) => {
   return year && month && day ? `${day}/${month}/${year}` : value;
 };
 
-const getRoundName = (roundId, rounds) => rounds.find((round) => round.id === roundId)?.name || 'Geral';
+const getRoundName = (attachment, rounds) => attachmentRoundNames(attachment, rounds);
 
 const MetricCard = ({ label, value, helper, tone = 'border-white/10 bg-black/25 text-white' }) => (
   <div className={`rounded-2xl border p-4 ${tone}`}>
@@ -55,7 +56,6 @@ const RobotDesignStrategyPanel = ({
   codeSnippets,
   rounds,
   activeCommandCode,
-  iterationRecords,
   isAdmin,
   viewAsStudent,
   onOpenRobot,
@@ -80,7 +80,7 @@ const RobotDesignStrategyPanel = ({
   const latestAttachment = sortedAttachments[0] || null;
   const latestCode = activeCommandCode || sortedCodeSnippets[0] || null;
   const pendingCodeCount = sortedCodeSnippets.filter((item) => !item.applied).length;
-  const linkedRoundIds = new Set(sortedAttachments.map((item) => item.roundId).filter(Boolean));
+  const linkedRoundIds = new Set(sortedAttachments.flatMap(attachmentRoundIds));
   const evidenceCount = sortedRobotVersions.filter((item) => item.image).length + sortedAttachments.filter((item) => item.image).length + sortedCodeSnippets.filter((item) => item.image).length;
   const readinessItems = [
     { label: 'Versoes registradas', ready: sortedRobotVersions.length > 0, helper: 'Mostrem o que mudou no robo.' },
@@ -188,7 +188,7 @@ const RobotDesignStrategyPanel = ({
               <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-cyan-200 font-bold">Estrategia de missao</p>
                 <p className="text-sm font-bold text-white mt-3">{latestAttachment ? latestAttachment.name : 'Sem garra associada'}</p>
-                <p className="text-xs text-gray-200 mt-3 leading-relaxed">{latestAttachment ? `${getRoundName(latestAttachment.roundId, rounds)}: ${latestAttachment.changes}` : 'Relacionem cada garra a uma saida para mostrar quando e por que ela existe.'}</p>
+                <p className="text-xs text-gray-200 mt-3 leading-relaxed">{latestAttachment ? `${getRoundName(latestAttachment, rounds)}: ${latestAttachment.changes}` : 'Relacionem cada garra às saídas em que ela será usada.'}</p>
               </div>
               <div className="rounded-2xl border border-green-500/20 bg-green-500/10 p-4">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-green-200 font-bold">Codificacao</p>
@@ -258,7 +258,7 @@ const RobotDesignStrategyPanel = ({
                   <button onClick={(event) => { event.stopPropagation(); onOpenAttachmentEdit(attachment); }} className="text-gray-400 hover:text-white p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Pencil size={14} /></button>
                   {(isAdmin || attachment.author === viewAsStudent?.name) && <button onClick={(event) => onDeleteAttachment(event, attachment.id)} className="text-gray-400 hover:text-red-500 p-1.5 bg-black/60 rounded-lg backdrop-blur-sm"><Trash2 size={14} /></button>}
                 </div>
-                <div className="flex justify-between items-start gap-4 pr-6"><div><span className="inline-flex items-center rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-200">{getRoundName(attachment.roundId, rounds)}</span><h4 className="text-white font-bold mt-3 text-sm">{attachment.name}</h4></div><div className="text-[10px] text-gray-500 flex items-center gap-1"><Calendar size={10} /> {formatShortDate(attachment.date)}</div></div>
+                <div className="flex justify-between items-start gap-4 pr-6"><div><span className="inline-flex items-center rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-200">{getRoundName(attachment, rounds)}</span><h4 className="text-white font-bold mt-3 text-sm">{attachment.name}</h4></div><div className="text-[10px] text-gray-500 flex items-center gap-1"><Calendar size={10} /> {formatShortDate(attachment.date)}</div></div>
                 <p className="text-xs text-gray-300 mt-3 leading-relaxed line-clamp-4">{attachment.changes}</p>
                 <div className="flex flex-wrap gap-2 mt-4">{attachment.author && <MetaChip><UserCircle size={10} /> {attachment.author}</MetaChip>}{attachment.image && <MetaChip tone="border-cyan-500/20 bg-cyan-500/10 text-cyan-200"><ImageIcon size={10} /> Foto</MetaChip>}<MetaChip>{formatFullDate(attachment.date)}</MetaChip></div>
               </div>

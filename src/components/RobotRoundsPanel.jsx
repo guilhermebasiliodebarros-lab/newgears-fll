@@ -1,4 +1,5 @@
 import DraftForm from './DraftForm';
+import { attachmentsByRound } from '../utils/attachmentRounds';
 import React from 'react';
 import StrategyBoard from './StrategyBoard';
 import {
@@ -135,7 +136,6 @@ const RobotRoundsPanel = ({
   onOpenRoundEdit,
   onOpenMissionForm,
   onOpenPitStop,
-  onSavePracticeScore,
   onDeleteRound,
   onSaveFullRoundRun,
   onSaveExitPractice,
@@ -144,14 +144,10 @@ const RobotRoundsPanel = ({
   readonly = false,
 }) => {
   const missionMap = Object.fromEntries(missionsList.map((mission) => [mission.id, mission]));
-  const totalPoints = rounds.reduce((sum, round) => sum + (round.totalPoints || 0), 0);
   const totalTime = rounds.reduce((sum, round) => sum + (round.estimatedTime || 0), 0);
   const isOverTime = totalTime > 150;
   const timePercent = rounds.length > 0 ? Math.min(100, (totalTime / 150) * 100) : 0;
   const missionCoverageIds = new Set(rounds.flatMap((round) => round.missions || []).filter(Boolean));
-  const missionCoveragePercent = missionsList.length > 0
-    ? Math.round((missionCoverageIds.size / missionsList.length) * 100)
-    : 0;
 
   const roundRuns = scoreHistory
     .filter((entry) => entry.roundId && typeof entry.time === 'number')
@@ -219,14 +215,7 @@ const RobotRoundsPanel = ({
     return (current.score || 0) > (best.score || 0) ? current : best;
   }, null);
 
-  const attachmentsByRoundId = attachments.reduce((accumulator, attachment) => {
-    if (!attachment.roundId) return accumulator;
-
-    const current = accumulator[attachment.roundId] || [];
-    current.push(attachment);
-    accumulator[attachment.roundId] = current;
-    return accumulator;
-  }, {});
+  const attachmentsByRoundId = attachmentsByRound(attachments);
 
   const linkedRoundIds = new Set(Object.keys(attachmentsByRoundId));
   const roundsWithRecordedRun = new Set(roundRuns.map((entry) => entry.roundId));
@@ -803,7 +792,7 @@ const RobotRoundsPanel = ({
 
               {rounds.length === 0 ? (
                 <div className="mt-6">
-                  <EmptyState text='Nenhuma saida planejada ainda. Comecem criando rounds com nome claro, base, missoes e tempo estimado.' />
+                  <EmptyState text='Nenhuma saida planejada ainda. Comecem criando rounds com nome claro, base e missoes. Registrem os tempos durante os treinos.' />
                 </div>
               ) : null}
             </div>

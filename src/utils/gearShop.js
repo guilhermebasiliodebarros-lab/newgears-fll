@@ -105,12 +105,13 @@ export const gearDay = (date = new Date()) => {
   return `${value.year}-${value.month}-${value.day}`;
 };
 export const gearDayIndex = (date = new Date()) => Math.floor((date.getTime() - 3 * 60 * 60 * 1000) / 86400000);
-export const newGearProfile = (studentId) => ({ studentId: String(studentId), balance: WELCOME_GEARS, earned: WELCOME_GEARS, spent: 0, owned: Object.values(DEFAULT_GEAR_EQUIPMENT), equipped: { ...DEFAULT_GEAR_EQUIPMENT }, rewardDay: '', rewardDayIndex: -1, dayEarned: 0, dayCounts: {}, growthPoints: 0, contributionCounts: {} });
+export const newGearProfile = (studentId) => ({ studentId: String(studentId), balance: WELCOME_GEARS, earned: WELCOME_GEARS, spent: 0, refundCount: 0, refundableItems: [], owned: Object.values(DEFAULT_GEAR_EQUIPMENT), equipped: { ...DEFAULT_GEAR_EQUIPMENT }, rewardDay: '', rewardDayIndex: -1, dayEarned: 0, dayCounts: {}, growthPoints: 0, contributionCounts: {} });
 export const resolveGearEquipment = (equipment = {}) => Object.fromEntries(Object.entries(DEFAULT_GEAR_EQUIPMENT).map(([category, fallback]) => [category, gearItem(equipment?.[category])?.category === category ? equipment[category] : fallback]));
 export const gearProfile = (studentId, value) => {
   const initial = newGearProfile(studentId);
   if (!value) return initial;
-  return { ...initial, ...value, studentId: String(studentId), owned: [...new Set([...initial.owned, ...(Array.isArray(value.owned) ? value.owned.filter((id) => gearItem(id)) : [])])], equipped: resolveGearEquipment(value.equipped) };
+  const owned = [...new Set([...initial.owned, ...(Array.isArray(value.owned) ? value.owned.filter((id) => gearItem(id)) : [])])];
+  return { ...initial, ...value, studentId: String(studentId), owned, refundableItems: value.refundableItems ?? owned.filter((id) => gearItem(id).price > 0 && value.spent > 0), equipped: resolveGearEquipment(value.equipped) };
 };
 export const contributionPath = (type, sourceId, studentId) => {
   if (!GEAR_CONTRIBUTIONS[type] || !sourceId || String(sourceId).includes('/')) throw new Error('Contribuição inválida.');

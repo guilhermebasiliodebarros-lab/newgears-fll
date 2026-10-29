@@ -1,0 +1,40 @@
+import assert from 'node:assert/strict';
+import { GEAR_SHOP_ITEMS, gearProfile } from '../src/utils/gearShop.js';
+import { gearEvolution } from '../src/utils/gearEvolution.js';
+import { completedGearCollections } from '../src/utils/gearCollections.js';
+import { equipTechnicianGiro, readTechnicianGiro, saveTechnicianGiro, technicianGiroKey, technicianGiroState } from '../src/utils/gearTechnician.js';
+
+export async function runGearTechnicianTests() {
+  const user = { type: 'admin', name: 'Técnico' };
+  const student = { type: 'student', studentId: 'student-a' };
+  const entries = new Map();
+  const storage = { getItem: (key) => entries.get(key) || null, setItem: (key, value) => entries.set(key, value) };
+  const realStudent = gearProfile('student-a');
+  const before = structuredClone(realStudent);
+  const initial = readTechnicianGiro(storage, user, 'current');
+  assert.equal(initial.account.owned.length, GEAR_SHOP_ITEMS.length);
+  assert.equal(gearEvolution(initial.account).level, 5);
+  assert.equal(completedGearCollections(initial.account.owned).length, 5);
+  assert.equal(Number.isFinite(initial.account.balance), true, 'Only the display uses infinity; stored balances stay finite');
+  const equipped = equipTechnicianGiro(user, initial, 'animation-trophy');
+  assert.equal(equipped.account.equipped.animation, 'animation-trophy');
+  assert.equal(equipped.account.balance, initial.account.balance);
+  assert.equal(initial.account.equipped.animation, 'animation-default', 'Testing an item does not mutate the previous account');
+  saveTechnicianGiro(storage, user, 'current', equipped);
+  assert.equal(readTechnicianGiro(storage, user, 'current').account.equipped.animation, 'animation-trophy');
+  assert.equal(readTechnicianGiro(storage, user, 'next').account.equipped.animation, 'animation-default');
+  assert.equal(readTechnicianGiro(storage, { ...user, name: 'Outro técnico' }, 'current').account.equipped.animation, 'animation-default');
+  assert.equal(technicianGiroKey(student, 'current'), null);
+  assert.equal(readTechnicianGiro(storage, student, 'current'), null);
+  assert.throws(() => technicianGiroState(student), /exclusivo do técnico/);
+  assert.throws(() => equipTechnicianGiro(student, initial, 'skin-solar'), /exclusivo do técnico/);
+  assert.throws(() => equipTechnicianGiro(user, initial, 'invalid'), /item válido/);
+  assert.deepEqual(realStudent, before, 'Technician tests do not credit or equip student accounts');
+  const clean = technicianGiroState(user, { equipment: { skin: 'invalid', password: 'secret' }, workshop: { expression: 'invalid' }, balance: Infinity, studentId: 'student-a' });
+  assert.equal(clean.account.equipped.skin, 'skin-nebula');
+  assert.equal(clean.account.studentId, '');
+  assert.doesNotMatch(JSON.stringify(clean), /secret|student-a/);
+  entries.set(technicianGiroKey(user, 'current'), '{invalid');
+  assert.equal(readTechnicianGiro(storage, user, 'current').account.equipped.animation, 'animation-default');
+  assert.equal(readTechnicianGiro({ getItem: () => { throw new Error('Blocked'); } }, user, 'current').account.owned.length, GEAR_SHOP_ITEMS.length);
+}

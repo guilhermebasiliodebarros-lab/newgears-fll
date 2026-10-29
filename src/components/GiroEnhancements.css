@@ -1,0 +1,50 @@
+.giro-ai__footer { max-height: 48dvh; overflow-y: auto; flex-shrink: 0; }
+.giro-ai__media { margin-bottom: 10px; color: #abc0d9; font-size: 11px; line-height: 1.6; }
+.giro-ai__media-actions, .giro-ai__audio-preview > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.giro-ai__media button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border: 1px solid #ffffff20; border-radius: 9px; color: #bdeef6; background: #67e8f908; }
+.giro-ai__media > p { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.giro-ai__media .giro-ai__recording { color: #fecdd3; border-color: #fb718580; background: #fb718512; }
+.giro-ai__previews { display: flex; gap: 8px; margin-top: 9px; }
+.giro-ai__previews figure { position: relative; width: 110px; overflow: hidden; border: 1px solid #67e8f944; border-radius: 10px; background: #070f1f; }
+.giro-ai__previews img { width: 110px; height: 68px; object-fit: cover; }
+.giro-ai__previews figcaption { padding: 3px 6px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; font-size: 9px; }
+.giro-ai__previews button { position: absolute; top: 3px; right: 3px; padding: 4px; background: #070f1fee; }
+.giro-ai__audio-preview { margin-top: 9px; padding: 9px; border: 1px solid #ffffff17; border-radius: 12px; background: #070f1f; }
+.giro-ai__audio-preview audio { width: min(100%, 340px); height: 34px; }
+.giro-ai__audio-preview p { margin: 7px 0; }
+.giro-ai__media-history { margin-top: 10px; color: #93b0cb; font-size: 10px; }
+.giro-ai__feedback { border-top: 1px solid #ffffff12; margin-top: 14px; padding-top: 12px; color: #9fb1ca; font-size: 11px; }
+.giro-ai__feedback > div, .giro-ai__feedback > p, .giro-ai__feedback form > div { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.giro-ai__feedback button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #ffffff1a; border-radius: 9px; padding: 5px 9px; }
+.giro-ai__feedback button[aria-pressed="true"] { border-color: #67e8f970; color: #a5f3fc; background: #67e8f90b; }
+.giro-ai__feedback form { margin-top: 10px; }
+.giro-ai__feedback textarea { display: block; width: 100%; min-height: 65px; padding: 9px; margin-top: 5px; border-radius: 9px; border: 1px solid #ffffff25; background: #070f1f; color: #e3ecfa; resize: vertical; }
+.giro-ai__feedback form p { margin: 7px 0; font-size: 10px; }
+.giro-feedback-review { border: 1px solid #ffffff1a; border-radius: 18px; padding: 20px; margin: 24px 0; background: #0e192b; }
+.giro-feedback-review > header { display: flex; align-items: start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 15px; }
+.giro-feedback-review h3 { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 800; color: #d5f7fa; }
+.giro-feedback-review p, .giro-feedback-review label, .giro-feedback-review select { color: #a8bbd4; font-size: 12px; line-height: 1.7; }
+.giro-feedback-review select, .giro-feedback-review textarea { border: 1px solid #ffffff24; border-radius: 9px; background: #070f1f; color: #d5e5f5; padding: 9px; }
+.giro-feedback-review__item { padding: 15px; margin-top: 12px; border: 1px solid #ffffff14; border-radius: 12px; background: #ffffff03; }
+.giro-feedback-review__meta { display: flex; gap: 12px; flex-wrap: wrap; justify-content: space-between; font-size: 11px; color: #a5f3fc; }
+.giro-feedback-review__meta span { color: #92a6c0; }
+.giro-feedback-review h4 { margin: 12px 0; font-weight: 700; color: #dbeafe; overflow-wrap: anywhere; }
+.giro-feedback-review details { font-size: 12px; line-height: 1.8; }
+.giro-feedback-review summary { cursor: pointer; color: #a5f3fc; }
+.giro-feedback-review__note { margin: 12px 0; padding: 9px; background: #67e8f908; border-radius: 9px; overflow-wrap: anywhere; }
+.giro-feedback-review textarea { display: block; width: 100%; margin-top: 6px; resize: vertical; }
+.giro-feedback-review label { display: block; margin-top: 12px; }
+.giro-feedback-review .giro-knowledge__actions { flex-wrap: wrap; }
+.giro-celebration__scene { position: absolute; left: 50%; top: 43%; width: min(280px, 62vw); transform: translate(-50%, -50%); perspective: 700px; animation: giro-celebration-arrive 4.3s ease both; }
+.giro-celebration__hero { position: relative; width: 78%; aspect-ratio: 200 / 210; margin: auto; filter: drop-shadow(0 0 20px #67e8f93a); }
+.giro-celebration__floor { position: absolute; left: 0; right: 0; bottom: 2%; height: 30%; border: 1px solid #a5f3fc55; border-radius: 50%; background: radial-gradient(ellipse, #67e8f943, #6366f112 55%, transparent 70%); transform: rotateX(35deg); }
+.giro-celebration__ring { position: absolute; inset: 10%; border: 2px solid #67e8f96b; border-radius: 50%; box-shadow: 0 0 16px #67e8f933; animation: giro-celebration-orbit 2.1s ease-in-out infinite; }
+.giro-celebration__ring--two { border-color: #c4b5fd66; animation-delay: -.9s; animation-direction: reverse; }
+.giro-celebration__scene > p { position: relative; margin: 12px -30px 0; padding: 10px 15px; border: 1px solid #67e8f944; border-radius: 15px; background: #0c1729ed; color: #d5f7fa; text-align: center; font-weight: 800; font-size: clamp(12px, 2vw, 16px); box-shadow: 0 10px 30px #0005; }
+.giro-celebration--compact .giro-celebration__scene { width: min(160px, 35%); top: 47%; }
+.giro-celebration--compact .giro-celebration__scene > p { margin: 4px -35px 0; font-size: 10px; padding: 6px; }
+.giro-celebration--trophy .giro-celebration__scene { top: 34%; }
+.giro-celebration--stage .giro-celebration__ring { border-color: #f0abfc99; }
+@keyframes giro-celebration-arrive { 0% { opacity: 0; transform: translate(-50%, -35%) scale(.65); } 12% { opacity: 1; transform: translate(-50%, -50%) scale(1.04); } 20%,82% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -65%) scale(.9); } }
+@keyframes giro-celebration-orbit { 0%,100% { transform: rotateX(65deg) rotateY(-20deg) rotateZ(0); opacity: .4; } 50% { transform: rotateX(35deg) rotateY(20deg) rotateZ(180deg); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .giro-celebration *, .gear-mascot { animation: none !important; transition: none !important; } .giro-celebration__particle, .giro-celebration__beam, .giro-celebration__ring { display: none; } }

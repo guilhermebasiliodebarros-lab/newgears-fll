@@ -28,19 +28,25 @@ export default function useGiroAI(scope, knowledge, context) {
   useEffect(() => () => { controller.current?.abort(); controller.current = null; }, []);
   const cancel = () => { controller.current?.abort(); controller.current = null; setPending(null); };
   const ready = Boolean(status?.ready && !connectionError && (!useKnowledge || (!knowledge.loading && !knowledge.error)));
-  const send = async () => {
-    const question = latest.current.draft.trim();
-    if (!question || question.length > GIRO_AI_MAX_QUESTION || controller.current || !ready) return;
+  const send = async (images = []) => {
+    const question = latest.current.draft.trim() || (images.length ? 'Analise as fotos anexadas e me ajude a entender o que está visível.' : '');
+    if (!question || question.length > GIRO_AI_MAX_QUESTION || controller.current || !ready) return false;
     const abort = new AbortController(); controller.current = abort; setError(''); setPending(question);
     try {
-      const payload = prepareGiroAIRequest({ question, messages: latest.current.messages, knowledge, context, useKnowledge });
+      const payload = prepareGiroAIRequest({ question, messages: latest.current.messages, knowledge, context, useKnowledge, attachments: images });
       const answer = await askGiroAI(payload, abort.signal);
-      if (controller.current !== abort || abort.signal.aborted) return;
-      commit({ draft: '', messages: [...latest.current.messages, { id: crypto.randomUUID(), role: 'user', text: question }, { id: crypto.randomUUID(), role: 'assistant', ...answer }].slice(-32) });
+      if (controller.current !== abort || abort.signal.aborted) return false;
+      commit({ draft: '', messages: [...latest.current.messages, { id: crypto.randomUUID(), role: 'user', text: question, media: images.map((image) => ({ kind: 'image', name: image.name })) }, { id: crypto.randomUUID(), role: 'assistant', ...answer }].slice(-32) });
+      return true;
     } catch (issue) { if (controller.current === abort && !abort.signal.aborted) setError(issue.message); }
     finally { if (controller.current === abort) { controller.current = null; setPending(null); } }
   };
   return { ...session, pending, ready, error, status, connectionError, storageError, useKnowledge, setUseKnowledge,
+    appendTranscript: (text) => {
+      const draft = [latest.current.draft.trim(), text.trim()].filter(Boolean).join('\n\n');
+      if (draft.length > GIRO_AI_MAX_QUESTION) return false;
+      commit({ ...latest.current, draft }); return true;
+    },
     setDraft: (draft) => commit({ ...latest.current, draft: draft.slice(0, GIRO_AI_MAX_QUESTION) }),
     send, cancel, reconnect: () => { if (knowledge.error) knowledge.retry(); setRetry((value) => value + 1); },
     clear: () => { cancel(); setError(''); commit({ draft: '', messages: [] }); },

@@ -4,6 +4,7 @@ import { handleNvidiaGiroRequest, NVIDIA_GIRO_MODEL, parseNvidiaAnswer, resolveN
 import { prepareGiroAIRequest } from '../src/utils/giroConversation.js';
 import { buildGiroKnowledgeIndex } from '../src/utils/giroKnowledge.js';
 import { onRequest } from '../functions/api/giro-ai/[[path]].js';
+import { GIRO_REQUEST_MAX_BYTES } from '../src/utils/giroMedia.js';
 
 export async function runGiroNvidiaTests() {
   const reference = { materialId: 'guide', title: 'Guia da temporada', page: 2, excerpt: 'Compartilhar a solução com especialistas permite receber feedback.', url: 'https://example.com/guia' };
@@ -35,14 +36,18 @@ export async function runGiroNvidiaTests() {
   assert.equal(configuration.connectionVerified, false, 'A configured key is not proof that NVIDIA generated an answer');
   const result = await handleNvidiaGiroRequest(localRequest({ ...valid, model: 'client-override', api_key: 'client-secret', instructions: 'client instructions' }), env, runtime);
   assert.equal(result.status, 200); assert.doesNotMatch(await result.text(), /fixture-only|PRIVATE_REASONING/);
-  assert.equal(headers.Authorization, 'Bearer fixture-only-server-secret'); assert.equal(submitted.model, 'deepseek-ai/deepseek-v4.1-flash');
+  assert.equal(headers.Authorization, 'Bearer fixture-only-server-secret'); assert.equal(submitted.model, 'nvidia/nemotron-3.5-lightning-30b-a3b');
+  assert.deepEqual(submitted.chat_template_kwargs, { enable_thinking: false });
   assert.equal(submitted.temperature, 1); assert.equal(submitted.top_p, 0.95); assert.equal(submitted.stream, false); assert.equal(submitted.max_tokens, 4096);
   assert.equal(submitted.messages[0].role, 'system'); assert.match(submitted.messages[0].content, /Guia da temporada/);
   assert.doesNotMatch(JSON.stringify(submitted), /private-password|private-student|grades|balance|client-override|client-secret|client instructions|fixture-only-server-secret/);
   await handleNvidiaGiroRequest(localRequest({ ...valid, useKnowledge: false }), env, runtime);
   assert.doesNotMatch(submitted.messages[0].content, /Guia da temporada|Água/);
+  await handleNvidiaGiroRequest(localRequest(), { ...env, GIRO_AI_MODEL: 'deepseek-ai/deepseek-v4.1-flash' }, runtime);
+  assert.equal(submitted.model, 'deepseek-ai/deepseek-v4.1-flash');
+  assert.equal(submitted.chat_template_kwargs, undefined, 'Model-specific options must not be sent to other models');
   const wrongOrigin = await handleNvidiaGiroRequest(localRequest(valid, { headers: { 'Content-Type': 'application/json', Origin: 'https://attacker.example' } }), env, runtime); assert.equal(wrongOrigin.status, 403);
-  const large = await handleNvidiaGiroRequest(localRequest(valid, { headers: { 'Content-Type': 'application/json', 'Content-Length': '100001' } }), env, runtime); assert.equal(large.status, 413);
+  const large = await handleNvidiaGiroRequest(localRequest(valid, { headers: { 'Content-Type': 'application/json', 'Content-Length': String(GIRO_REQUEST_MAX_BYTES + 1) } }), env, runtime); assert.equal(large.status, 413);
   for (const [statusCode, expected] of [[401, 503], [402, 503], [403, 503], [404, 503], [422, 502], [429, 429], [500, 502]]) {
     const failed = await handleNvidiaGiroRequest(localRequest(), env, { ...runtime, fetch: async () => new Response('private-provider-error fixture-only-server-secret', { status: statusCode }) });
     assert.equal(failed.status, expected); assert.doesNotMatch(await failed.text(), /private-provider-error|fixture-only-server-secret/);

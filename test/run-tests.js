@@ -16,6 +16,9 @@ import { runGearWorkshopTests } from './gearWorkshop.test.js';
 import { runGiroAITests } from './giroAI.test.js';
 import { runGiroKnowledgeTests } from './giroKnowledge.test.js';
 import { runGiroNvidiaTests } from './giroNvidia.test.js';
+import { runGiroImprovementsTests } from './giroImprovements.test.js';
+import { runGearTechnicianTests } from './gearTechnician.test.js';
+import { runGearRefundsTests } from './gearRefunds.test.js';
 
 const suites = [
   { name: 'projectSummary', run: runProjectSummaryTests },
@@ -35,7 +38,10 @@ const suites = [
   { name: 'gearWorkshop', run: runGearWorkshopTests },
   { name: 'giroAI', run: runGiroAITests },
   { name: 'giroKnowledge', run: runGiroKnowledgeTests },
-  { name: 'giroNvidia', run: runGiroNvidiaTests }
+  { name: 'giroNvidia', run: runGiroNvidiaTests },
+  { name: 'giroImprovements', run: runGiroImprovementsTests },
+  { name: 'gearTechnician', run: runGearTechnicianTests },
+  { name: 'gearRefunds', run: runGearRefundsTests }
 ];
 
 let failures = 0;

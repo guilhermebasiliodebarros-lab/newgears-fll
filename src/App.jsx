@@ -14,6 +14,8 @@ import TaskReviewForm from './components/TaskReviewForm';
 import SeasonTransitionChecklist from './components/SeasonTransitionChecklist';
 import TournamentSelectionNotice from './components/TournamentSelectionNotice';
 import GearExperienceProvider from './components/GearExperienceProvider';
+import AttachmentRoundPicker from './components/AttachmentRoundPicker';
+import { attachmentRoundNames } from './utils/attachmentRounds';
 import DraftForm from './components/DraftForm';
 import { createDraftRecord } from './services/draftRecords';
 import { saveTeamCheckIn, CHECK_IN_REWARD_XP } from './services/teamCheckIn';
@@ -3594,13 +3596,16 @@ function App() {
   const handleAttachmentSubmit = async (e, { draftId } = {}) => {
       e.preventDefault();
       const fd = new FormData(e.target);
+      const roundIds = [...new Set(fd.getAll('roundIds'))].filter((id) => rounds.some((round) => round.id === id));
+      if (!roundIds.length) { showNotification('Selecione pelo menos uma saída para esta garra.', 'error'); return false; }
       
       let img = modal.data?.image || null; 
       if (selectedFile) img = await convertBase64(selectedFile); 
       
       const attachmentData = { 
           name: fd.get('name'), 
-          roundId: fd.get('roundId'), 
+          roundIds,
+          roundId: roundIds[0],
           date: fd.get('date'), 
           changes: fd.get('changes'), 
           image: img,
@@ -4280,7 +4285,6 @@ const handleDeleteRound = async (id) => {
       e.preventDefault();
       const fd = new FormData(e.target);
       const selectedMissions = Array.from(fd.getAll('missions'));
-      const estimatedTime = Number.parseInt(fd.get('time'), 10) || 0;
       
       // Calcula pontos somando as missões selecionadas
       const totalPoints = selectedMissions.reduce((acc, mid) => 
@@ -4289,7 +4293,6 @@ const handleDeleteRound = async (id) => {
       const roundData = {
           name: fd.get('name'),
           startBase: fd.get('startBase'), // <--- SALVA A BASE ESCOLHIDA
-          estimatedTime,
           missions: selectedMissions,
           totalPoints
       };
@@ -4306,7 +4309,7 @@ const handleDeleteRound = async (id) => {
               action: modal.data?.id ? 'atualizou uma saida do robo' : 'planejou uma nova saida do robo',
               category: 'robot',
               title: roundData.name,
-              detail: `${roundData.totalPoints} pontos estimados em ${roundData.estimatedTime}s`,
+              detail: `${roundData.totalPoints} pontos planejados`,
               entityId: modal.data?.id || ''
           });
           closeModal();
@@ -7556,17 +7559,13 @@ const handleFileSelect = (e) => {
           {modal.type === 'attachmentForm' && (
               <DraftForm key={JSON.stringify([currentUser?.studentId || currentUser?.data?.id || currentUser?.name, activeTeamSeasonId, modal.type, modal.data?.id])} kind="attachment" recordId={modal.data?.id} onDiscard={() => setSelectedFile(null)} onSubmit={handleAttachmentSubmit}>
                   <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Wrench className="text-blue-500"/> {modal.data ? 'Editar' : 'Nova'} Garra / Anexo</h3>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="space-y-4 mb-4">
                       <div>
                           <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome do Anexo</label>
                           <input name="name" defaultValue={modal.data?.name} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Garra 1" />
                       </div>
                       <div>
-                          <label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Saída Associada</label>
-                          <select name="roundId" defaultValue={modal.data?.roundId} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none">
-                              <option value="">Selecione...</option>
-                              {rounds.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                          </select>
+                          <AttachmentRoundPicker rounds={rounds} attachment={modal.data} />
                       </div>
                   </div>
                   <div className="mb-4">
@@ -7586,7 +7585,7 @@ const handleFileSelect = (e) => {
               </DraftForm>
           )}
 
-          {modal.type === 'attachmentView' && (<div><div className="flex justify-between items-start mb-2"><h3 className="text-xl font-bold text-white">{modal.data.name}</h3>{(() => { const roundName = rounds.find(r => r.id === modal.data.roundId)?.name || 'Saída Desconhecida'; return <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-mono font-bold">{roundName}</span> })()}</div><p className="text-xs text-gray-500 mb-6">{modal.data.date?.split('-').reverse().join('/')} {modal.data.author && `• Por ${modal.data.author}`}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Mudanças / Funcionalidade</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.changes}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Garra</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10 cursor-pointer hover:opacity-80 transition-opacity" alt="Garra" onClick={() => openImageModal(modal.data.image)} title="Clique para ampliar" /></div>)}</div>)}
+          {modal.type === 'attachmentView' && (<div><div className="flex justify-between items-start mb-2"><h3 className="text-xl font-bold text-white">{modal.data.name}</h3>{(() => { const roundName = attachmentRoundNames(modal.data, rounds); return <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded text-xs font-mono font-bold">{roundName}</span> })()}</div><p className="text-xs text-gray-500 mb-6">{modal.data.date?.split('-').reverse().join('/')} {modal.data.author && `• Por ${modal.data.author}`}</p><div className="bg-black/50 border border-white/10 p-4 rounded-xl mb-6"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Mudanças / Funcionalidade</label><p className="text-sm text-gray-200 leading-relaxed whitespace-pre-wrap">{modal.data.changes}</p></div>{modal.data.image && (<div className="mt-4"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Foto da Garra</label><img src={modal.data.image} className="w-full rounded-lg border border-white/10 cursor-pointer hover:opacity-80 transition-opacity" alt="Garra" onClick={() => openImageModal(modal.data.image)} title="Clique para ampliar" /></div>)}</div>)}
 
           {modal.type === 'codeForm' && (
               <DraftForm key={JSON.stringify([currentUser?.studentId || currentUser?.data?.id || currentUser?.name, activeTeamSeasonId, modal.type, modal.data?.id])} kind="code" recordId={modal.data?.id} onDiscard={() => setSelectedFile(null)} onSubmit={handleCodeSubmit}>
@@ -7622,9 +7621,8 @@ const handleFileSelect = (e) => {
           {modal.type === 'newRound' && (<form onSubmit={handleRoundSubmit}>
               <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><ListTodo className="text-blue-500"/> {modal.data ? 'Editar Saída' : 'Planejar Saída'}</h3>
               
-              <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="mb-4">
                   <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome da Saída</label><input name="name" defaultValue={modal.data?.name} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: Saída 1" /></div>
-                  <div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Tempo Estimado (s)</label><input name="time" type="number" defaultValue={modal.data?.estimatedTime} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="30" /></div>
               </div>
 
               {/* SELEÇÃO DE BASE */}
@@ -8976,7 +8974,7 @@ const handleFileSelect = (e) => {
 
   // --- RENDER PRINCIPAL (SÓ CHEGA AQUI SE ESTIVER LOGADO) ---
   return (
-    <GearExperienceProvider key={`${currentUser.type}:${currentUser.studentId || currentUser.data?.id || currentUser.uid || currentUser.name}`} db={db} user={currentUser} student={viewAsStudent} teamMembers={students.filter(isActiveStudent).map(workshopMember)} seasonId={activeTeamSeasonId || 'legacy'} isLiteMode={isLiteMode} aiContext={{ season: activeTeamSeasonName, project: projectSummary, robots: robotVersions, attachments, codes: codeSnippets }} onOpenKnowledge={() => setAdminTab('giro_knowledge')} onOpenShop={() => isAdmin ? setAdminTab('shop') : setStudentTab('shop')}>
+    <GearExperienceProvider key={`${currentUser.type}:${currentUser.studentId || currentUser.data?.id || currentUser.uid || currentUser.name}:${activeTeamSeasonId || 'legacy'}`} db={db} user={currentUser} student={viewAsStudent} teamMembers={students.filter(isActiveStudent).map(workshopMember)} seasonId={activeTeamSeasonId || 'legacy'} isLiteMode={isLiteMode} aiContext={{ season: activeTeamSeasonName, project: projectSummary, robots: robotVersions, attachments, codes: codeSnippets }} onOpenKnowledge={() => setAdminTab('giro_knowledge')} onOpenShop={() => isAdmin ? setAdminTab('shop') : setStudentTab('shop')}>
     <div className={`newgears-shell newgears-workspace min-h-screen text-white selection:bg-yellow-300 selection:text-slate-950 pb-20 relative overflow-hidden ${isLiteMode ? 'newgears-lite-mode' : ''}`}>
       {/* Estilo da Animação de Fundo */}
       <div className="newgears-floating-layer">

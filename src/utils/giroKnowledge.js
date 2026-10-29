@@ -50,6 +50,11 @@ const groups = [
   ['evidencia', 'evidencias', 'comprovacao', 'comprovar'], ['pontuacao', 'ponto', 'pontos', 'score'],
   ['equipe', 'equipes', 'time', 'times'], ['regra', 'regras', 'regulamento'], ['sensor', 'sensores'],
   ['solucao', 'solucoes'], ['problema', 'problemas'], ['teste', 'testes', 'testar'],
+  ['calibracao', 'calibrar', 'calibrado', 'calibrada', 'calibrados', 'calibradas'],
+  ['giro', 'giros', 'curva', 'curvas', 'virar', 'girar'], ['giroscopio', 'gyro', 'yaw'],
+  ['compartilhar', 'compartilhamento', 'compartilhamos', 'compartilhada'],
+  ['pesquisa', 'pesquisar', 'pesquisas', 'pesquisada', 'pesquisadas'],
+  ['documentar', 'documentado', 'documentada', 'documentacao', 'registrar'],
 ];
 const aliases = new Map(groups.flatMap((group) => group.map((term) => [term, group[0]])));
 const tokens = (value) => [...new Set((normalize(value).match(/[a-z0-9]+/g) || []).filter((term) => term.length > 1 && !stop.has(term)).map((term) => aliases.get(term) || term))];
@@ -79,29 +84,48 @@ export function buildGiroKnowledgeIndex(materials = [], seasonId = 'legacy') {
       id: `${material.id}:${page.number}:${index}`, materialId: String(material.id), title: String(material.title),
       page: page.number, excerpt, sourceURL: safeGiroURL(material.sourceURL) || '',
       system: material.system === true, category: material.category, terms: new Set(tokens(excerpt)), metadata,
+      words: (normalize(excerpt).match(/[a-z0-9]+/g) || []).map((term) => aliases.get(term) || term),
+      normalized: normalize(excerpt), heading: normalize(`${material.title} ${material.tags || ''}`),
     })));
   });
 }
 
 export function searchGiroKnowledge(question, index, previousQuestion = '') {
-  let terms = tokens(question);
-  if (!terms.length && /\b(mais|melhor|isso|continue|novamente|detalhes)\b/.test(normalize(question))) terms = tokens(previousQuestion);
+  const current = tokens(question);
+  const followup = /\b(mais|melhor|isso|continue|novamente|detalhes|nesse|nessa|desse|dessa|ele|ela|e se|e quanto)\b/.test(normalize(question));
+  const context = followup ? tokens(previousQuestion).filter((term) => !current.includes(term)).slice(0, 14) : [];
+  const terms = [...current, ...context];
   if (!terms.length) return [];
+  const averageLength = index.reduce((sum, entry) => sum + (entry.words?.length || entry.terms.size), 0) / Math.max(1, index.length);
+  const rarity = new Map(terms.map((term) => {
+    const count = index.filter((entry) => entry.terms.has(term)).length;
+    return [term, Math.log(1 + (index.length - count + 0.5) / (count + 0.5))];
+  }));
+  const phrase = normalize(question).replace(/[?!.,]/g, '').trim();
   const matches = index.map((entry) => {
-    let score = 0; let covered = 0; let bodyMatches = 0;
+    let score = 0; let covered = 0; let bodyMatches = 0; let currentMatches = 0;
     for (const term of terms) {
       const body = entry.terms.has(term); const heading = entry.metadata.has(term);
-      if (body || heading) { covered++; score += body ? 2 : 0.65; if (heading) score += 0.5; }
+      const weight = current.includes(term) ? 1 : current.length ? 0.4 : 1;
+      if (body || heading) {
+        covered++;
+        if (current.includes(term)) currentMatches++;
+        const frequency = entry.words?.filter((word) => word === term).length || (body ? 1 : 0);
+        const bm25 = frequency * 2.2 / (frequency + 1.2 * (0.25 + 0.75 * (entry.words?.length || entry.terms.size) / (averageLength || 1)));
+        score += weight * (rarity.get(term) * bm25 + (heading ? 0.65 : 0));
+      }
       if (body) bodyMatches++;
     }
+    if (phrase.length > 5 && (entry.normalized?.includes(phrase) || entry.heading?.includes(phrase))) score += 2;
     const coverage = covered / terms.length;
-    return { ...entry, score: score * coverage, covered, bodyMatches, coverage };
-  }).filter((entry) => entry.bodyMatches > 0 && entry.coverage >= 0.5 && entry.covered >= Math.min(2, terms.length))
+    return { ...entry, score: score * (0.5 + coverage), covered, bodyMatches, coverage, currentMatches };
+  }).filter((entry) => entry.bodyMatches > 0 && (!current.length || entry.currentMatches > 0) && entry.covered >= Math.min(2, terms.length) && entry.coverage >= (followup ? 0.3 : 0.4))
     .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
   const selected = [];
   for (const match of matches) {
     if (selected.length === 4) break;
-    if (selected.some((item) => item.materialId === match.materialId && item.page === match.page)) continue;
+    const samePage = selected.filter((item) => item.materialId === match.materialId && item.page === match.page);
+    if (samePage.length >= 2 || samePage.some((item) => [...match.terms].filter((term) => item.terms.has(term)).length / Math.max(1, Math.min(match.terms.size, item.terms.size)) > 0.8)) continue;
     selected.push(match);
   }
   return selected;

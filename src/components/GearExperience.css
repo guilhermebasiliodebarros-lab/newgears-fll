@@ -2,6 +2,9 @@
 .gear-mascot__character { transform-origin: 100px 185px; animation: gear-idle 6s cubic-bezier(.45,0,.55,1) infinite; }
 .gear-mascot__eyes { transform-origin: center; transform-box: fill-box; animation: gear-blink 7.4s linear infinite; }
 .gear-mascot__gaze { animation: gear-look 8s ease-in-out infinite; }
+.gear-mascot[data-tracking="true"] .gear-mascot__gaze { animation: none; transform: translate(var(--gear-gaze-x, 0), var(--gear-gaze-y, 0)); transition: transform .12s ease-out; }
+.gear-mascot__depth { filter: drop-shadow(1px 3px 2px #02061765); }
+.gear-mascot__teeth { paint-order: stroke fill; }
 .gear-mascot__arm { transform-origin: 48px 113px; animation: gear-wave 6s ease-in-out infinite; }
 .gear-mascot__arm-right { transform-origin: 151px 113px; animation: gear-arm-swing 6s ease-in-out infinite; }
 .gear-mascot__leg--left { transform-origin: 80px 158px; animation: gear-foot-tap 6s ease-in-out infinite; }

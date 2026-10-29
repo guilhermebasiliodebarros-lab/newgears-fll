@@ -55,6 +55,27 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;
     }
+    // Avaliações nunca viram conhecimento automaticamente; só o técnico revisa.
+    match /giroAnswerFeedback/{feedbackId} {
+      allow read: if isReportAdmin() || (isReportMember() && resource.data.ownerId == request.auth.uid);
+      allow create: if isReportMember()
+        && request.resource.data.keys().hasOnly(['question', 'answer', 'note', 'rating', 'sources', 'ownerId', 'seasonId', 'status', 'correction', 'createdAt', 'reviewedAt'])
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.seasonId is string && giroSeasonWritable(request.resource.data.seasonId)
+        && request.resource.data.question is string && request.resource.data.question.size() > 0 && request.resource.data.question.size() <= 4000
+        && request.resource.data.answer is string && request.resource.data.answer.size() > 0 && request.resource.data.answer.size() <= 16000
+        && request.resource.data.note is string && request.resource.data.note.size() <= 1000
+        && request.resource.data.rating in ['helpful', 'incorrect']
+        && request.resource.data.sources is list && request.resource.data.sources.size() <= 4
+        && request.resource.data.status == 'open' && request.resource.data.correction == ''
+        && request.resource.data.reviewedAt == '' && request.resource.data.createdAt is string;
+      allow update: if isReportAdmin() && giroSeasonWritable(resource.data.seasonId)
+        && resource.data.status == 'open' && request.resource.data.status == 'reviewed'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'correction', 'reviewedAt'])
+        && request.resource.data.correction is string && request.resource.data.correction.size() <= 4000
+        && request.resource.data.reviewedAt is string;
+      allow delete: if false;
+    }
     // Contador do Giro IA: somente o servidor pode reservar o uso da API.
     match /giroAiUsage/{uid} {
       allow read, write: if false;
@@ -106,6 +127,8 @@ service cloud.firestore {
       let defaults = ['skin-nebula', 'frame-none', 'accessory-none', 'title-team', 'room-base', 'bench-base', 'light-base', 'decor-base', 'animation-default'];
       // Normalize older wallets without charging for the starter workshop.
       return {'balance': previous.get('balance', 40), 'earned': previous.get('earned', 40), 'spent': previous.get('spent', 0),
+           'refundCount': previous.get('refundCount', 0),
+           'refundableItems': previous.get('refundableItems', previous.get('spent', 0) > 0 ? previous.get('owned', []).removeAll(defaults) : []),
            'owned': defaults.concat(previous.get('owned', []).removeAll(defaults)),
            'equipped': {'skin': equipped.get('skin', 'skin-nebula'),
              'frame': equipped.get('frame', 'frame-none'),
@@ -261,20 +284,58 @@ service cloud.firestore {
         && gearSameDaily(data, before)
         && ('growthPoints' in previous ? gearSameGrowth(data, before) : gearGrowthChange(data, before, receipt.type));
     }
+    function gearRefundReceiptId(studentId, count) {
+      return studentId + '__' + (count == 1 ? '1' : count == 2 ? '2' : '3');
+    }
+    function gearInitialEquipment() {
+      return {'skin': 'skin-nebula', 'frame': 'frame-none', 'accessory': 'accessory-none', 'title': 'title-team', 'room': 'room-base', 'bench': 'bench-base', 'light': 'light-base', 'decor': 'decor-base', 'animation': 'animation-default'};
+    }
+    function gearRefundChange(studentId, data, before) {
+      let itemId = data.lastAction.id;
+      let price = gearPrice(itemId);
+      let category = gearCategory(itemId);
+      let receiptId = gearRefundReceiptId(studentId, data.refundCount);
+      let receipt = getAfter(/databases/$(database)/documents/studentGearRefunds/$(receiptId)).data;
+      return before.refundCount < 3 && itemId in before.owned && itemId in before.refundableItems && price > 0
+        && data.lastAction.coins == price && data.balance == before.balance + price && data.spent == before.spent - price && data.earned == before.earned
+        && data.owned == before.owned.removeAll([itemId]) && data.refundableItems == before.refundableItems.removeAll([itemId])
+        && data.equipped[category] == (before.equipped[category] == itemId ? gearInitialEquipment()[category] : before.equipped[category])
+        && data.equipped.diff(before.equipped).affectedKeys().hasOnly([category])
+        && gearSameDaily(data, before) && gearSameGrowth(data, before)
+        && !exists(/databases/$(database)/documents/studentGearRefunds/$(receiptId))
+        && receipt.studentId == studentId && receipt.itemId == itemId && receipt.number == data.refundCount && receipt.coins == price;
+    }
+    function gearPurchaseResetChange(studentId, data, before) {
+      let receiptId = 'v1__' + studentId;
+      let receipt = getAfter(/databases/$(database)/documents/gearPurchaseResets/$(receiptId)).data;
+      return isReportAdmin() && before.spent > 0 && data.lastAction.id == receiptId && data.lastAction.coins == before.spent
+        && data.balance == before.balance + before.spent && data.spent == 0 && data.earned == before.earned
+        && data.refundableItems == [] && gearSameDaily(data, before) && gearSameGrowth(data, before)
+        && !exists(/databases/$(database)/documents/gearPurchaseResets/$(receiptId))
+        && receipt.studentId == studentId && receipt.coins == before.spent
+        && (receipt.keepItems ? data.owned == before.owned && data.equipped == before.equipped
+          : data.owned.size() == 9 && data.owned.toSet() == gearInitialEquipment().values().toSet() && data.equipped == gearInitialEquipment());
+    }
     function validGearProfile(studentId) {
       let data = request.resource.data;
       let before = gearBefore(studentId);
       let price = gearPrice(data.lastAction.id);
-      return data.keys().hasOnly(['studentId', 'balance', 'earned', 'spent', 'owned', 'equipped', 'rewardDay', 'rewardDayIndex', 'dayEarned', 'dayCounts', 'growthPoints', 'contributionCounts', 'updatedAt', 'lastAction'])
+      return data.keys().hasOnly(['studentId', 'balance', 'earned', 'spent', 'owned', 'equipped', 'rewardDay', 'rewardDayIndex', 'dayEarned', 'dayCounts', 'growthPoints', 'contributionCounts', 'updatedAt', 'lastAction', 'refundCount', 'refundableItems'])
         && data.studentId == studentId && data.balance is int && data.balance >= 0
         && data.earned is int && data.spent is int && data.spent >= 0 && data.earned == data.balance + data.spent
         && data.growthPoints is int && data.growthPoints >= 0 && data.contributionCounts is map
+        && data.refundCount is int && data.refundCount >= 0 && data.refundCount <= 3
+        && data.refundableItems is list && data.refundableItems.size() <= 44 && data.refundableItems.toSet().size() == data.refundableItems.size()
+        && data.owned.hasAll(data.refundableItems)
+        && (data.lastAction.type == 'refund' ? data.refundCount == before.refundCount + 1 : data.refundCount == before.refundCount)
+        && (data.lastAction.type in ['purchase', 'refund', 'purchase_reset'] || data.refundableItems == before.refundableItems)
         && data.owned is list && data.owned.size() <= 44
         && data.equipped.keys().hasOnly(['skin', 'frame', 'accessory', 'title', 'room', 'bench', 'light', 'decor', 'animation'])
         && data.owned.hasAll([data.equipped.skin, data.equipped.frame, data.equipped.accessory, data.equipped.title, data.equipped.room, data.equipped.bench, data.equipped.light, data.equipped.decor, data.equipped.animation])
         && gearCategory(data.equipped.skin) == 'skin' && gearCategory(data.equipped.frame) == 'frame' && gearCategory(data.equipped.accessory) == 'accessory' && gearCategory(data.equipped.title) == 'title' && gearCategory(data.equipped.room) == 'room' && gearCategory(data.equipped.bench) == 'bench' && gearCategory(data.equipped.light) == 'light' && gearCategory(data.equipped.decor) == 'decor' && gearCategory(data.equipped.animation) == 'animation'
         && data.lastAction.keys().hasOnly(['type', 'id', 'coins'])
         && ((data.lastAction.type == 'purchase' && price > 0 && !(data.lastAction.id in before.owned)
+              && data.refundableItems == before.refundableItems.concat([data.lastAction.id])
               && data.lastAction.coins == price && data.balance == before.balance - price && data.spent == before.spent + price
               && data.earned == before.earned && data.owned == before.owned.concat([data.lastAction.id])
               && gearEquipmentChange(data, before) && gearSameDaily(data, before) && gearSameGrowth(data, before))
@@ -282,12 +343,38 @@ service cloud.firestore {
               && data.balance == before.balance && data.earned == before.earned && data.spent == before.spent
               && data.owned == before.owned && gearEquipmentChange(data, before) && gearSameDaily(data, before) && gearSameGrowth(data, before))
           || (data.lastAction.type == 'reward' && gearRewardChange(studentId, data, before))
-          || (data.lastAction.type == 'history' && gearHistoryChange(studentId, data, before)));
+          || (data.lastAction.type == 'history' && gearHistoryChange(studentId, data, before))
+          || (data.lastAction.type == 'refund' && gearRefundChange(studentId, data, before))
+          || (data.lastAction.type == 'purchase_reset' && gearPurchaseResetChange(studentId, data, before)));
     }
     match /studentGearProfiles/{studentId} {
       allow read: if isGearOwner(studentId) || isReportAdmin();
-      allow create, update: if (isGearOwner(studentId) || (isReportAdmin() && request.resource.data.lastAction.type == 'history')) && validGearProfile(studentId);
+      allow create, update: if (isGearOwner(studentId) || (isReportAdmin() && request.resource.data.lastAction.type in ['history', 'purchase_reset'])) && validGearProfile(studentId);
       allow delete: if false;
+    }
+    match /studentGearRefunds/{receiptId} {
+      allow get: if isReportAdmin() || (isReportMember() && (!exists(/databases/$(database)/documents/studentGearRefunds/$(receiptId)) || isGearOwner(resource.data.studentId)));
+      allow list: if isReportAdmin() || isGearOwner(resource.data.studentId);
+      allow create: if isGearOwner(request.resource.data.studentId)
+        && request.resource.data.keys().hasOnly(['studentId', 'itemId', 'coins', 'number', 'createdAt'])
+        && request.resource.data.number in [1, 2, 3]
+        && receiptId == gearRefundReceiptId(request.resource.data.studentId, request.resource.data.number)
+        && request.resource.data.createdAt is string
+        && getAfter(/databases/$(database)/documents/studentGearProfiles/$(request.resource.data.studentId)).data.lastAction.type == 'refund'
+        && gearRefundChange(request.resource.data.studentId, getAfter(/databases/$(database)/documents/studentGearProfiles/$(request.resource.data.studentId)).data, gearBefore(request.resource.data.studentId));
+      allow update, delete: if false;
+    }
+    match /gearPurchaseResets/{receiptId} {
+      allow read: if isReportAdmin();
+      allow create: if isReportAdmin()
+        && request.resource.data.keys().hasOnly(['studentId', 'coins', 'keepItems', 'previousOwned', 'previousEquipped', 'createdAt'])
+        && request.resource.data.keepItems is bool && request.resource.data.createdAt is string
+        && receiptId == 'v1__' + request.resource.data.studentId
+        && request.resource.data.previousOwned == gearBefore(request.resource.data.studentId).owned
+        && request.resource.data.previousEquipped == gearBefore(request.resource.data.studentId).equipped
+        && getAfter(/databases/$(database)/documents/studentGearProfiles/$(request.resource.data.studentId)).data.lastAction.type == 'purchase_reset'
+        && gearPurchaseResetChange(request.resource.data.studentId, getAfter(/databases/$(database)/documents/studentGearProfiles/$(request.resource.data.studentId)).data, gearBefore(request.resource.data.studentId));
+      allow update, delete: if false;
     }
     match /studentGearRewards/{receiptId} {
       allow get: if isReportAdmin() || (isReportMember()

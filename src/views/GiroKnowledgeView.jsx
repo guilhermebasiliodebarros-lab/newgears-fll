@@ -4,13 +4,15 @@ import useGearShopContext from '../hooks/useGearShopContext';
 import { giroKnowledgeError } from '../services/giroKnowledge';
 import { GIRO_MATERIAL_CATEGORIES, GIRO_MATERIAL_MAX_TEXT } from '../utils/giroKnowledge';
 import { importGiroMaterial } from '../utils/giroMaterialImport';
+import GiroFeedbackReview from '../components/GiroFeedbackReview';
 import '../components/GiroKnowledge.css';
+import '../components/GiroEnhancements.css';
 
 const newDraft = () => ({ title: '', category: 'season', status: 'draft', sourceURL: '', tags: '', fileName: '', pages: [{ number: 1, text: '' }] });
 const statusLabel = { published: 'Publicado', draft: 'Rascunho', archived: 'Arquivado' };
 
-function MaterialEditor({ material, onSave, onCancel, saving }) {
-  const [draft, setDraft] = useState(() => material ? { ...material, pages: material.pages.map((page) => ({ ...page })) } : newDraft());
+function MaterialEditor({ material, initialDraft, onSave, onCancel, saving }) {
+  const [draft, setDraft] = useState(() => material ? { ...material, pages: material.pages.map((page) => ({ ...page })) } : initialDraft || newDraft());
   const [pageIndex, setPageIndex] = useState(0);
   const [progress, setProgress] = useState('');
   const [error, setError] = useState('');
@@ -84,7 +86,8 @@ export default function GiroKnowledgeView({ seasonName }) {
     {knowledge.error && <div role="alert" className="giro-knowledge__error">{knowledge.error}<button type="button" onClick={knowledge.retry}>Tentar novamente</button></div>}
     {notice && <p role="status" className="giro-knowledge__notice">{notice}</p>}
     {error && <p role="alert" className="giro-knowledge__error">{error}</p>}
-    {editor && <MaterialEditor key={editor.key} material={editor.material} saving={saving} onSave={save} onCancel={() => { if (window.confirm('Fechar o editor? As alterações ainda não salvas serão descartadas.')) setEditor(null); }} />}
+    {editor && <MaterialEditor key={editor.key} material={editor.material} initialDraft={editor.initialDraft} saving={saving} onSave={save} onCancel={() => { if (window.confirm('Fechar o editor? As alterações ainda não salvas serão descartadas.')) setEditor(null); }} />}
+    {!editor && <GiroFeedbackReview onPrepare={(initialDraft) => { setEditor({ key: crypto.randomUUID(), material: null, initialDraft }); setNotice('Orientação preparada como rascunho. Revise as fontes antes de publicar.'); }} />}
     <div className="giro-knowledge__filters"><label className="giro-library__search"><Search size={17} /><input aria-label="Filtrar biblioteca do Giro" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar material ou palavra-chave" /></label><select aria-label="Filtrar disponibilidade" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="all">Todos os materiais</option>{Object.entries(statusLabel).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></div>
     {!knowledge.loading && !knowledge.error && !visible.length && <div className="giro-knowledge__empty"><BookOpen size={32} /><h3>{knowledge.materials.length ? 'Nenhum material neste filtro.' : 'Vamos alimentar o Giro?'}</h3><p>Comece pela rúbrica, pelo regulamento do torneio ou pelo guia da temporada. Importe o PDF, revise o texto e publique para a equipe consultar.</p></div>}
     <div className="giro-knowledge__list">{visible.map((material) => <article key={material.id}><div><span className={`giro-knowledge__badge giro-knowledge__badge--${material.status}`}>{statusLabel[material.status]}</span><small>{GIRO_MATERIAL_CATEGORIES[material.category]}</small><h3>{material.title}</h3><p>{material.pages.length} página(s) · {(material.textLength || 0).toLocaleString('pt-BR')} caracteres · {new Date(material.updatedAt).toLocaleDateString('pt-BR')}</p>{material.tags && <p>{material.tags}</p>}</div><div className="giro-knowledge__list-actions"><button type="button" disabled={Boolean(editor) || saving || Boolean(knowledge.error)} onClick={() => { setNotice(''); setEditor({ key: material.id, material }); }}><Pencil size={15} />Revisar / editar</button>{material.status !== 'archived' && <button type="button" disabled={Boolean(editor) || saving || Boolean(knowledge.error)} onClick={() => void archive(material)}><Archive size={15} />Arquivar</button>}</div></article>)}</div>

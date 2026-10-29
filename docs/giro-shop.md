@@ -10,9 +10,19 @@ Balões abertos manualmente permanecem até serem fechados. Os avisos automátic
 
 ## Loja
 
-A aba **Loja New Gears** reúne 44 itens entre cores do Giro, molduras de avatar, acessórios, títulos, cenários, bancadas, iluminação, decoração e comemorações. As áreas **Minha oficina**, **Loja** e **Coleções** separam o espaço do aluno, o catálogo e os conjuntos temáticos. O técnico pode consultar tudo em modo de prévia; compras e trocas são feitas pelo próprio aluno.
+A aba **Loja New Gears** reúne 44 itens entre cores do Giro, molduras de avatar, acessórios, títulos, cenários, bancadas, iluminação, decoração e comemorações. As áreas **Minha oficina**, **Loja** e **Coleções** separam o espaço do aluno, o catálogo e os conjuntos temáticos. No perfil técnico, o saldo aparece como **∞** e todos os itens, níveis e interações ficam liberados para teste. O técnico pode equipar acessórios, cenários e animações e organizar a oficina; essas escolhas ficam salvas somente neste navegador, separadas por técnico e temporada. O modo de teste não altera carteiras, compras ou personalizações de alunos. Para alunos, compras e trocas continuam usando o saldo do próprio perfil.
 
 Cada aluno começa com **40 Gears de boas-vindas**. Essa quantidade é inicializada uma única vez na carteira, junto da primeira recompensa, compra ou troca. Gears são moedas virtuais e não têm valor monetário. Comprar itens não altera XP, notas ou posições no ranking.
+
+## Reembolsos
+
+Na **Loja**, selecione um item comprado e use **Reembolsar item**. A confirmação mostra quantos Gears serão devolvidos e quantos reembolsos ainda estão disponíveis. Cada aluno tem **três reembolsos no total**, um por item devolvido; recomprar um item não recupera um uso. Itens iniciais, itens não comprados e itens já devolvidos não podem ser reembolsados.
+
+Ao confirmar, o valor retorna ao saldo, o item sai da coleção e, se estava equipado, seu lugar recebe o item inicial da mesma categoria. O reembolso não altera os Gears conquistados, XP ou evolução. Saldo, coleção, aparência, contador e recibo são atualizados na mesma transação. O recibo imutável fica em `studentGearRefunds/{studentId}__{numero}` e o perfil mantém `refundCount` e `refundableItems`. A operação recusa o quarto reembolso e protege contra devoluções repetidas.
+
+Em **29/10/2026**, por solicitação do técnico, as compras antigas de **seis carteiras** foram restauradas: **1.370 Gears devolvidos**, compras zeradas e itens iniciais reaplicados. Ganhos e evolução foram preservados, assim como os usos disponíveis de reembolso. Essa restauração administrativa não consome os três reembolsos futuros. Recibos em `gearPurchaseResets/v1__{studentId}` registram a devolução e os itens anteriores; repetir a restauração não devolve compras novas.
+
+Integre as regras atualizadas de `studentGearProfiles`, `studentGearRefunds` e `gearPurchaseResets` às regras do Firestore. Elas conferem o valor, a remoção do item, a troca de aparência, a reserva de um dos três usos e a criação atômica do recibo. Apenas o técnico pode restaurar compras antigas. Como nas outras coleções privadas, regras globais permissivas precisam excluir essas coleções. As regras deste repositório não foram publicadas automaticamente.
 
 Selecione um item para experimentá-lo no provador. **Comprar e usar** desconta o preço mostrado e equipa o item na mesma transação. Itens da coleção podem ser equipados novamente sem custo. O saldo insuficiente desativa a compra; erros mantêm o saldo e o visual anteriores. Molduras e títulos aparecem no perfil, e cores e acessórios acompanham o Giro.
 

@@ -1,6 +1,7 @@
 /* global Buffer, process */
 import { loadEnv } from 'vite';
 import { handleNvidiaGiroRequest } from './nvidia.js';
+import { GIRO_REQUEST_MAX_BYTES } from '../../src/utils/giroMedia.js';
 
 export const giroAIDevPlugin = () => ({
   name: 'newgears-giro-ai-local',
@@ -14,7 +15,7 @@ export const giroAIDevPlugin = () => ({
       res.on('close', close);
       try {
         const chunks = []; let length = 0;
-        for await (const chunk of req) { length += chunk.length; if (length > 100000) { res.writeHead(413, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'A conversa está muito grande.' })); return; } chunks.push(chunk); }
+        for await (const chunk of req) { length += chunk.length; if (length > GIRO_REQUEST_MAX_BYTES) { res.writeHead(413, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'A conversa está muito grande.' })); return; } chunks.push(chunk); }
         const body = Buffer.concat(chunks);
         const request = new Request(`http://${host}${req.originalUrl || `/api/giro-ai${req.url}`}`, { method: req.method, headers: req.headers, signal: controller.signal, ...(!['GET', 'HEAD'].includes(req.method) ? { body } : {}) });
         const env = { ...loadEnv(server.config.mode, server.config.envDir, ''), ...process.env };

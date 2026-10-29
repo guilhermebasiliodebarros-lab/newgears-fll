@@ -8,6 +8,7 @@ import GearWorkshop, { GearWorkshopScene } from '../components/GearWorkshop';
 import GearCelebration from '../components/GearCelebration';
 import GearWorkshopGallery from '../components/GearWorkshopGallery';
 import GearCollectionCard from '../components/GearCollectionCard';
+import GearRefundButton from '../components/GearRefundButton';
 import { gearEvolution } from '../utils/gearEvolution';
 import { GEAR_CONTRIBUTIONS, GEAR_SHOP_CATEGORIES, GEAR_SHOP_COLLECTIONS, GEAR_SHOP_ITEMS, GEAR_WORKSHOP_CATEGORIES, gearCollectionItems, gearItem, WELCOME_GEARS } from '../utils/gearShop';
 
@@ -22,7 +23,8 @@ function ItemArt({ item, equipment }) {
 }
 
 export default function GearShopView() {
-  const { account, loading, walletError, reloadWallet, student, isStudent, pending, retrying, retryPending, busy, operationError, activateItem, workshop, workshopLoading, workshopError, workshopSaving, saveWorkshop } = useGearShopContext();
+  const { account, technicianMode, loading, walletError, reloadWallet, student, isStudent, pending, retrying, retryPending, busy, operationError, activateItem, workshop, workshopLoading, workshopError, workshopSaving, saveWorkshop } = useGearShopContext();
+  const canCustomize = isStudent || technicianMode;
   const [tab, setTab] = useState('workshop');
   const [category, setCategory] = useState('all');
   const [collection, setCollection] = useState('all');
@@ -62,15 +64,15 @@ export default function GearShopView() {
         <h2 className="mt-4 text-4xl font-black leading-[1.05] text-white md:text-5xl">Seu cantinho.<br /><span className="gear-shop__gradient-text">Seu jeito de girar.</span></h2>
         <p className="mt-5 max-w-md text-sm leading-relaxed text-slate-300">Monte a oficina do Giro, descubra coleções e escolha como comemorar suas conquistas. Cada contribuição da equipe abre novas possibilidades.</p>
         <div className="mt-6 flex flex-wrap gap-3">
-          <div className="gear-shop__wallet" aria-label={`Saldo de ${account.balance} Gears`}><Coins size={24} className="text-amber-200" /><div><p className="text-[9px] font-bold uppercase tracking-[0.15em] text-amber-100/65">Seus Gears</p><p className="text-3xl font-black text-amber-100">{loading ? '…' : walletError ? '—' : account.balance}</p></div></div>
+          <div className="gear-shop__wallet" aria-label={technicianMode ? 'Gears ilimitados para o técnico' : `Saldo de ${account.balance} Gears`}><Coins size={24} className="text-amber-200" /><div><p className="text-[9px] font-bold uppercase tracking-[0.15em] text-amber-100/65">{technicianMode ? 'Gears do técnico' : 'Seus Gears'}</p><p className="text-3xl font-black text-amber-100">{technicianMode ? '∞' : loading ? '…' : walletError ? '—' : account.balance}</p></div></div>
           <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3"><p className="text-[9px] font-bold uppercase tracking-[0.15em] text-slate-400">Sua coleção</p><p className="mt-1 text-2xl font-black text-white">{account.owned.length}<span className="ml-1 text-xs font-normal text-slate-400">itens</span></p></div>
         </div>
-        <p className="mt-4 flex items-center gap-2 text-xs text-slate-400"><Gift size={14} className="shrink-0 text-cyan-200" />A oficina inicial já é sua. Você também começa com {WELCOME_GEARS} Gears de boas-vindas.</p>
+        <p className="mt-4 flex items-center gap-2 text-xs text-slate-400"><Gift size={14} className="shrink-0 text-cyan-200" />{technicianMode ? 'Experimente qualquer item e comemoração com Gears ilimitados.' : <>A oficina inicial já é sua. Você também começa com {WELCOME_GEARS} Gears de boas-vindas.</>}</p>
       </div>
       <div className="gear-shop__hero-mascot"><div className="gear-shop__orbit-label">GIRO · NÍVEL {evolution.level}</div><GearMascot equipment={account.equipped} level={evolution.level} expression={workshop.expression} /><p className="text-center text-xs font-bold text-cyan-100">{gearItem(account.equipped.title).name}</p></div>
     </section>
 
-    {!isStudent && <p className="rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4 text-sm text-cyan-100">Esta é a prévia da oficina e da loja. Os alunos compram e equipam os itens ao entrar no próprio perfil.</p>}
+    {!isStudent && <p className="rounded-2xl border border-cyan-300/20 bg-cyan-300/5 p-4 text-sm text-cyan-100">{technicianMode ? 'Gears ∞ para o técnico: todos os itens, níveis e interações estão liberados para testar. Suas escolhas ficam salvas neste navegador.' : 'Esta é a prévia da oficina e da loja. Os alunos compram e equipam os itens ao entrar no próprio perfil.'}</p>}
     {walletError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-300/25 bg-rose-300/10 p-4 text-xs text-rose-100"><p>{walletError}</p><button type="button" onClick={reloadWallet} className="inline-flex items-center gap-2 font-bold"><RefreshCw size={14} />Tentar carregar carteira</button></div>}
     {pending.length > 0 && <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4"><div><h3 className="text-sm font-black text-amber-100">{pending.length} contribuição(ões) com Gears pendentes</h3><p className="mt-1 text-xs text-slate-300">Seus registros já estão salvos. Tente confirmar os Gears sem cadastrar tudo outra vez.</p></div><button type="button" disabled={retrying} onClick={retryPending} className="rounded-xl bg-amber-300 px-4 py-2.5 text-xs font-black text-black disabled:opacity-50">{retrying ? 'Conferindo…' : 'Tentar receber Gears'}</button></section>}
 
@@ -78,7 +80,7 @@ export default function GearShopView() {
       {[{ id: 'workshop', label: 'Minha oficina', icon: <Wrench size={17} /> }, { id: 'catalog', label: 'Loja', icon: <ShoppingBag size={17} /> }, { id: 'collections', label: 'Coleções', icon: <Layers3 size={17} /> }, { id: 'team', label: 'Visitar oficinas', icon: <Users size={17} /> }].map(({ id, label, icon }) => <button type="button" key={id} aria-pressed={tab === id} onClick={() => { setTab(id); setPreviewEffect(null); }}>{icon}{label}</button>)}
     </div>
 
-    {tab === 'workshop' && <GearWorkshop account={account} student={student} level={evolution.level} onCustomize={(category) => browse(category)} onCollections={() => setTab('collections')} workshop={workshop} onSave={saveWorkshop} saving={workshopSaving} loading={workshopLoading} error={workshopError} canSave={isStudent} walletReady={!loading && !walletError} />}
+    {tab === 'workshop' && <GearWorkshop account={account} student={student} level={evolution.level} onCustomize={(category) => browse(category)} onCollections={() => setTab('collections')} workshop={workshop} onSave={saveWorkshop} saving={workshopSaving} loading={workshopLoading} error={workshopError} canSave={canCustomize} technicianMode={technicianMode} walletReady={!loading && !walletError} />}
     {tab === 'team' && <GearWorkshopGallery />}
 
     {tab === 'collections' && <section>
@@ -99,8 +101,9 @@ export default function GearShopView() {
         {preview.category === 'animation' && <p className="mt-3 text-[11px] leading-relaxed text-cyan-100">Quando equipada, esta comemoração acompanha seus novos Gears confirmados. Você também pode acioná-la na conversa com o Giro.</p>}
         {operationError && <p role="alert" className="mt-4 rounded-xl border border-rose-300/25 bg-rose-300/10 p-3 text-xs leading-relaxed text-rose-100">{operationError}</p>}
         {!owned && <p className="mt-4 flex items-center justify-between gap-2 text-xs text-slate-300"><span>Saldo após desbloquear</span><span className={canAfford ? 'font-black text-amber-100' : 'font-bold text-rose-200'}>{canAfford ? `${account.balance - preview.price} Gears` : `Faltam ${preview.price - account.balance} Gears`}</span></p>}
-        <button type="button" disabled={!isStudent || loading || Boolean(walletError) || Boolean(busy) || equipped || (!owned && !canAfford)} onClick={() => activateItem(preview.id, !owned)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-40">{busy === preview.id ? 'Confirmando…' : equipped ? <><Check size={16} />Em uso</> : owned ? 'Equipar item' : <><Coins size={16} />Comprar e usar · {preview.price}</>}</button>
+        <button type="button" disabled={!canCustomize || loading || Boolean(walletError) || Boolean(busy) || equipped || (!owned && !canAfford)} onClick={() => activateItem(preview.id, !owned)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-300 px-4 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-40">{busy === preview.id ? 'Confirmando…' : equipped ? <><Check size={16} />Em uso</> : owned ? 'Equipar item' : <><Coins size={16} />Comprar e usar · {preview.price}</>}</button>
         <p className="mt-3 text-center text-[10px] leading-relaxed text-slate-500">Experimentar é grátis. Seu perfil só muda ao comprar ou equipar.</p>
+        <GearRefundButton key={preview.id} item={preview} />
       </aside>
       <section className="giro-store-catalog min-w-0 space-y-4">
         <div className="flex flex-wrap gap-2" aria-label="Categorias da loja">{GEAR_SHOP_CATEGORIES.map((item) => <button key={item.id} type="button" aria-pressed={category === item.id} onClick={() => browse(item.id, collection)} className={`rounded-xl border px-3 py-2.5 text-xs font-bold ${category === item.id ? 'border-cyan-200/50 bg-cyan-300/15 text-cyan-100' : 'border-white/10 bg-white/[0.03] text-slate-400 hover:text-white'}`}>{item.label}</button>)}</div>

@@ -41,6 +41,7 @@ export const restoreGiroConversation = (storage, key) => {
     if (saved?.version !== 1) return { messages: [], draft: '' };
     const messages = (Array.isArray(saved.messages) ? saved.messages : []).filter((item) => ['user', 'assistant'].includes(item?.role) && typeof item.text === 'string').slice(-32).map((item) => ({
       id: String(item.id || ''), role: item.role, text: item.text.slice(0, 16000), searched: item.searched === true,
+      media: (Array.isArray(item.media) ? item.media : []).filter((media) => media?.kind === 'image').slice(0, 2).map((media) => ({ kind: 'image', name: String(media.name || 'Foto').slice(0, 120) })),
       sources: (Array.isArray(item.sources) ? item.sources : []).filter((source) => (source?.type === 'internal' && typeof source.materialId === 'string' && source.materialId.length <= 240 && Number.isInteger(source.page) && source.page > 0 && source.page <= 200) || safeGiroURL(source?.url)).slice(0, 12).map((source) => source.type === 'internal' ? { type: 'internal', number: Number.isInteger(source.number) && source.number >= 1 && source.number <= 4 ? source.number : undefined, materialId: source.materialId, title: String(source.title || 'Material').slice(0, 240), page: source.page, url: safeGiroURL(source.url) || '', system: source.system === true } : { url: safeGiroURL(source.url), title: String(source.title || 'Fonte').slice(0, 240) }),
     }));
     return { messages, draft: typeof saved.draft === 'string' ? saved.draft.slice(0, GIRO_AI_MAX_QUESTION) : '' };
