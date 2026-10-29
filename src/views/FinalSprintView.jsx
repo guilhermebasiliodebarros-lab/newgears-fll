@@ -1,40 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Bot, Check, CheckCircle2, ClipboardList, Flag, Lightbulb, LoaderCircle, Mic, RefreshCw, Wrench } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { AlertCircle, Check, CheckCircle2, ClipboardList, Flag, LoaderCircle, RefreshCw } from 'lucide-react';
 
-export const FINAL_SPRINT_FRONTS = [
-  {
-    id: 'innovation_project',
-    title: 'Projeto de inovação',
-    icon: Lightbulb,
-    tone: 'border-purple-400/25 bg-purple-400/10 text-purple-200',
-    description: 'Concluir a solução, validar seu impacto e organizar a história do projeto.',
-    examples: ['Finalizar protótipo e validação', 'Organizar evidências e impacto', 'Preparar a apresentação do projeto'],
-  },
-  {
-    id: 'robot_design',
-    title: 'Design do robô',
-    icon: Wrench,
-    tone: 'border-cyan-400/25 bg-cyan-400/10 text-cyan-200',
-    description: 'Explicar as decisões de construção, programação, anexos e testes do robô.',
-    examples: ['Ajustar construção e anexos', 'Testar código e sensores', 'Registrar melhorias feitas após os testes'],
-  },
-  {
-    id: 'robot_game',
-    title: 'Mesa da FLL',
-    icon: Bot,
-    tone: 'border-blue-400/25 bg-blue-400/10 text-blue-200',
-    description: 'Treinar as saídas, consolidar rounds e melhorar a consistência na mesa.',
-    examples: ['Treinar as oito saídas', 'Combinar estratégia e ordem dos rounds', 'Repetir tentativas e acompanhar pontos e tempo'],
-  },
-  {
-    id: 'judges_presentation',
-    title: 'Apresentação aos juízes',
-    icon: Mic,
-    tone: 'border-amber-400/25 bg-amber-400/10 text-amber-200',
-    description: 'Praticar explicações e perguntas para que todos participem com segurança.',
-    examples: ['Ensaiar falas e transições', 'Treinar respostas a perguntas', 'Ajudar cada integrante a explicar sua contribuição'],
-  },
-];
+import { FINAL_SPRINT_FRONTS } from '../constants/finalSprintFronts';
 
 const STATUS_OPTIONS = [
   { id: 'planned', label: 'Vou começar' },
@@ -70,16 +37,7 @@ export default function FinalSprintView({
   const [drafts, setDrafts] = useState({});
   const [savingFrontId, setSavingFrontId] = useState(null);
   const [saveStates, setSaveStates] = useState({});
-
-  useEffect(() => {
-    setDrafts((currentDrafts) => {
-      const nextDrafts = { ...currentDrafts };
-      assignments.forEach((assignment) => {
-        if (!nextDrafts[assignment.frontId]) nextDrafts[assignment.frontId] = getAssignmentDraft(assignment);
-      });
-      return nextDrafts;
-    });
-  }, [assignments]);
+  const saving = useRef(false);
 
   const ownAssignments = useMemo(
     () => assignments.filter((assignment) => String(assignment.studentId) === String(student?.id)),
@@ -109,15 +67,24 @@ export default function FinalSprintView({
   };
 
   const handleSaveProgress = async (frontId, assignment) => {
+    if (saving.current) return;
+    saving.current = true;
     const draft = drafts[frontId] || getAssignmentDraft(assignment);
     setSavingFrontId(frontId);
     setSaveStates((current) => ({ ...current, [frontId]: 'saving' }));
     try {
       const saved = await onSaveProgress(frontId, draft);
+      if (saved) setDrafts((current) => {
+        if (current[frontId] !== draft) return current;
+        const next = { ...current };
+        delete next[frontId];
+        return next;
+      });
       setSaveStates((current) => ({ ...current, [frontId]: saved ? 'saved' : 'error' }));
     } catch {
       setSaveStates((current) => ({ ...current, [frontId]: 'error' }));
     } finally {
+      saving.current = false;
       setSavingFrontId(null);
     }
   };
@@ -227,7 +194,7 @@ export default function FinalSprintView({
                     <label className="space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Status<select disabled={savingFrontId === front.id} value={draft.status} onChange={(event) => updateDraft(front.id, 'status', event.target.value, assignment)} className="mt-1 w-full rounded-xl border border-white/10 bg-[#111722] px-3 py-2.5 text-sm font-normal normal-case text-white outline-none focus:border-blue-400 disabled:opacity-60">{STATUS_OPTIONS.map((status) => <option key={status.id} value={status.id}>{status.label}</option>)}</select></label>
                   </div>
                   <label className="block space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Atualização recente<textarea disabled={savingFrontId === front.id} value={draft.progressNote} onChange={(event) => updateDraft(front.id, 'progressNote', event.target.value, assignment)} maxLength={1000} rows="3" className="mt-1 w-full resize-y rounded-xl border border-white/10 bg-black/25 px-3 py-2.5 text-sm font-normal normal-case leading-relaxed text-white outline-none focus:border-blue-400 disabled:opacity-60" placeholder="O que você já fez, aprendeu ou precisa destravar?" /></label>
-                  <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-[10px] text-gray-500">Atualizado: {formatUpdatedAt(assignment.updatedAt || assignment.createdAt)} · escolha mantida até o torneio</p>{saveStates[front.id] === 'saved' ? <p role="status" className="mt-1 flex items-center gap-1 text-[10px] font-bold text-emerald-300"><CheckCircle2 size={12} />Alterações salvas.</p> : saveStates[front.id] === 'error' ? <p role="alert" className="mt-1 flex items-center gap-1 text-[10px] font-bold text-red-300"><AlertCircle size={12} />Não foi possível salvar. Confira a conexão e tente novamente.</p> : null}</div><button type="button" disabled={savingFrontId === front.id || assignmentsLoading || assignmentsError} onClick={() => handleSaveProgress(front.id, assignment)} className="inline-flex items-center gap-2 rounded-xl bg-blue-500 px-4 py-2 text-xs font-black text-white hover:bg-blue-400 disabled:opacity-50"><ClipboardList size={13} />{savingFrontId === front.id ? <><LoaderCircle size={13} className="animate-spin" />Salvando...</> : saveStates[front.id] === 'error' ? 'Tentar novamente' : 'Salvar atualização'}</button></div>
+                  <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-[10px] text-gray-500">Atualizado: {formatUpdatedAt(assignment.updatedAt || assignment.createdAt)} · escolha mantida até o torneio</p>{saveStates[front.id] === 'saved' ? <p role="status" className="mt-1 flex items-center gap-1 text-[10px] font-bold text-emerald-300"><CheckCircle2 size={12} />Alterações salvas.</p> : saveStates[front.id] === 'error' ? <p role="alert" className="mt-1 flex items-center gap-1 text-[10px] font-bold text-red-300"><AlertCircle size={12} />Não foi possível salvar. Confira a conexão e tente novamente.</p> : null}</div><button type="button" disabled={Boolean(savingFrontId) || assignmentsLoading || assignmentsError} onClick={() => handleSaveProgress(front.id, assignment)} className="inline-flex items-center gap-2 rounded-xl bg-blue-500 px-4 py-2 text-xs font-black text-white hover:bg-blue-400 disabled:opacity-50"><ClipboardList size={13} />{savingFrontId === front.id ? <><LoaderCircle size={13} className="animate-spin" />Salvando...</> : saveStates[front.id] === 'error' ? 'Tentar novamente' : 'Salvar atualização'}</button></div>
                 </div>
               ) : null}
             </article>

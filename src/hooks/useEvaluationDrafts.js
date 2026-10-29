@@ -1,11 +1,15 @@
 import { useRef, useState } from 'react';
+import { normalizeEvaluationDraft } from '../utils/finalSprintEvaluations';
 
 const empty = () => ({ weekly: {}, presentation: {}, report: {} });
 const readDrafts = (key) => {
   try {
     const stored = JSON.parse(localStorage.getItem(key));
     if (stored?.version !== 1) return empty();
-    return Object.fromEntries(Object.keys(empty()).map((type) => [type, stored[type] && typeof stored[type] === 'object' && !Array.isArray(stored[type]) ? stored[type] : {}]));
+    return Object.fromEntries(Object.keys(empty()).map((type) => [type,
+      Object.fromEntries(Object.entries(stored[type] && typeof stored[type] === 'object' && !Array.isArray(stored[type]) ? stored[type] : {})
+        .map(([id, value]) => [id, normalizeEvaluationDraft(type, value)]).filter(([, value]) => value)),
+    ]));
   } catch { return empty(); }
 };
 
@@ -33,10 +37,11 @@ export default function useEvaluationDrafts(scope) {
   const remove = (type, key, submitted) => {
     const current = latest.current;
     // Do not remove edits made while the submitted evaluation was saving.
-    if (submitted && current[type][key] !== submitted) return;
+    if (submitted && current[type][key] && current[type][key] !== submitted) return false;
     const entries = { ...current[type] };
     delete entries[key];
     commit({ ...current, [type]: entries });
+    return true;
   };
   return { drafts, update, remove, storageError, restored: restored.filter(({ type, key }) => drafts[type][key]) };
 }

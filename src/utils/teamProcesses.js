@@ -1,9 +1,10 @@
 import { STATION_KEYS } from '../constants/workspace.js';
+import { recordDay } from './workspaceRecords.js';
 
 export const ACTIVE_STATUSES = ['present', 'late'];
 export const ATTENDANCE_LABELS = { present: 'Presente', late: 'Atraso', absent: 'Falta', excused: 'Falta justificada' };
 export const SEASON_COLLECTIONS = ['tasks', 'events', 'finalSprintAssignments', 'finalSprintEvaluations', 'finalSprintSelectionScores', 'finalSprintTournamentDrafts', 'attendanceSessions', 'rotationApplications', 'logbook', 'score_history', 'prototypeIterations', 'expertContacts', 'outreach', 'decisionMatrix', 'xpRecords', 'xpLossRecords', 'leaderPenaltyRequests', 'dailyMoods', 'activityLogs', 'robotTrajectories'];
-export const isActiveStudent = (student) => student.status !== 'inactive';
+export const isActiveStudent = (student) => Boolean(student && typeof student === 'object' && student.status !== 'inactive');
 export const dateKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 export const validDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && Number.isFinite(Date.parse(`${value}T12:00:00Z`)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
 const token = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
@@ -16,6 +17,24 @@ export function defaultPlanning(students, legacy = false) {
   const oldOrder = legacy ? findIds(['Enzo', 'Mariana', 'Lívia', 'Arthur Silva', 'Benjamim', 'Davi Miguel', 'Antônio Yamaguchi']) : [];
   const participantIds = [...new Set([...oldOrder, ...students.filter(isActiveStudent).map((s) => s.id)])].filter((id) => !captainIds.includes(id) && !traineeIds.includes(id));
   return { startDate: legacy ? '2026-02-22' : dateKey(new Date()), totalWeeks: 36, trainingDays: [1, 3], pauseWeeks: [], participantIds, captainIds, traineeIds, reportDueDay: 5 };
+}
+
+export function resolvePlanningConfig(config, students, legacy = false) {
+  const fallback = defaultPlanning(students, legacy);
+  if (!config || typeof config !== 'object') return fallback;
+  const ids = (value, defaults) => Array.isArray(value) ? value.filter((id) => typeof id === 'string') : defaults;
+  const trainingDays = Array.isArray(config.trainingDays) ? config.trainingDays.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6) : [];
+  return {
+    ...fallback, ...config,
+    startDate: recordDay(config.startDate) || fallback.startDate,
+    totalWeeks: Number.isInteger(Number(config.totalWeeks)) && Number(config.totalWeeks) >= 1 && Number(config.totalWeeks) <= 52 ? Number(config.totalWeeks) : fallback.totalWeeks,
+    trainingDays: trainingDays.length ? trainingDays : fallback.trainingDays,
+    pauseWeeks: Array.isArray(config.pauseWeeks) ? config.pauseWeeks.map(recordDay).filter(Boolean) : [],
+    participantIds: ids(config.participantIds, fallback.participantIds),
+    captainIds: ids(config.captainIds, fallback.captainIds),
+    traineeIds: ids(config.traineeIds, fallback.traineeIds),
+    reportDueDay: Number.isInteger(config.reportDueDay) && config.reportDueDay >= 0 && config.reportDueDay <= 6 ? config.reportDueDay : fallback.reportDueDay,
+  };
 }
 
 export function validatePlanning(config, students) {
@@ -62,13 +81,19 @@ export function buildRotationSchedule(students, config) {
 }
 
 export function sessionEntries(session) {
-  if (session?.entries) return session.entries;
-  return Object.fromEntries([...(session?.presentIds || []).map((id) => [id, { status: 'present', note: '' }]), ...(session?.absentIds || []).map((id) => [id, { status: 'absent', note: '' }])]);
+  if (session?.entries && typeof session.entries === 'object' && !Array.isArray(session.entries)) return Object.fromEntries(Object.entries(session.entries)
+    .filter(([, entry]) => entry && Object.hasOwn(ATTENDANCE_LABELS, entry.status))
+    .map(([id, entry]) => [id, { ...entry, note: typeof entry.note === 'string' ? entry.note : '' }]));
+  return Object.fromEntries([...(Array.isArray(session?.presentIds) ? session.presentIds : []).map((id) => [id, { status: 'present', note: '' }]), ...(Array.isArray(session?.absentIds) ? session.absentIds : []).map((id) => [id, { status: 'absent', note: '' }])]);
 }
 export function attendanceContribution(entry) {
   return { total: entry && entry.status !== 'excused' ? 1 : 0, attended: ACTIVE_STATUSES.includes(entry?.status) ? 1 : 0, late: entry?.status === 'late' ? 1 : 0, excused: entry?.status === 'excused' ? 1 : 0 };
 }
 export function taskParticipants(task, students = []) {
-  if (Array.isArray(task.participants)) return task.participants;
-  return (task.author || '').split(',').map((name) => name.trim()).filter((name) => name && !['Tecnico', 'Técnico', 'Equipe'].includes(name)).map((name) => ({ id: students.find((student) => student.name === name)?.id || '', name }));
+  const roster = Array.isArray(students) ? students.filter(Boolean) : [];
+  if (Array.isArray(task?.participants)) return task.participants
+    .filter((person) => person && typeof person === 'object')
+    .map((person) => ({ ...person, id: typeof person.id === 'string' ? person.id : '', name: typeof person.name === 'string' && person.name.trim() ? person.name : roster.find((student) => student.id === person.id)?.name || '' }))
+    .filter((person) => typeof person.name === 'string' && person.name.trim());
+  return (typeof task?.author === 'string' ? task.author : '').split(',').map((name) => name.trim()).filter((name) => name && !['Tecnico', 'Técnico', 'Equipe'].includes(name)).map((name) => ({ id: roster.find((student) => student.name === name)?.id || '', name }));
 }

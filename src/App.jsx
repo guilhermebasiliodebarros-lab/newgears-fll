@@ -4,8 +4,9 @@ import { auth, db, FIREBASE_AUTH_ENABLED } from './firebase'; // Reutiliza o mes
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { loadReportsSession } from './services/weeklyReports';
 import useWeeklyReports from './hooks/useWeeklyReports';
-import WeeklyReportsView from './views/WeeklyReportsView';
-import ReportRecipientsView from './views/ReportRecipientsView';
+import useSeasonEvaluations from './hooks/useSeasonEvaluations';
+const WeeklyReportsView = lazy(() => import('./views/WeeklyReportsView'));
+const ReportRecipientsView = lazy(() => import('./views/ReportRecipientsView'));
 import WeeklyReportsSummary from './components/WeeklyReportsSummary';
 import WorkspaceActionQueue from './components/WorkspaceActionQueue';
 import SeasonPlanningPanel from './components/SeasonPlanningPanel';
@@ -29,24 +30,28 @@ import { validateTaskGearReward } from './services/taskGearRewards';
 import TaskBlockForm from './components/TaskBlockForm';
 import ReminderInbox from './components/ReminderInbox';
 import { applyRotation, undoRotation, saveAttendance, assertActiveSeason, transitionSeason } from './services/teamProcesses';
-import { buildRotationSchedule, defaultPlanning, validatePlanning, isActiveStudent, SEASON_COLLECTIONS, validDate, dateKey } from './utils/teamProcesses';
+import { buildRotationSchedule, resolvePlanningConfig, validatePlanning, isActiveStudent, SEASON_COLLECTIONS, validDate, dateKey } from './utils/teamProcesses';
 import Countdown from './components/Countdown';
 import LogoNewGears from './components/LogoNewGears';
 import WorkspaceSidebar from './components/WorkspaceSidebar';
 import { workshopMember } from './utils/gearWorkshop';
-import { WorkspaceHero, WorkspaceSectionHeading, WorkspaceScene, WorkspaceCollapsible, WorkspacePanelToolbar, SeasonModeControl } from './components/WorkspaceChrome';
+import { WorkspaceHero, WorkspaceSectionHeading, WorkspaceScene, WorkspaceContent, WorkspaceCollapsible, WorkspacePanelToolbar, SeasonModeControl } from './components/WorkspaceChrome';
 import StrategyView from './views/StrategyView';
 import RoundsView from './views/RoundsView';
 import LogbookView from './views/LogbookView';
 import KanbanView from './views/KanbanView';
+import { normalizeTaskRecord, normalizeEventRecord, normalizeWorkspaceRecord, recordDay, recordDate } from './utils/workspaceRecords';
+import { browserStorage } from './utils/browserStorage';
+import { reportClientIssue, setDiagnosticsContext } from './services/clientDiagnostics';
 import AgendaView from './views/AgendaView';
-import FinalSprintView, { FINAL_SPRINT_FRONTS } from './views/FinalSprintView';
+import FinalSprintView from './views/FinalSprintView';
+import { FINAL_SPRINT_FRONTS } from './constants/finalSprintFronts';
 import ActivityHistoryView from './views/ActivityHistoryView';
-import SeasonHistoryView from './views/SeasonHistoryView';
-import PublicShowcaseAdminView from './views/PublicShowcaseAdminView';
-import GiroKnowledgeView from './views/GiroKnowledgeView';
-import PublicTeamView from './views/PublicTeamView';
-import PublicTvModeView from './views/PublicTvModeView';
+const SeasonHistoryView = lazy(() => import('./views/SeasonHistoryView'));
+const PublicShowcaseAdminView = lazy(() => import('./views/PublicShowcaseAdminView'));
+const GiroKnowledgeView = lazy(() => import('./views/GiroKnowledgeView'));
+const PublicTeamView = lazy(() => import('./views/PublicTeamView'));
+const PublicTvModeView = lazy(() => import('./views/PublicTvModeView'));
 import { STATION_KEYS } from './constants/workspace';
 import { DEFAULT_PROJECT_SUMMARY, PROJECT_MAIN_DOC_ID, resolveProjectSummary } from './utils/projectSummary';
 import { buildTrainingGallery, DEFAULT_PUBLIC_SHOWCASE_SETTINGS, resolvePublicShowcaseSettings } from './utils/publicShowcase';
@@ -192,7 +197,7 @@ const StudentManagementPanel = lazy(() => import('./components/RotationOperation
 const FinalSprintEvaluationsView = lazy(() => import('./views/FinalSprintEvaluationsView'));
 const readStoredTheme = () => {
   if (typeof window === 'undefined') return 'classic';
-  return localStorage.getItem('newgears_visual_theme') === 'gold' ? 'gold' : 'classic';
+  return browserStorage.getItem('newgears_visual_theme') === 'gold' ? 'gold' : 'classic';
 };
 
 const LazyPanelFallback = ({ label = 'Carregando modulo...', minHeightClass = 'min-h-[220px]' }) => (
@@ -315,7 +320,7 @@ const readStoredPrefs = (storageKey, defaults) => {
   if (typeof window === 'undefined') return defaults;
 
   try {
-    const raw = localStorage.getItem(storageKey);
+    const raw = browserStorage.getItem(storageKey);
     if (!raw) return defaults;
     const parsed = JSON.parse(raw);
     return { ...defaults, ...parsed };
@@ -328,7 +333,7 @@ const readStoredUser = () => {
   if (typeof window === 'undefined') return null;
 
   try {
-    const raw = localStorage.getItem("roboquest_user");
+    const raw = browserStorage.getItem("roboquest_user");
     if (!raw) return null;
 
     const parsed = JSON.parse(raw);
@@ -524,6 +529,10 @@ const normalizeStudentRecord = (student) => {
   if (!student || typeof student !== 'object') return student;
   return {
     ...student,
+    name: typeof student.name === 'string' && student.name.trim() ? student.name : 'Integrante sem nome',
+    station: typeof student.station === 'string' ? student.station : '',
+    xp: Number.isFinite(Number(student.xp)) ? Number(student.xp) : 0,
+    joinedAt: recordDay(student.joinedAt),
     badges: normalizeStudentBadges(student.badges),
     xpLossNotifications: normalizeXpLossNotifications(student.xpLossNotifications),
   };
@@ -753,11 +762,11 @@ const persistStoredUser = (user) => {
 
   try {
     if (!user) {
-      localStorage.removeItem("roboquest_user");
+      browserStorage.removeItem("roboquest_user");
       return;
     }
 
-    localStorage.setItem("roboquest_user", JSON.stringify(user));
+    browserStorage.setItem("roboquest_user", JSON.stringify(user));
   } catch {
     // Ignore storage errors so the interface keeps working.
   }
@@ -976,7 +985,7 @@ function App() {
         const student = user.role === 'student' ? { id: user.studentId, name: user.name, email: user.email } : null;
         const session = { type: user.role, uid: user.uid, name: user.name, email: user.email, studentId: user.studentId, ...(student ? { data: student } : {}) };
         setCurrentUser(session); setIsAdmin(user.role === 'admin'); setViewAsStudent(student);
-        localStorage.setItem('roboquest_user', JSON.stringify(session));
+        browserStorage.setItem('roboquest_user', JSON.stringify(session));
         setLoginError('');
       } catch (error) {
         if (!mounted || attempt !== generation) return;
@@ -1012,7 +1021,7 @@ function App() {
   const [studentPanelState, setStudentPanelState] = useState(() => readStoredPrefs('newgears_student_panel_prefs_v2', STUDENT_PANEL_DEFAULTS));
   const [studentMissionMode, setStudentMissionMode] = useState(() => {
     if (typeof window === 'undefined') return 'compact';
-    return localStorage.getItem('newgears_student_mission_mode') || 'compact';
+    return browserStorage.getItem('newgears_student_mission_mode') || 'compact';
   });
   const getStandaloneView = () => {
     if (typeof window === 'undefined') return '';
@@ -1021,11 +1030,11 @@ function App() {
   const [isPublicMode, setIsPublicMode] = useState(() => getStandaloneView() === 'public');
   const [focusedReportId, setFocusedReportId] = useState(() => new URLSearchParams(window.location.search).get('report') || '');
   const [adminTab, setAdminTab] = useState(() => new URLSearchParams(window.location.search).has('report') ? 'weekly_reports' : 'sprint');
-  const [workspaceSeason, setWorkspaceSeason] = useState(() => localStorage.getItem('newgears_workspace_season') === 'rotation' ? 'rotation' : 'final');
+  const [workspaceSeason, setWorkspaceSeason] = useState(() => browserStorage.getItem('newgears_workspace_season') === 'rotation' ? 'rotation' : 'final');
   const [isSavingWorkspaceSeason, setIsSavingWorkspaceSeason] = useState(false);
-  const [activeTeamSeasonId, setActiveTeamSeasonId] = useState(() => localStorage.getItem('newgears_active_season_id') || null);
-  const [activeTeamSeasonName, setActiveTeamSeasonName] = useState(() => localStorage.getItem('newgears_active_season_name') || 'Temporada atual');
-  const [seasonLifecycleReady, setSeasonLifecycleReady] = useState(() => Boolean(localStorage.getItem('newgears_active_season_id')));
+  const [activeTeamSeasonId, setActiveTeamSeasonId] = useState(() => browserStorage.getItem('newgears_active_season_id') || null);
+  const [activeTeamSeasonName, setActiveTeamSeasonName] = useState(() => browserStorage.getItem('newgears_active_season_name') || 'Temporada atual');
+  const [seasonLifecycleReady, setSeasonLifecycleReady] = useState(() => Boolean(browserStorage.getItem('newgears_active_season_id')));
   const [workspaceSeasonLoaded, setWorkspaceSeasonLoaded] = useState(false);
   const [teamSeasons, setTeamSeasons] = useState([]);
   const [isTransitioningSeason, setIsTransitioningSeason] = useState(false);
@@ -1052,12 +1061,12 @@ function App() {
     if (currentUser?.type !== 'student') return;
     const studentId = currentUser.studentId || currentUser.data?.id;
     if (!allStudents.some((student) => student.id === studentId && student.status === 'inactive')) return;
-    setCurrentUser(null); setViewAsStudent(null); setIsAdmin(false); localStorage.removeItem('roboquest_user');
+    setCurrentUser(null); setViewAsStudent(null); setIsAdmin(false); browserStorage.removeItem('roboquest_user');
     setLoginError('Seu cadastro foi arquivado. Peça ao técnico para reativá-lo.');
     if (FIREBASE_AUTH_ENABLED) void signOut(auth);
   }, [allStudents, currentUser]);
   const [planningConfig, setPlanningConfig] = useState(null);
-  const effectivePlanning = useMemo(() => planningConfig || defaultPlanning(students, !activeTeamSeasonId), [planningConfig, students, activeTeamSeasonId]);
+  const effectivePlanning = useMemo(() => resolvePlanningConfig(planningConfig, students, !activeTeamSeasonId), [planningConfig, students, activeTeamSeasonId]);
   const [rotationApplications, setRotationApplications] = useState([]);
   const [isProcessingRotation, setIsProcessingRotation] = useState(false);
   const [isSavingPlanning, setIsSavingPlanning] = useState(false);
@@ -1065,11 +1074,17 @@ function App() {
   const [finalSprintAssignments, setFinalSprintAssignments] = useState([]);
   const [finalSprintAssignmentsState, setFinalSprintAssignmentsState] = useState({ loading: true, error: false });
   const [finalSprintAssignmentsRetry, setFinalSprintAssignmentsRetry] = useState(0);
-  const [finalSprintEvaluations, setFinalSprintEvaluations] = useState([]);
-  const [finalSprintSelections, setFinalSprintSelections] = useState([]);
+  const evaluationWorkspace = useSeasonEvaluations({ db, user: currentUser, technical: currentUser?.type === 'admin' && isAdmin, studentId: viewAsStudent?.id, seasonId: activeTeamSeasonId, ready: workspaceSeasonLoaded });
+  const finalSprintEvaluations = evaluationWorkspace.records;
+  const [selectionRecords, setFinalSprintSelections] = useState([]);
+  const [selectionReadScope, setSelectionReadScope] = useState('');
+  const [selectionReadError, setSelectionReadError] = useState(false);
+  const [selectionRetry, setSelectionRetry] = useState(0);
+  const selectionScope = JSON.stringify([currentUser?.uid || currentUser?.studentId || currentUser?.name, currentUser?.type, isAdmin, viewAsStudent?.id, activeTeamSeasonId, selectionRetry]);
+  const finalSprintSelections = selectionReadScope === selectionScope ? selectionRecords : [];
   const [finalSprintSelectionsReady, setFinalSprintSelectionsReady] = useState(false);
   const [tournamentDraftState, setTournamentDraftState] = useState({ seasonId: '', loading: true, error: false, record: null });
-  const tournamentDraftReady = finalSprintSelectionsReady && tournamentDraftState.seasonId === (activeTeamSeasonId || 'legacy') && !tournamentDraftState.loading && !tournamentDraftState.error;
+  const tournamentDraftReady = selectionReadScope === selectionScope && finalSprintSelectionsReady && tournamentDraftState.seasonId === (activeTeamSeasonId || 'legacy') && !tournamentDraftState.loading && !tournamentDraftState.error;
   const ownTournamentSelection = getStudentTournamentSelection({ user: currentUser, studentId: viewAsStudent?.id, selections: finalSprintSelections, seasonId: activeTeamSeasonId || 'legacy' });
   const [logbookEntries, setLogbookEntries] = useState([]);
   const [events, setEvents] = useState([]);
@@ -1131,10 +1146,10 @@ function App() {
   const [studentDiaryDrafts, setStudentDiaryDrafts] = useState({});
   const diaryStudentId = currentUser?.studentId || currentUser?.data?.id || '';
   const diaryDraftIdentity = JSON.stringify([diaryStudentId || currentUser?.name, activeTeamSeasonId, currentWeekData?.id]);
-  const studentLogbookDraft = studentDiaryDrafts[diaryDraftIdentity] ?? (() => { try { return localStorage.getItem(`newgears_logbook_draft_${diaryStudentId}`) || ''; } catch { return ''; } })();
+  const studentLogbookDraft = studentDiaryDrafts[diaryDraftIdentity] ?? (() => { try { return browserStorage.getItem(`newgears_logbook_draft_${diaryStudentId}`) || ''; } catch { return ''; } })();
   const setStudentLogbookDraft = (value) => {
       const next = typeof value === 'function' ? value(studentLogbookDraft) : value;
-      if (!next.trim()) { try { localStorage.removeItem(`newgears_logbook_draft_${diaryStudentId}`); } catch { /* The form reports browser storage failures. */ } }
+      if (!next.trim()) { try { browserStorage.removeItem(`newgears_logbook_draft_${diaryStudentId}`); } catch { /* The form reports browser storage failures. */ } }
       setStudentDiaryDrafts((current) => ({ ...current, [diaryDraftIdentity]: next }));
   };
   const [leaderTaskDraft, setLeaderTaskDraft] = useState({ text: '', studentId: '', station: STATION_KEYS.MANAGEMENT, dueDate: '' });
@@ -1147,12 +1162,12 @@ function App() {
   const isFinalSprintActive = Boolean(currentUser) && (isAdmin ? adminTab === 'sprint' : studentTab === 'sprint');
   const isActivityHistoryActive = currentUser?.type === 'admin' && isAdmin && adminTab === 'history';
   const isPitStopModalOpen = modal.type === 'pitstop';
-  const dashboardNeedsStrategyData =
-    (adminPanelState.dashboard && (adminPanelState.prep || adminPanelState.judge || adminPanelState.stats || adminPanelState.achievements))
-    || (studentPanelState.dashboard && (studentPanelState.prep || studentPanelState.judge || studentPanelState.stats || studentPanelState.achievements));
-  const dashboardNeedsRobotData =
-    (adminPanelState.dashboard && (adminPanelState.prep || adminPanelState.judge || adminPanelState.stats))
-    || (studentPanelState.dashboard && (studentPanelState.prep || studentPanelState.judge || studentPanelState.stats));
+  const dashboardNeedsStrategyData = isAdmin
+    ? adminTab === 'overview' && adminPanelState.dashboard && (adminPanelState.prep || adminPanelState.judge || adminPanelState.stats || adminPanelState.achievements)
+    : studentTab === 'overview' && studentPanelState.dashboard && (studentPanelState.prep || studentPanelState.judge || studentPanelState.stats || studentPanelState.achievements);
+  const dashboardNeedsRobotData = isAdmin
+    ? adminTab === 'overview' && adminPanelState.dashboard && (adminPanelState.prep || adminPanelState.judge || adminPanelState.stats)
+    : studentTab === 'overview' && studentPanelState.dashboard && (studentPanelState.prep || studentPanelState.judge || studentPanelState.stats);
   const shouldLoadStrategyWorkspaceData =
     isTvOnlyView
     || isPublicMode
@@ -1172,8 +1187,12 @@ function App() {
     || adminTab === 'rounds'
     || adminTab === 'showcase'
     || studentTab === 'rounds'
+    || ['roundForm', 'missionForm', 'attachmentForm', 'attachmentView', 'robotForm', 'robotView', 'codeForm', 'codeView', 'pitstop'].includes(modal.type)
     || ((adminTab === 'strategy' || studentTab === 'strategy') && ['robot_design', 'judge_practice'].includes(strategySubTab))
     || dashboardNeedsRobotData;
+  useEffect(() => {
+    setDiagnosticsContext({ area: currentUser ? (isAdmin ? adminTab : studentTab) : isPublicMode ? 'public' : isTvOnlyView || isPublicTvMode ? 'tv' : 'startup', role: currentUser?.type === 'admin' ? 'technical' : currentUser?.type === 'student' ? 'student' : 'visitor' });
+  }, [currentUser?.type, isAdmin, adminTab, studentTab, isPublicMode, isTvOnlyView, isPublicTvMode]);
   const [missions, setMissions] = useState({
     [STATION_KEYS.ENGINEERING]: { text: 'Definir estrategia do robo.', deadline: today },
     [STATION_KEYS.INNOVATION]: { text: 'Pesquisar especialistas.', deadline: today },
@@ -1181,11 +1200,11 @@ function App() {
   });
 
   useEffect(() => {
-      localStorage.setItem('newgears_admin_panel_prefs_v2', JSON.stringify(adminPanelState));
+      browserStorage.setItem('newgears_admin_panel_prefs_v2', JSON.stringify(adminPanelState));
   }, [adminPanelState]);
 
   useEffect(() => {
-      localStorage.setItem('newgears_student_panel_prefs_v2', JSON.stringify(studentPanelState));
+      browserStorage.setItem('newgears_student_panel_prefs_v2', JSON.stringify(studentPanelState));
   }, [studentPanelState]);
 
   useEffect(() => {
@@ -1197,11 +1216,11 @@ function App() {
   }, [studentTab]);
 
   useEffect(() => {
-      localStorage.setItem('newgears_student_mission_mode', studentMissionMode);
+      browserStorage.setItem('newgears_student_mission_mode', studentMissionMode);
   }, [studentMissionMode]);
 
   useEffect(() => {
-      localStorage.setItem('newgears_visual_theme', visualTheme);
+      browserStorage.setItem('newgears_visual_theme', visualTheme);
       document.documentElement.dataset.newgearsTheme = visualTheme;
   }, [visualTheme]);
 
@@ -1474,7 +1493,7 @@ function App() {
   };
 
   const handleSaveWeeklyEvaluation = async ({ student, week, draft }) => {
-      if (currentUser?.type !== 'admin' || !isAdmin || !student?.id || !week?.id) return false;
+      if (currentUser?.type !== 'admin' || !isAdmin || !student?.id || !week?.id || evaluationWorkspace.loading || evaluationWorkspace.error) return false;
       const total = getFinalSprintEvaluationTotal(draft.ratings, WEEKLY_EVALUATION_CRITERIA);
       if (total === null || !`${draft.improvement || ''}`.trim()) {
           showNotification('Complete as notas e registre um próximo ponto a melhorar.', 'error');
@@ -1502,7 +1521,6 @@ function App() {
           };
           const evaluationId = existing?.id || getFinalSprintEvaluationDocId('weekly', studentId, week.id);
           await setDoc(doc(db, 'finalSprintEvaluations', evaluationId), evaluation, { merge: true });
-          setFinalSprintEvaluations((current) => [...current.filter((item) => !(item.type === 'weekly' && String(item.studentId) === studentId && item.weekId === week.id)), { ...evaluation, id: evaluationId }]);
           showNotification(`Avaliação semanal de ${student.name || 'aluno'} salva.`, 'success');
           return true;
       } catch (error) {
@@ -1513,7 +1531,7 @@ function App() {
   };
 
   const handleSavePresentationEvaluation = async ({ student, draft }) => {
-      if (currentUser?.type !== 'admin' || !isAdmin || !student?.id) return false;
+      if (currentUser?.type !== 'admin' || !isAdmin || !student?.id || evaluationWorkspace.loading || evaluationWorkspace.error) return false;
       const total = getFinalSprintEvaluationTotal(draft.ratings, PRESENTATION_EVALUATION_CRITERIA);
       if (total === null || !`${draft.improvement || ''}`.trim()) {
           showNotification('Complete as notas e registre um próximo ponto a melhorar.', 'error');
@@ -1542,7 +1560,6 @@ function App() {
           const evaluationId = existing?.id || getFinalSprintEvaluationDocId('presentation', studentId);
           // Replace the ratings map as a whole so removed criteria do not survive a reevaluation.
           await setDoc(doc(db, 'finalSprintEvaluations', evaluationId), evaluation, { mergeFields: Object.keys(evaluation) });
-          setFinalSprintEvaluations((current) => [...current.filter((item) => !(item.type === 'presentation' && String(item.studentId) === studentId)), { ...evaluation, id: evaluationId }]);
           showNotification(`Avaliação da apresentação de ${student.name || 'aluno'} salva.`, 'success');
           return true;
       } catch (error) {
@@ -1553,7 +1570,7 @@ function App() {
   };
 
   const handleSaveReportEvaluation = async ({ student, draft }) => {
-      if (currentUser?.type !== 'admin' || !isAdmin || !student?.id) return false;
+      if (currentUser?.type !== 'admin' || !isAdmin || !student?.id || evaluationWorkspace.loading || evaluationWorkspace.error) return false;
       const total = parseFinalSprintReportScore(draft.score);
       if (total === null) {
           showNotification('Informe uma nota de 0 a 10 para a avaliação do relatório.', 'error');
@@ -1577,7 +1594,6 @@ function App() {
       const evaluationId = existing?.id || getFinalSprintEvaluationDocId('report', studentId);
       try {
           await setDoc(doc(db, 'finalSprintEvaluations', evaluationId), evaluation, { merge: true });
-          setFinalSprintEvaluations((current) => [...current.filter((item) => !(item.type === 'report' && String(item.studentId) === studentId)), { ...evaluation, id: evaluationId }]);
           showNotification(`Avaliação do relatório de ${student.name || 'aluno'} salva.`, 'success');
           return true;
       } catch (error) {
@@ -1916,7 +1932,7 @@ function App() {
           
           // 2. Busca na memória qual foi o último nível que esse aluno assistiu
           const storageKey = `last_seen_level_${viewAsStudent.id}`;
-          const lastSeenLevel = localStorage.getItem(storageKey);
+          const lastSeenLevel = browserStorage.getItem(storageKey);
 
           let triggerConfetti = false;
           let msg = "";
@@ -1954,7 +1970,7 @@ function App() {
           }
 
           // 4. Salva o nível atual para não repetir a animação toda hora
-          localStorage.setItem(storageKey, currentLevelIndex.toString());
+          browserStorage.setItem(storageKey, currentLevelIndex.toString());
           
           // Atualiza o valor anterior para a próxima renderização
           prevXpRef.current = currentXp;
@@ -2033,7 +2049,7 @@ function App() {
         setCurrentUser(userObj);
         setIsAdmin(true);
         setViewAsStudent(null);
-        localStorage.setItem("roboquest_user", JSON.stringify(userObj)); // Salva na memória
+        browserStorage.setItem("roboquest_user", JSON.stringify(userObj)); // Salva na memória
         return;
     }
 
@@ -2051,7 +2067,7 @@ function App() {
         setCurrentUser(userObj);
         setIsAdmin(false); // Remove flag de admin
         setViewAsStudent(studentFound); // Força a visão para este aluno
-        localStorage.setItem("roboquest_user", JSON.stringify(userObj)); // Salva na memória
+        browserStorage.setItem("roboquest_user", JSON.stringify(userObj)); // Salva na memória
     } else {
         // Log para ajudar a descobrir o erro (veja no F12)
         console.log("Falha no login. Usuários disponíveis:", students.map(s => s.username));
@@ -2073,8 +2089,8 @@ function App() {
       setLoginPass("");
       xpLossLastAlertAtRef.current = new Map();
       setXpLossAlertNotice(null);
-      localStorage.removeItem("roboquest_user"); // Limpa a memória
-        localStorage.removeItem("roboquest_last_activity"); // Limpa o controle de tempo
+      browserStorage.removeItem("roboquest_user"); // Limpa a memória
+        browserStorage.removeItem("roboquest_last_activity"); // Limpa o controle de tempo
   };
   // ----------------------------------
 
@@ -2095,7 +2111,7 @@ function App() {
       const IDLE_TIME_BEFORE_WARNING = TIMEOUT_MS - WARNING_MS;
 
       const checkInactivity = () => {
-        const lastActivity = localStorage.getItem("roboquest_last_activity");
+        const lastActivity = browserStorage.getItem("roboquest_last_activity");
         const now = new Date().getTime();
         
         if (lastActivity) {
@@ -2114,7 +2130,7 @@ function App() {
             timeLeft -= 1;
             
             // Verifica se a outra aba foi mexida durante a contagem
-            const currentLastActivity = localStorage.getItem("roboquest_last_activity");
+            const currentLastActivity = browserStorage.getItem("roboquest_last_activity");
             const currentNow = new Date().getTime();
             if (currentLastActivity && (currentNow - parseInt(currentLastActivity)) < IDLE_TIME_BEFORE_WARNING) {
                 clearInterval(countdownIntervalId);
@@ -2136,7 +2152,7 @@ function App() {
 
       const resetTimer = () => {
         if (currentUser) {
-          localStorage.setItem("roboquest_last_activity", new Date().getTime().toString());
+          browserStorage.setItem("roboquest_last_activity", new Date().getTime().toString());
           clearTimeout(warningTimeoutId);
           clearInterval(countdownIntervalId);
           setLogoutCountdown(null);
@@ -2152,7 +2168,7 @@ function App() {
       };
 
       if (currentUser) {
-        const lastActivity = localStorage.getItem("roboquest_last_activity");
+        const lastActivity = browserStorage.getItem("roboquest_last_activity");
         const now = new Date().getTime();
         if (lastActivity && now - parseInt(lastActivity) > TIMEOUT_MS) {
           handleLogout();
@@ -2196,8 +2212,9 @@ function App() {
   const localTodayStart = new Date(localTodayObj.getFullYear(), localTodayObj.getMonth(), localTodayObj.getDate());
 
   const parseAgendaDate = (dateString) => {
-      if (!dateString) return null;
-      const [year, month, day] = dateString.split('-').map(Number);
+      const normalizedDay = recordDay(dateString);
+      if (!normalizedDay) return null;
+      const [year, month, day] = normalizedDay.split('-').map(Number);
       if (!year || !month || !day) return null;
       return new Date(year, month - 1, day);
   };
@@ -2228,6 +2245,7 @@ function App() {
 
   const getAgendaRelativeLabel = (dateString) => {
       const dayOffset = getAgendaDayOffset(dateString);
+      if (!Number.isFinite(dayOffset)) return 'Data não definida';
 
       if (dayOffset === 0) return 'Hoje';
       if (dayOffset === 1) return 'Amanha';
@@ -2330,8 +2348,7 @@ function App() {
   };
 
   const getLogbookEntryDate = (entry) => {
-      const parsed = new Date(entry?.date || 0);
-      return Number.isNaN(parsed.getTime()) ? new Date(0) : parsed;
+      return recordDate(entry?.date) || new Date(0);
   };
 
   const sortLogbookEntries = (entries) => [...entries].sort((left, right) => getLogbookEntryDate(right) - getLogbookEntryDate(left));
@@ -2423,7 +2440,7 @@ function App() {
   const urgentTasks = tasks.filter(t => t.status !== 'done' && t.dueDate && t.dueDate <= localTodayStr);
   const urgentTasksCount = urgentTasks.length;
 
-  const UrgentEventsBanner = () => {
+  const renderUrgentEventsBanner = () => {
       if (eventsToday.length === 0 && eventsTomorrow.length === 0) return null;
       if (eventsToday.length === 0 && eventsTomorrow.length === 0 && urgentTasks.length === 0) return null;
       return (
@@ -2512,9 +2529,10 @@ function App() {
       new Date(year, monthIndex, day, hour, minute, second, millisecond);
 
   const parseLocalDateValue = (dateString, endOfDay = false) => {
-      if (!dateString) return null;
+      const normalizedDay = recordDay(dateString);
+      if (!normalizedDay) return null;
 
-      const [year, month, day] = dateString.split('-').map(Number);
+      const [year, month, day] = normalizedDay.split('-').map(Number);
       if (!year || !month || !day) return null;
 
       return buildLocalDate(
@@ -2589,10 +2607,11 @@ function App() {
         const source = collection(db, colName);
         const scoped = source;
         return onSnapshot(scoped, (snapshot) => {
-            const data = snapshot.docs.map((docSnap) => mapRecord({ ...docSnap.data(), id: docSnap.id }));
+            const data = snapshot.docs.map((docSnap) => mapRecord(normalizeWorkspaceRecord(colName, { ...docSnap.data(), id: docSnap.id })));
             console.log(`✅ ${colName} carregados com sucesso:`, data.length);
             setter(SEASON_COLLECTIONS.includes(colName) && seasonLifecycleReady ? data.filter((record) => !record.seasonId || record.seasonId === activeTeamSeasonId) : data);
         }, (error) => {
+            reportClientIssue(error, { area: colName });
             console.error(`❌ ERRO CRÍTICO em ${colName}:`, error);
             showNotification(`Erro de conexão: ${error.code}`, "error");
         });
@@ -2650,15 +2669,15 @@ function App() {
         setSeasonTransitionLock(seasonData.transitionLock || null);
         const normalizedSeason = season === 'rotation' ? 'rotation' : 'final';
         setWorkspaceSeason(normalizedSeason);
-        localStorage.setItem('newgears_workspace_season', normalizedSeason);
+        browserStorage.setItem('newgears_workspace_season', normalizedSeason);
         const activeSeasonId = typeof seasonData.activeSeasonId === 'string' ? seasonData.activeSeasonId : null;
         const activeSeasonName = typeof seasonData.activeSeasonName === 'string' && seasonData.activeSeasonName.trim() ? seasonData.activeSeasonName : 'Temporada atual';
         setActiveTeamSeasonId(activeSeasonId);
         setActiveTeamSeasonName(activeSeasonName);
         setSeasonLifecycleReady(Boolean(seasonData.activeSeasonId));
-        if (activeSeasonId) localStorage.setItem('newgears_active_season_id', activeSeasonId);
-        else localStorage.removeItem('newgears_active_season_id');
-        localStorage.setItem('newgears_active_season_name', activeSeasonName);
+        if (activeSeasonId) browserStorage.setItem('newgears_active_season_id', activeSeasonId);
+        else browserStorage.removeItem('newgears_active_season_id');
+        browserStorage.setItem('newgears_active_season_name', activeSeasonName);
         setWorkspaceSeasonLoaded(true);
     });
     // ... e não esqueça de adicionar no return para limpar:
@@ -2691,21 +2710,21 @@ function App() {
 
   useEffect(() => {
     if (!db) return undefined;
-    const listenToSeasonCollection = (collectionName, setter) => {
+    const listenToSeasonCollection = (collectionName, setter, normalize = (record) => record) => {
       const source = collection(db, collectionName);
       const sourceQuery = !['attendanceSessions', 'rotationApplications'].includes(collectionName) && seasonLifecycleReady && activeTeamSeasonId
         ? query(source, where('seasonId', '==', activeTeamSeasonId))
         : source;
       return onSnapshot(sourceQuery, (snapshot) => {
-        setter(snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id })).filter((record) => !seasonLifecycleReady || !record.seasonId || record.seasonId === activeTeamSeasonId));
+        setter(snapshot.docs.map((docSnap) => normalize({ ...docSnap.data(), id: docSnap.id })).filter((record) => !seasonLifecycleReady || !record.seasonId || record.seasonId === activeTeamSeasonId));
       }, (error) => {
         console.error(`Não foi possível carregar ${collectionName} da temporada:`, error);
         showNotification('Não foi possível carregar os dados da temporada ativa.', 'error');
       });
     };
 
-    const unsubscribeTasks = listenToSeasonCollection('tasks', setTasks);
-    const unsubscribeEvents = listenToSeasonCollection('events', setEvents);
+    const unsubscribeTasks = listenToSeasonCollection('tasks', setTasks, normalizeTaskRecord);
+    const unsubscribeEvents = listenToSeasonCollection('events', setEvents, normalizeEventRecord);
     const unsubscribeAttendance = listenToSeasonCollection('attendanceSessions', setAttendanceSessions);
     const unsubscribeRotations = listenToSeasonCollection('rotationApplications', setRotationApplications);
     return () => {
@@ -2723,9 +2742,10 @@ function App() {
         const source = collection(db, colName);
         const scoped = source;
         return onSnapshot(scoped, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            const data = snapshot.docs.map(doc => normalizeWorkspaceRecord(colName, { ...doc.data(), id: doc.id }));
             setter(SEASON_COLLECTIONS.includes(colName) && seasonLifecycleReady ? data.filter((record) => !record.seasonId || record.seasonId === activeTeamSeasonId) : data);
         }, (error) => {
+            reportClientIssue(error, { area: colName });
             console.error(`Erro critico em ${colName}:`, error);
             showNotification(`Erro de conexao: ${error.code}`, "error");
         });
@@ -2777,9 +2797,10 @@ function App() {
         const source = collection(db, colName);
         const scoped = source;
         return onSnapshot(scoped, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            const data = snapshot.docs.map(doc => normalizeWorkspaceRecord(colName, { ...doc.data(), id: doc.id }));
             setter(SEASON_COLLECTIONS.includes(colName) && seasonLifecycleReady ? data.filter((record) => !record.seasonId || record.seasonId === activeTeamSeasonId) : data);
         }, (error) => {
+            reportClientIssue(error, { area: colName });
             console.error(`Erro critico em ${colName}:`, error);
             showNotification(`Erro de conexao: ${error.code}`, "error");
         });
@@ -2792,9 +2813,7 @@ function App() {
     const unsubScoreHistory = createListener("score_history", setScoreHistory);
 
     const unsubMissions = onSnapshot(collection(db, "missions"), (snapshot) => {
-        if (!snapshot.empty) {
-            setMissionsList(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
-        }
+        setMissionsList(snapshot.docs.map(doc => normalizeWorkspaceRecord('missions', { ...doc.data(), id: doc.id })));
     });
 
     return () => {
@@ -2815,13 +2834,13 @@ function App() {
     if (isAdmin) {
         const logbookQuery = query(collectionGroup(db, 'logbook'));
         unsubLogbook = onSnapshot(logbookQuery, (snapshot) => {
-            const entries = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, refPath: doc.ref.path }));
+            const entries = snapshot.docs.map(doc => normalizeWorkspaceRecord('logbook', { ...doc.data(), id: doc.id, refPath: doc.ref.path }));
             setLogbookEntries(entries.filter((entry) => !seasonLifecycleReady || !entry.seasonId || entry.seasonId === activeTeamSeasonId).sort((a, b) => (b.weekId || 0) - (a.weekId || 0)));
         });
     } else if (viewAsStudent?.id) {
         const logbookQuery = query(collection(db, 'students', viewAsStudent.id, 'logbook'));
         unsubLogbook = onSnapshot(logbookQuery, (snapshot) => {
-            const entries = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, refPath: doc.ref.path }));
+            const entries = snapshot.docs.map(doc => normalizeWorkspaceRecord('logbook', { ...doc.data(), id: doc.id, refPath: doc.ref.path }));
             setLogbookEntries(entries.filter((entry) => !seasonLifecycleReady || !entry.seasonId || entry.seasonId === activeTeamSeasonId).sort((a, b) => (b.weekId || 0) - (a.weekId || 0)));
         });
     }
@@ -2836,7 +2855,7 @@ function App() {
 
     const historyQuery = query(collection(db, "activityLogs"), orderBy("createdAt", "desc"), limit(160));
     const unsubscribe = onSnapshot(historyQuery, (snapshot) => {
-        setActivityLogs(snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id })).filter((record) => !seasonLifecycleReady || !record.seasonId || record.seasonId === activeTeamSeasonId));
+        setActivityLogs(snapshot.docs.map(docSnap => normalizeWorkspaceRecord('activityLogs', { ...docSnap.data(), id: docSnap.id })).filter((record) => !seasonLifecycleReady || !record.seasonId || record.seasonId === activeTeamSeasonId));
     }, (error) => {
         console.error("Erro ao carregar historico de alteracoes:", error);
     });
@@ -2866,7 +2885,7 @@ function App() {
 
     const unsubscribe = onSnapshot(assignmentsQuery, (snapshot) => {
       const records = snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id }));
-      setFinalSprintAssignments(seasonLifecycleReady && activeTeamSeasonId ? records.filter((record) => record.seasonId === activeTeamSeasonId) : records);
+      setFinalSprintAssignments((seasonLifecycleReady && activeTeamSeasonId ? records.filter((record) => record.seasonId === activeTeamSeasonId) : records).map((record) => normalizeWorkspaceRecord('finalSprintAssignments', record)));
       setFinalSprintAssignmentsState({ loading: false, error: false });
     }, (error) => {
       console.error('Erro ao carregar frentes da reta final:', error);
@@ -2875,32 +2894,6 @@ function App() {
 
     return () => unsubscribe();
   }, [isFinalSprintActive, currentUser?.type, isAdmin, viewAsStudent?.id, finalSprintAssignmentsRetry, seasonLifecycleReady, activeTeamSeasonId]);
-
-  useEffect(() => {
-    if (!db || !currentUser) {
-      setFinalSprintEvaluations([]);
-      return;
-    }
-    const isTechnicalProfile = currentUser?.type === 'admin' && isAdmin;
-    const evaluationsRef = collection(db, 'finalSprintEvaluations');
-    const evaluationsQuery = isTechnicalProfile
-      ? evaluationsRef
-      : currentUser?.type === 'student' && viewAsStudent?.id
-        ? query(evaluationsRef, where('studentId', '==', String(viewAsStudent.id)))
-        : null;
-    if (!evaluationsQuery) {
-      setFinalSprintEvaluations([]);
-      return;
-    }
-    const unsubscribe = onSnapshot(evaluationsQuery, (snapshot) => {
-      const records = snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id }));
-      setFinalSprintEvaluations(seasonLifecycleReady && activeTeamSeasonId ? records.filter((record) => record.seasonId === activeTeamSeasonId) : records);
-    }, (error) => {
-      console.error('Erro ao carregar avaliações da reta final:', error);
-      showNotification('Não foi possível carregar as avaliações.', 'error');
-    });
-    return () => unsubscribe();
-  }, [currentUser?.type, isAdmin, viewAsStudent?.id, seasonLifecycleReady, activeTeamSeasonId]);
 
   useEffect(() => {
     const selectionsRef = db ? collection(db, 'finalSprintSelectionScores') : null;
@@ -2917,15 +2910,18 @@ function App() {
     const unsubscribe = onSnapshot(selectionsQuery, (snapshot) => {
       const records = snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id }));
       setFinalSprintSelections(seasonLifecycleReady && activeTeamSeasonId ? records.filter((record) => record.seasonId === activeTeamSeasonId) : records);
+      setSelectionReadScope(selectionScope);
+      setSelectionReadError(false);
       setFinalSprintSelectionsReady(true);
     }, (error) => {
       setFinalSprintSelections([]);
       setFinalSprintSelectionsReady(false);
+      setSelectionReadError(true);
       console.error('Erro ao carregar pontuações de prontidão:', error);
       showNotification('Não foi possível carregar os dados de prontidão.', 'error');
     });
     return () => unsubscribe();
-  }, [currentUser?.type, isAdmin, viewAsStudent?.id, seasonLifecycleReady, activeTeamSeasonId]);
+  }, [currentUser?.type, isAdmin, viewAsStudent?.id, seasonLifecycleReady, activeTeamSeasonId, selectionScope]);
 
   useEffect(() => {
     if (!db || currentUser?.type !== 'admin' || !isAdmin) return;
@@ -2935,7 +2931,7 @@ function App() {
     }, () => {
       setTournamentDraftState({ seasonId, loading: false, error: true, record: null });
     });
-  }, [currentUser?.type, isAdmin, activeTeamSeasonId]);
+  }, [currentUser?.type, isAdmin, activeTeamSeasonId, selectionRetry]);
 
   useEffect(() => {
     if (!db || !isPitStopModalOpen) return;
@@ -5346,7 +5342,7 @@ const handleDeleteRound = async (id) => {
       if (currentUser?.type !== 'admin' || !['rotation', 'final'].includes(season)) return;
       setWorkspaceSeason(season);
       setAdminTab(season === 'rotation' ? 'rotation' : 'sprint');
-      localStorage.setItem('newgears_workspace_season', season);
+      browserStorage.setItem('newgears_workspace_season', season);
       if (!db) return;
 
       setIsSavingWorkspaceSeason(true);
@@ -5371,7 +5367,7 @@ const handleDeleteRound = async (id) => {
     try {
       const next = await transitionSeason({ db, seasonId: activeTeamSeasonId || 'legacy', options, actor: adminProfile?.name || 'Técnico', weeklyStats: teamSeasonStats, planningConfig: effectivePlanning, reportCount: reportsWorkspace.reports.filter((item) => (item.seasonId || 'legacy') === (activeTeamSeasonId || 'legacy')).length });
       setActiveTeamSeasonId(next.id); setActiveTeamSeasonName(next.name); setSeasonLifecycleReady(true); setWorkspaceSeason('rotation');
-      localStorage.setItem('newgears_active_season_id', next.id); localStorage.setItem('newgears_active_season_name', next.name); localStorage.setItem('newgears_workspace_season', 'rotation');
+      browserStorage.setItem('newgears_active_season_id', next.id); browserStorage.setItem('newgears_active_season_name', next.name); browserStorage.setItem('newgears_workspace_season', 'rotation');
       setModal({ type: null, data: null }); setAdminTab('rotation'); showNotification('Temporada arquivada e próximo ciclo preparado.');
     } catch (error) { showNotification(error.message + ' Reabra o encerramento para retomar, se necessário.', 'error'); }
     finally { setIsTransitioningSeason(false); }
@@ -6436,7 +6432,7 @@ const handleFileSelect = (e) => {
   // --- UI COMPONENTS ---
 
   // --- COMPONENTE DE ESTATÍSTICAS DA EQUIPE (VISÃO DOS JUÍZES) ---
-  const TeamStatsPanel = () => {
+  const renderTeamStatsPanel = () => {
       const totalXP = students.reduce((sum, s) => sum + (s.xp || 0), 0);
       const totalBadges = students.reduce((sum, s) => sum + (s.badges?.length || 0), 0);
       const totalImpact = outreachEvents.reduce((sum, ev) => sum + (ev.people || 0), 0);
@@ -6475,7 +6471,7 @@ const handleFileSelect = (e) => {
   };
 
   // --- COMPONENTE DE CONQUISTAS COLETIVAS (TEAM ACHIEVEMENTS) ---
-  const TeamAchievementsPanel = ({ showLocked = true } = {}) => {
+  const renderTeamAchievementsPanel = ({ showLocked = true } = {}) => {
       const totalXP = students.reduce((sum, s) => sum + (s.xp || 0), 0);
       const totalImpact = outreachEvents.reduce((sum, ev) => sum + (ev.people || 0), 0);
       const totalTasksDone = tasks.filter(t => t.status === 'done').length;
@@ -6552,9 +6548,8 @@ const handleFileSelect = (e) => {
       )
   };
 
-  const AttendanceModalContent = () => <AttendancePanel students={allStudents} sessions={attendanceSessions} onSave={handleAttendanceSave} onClose={closeModal} />;
 
-  const DisciplinePanel = () => {
+  const renderDisciplinePanel = () => {
       const topConsistency = consistencyRanking.slice(0, 5);
       const rowsWithLosses = consistencyRanking
           .filter((row) => row.xpLosses.length > 0 || row.overdueTasks > 0 || row.attendanceStats.absences > 0)
@@ -6760,7 +6755,7 @@ const handleFileSelect = (e) => {
       );
   }
 
-  const Notification = () => {
+  const renderNotification = () => {
       if (!notification) return null;
 
       const isError = notification.type === 'error';
@@ -6793,7 +6788,7 @@ const handleFileSelect = (e) => {
       );
   }
 
-  const XpLossAlertModal = () => {
+  const renderXpLossAlertModal = () => {
       if (!xpLossAlertNotice) return null;
 
       const mood = getXpLossMood(xpLossAlertNotice.amount);
@@ -7642,7 +7637,7 @@ const handleFileSelect = (e) => {
 
     
 
-          {modal.type === 'attendance' && <AttendanceModalContent />}
+          {modal.type === 'attendance' && <AttendancePanel students={allStudents} sessions={attendanceSessions} onSave={handleAttendanceSave} onClose={closeModal} />}
 
           {modal.type === 'grades' && (
               <SchoolGradesForm
@@ -8686,13 +8681,17 @@ const handleFileSelect = (e) => {
       student: viewAsStudent,
       students,
       evaluations: finalSprintEvaluations,
+      evaluationsLoading: evaluationWorkspace.loading,
+      evaluationsError: evaluationWorkspace.error,
+      onRetryEvaluations: evaluationWorkspace.retry,
       selections: finalSprintSelections,
       draftScope: evaluationDraftScope,
       evaluationStartDate: teamSeasons.find((season) => season.id === activeTeamSeasonId)?.startDate || effectivePlanning.startDate,
       pauseWeeks: effectivePlanning.pauseWeeks || [],
       selectionDraft: tournamentDraftReady ? tournamentDraftState.record : null,
       selectionReady: tournamentDraftReady,
-      selectionLoadingError: tournamentDraftState.error,
+      selectionLoadingError: tournamentDraftState.error || selectionReadError,
+      onRetrySelection: () => { setSelectionReadError(false); setTournamentDraftState({ seasonId: activeTeamSeasonId || 'legacy', loading: true, error: false, record: null }); setSelectionRetry((attempt) => attempt + 1); },
       onPublishSelection: handlePublishTournamentSelection,
       onSaveWeekly: handleSaveWeeklyEvaluation,
       onSavePresentation: handleSavePresentationEvaluation,
@@ -8814,7 +8813,7 @@ const handleFileSelect = (e) => {
   // Só aparece DEPOIS que logou, enquanto baixa os dados
   if (isPublicTvMode) {
       return (
-          <PublicTvModeView
+          <Suspense fallback={<LazyPanelFallback label="Carregando a equipe…" />}><PublicTvModeView
               students={students}
               adminProfile={adminProfile}
               projectSummary={projectSummary}
@@ -8827,13 +8826,13 @@ const handleFileSelect = (e) => {
               visualTheme={visualTheme}
               onToggleTheme={toggleVisualTheme}
               onExit={closePublicTvMode}
-          />
+          /></Suspense>
       );
   }
 
   if (isPublicMode) {
       return (
-          <PublicTeamView
+          <Suspense fallback={<LazyPanelFallback label="Carregando a equipe…" />}><PublicTeamView
               students={students}
               adminProfile={adminProfile}
               projectSummary={projectSummary}
@@ -8846,7 +8845,7 @@ const handleFileSelect = (e) => {
               onBackToLogin={closePublicMode}
               onOpenTvMode={openPublicTvMode}
               onToggleTheme={toggleVisualTheme}
-          />
+          /></Suspense>
       );
   }
 
@@ -9003,8 +9002,8 @@ const handleFileSelect = (e) => {
         )}
 
         <GearCompanion />
-        <Notification />
-        <XpLossAlertModal />
+        <WorkspaceContent render={renderNotification} />
+        <WorkspaceContent render={renderXpLossAlertModal} />
         {renderModal()}
         {seasonTransitionLock && modal.type !== 'seasonTransition' && <div role="dialog" aria-modal="true" aria-label="Encerramento em andamento" className="fixed inset-0 z-[250] flex items-center justify-center bg-black/90 p-5"><div className="max-w-md rounded-3xl border border-white/15 bg-[#111827] p-6"><h2 className="text-xl font-bold">Encerramento em andamento</h2><p className="mt-3 text-sm text-slate-300">Aguarde a preparação da próxima temporada. Se a conexão caiu, o técnico pode retomar de onde parou.</p>{isAdmin && <button onClick={() => setModal({ type: 'seasonTransition', data: null })} className="mt-5 rounded-full bg-cyan-300 px-5 py-3 font-bold text-slate-950">Retomar encerramento</button>}</div></div>}
 
@@ -9378,7 +9377,7 @@ const handleFileSelect = (e) => {
 
       {isAdmin && (
         <main id="workspace-content" tabIndex={-1} aria-label={currentWorkspaceTab?.label} className={`newgears-stage workspace-section-anchor max-w-[1600px] mx-auto animate-in fade-in duration-500 ${adminPanelState.compact ? 'p-4 md:p-6' : 'p-4 md:p-8'}`}>
-          {!adminPanelState.compact && <UrgentEventsBanner />}
+          {!adminPanelState.compact && <WorkspaceContent render={renderUrgentEventsBanner} />}
 
           <div className="mb-6" hidden={adminTab !== 'overview'}>
             <WorkspaceCollapsible isOpen={adminPanelState.hero}>
@@ -9445,12 +9444,12 @@ const handleFileSelect = (e) => {
                 <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
                   {adminPanelState.stats && (
                     <div className="[&>div]:mb-0 h-full">
-                      <TeamStatsPanel />
+                      <WorkspaceContent render={renderTeamStatsPanel} />
                     </div>
                   )}
                   {adminPanelState.achievements && (
                     <div className="[&>div]:mb-0 h-full">
-                      <TeamAchievementsPanel />
+                      <WorkspaceContent render={renderTeamAchievementsPanel} />
                     </div>
                   )}
                 </div>
@@ -9502,7 +9501,7 @@ const handleFileSelect = (e) => {
 
                 {/* CONTEÃƒÅ¡DO DA ABA SELECIONADA */}
                 <div hidden={adminTab === 'overview'} className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(adminTab)}`}>
-                  <WorkspaceScene sceneId={`admin-${adminTab}`}>
+                  <WorkspaceScene sceneId={`admin-${adminTab}`} onHome={() => setAdminTab('overview')}><Suspense fallback={<LazyPanelFallback label="Carregando esta área…" />}>
                     {adminTab === 'giro_knowledge' && currentUser?.type === 'admin' && <GiroKnowledgeView key={activeTeamSeasonId || 'legacy'} seasonName={activeTeamSeasonName} />}
                     {adminTab === 'weekly_reports' && <WeeklyReportsView key={focusedReportId || 'all-reports'} user={currentUser} workspace={reportsWorkspace} students={allStudents} seasonId={activeTeamSeasonId || 'legacy'} reportDueDay={effectivePlanning.reportDueDay} defaultWeek={currentWeekData?.weekName} focusedReportId={focusedReportId} />}
                     {adminTab === 'report_recipients' && <ReportRecipientsView user={currentUser} workspace={reportsWorkspace} />}
@@ -9557,7 +9556,7 @@ const handleFileSelect = (e) => {
                     )}
                     
                     {/* --- VISUALIZAÇÃO KANBAN --- */}
-                    {adminTab === 'discipline' && <DisciplinePanel />}
+                    {adminTab === 'discipline' && <WorkspaceContent render={renderDisciplinePanel} />}
                     {adminTab === 'kanban' && <KanbanView {...kanbanViewProps} />}
                     {adminTab === 'logbook' && <LogbookView {...logbookViewProps} />}
                     {adminTab === 'agenda' && <AgendaView {...agendaViewProps} />}
@@ -9580,7 +9579,7 @@ const handleFileSelect = (e) => {
                     {adminTab === 'operations' && currentUser?.type === 'admin' && <Suspense fallback={<LazyPanelFallback label="Carregando evolução e ferramentas…" minHeightClass="min-h-[420px]" />}><TeamOperationsView db={db} user={currentUser} tasks={tasks} sessions={attendanceSessions} seasonId={activeTeamSeasonId || 'legacy'} seasons={teamSeasons} reportsEnabled={reportsWorkspace.enabled} /></Suspense>}
                     {adminTab === 'history' && currentUser?.type === 'admin' && <ActivityHistoryView activityLogs={activityLogs} />}
                     {adminTab === 'season_history' && currentUser?.type === 'admin' && <SeasonHistoryView db={db} seasons={teamSeasons} reports={reportsWorkspace.reports} reportsEnabled={reportsWorkspace.enabled} />}
-                  </WorkspaceScene>
+                  </Suspense></WorkspaceScene>
                 </div>
             </div>
           </div>
@@ -9590,7 +9589,7 @@ const handleFileSelect = (e) => {
       {/* --- ÁREA DO ALUNO --- */}
       {!isAdmin && viewAsStudent && (
         <main id="workspace-content" tabIndex={-1} aria-label={currentWorkspaceTab?.label} className="newgears-stage workspace-section-anchor p-4 md:p-8 w-full max-w-[1800px] mx-auto animate-in slide-in-from-bottom-8">
-          <UrgentEventsBanner />
+          <WorkspaceContent render={renderUrgentEventsBanner} />
 
           {ownTournamentSelection ? <TournamentSelectionNotice key={`${viewAsStudent.id}__${activeTeamSeasonId || 'legacy'}__${ownTournamentSelection.selectedAt || ownTournamentSelection.createdAt || 'selected'}`} studentName={viewAsStudent.name || 'Integrante'} seasonName={activeTeamSeasonName} isLiteMode={isLiteMode} /> : null}
 
@@ -9660,12 +9659,12 @@ const handleFileSelect = (e) => {
                 <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
                   {studentPanelState.stats && (
                     <div className="[&>div]:mb-0 w-full">
-                      <TeamStatsPanel />
+                      <WorkspaceContent render={renderTeamStatsPanel} />
                     </div>
                   )}
                   {studentPanelState.achievements && (
                     <div className="[&>div]:mb-0 w-full">
-                      <TeamAchievementsPanel showLocked={true} />
+                      <WorkspaceContent render={renderTeamAchievementsPanel} options={{ showLocked: true }} />
                     </div>
                   )}
                 </div>
@@ -9752,7 +9751,7 @@ const handleFileSelect = (e) => {
 
                 {/* CONTEÃƒÅ¡DO DA ABA SELECIONADA */}
                 <div hidden={studentTab === 'overview'} className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(studentTab)}`}>
-                  <WorkspaceScene sceneId={`student-${studentTab}`}>
+                  <WorkspaceScene sceneId={`student-${studentTab}`} onHome={() => setStudentTab('overview')}><Suspense fallback={<LazyPanelFallback label="Carregando esta área…" />}>
                     {studentTab === 'weekly_reports' && <WeeklyReportsView key={focusedReportId || 'all-reports'} user={currentUser} workspace={reportsWorkspace} students={allStudents} seasonId={activeTeamSeasonId || 'legacy'} reportDueDay={effectivePlanning.reportDueDay} defaultWeek={currentWeekData?.weekName} focusedReportId={focusedReportId} />}
                     {studentTab === 'shop' && <Suspense fallback={<LazyPanelFallback label="Carregando a loja do Giro…" />}><GearShopView /></Suspense>}
                     {studentTab === 'sprint' && <FinalSprintView {...finalSprintViewProps} />}
@@ -10227,7 +10226,7 @@ const handleFileSelect = (e) => {
                     {studentTab === 'kanban' && <div className="text-left"><KanbanView {...kanbanViewProps} /></div>}
                     {studentTab === 'logbook' && <div className="text-left"><LogbookView {...logbookViewProps} /></div>}
                     {studentTab === 'agenda' && <div className="text-left"><AgendaView {...agendaViewProps} /></div>}
-                  </WorkspaceScene>
+                  </Suspense></WorkspaceScene>
                 </div>
             </div>
           </div>

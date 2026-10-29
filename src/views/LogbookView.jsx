@@ -33,7 +33,7 @@ export default function LogbookView({
 }) {
       const currentWeekValue = String(currentWeekData?.id || 'current');
       const prompts = ['Hoje eu testei...', 'O principal aprendizado foi...', 'O que deu errado foi...', 'Na proxima semana quero melhorar...'];
-      const formatDiaryDate = (entry, includeTime = false) => getLogbookEntryDate(entry).toLocaleDateString(
+      const formatDiaryDate = (entry, includeTime = false) => !entry.date ? 'Data não registrada' : getLogbookEntryDate(entry).toLocaleDateString(
           'pt-BR',
           includeTime ? { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' } : { day: '2-digit', month: 'long', year: 'numeric' }
       );

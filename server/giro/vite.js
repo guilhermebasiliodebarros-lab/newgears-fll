@@ -1,4 +1,3 @@
-/* global Buffer, process */
 import { loadEnv } from 'vite';
 import { handleNvidiaGiroRequest } from './nvidia.js';
 import { GIRO_REQUEST_MAX_BYTES } from '../../src/utils/giroMedia.js';

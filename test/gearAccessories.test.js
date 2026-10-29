@@ -1,0 +1,48 @@
+import assert from 'node:assert/strict';
+import { memoryStore } from './teamProcesses.test.js';
+import { applyGearItem, DEFAULT_GEAR_EQUIPMENT, equippedGearAccessories, gearItem, gearProfile, isGearItemEquipped, resolveGearEquipment } from '../src/utils/gearShop.js';
+import { equipGearItem, purchaseGearItem, refundGearItem } from '../src/services/gearShop.js';
+import { equipTechnicianGiro, readTechnicianGiro, saveTechnicianGiro, technicianGiroState } from '../src/utils/gearTechnician.js';
+import { tryOnEquipment } from '../src/utils/shopWishlist.js';
+import { buildWorkshopInteraction } from '../src/utils/gearWorkshopInteractions.js';
+
+export async function runGearAccessoriesTests() {
+  const old = { ...DEFAULT_GEAR_EQUIPMENT, accessory: 'accessory-crown' };
+  assert.deepEqual(resolveGearEquipment(old), old, 'existing single-accessory profiles stay compatible');
+  assert.deepEqual(equippedGearAccessories({ accessory: 'accessory-crown', accessories: ['accessory-crown', 'accessory-crown', 'missing', 'skin-solar', null, 'accessory-medal'] }), ['accessory-crown', 'accessory-medal']);
+  const combined = applyGearItem(old, 'accessory-medal');
+  assert.deepEqual(equippedGearAccessories(combined), ['accessory-crown', 'accessory-medal']);
+  assert.ok(isGearItemEquipped(combined, 'accessory-crown'));
+  assert.ok(isGearItemEquipped(combined, 'accessory-medal'));
+  assert.deepEqual(applyGearItem(combined, 'accessory-medal', { toggle: true }), old);
+  assert.deepEqual(applyGearItem(combined, 'accessory-none'), DEFAULT_GEAR_EQUIPMENT);
+  assert.deepEqual(equippedGearAccessories(applyGearItem(combined, 'skin-plasma')), ['accessory-crown', 'accessory-medal']);
+  assert.deepEqual(tryOnEquipment(combined, { accessory: 'accessory-visor' }).accessories, ['accessory-crown', 'accessory-medal', 'accessory-visor']);
+  assert.deepEqual(tryOnEquipment(combined, { accessories: [] }), DEFAULT_GEAR_EQUIPMENT);
+  const account = gearProfile('a', { balance: 500, earned: 500 });
+  const memory = memoryStore({ 'students/a': { name: 'Test', status: 'active', xp: 100 }, 'studentGearProfiles/a': account });
+  const context = { db: {}, user: { type: 'student', studentId: 'a' }, studentId: 'a', store: memory.store };
+  await purchaseGearItem({ ...context, itemId: 'accessory-crown' });
+  await purchaseGearItem({ ...context, itemId: 'accessory-medal' });
+  const paid = memory.records.get('studentGearProfiles/a');
+  assert.deepEqual(equippedGearAccessories(paid.equipped), ['accessory-crown', 'accessory-medal']);
+  assert.equal(paid.balance, 500 - gearItem('accessory-crown').price - gearItem('accessory-medal').price);
+  assert.deepEqual(memory.records.get('students/a').gearAppearance, paid.equipped);
+  await assert.rejects(equipGearItem({ ...context, itemId: 'accessory-visor' }), /Desbloqueie/);
+  await equipGearItem({ ...context, itemId: 'accessory-crown' });
+  assert.deepEqual(equippedGearAccessories(memory.records.get('studentGearProfiles/a').equipped), ['accessory-medal']);
+  await equipGearItem({ ...context, itemId: 'accessory-crown' });
+  assert.equal(memory.records.get('studentGearProfiles/a').balance, paid.balance, 'adding/removing an owned accessory never charges again');
+  const refunded = await refundGearItem({ ...context, itemId: 'accessory-medal' });
+  assert.deepEqual(equippedGearAccessories(refunded.equipped), ['accessory-crown'], 'refunding one accessory preserves the others');
+  assert.equal(refunded.balance, paid.balance + gearItem('accessory-medal').price);
+  assert.equal(refunded.refundCount, 1);
+  assert.equal(memory.records.get('students/a').xp, 100);
+  assert.deepEqual(buildWorkshopInteraction({ action: 'accessory', equipment: combined }).map((item) => item.status.includes('coroa') || item.status.includes('medalha')), [true, true]);
+  const admin = { type: 'admin', uid: 'coach' };
+  let technician = equipTechnicianGiro(admin, technicianGiroState(admin), 'accessory-crown');
+  technician = equipTechnicianGiro(admin, technician, 'accessory-medal');
+  const saved = new Map(); const storage = { setItem: (key, value) => saved.set(key, value), getItem: (key) => saved.get(key) };
+  saveTechnicianGiro(storage, admin, 'current', technician);
+  assert.deepEqual(equippedGearAccessories(readTechnicianGiro(storage, admin, 'current').account.equipped), ['accessory-crown', 'accessory-medal']);
+}

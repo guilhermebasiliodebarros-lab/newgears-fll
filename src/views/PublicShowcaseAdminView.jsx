@@ -79,19 +79,17 @@ export default function PublicShowcaseAdminView({
   onDeletePhoto,
   onOpenTvMode,
 }) {
-  const [draftSettings, setDraftSettings] = useState(() => resolvePublicShowcaseSettings(settings));
+  const [settingsChanges, setSettingsChanges] = useState({});
+  const draftSettings = { ...resolvePublicShowcaseSettings(settings), ...settingsChanges };
   const [uploadDraft, setUploadDraft] = useState({ title: '', detail: '', date: getToday(), file: null });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [settingsError, setSettingsError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [busyPhotoId, setBusyPhotoId] = useState('');
   const [draggedPhotoId, setDraggedPhotoId] = useState('');
   const [dragOverPhotoId, setDragOverPhotoId] = useState('');
   const [previewOrderIds, setPreviewOrderIds] = useState([]);
   const [uploadError, setUploadError] = useState('');
-
-  useEffect(() => {
-    setDraftSettings(resolvePublicShowcaseSettings(settings));
-  }, [settings]);
 
   const basePhotos = useMemo(
     () => buildTrainingGallery({ galleryPhotos, robotVersions, attachments, includeHidden: true, prioritizeFeatured: false }),
@@ -111,14 +109,21 @@ export default function PublicShowcaseAdminView({
   const visiblePhotos = allPhotos.filter((photo) => photo.isPublic);
 
   const updateSetting = (field, value) => {
-    setDraftSettings((currentSettings) => ({ ...currentSettings, [field]: value }));
+    setSettingsError('');
+    setSettingsChanges((currentSettings) => ({ ...currentSettings, [field]: value }));
   };
 
   const handleSaveSettings = async (event) => {
     event.preventDefault();
+    if (isSavingSettings) return;
+    setSettingsError('');
     setIsSavingSettings(true);
     try {
-      await onSaveSettings(draftSettings);
+      const saved = await onSaveSettings(draftSettings);
+      if (saved !== false) setSettingsChanges((current) => Object.fromEntries(Object.entries(current).filter(([field, value]) => value !== draftSettings[field])));
+      else setSettingsError('Não foi possível salvar as configurações. Suas alterações foram mantidas.');
+    } catch {
+      setSettingsError('Não foi possível salvar as configurações. Confira a conexão e tente novamente. Suas alterações foram mantidas.');
     } finally {
       setIsSavingSettings(false);
     }
@@ -257,6 +262,7 @@ export default function PublicShowcaseAdminView({
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
         <form onSubmit={handleSaveSettings} className="border border-white/10 bg-[#101520] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.2)] md:p-6">
+          {settingsError && <p role="alert" className="mb-4 text-sm text-rose-200">{settingsError}</p>}
           <div className="flex items-center gap-3">
             <CalendarDays size={20} className="text-yellow-200" />
             <h3 className="text-xl font-black text-white">Torneio e links publicos</h3>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { recordDate } from '../utils/workspaceRecords';
 import {
   CalendarDays,
   Clock,
@@ -23,9 +24,8 @@ const CATEGORY_META = {
 };
 
 const formatLogDate = (value) => {
-  if (!value) return 'Agora';
-  const parsedDate = new Date(value);
-  if (Number.isNaN(parsedDate.getTime())) return value;
+  const parsedDate = recordDate(value);
+  if (!parsedDate) return 'Data não registrada';
   return new Intl.DateTimeFormat('pt-BR', {
     day: '2-digit',
     month: '2-digit',

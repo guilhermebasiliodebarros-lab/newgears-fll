@@ -1,4 +1,5 @@
 import { isTournamentEligible } from './tournamentEligibility.js';
+import { recordDate, recordDay } from './workspaceRecords.js';
 
 export const WEEKLY_EVALUATION_CRITERIA = [
   { id: 'commitment', label: 'Comprometimento' },
@@ -61,9 +62,59 @@ export const FINAL_SPRINT_RANKING_CATEGORIES = [
 export const FINAL_SPRINT_REPORT_NOTE_MAX_LENGTH = 20000;
 
 export const parseFinalSprintReportScore = (value) => {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
   if (value === null || value === undefined || `${value}`.trim() === '') return null;
   const score = Number(`${value}`.trim().replace(',', '.'));
   return Number.isFinite(score) && score >= 0 && score <= 10 ? score : null;
+};
+
+const isRecord = (value) => value && typeof value === 'object' && !Array.isArray(value);
+const safeText = (value) => typeof value === 'string' ? value : '';
+export const parseEvaluationRating = (value) => {
+  if ((typeof value !== 'number' && typeof value !== 'string') || (typeof value === 'string' && !value.trim())) return null;
+  const score = Number(value);
+  return Number.isInteger(score) && score >= 0 && score <= 5 ? score : null;
+};
+
+export function normalizeEvaluationDraft(type, value) {
+  if (!isRecord(value)) return null;
+  const ratings = isRecord(value.ratings) ? Object.fromEntries(Object.entries(value.ratings).map(([id, score]) => [id, parseEvaluationRating(score)])) : {};
+  return {
+    ...value, ratings, strengths: safeText(value.strengths), improvement: safeText(value.improvement),
+    note: safeText(value.note), presentedAt: recordDay(value.presentedAt),
+    ...(type === 'report' ? { score: typeof value.score === 'string' || (typeof value.score === 'number' && Number.isFinite(value.score)) ? value.score : '' } : {}),
+  };
+}
+
+export function normalizeEvaluationRecords(values) {
+  const latest = new Map();
+  for (const [index, value] of (Array.isArray(values) ? values : []).entries()) {
+    if (!isRecord(value) || !['weekly', 'presentation', 'report'].includes(value.type)) continue;
+    const studentId = typeof value.studentId === 'string' || typeof value.studentId === 'number' ? String(value.studentId) : '';
+    if (!studentId) continue;
+    const draft = normalizeEvaluationDraft(value.type, value);
+    const maximum = value.type === 'report' ? 10 : value.type === 'weekly' ? 25 : 35;
+    const numericTotal = typeof value.total === 'number' || (typeof value.total === 'string' && value.total.trim()) ? Number(value.total) : NaN;
+    const item = {
+      ...value, ...draft, studentId, studentName: safeText(value.studentName),
+      weekId: value.type === 'weekly' ? getFinalSprintEvaluationWeekForDate(recordDay(value.weekId))?.id || '' : recordDay(value.weekId), weekLabel: safeText(value.weekLabel),
+      evaluatorName: safeText(value.evaluatorName),
+      total: Number.isFinite(numericTotal) && numericTotal >= 0 && numericTotal <= maximum ? numericTotal : null,
+      createdAt: recordDate(value.createdAt)?.toISOString() || '', updatedAt: recordDate(value.updatedAt)?.toISOString() || '',
+    };
+    if (item.type === 'presentation' && [1, 2, 3].includes(Number(value.criteriaVersion))) item.criteriaVersion = Number(value.criteriaVersion);
+    if (item.status === 'complete' && (item.type === 'report' ? item.total === null : getSavedEvaluationTotal(item, item.type === 'weekly' ? WEEKLY_EVALUATION_CRITERIA : getPresentationEvaluationCriteria(item)) === null)) item.status = 'draft';
+    const key = `${studentId}:${value.type}:${value.type === 'weekly' ? item.weekId || value.id || index : ''}`;
+    const previous = latest.get(key);
+    const stamp = (entry) => entry.updatedAt || entry.createdAt || '';
+    if (!previous || stamp(item) > stamp(previous) || (stamp(item) === stamp(previous) && String(item.id || '') > String(previous.id || ''))) latest.set(key, item);
+  }
+  return [...latest.values()];
+}
+
+export const formatEvaluationDate = (value, options = {}) => {
+  const date = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? recordDay(value) ? recordDate(`${value}T12:00:00`) : null : recordDate(value);
+  return date ? date.toLocaleDateString('pt-BR', options) : 'Data não registrada';
 };
 
 export const getFinalSprintReportEvaluation = (evaluation, selection) => {
@@ -93,6 +144,9 @@ const getSavedEvaluationTotal = (record, criteria) => {
 };
 
 export const getFinalSprintTournamentRanking = ({ students = [], evaluations = [], selections = [] }) => {
+  students = Array.isArray(students) ? students : [];
+  evaluations = normalizeEvaluationRecords(evaluations);
+  selections = (Array.isArray(selections) ? selections : []).filter(isRecord);
   const compareStudents = (left, right) => `${left.student.name || ''}`.localeCompare(`${right.student.name || ''}`, 'pt-BR') || String(left.student.id).localeCompare(String(right.student.id));
   const selectionsByStudent = new Map(selections.map((item) => [String(item.studentId), item]));
   const rows = students.filter((item) => item?.id !== null && item?.id !== undefined).map((student) => {
@@ -166,7 +220,8 @@ export const getFinalSprintTournamentRanking = ({ students = [], evaluations = [
   return [...ranked, ...learningOnly];
 };
 
-const formatDate = (date) => new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(date);
+const weekDateFormatter = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' });
+const formatDate = (date) => weekDateFormatter.format(date);
 const dateKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 export const getFinalSprintEvaluationWeek = (offset = 0, referenceDate = new Date()) => {
@@ -202,7 +257,7 @@ export const getStudentTournamentSelection = ({ user, studentId, selections = []
 
 export const getWeeklyEvaluationHistory = (evaluations = [], studentId) => {
   const weeks = new Map();
-  for (const record of evaluations) {
+  for (const record of normalizeEvaluationRecords(evaluations)) {
     if (record.type !== 'weekly' || record.status !== 'complete' || String(record.studentId) !== String(studentId)) continue;
     const week = getFinalSprintEvaluationWeekForDate(record.weekId);
     if (!week || WEEKLY_EVALUATION_CRITERIA.some(({ id }) => record.ratings?.[id] === null || record.ratings?.[id] === undefined || record.ratings?.[id] === '' || !Number.isInteger(Number(record.ratings[id])) || Number(record.ratings[id]) < 0 || Number(record.ratings[id]) > 5)) continue;
@@ -216,17 +271,32 @@ export const getWeeklyEvaluationHistory = (evaluations = [], studentId) => {
 
 export const buildEvaluationCalendar = ({ students = [], evaluations = [], startDate, pauseWeeks = [], includeWeekId, referenceDate = new Date() }) => {
   const current = getFinalSprintEvaluationWeek(0, referenceDate);
-  const records = evaluations.filter((item) => item.type === 'weekly' && getFinalSprintEvaluationWeekForDate(item.weekId));
-  const candidates = [getFinalSprintEvaluationWeekForDate(startDate)?.id, ...records.map((item) => getFinalSprintEvaluationWeekForDate(item.weekId).id), getFinalSprintEvaluationWeekForDate(includeWeekId)?.id].filter((id) => id && id <= current.id);
+  // Resolve each date once and index the records instead of scanning/parsing the
+  // entire evaluation history again for every week in the calendar.
+  const dateWeeks = new Map();
+  const resolveWeek = (value) => {
+    const day = recordDay(value);
+    if (!dateWeeks.has(day)) dateWeeks.set(day, getFinalSprintEvaluationWeekForDate(day, referenceDate));
+    return dateWeeks.get(day);
+  };
+  const recordsByWeek = new Map();
+  for (const item of normalizeEvaluationRecords(evaluations)) {
+    if (item?.type !== 'weekly') continue;
+    const week = resolveWeek(item.weekId);
+    if (!week) continue;
+    if (!recordsByWeek.has(week.id)) recordsByWeek.set(week.id, []);
+    recordsByWeek.get(week.id).push(item);
+  }
+  const candidates = [resolveWeek(startDate)?.id, ...recordsByWeek.keys(), resolveWeek(includeWeekId)?.id].filter((id) => id && id <= current.id);
   const first = candidates.sort()[0] || getFinalSprintEvaluationWeek(-11, referenceDate).id;
-  const paused = new Set(pauseWeeks.map((value) => getFinalSprintEvaluationWeekForDate(value)?.id));
-  const activeStudents = students.filter((item) => item?.id && item.status !== 'inactive');
+  const paused = new Set((Array.isArray(pauseWeeks) ? pauseWeeks : []).map((value) => resolveWeek(value)?.id));
+  const activeStudents = (Array.isArray(students) ? students : []).filter((item) => item?.id && item.status !== 'inactive');
   const weeks = [];
   for (let cursor = first; cursor <= current.id;) {
-    const week = getFinalSprintEvaluationWeekForDate(cursor, referenceDate);
-    const weekRecords = records.filter((item) => getFinalSprintEvaluationWeekForDate(item.weekId).id === week.id);
+    const week = resolveWeek(cursor);
+    const weekRecords = recordsByWeek.get(week.id) || [];
     if (!paused.has(week.id) || weekRecords.length) {
-      const eligible = activeStudents.filter((item) => !item.joinedAt || `${item.joinedAt}`.slice(0, 10) <= week.endDate);
+      const eligible = activeStudents.filter((item) => !recordDay(item.joinedAt) || recordDay(item.joinedAt) <= week.endDate);
       const completed = new Set(weekRecords.filter((item) => item.status === 'complete').map((item) => String(item.studentId)));
       const pending = paused.has(week.id) ? [] : eligible.filter((item) => !completed.has(String(item.id)));
       const completeCount = eligible.filter((item) => completed.has(String(item.id))).length;

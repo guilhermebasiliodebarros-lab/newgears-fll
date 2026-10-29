@@ -7,7 +7,7 @@ const STATUS = {
   paused: { label: 'Pausa', tone: 'border-white/10 bg-white/5 text-gray-400' },
 };
 
-export default function EvaluationCalendar({ weeks, selectedWeekId, month, onMonthChange, onSelectWeek }) {
+export default function EvaluationCalendar({ weeks, selectedWeekId, month, onMonthChange, onSelectWeek, disabled = false }) {
   const [onlyPending, setOnlyPending] = useState(false);
   const pending = weeks.filter((week) => week.pending.length);
   const visible = weeks.filter((week) => (!month || week.id.startsWith(month)) && (!onlyPending || week.pending.length));
@@ -19,7 +19,7 @@ export default function EvaluationCalendar({ weeks, selectedWeekId, month, onMon
       <button type="button" onClick={() => onMonthChange('')} className="rounded-lg border border-white/15 px-3 py-2">Toda a temporada</button>
       <label className="flex items-center gap-2"><input type="checkbox" checked={onlyPending} onChange={(event) => setOnlyPending(event.target.checked)} />Somente semanas com pendências</label>
     </div>
-    <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">{visible.map((week) => <button key={week.id} type="button" aria-pressed={week.id === selectedWeekId} onClick={() => onSelectWeek(week.id)} className={`rounded-xl border p-3 text-left ${STATUS[week.status].tone} ${week.id === selectedWeekId ? 'ring-2 ring-white/60' : ''}`}>
+    <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">{visible.map((week) => <button key={week.id} type="button" disabled={disabled} aria-pressed={week.id === selectedWeekId} onClick={() => onSelectWeek(week.id)} className={`rounded-xl border p-3 text-left disabled:cursor-wait disabled:opacity-60 ${STATUS[week.status].tone} ${week.id === selectedWeekId ? 'ring-2 ring-white/60' : ''}`}>
       <span className="block text-xs font-black">{week.label}</span><span className="mt-2 block text-[10px] font-bold">{STATUS[week.status].label} · {week.completeCount}/{week.total} avaliados</span>
       {week.pending.length ? <span className="mt-2 block text-[10px] leading-relaxed">Faltam: {week.pending.map((item) => item.name || 'Aluno').join(', ')}</span> : null}
     </button>)}</div>

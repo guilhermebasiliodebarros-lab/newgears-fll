@@ -121,7 +121,38 @@ export const gearDay = (date = new Date()) => {
 };
 export const gearDayIndex = (date = new Date()) => Math.floor((date.getTime() - 3 * 60 * 60 * 1000) / 86400000);
 export const newGearProfile = (studentId) => ({ studentId: String(studentId), balance: WELCOME_GEARS, earned: WELCOME_GEARS, spent: 0, refundCount: 0, refundableItems: [], owned: Object.values(DEFAULT_GEAR_EQUIPMENT), equipped: { ...DEFAULT_GEAR_EQUIPMENT }, rewardDay: '', rewardDayIndex: -1, dayEarned: 0, dayCounts: {}, growthPoints: 0, contributionCounts: {} });
-export const resolveGearEquipment = (equipment = {}) => Object.fromEntries(Object.entries(DEFAULT_GEAR_EQUIPMENT).map(([category, fallback]) => [category, gearItem(equipment?.[category])?.category === category ? equipment[category] : fallback]));
+export const equippedGearAccessories = (equipment = {}) => [...new Set((Array.isArray(equipment?.accessories) ? equipment.accessories : [equipment?.accessory])
+  .filter((id) => typeof id === 'string' && id !== 'accessory-none' && gearItem(id)?.category === 'accessory'))];
+
+export const resolveGearEquipment = (equipment = {}) => {
+  const selected = Object.fromEntries(Object.entries(DEFAULT_GEAR_EQUIPMENT).map(([category, fallback]) => [category, gearItem(equipment?.[category])?.category === category ? equipment[category] : fallback]));
+  const accessories = equippedGearAccessories(equipment);
+  selected.accessory = accessories.at(-1) || 'accessory-none';
+  // Single-accessory profiles keep the original shape; no purchase/data reset is required.
+  return accessories.length > 1 ? { ...selected, accessories } : selected;
+};
+
+export const isGearItemEquipped = (equipment, itemId) => {
+  const item = gearItem(itemId);
+  if (!item) return false;
+  return item.category === 'accessory' ? itemId === 'accessory-none' ? !equippedGearAccessories(equipment).length : equippedGearAccessories(equipment).includes(itemId) : equipment?.[item.category] === itemId;
+};
+
+export function applyGearItem(equipment, itemId, { toggle = false, remove = false } = {}) {
+  const selected = resolveGearEquipment(equipment);
+  const item = gearItem(itemId);
+  if (!item) return selected;
+  if (item.category !== 'accessory') return { ...selected, [item.category]: remove ? DEFAULT_GEAR_EQUIPMENT[item.category] : itemId };
+  const current = equippedGearAccessories(selected);
+  const accessories = itemId === 'accessory-none' ? [] : remove || (toggle && current.includes(itemId)) ? current.filter((id) => id !== itemId) : [...new Set([...current, itemId])];
+  return resolveGearEquipment({ ...selected, accessories });
+}
+
+export const gearEquipmentItems = (equipment) => {
+  const selected = resolveGearEquipment(equipment);
+  return [...Object.entries(selected).filter(([category]) => !['accessory', 'accessories'].includes(category)).map(([, id]) => gearItem(id)),
+    ...(equippedGearAccessories(selected).length ? equippedGearAccessories(selected).map(gearItem) : [gearItem('accessory-none')])];
+};
 export const gearProfile = (studentId, value) => {
   const initial = newGearProfile(studentId);
   if (!value) return initial;

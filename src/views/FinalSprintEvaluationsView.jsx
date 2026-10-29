@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, Save } from 'lucide-react';
 import { buildEvaluationCalendar, FINAL_SPRINT_RANKING_CATEGORIES, FINAL_SPRINT_REPORT_NOTE_MAX_LENGTH, PRESENTATION_EVALUATION_CRITERIA, WEEKLY_EVALUATION_CRITERIA, getPresentationEvaluationCriteria, getFinalSprintEvaluationWeek, getFinalSprintEvaluationWeekForDate, getFinalSprintReportEvaluation, getFinalSprintTournamentRanking, parseFinalSprintReportScore } from '../utils/finalSprintEvaluations';
 import useEvaluationDrafts from '../hooks/useEvaluationDrafts';
 import EvaluationCalendar from '../components/EvaluationCalendar';
 import StudentEvaluationProgress from '../components/StudentEvaluationProgress';
+import { formatEvaluationDate, normalizeEvaluationRecords, parseEvaluationRating } from '../utils/finalSprintEvaluations';
 
 const SCORE_LABELS = ['Não demonstrou', 'Muito abaixo', 'Abaixo', 'Adequado', 'Bom', 'Excelente'];
 const EMPTY_FEEDBACK = { strengths: '', improvement: '' };
@@ -12,7 +13,7 @@ const formatRankPoints = (position) => `${position}º · ${position} ${position 
 
 const makeEmptyRatings = (criteria) => Object.fromEntries(criteria.map(({ id }) => [id, null]));
 const getRatingTotal = (ratings, criteria) => {
-  if (!ratings || !criteria.every(({ id }) => ratings[id] !== null && ratings[id] !== undefined && ratings[id] !== '')) return null;
+  if (!ratings || !criteria.every(({ id }) => parseEvaluationRating(ratings[id]) !== null)) return null;
   return criteria.reduce((total, { id }) => total + Number(ratings[id]), 0);
 };
 
@@ -41,21 +42,28 @@ const FeedbackFields = ({ value, onChange, improvementRequired = true, maxLength
 export default function FinalSprintEvaluationsView({
   isTechnicalProfile = false,
   student,
-  students = [],
-  evaluations = [],
-  selections = [],
+  students: rawStudents = [],
+  evaluations: rawEvaluations = [],
+  evaluationsLoading = false,
+  evaluationsError = '',
+  onRetryEvaluations,
+  selections: rawSelections = [],
   draftScope = 'legacy:technical',
   evaluationStartDate,
   pauseWeeks = [],
   selectionDraft,
   selectionReady = false,
   selectionLoadingError = false,
+  onRetrySelection,
   onPublishSelection,
   onSaveWeekly,
   onSavePresentation,
   onSaveReport,
   onSaveSelection,
 }) {
+  const students = useMemo(() => (Array.isArray(rawStudents) ? rawStudents : []).filter((item) => item?.id).map((item) => ({ ...item, name: typeof item.name === 'string' ? item.name : 'Aluno' })), [rawStudents]);
+  const selections = useMemo(() => (Array.isArray(rawSelections) ? rawSelections : []).filter((item) => item && typeof item === 'object').map((item) => ({ ...item, studentName: typeof item.studentName === 'string' ? item.studentName : '', reportNote: typeof item.reportNote === 'string' ? item.reportNote : '' })), [rawSelections]);
+  const evaluations = useMemo(() => normalizeEvaluationRecords(rawEvaluations), [rawEvaluations]);
   const [section, setSection] = useState('weekly');
   const [selectedWeekId, setSelectedWeekId] = useState(() => getFinalSprintEvaluationWeek().id);
   const draftStorage = useEvaluationDrafts(isTechnicalProfile ? draftScope : `student:${draftScope}`);
@@ -67,6 +75,7 @@ export default function FinalSprintEvaluationsView({
   const [reviewingPublication, setReviewingPublication] = useState(false);
   const [reportSaveStates, setReportSaveStates] = useState({});
   const [savingKey, setSavingKey] = useState('');
+  const saving = useRef(false);
   const [selectionError, setSelectionError] = useState('');
   const currentWeek = getFinalSprintEvaluationWeek();
   const week = getFinalSprintEvaluationWeekForDate(selectedWeekId) || currentWeek;
@@ -74,6 +83,7 @@ export default function FinalSprintEvaluationsView({
   const previousWeekCount = new Set(evaluations.filter((item) => item.type === 'weekly' && item.weekId === previousWeek.id && item.status === 'complete').map((item) => String(item.studentId)));
   const previousPendingCount = students.filter((item) => item?.id && (!item.joinedAt || `${item.joinedAt}`.slice(0, 10) <= previousWeek.endDate) && !previousWeekCount.has(String(item.id))).length;
   const changeWeek = (value) => {
+    if (saving.current) return;
     const next = getFinalSprintEvaluationWeekForDate(value);
     if (next && next.id <= currentWeek.id) { setSelectedWeekId(next.id); setCalendarMonth(next.id.slice(0, 7)); }
   };
@@ -91,7 +101,8 @@ export default function FinalSprintEvaluationsView({
   const weeklyStudents = sortedStudents.filter((item) => !item.joinedAt || `${item.joinedAt}`.slice(0, 10) <= week.endDate);
   const completeWeeklyCount = weeklyStudents.filter((item) => weeklyByStudent.get(String(item.id))?.status === 'complete').length;
   const pendingWeeklyCount = weeklyStudents.length - completeWeeklyCount;
-  const calendarWeeks = useMemo(() => buildEvaluationCalendar({ students, evaluations, startDate: evaluationStartDate, pauseWeeks, includeWeekId: selectedWeekId }), [students, evaluations, evaluationStartDate, pauseWeeks, selectedWeekId]);
+  const calendarWeeks = useMemo(() => isTechnicalProfile ? buildEvaluationCalendar({ students, evaluations, startDate: evaluationStartDate, pauseWeeks, includeWeekId: selectedWeekId }) : [], [students, evaluations, evaluationStartDate, pauseWeeks, selectedWeekId, isTechnicalProfile]);
+  const readinessRows = useMemo(() => isTechnicalProfile ? getFinalSprintTournamentRanking({ students: sortedStudents, evaluations, selections }) : [], [isTechnicalProfile, sortedStudents, evaluations, selections]);
 
   const weeklyDraftFor = (studentId, persisted) => weeklyDrafts[`${studentId}__${week.id}`] || {
     ratings: persisted?.ratings || makeEmptyRatings(WEEKLY_EVALUATION_CRITERIA),
@@ -131,49 +142,57 @@ export default function FinalSprintEvaluationsView({
   };
 
   const saveWeekly = async (studentItem) => {
+    if (saving.current || evaluationsLoading || evaluationsError) return;
     const draft = weeklyDraftFor(studentItem.id, weeklyByStudent.get(String(studentItem.id)));
     if (getRatingTotal(draft.ratings, WEEKLY_EVALUATION_CRITERIA) === null || !draft.improvement.trim()) return;
     const key = `weekly-${studentItem.id}`;
+    saving.current = true;
     setSavingKey(key);
     const draftKey = `${studentItem.id}__${week.id}`;
     try {
       const saved = await onSaveWeekly({ student: studentItem, week, draft });
-      setEvaluationSaveStates((current) => ({ ...current, [draftKey]: saved === false ? 'error' : 'saved' }));
-      if (saved !== false) draftStorage.remove('weekly', draftKey, draft);
+      const cleared = saved !== false && draftStorage.remove('weekly', draftKey, draft);
+      setEvaluationSaveStates((current) => ({ ...current, [draftKey]: saved === false ? 'error' : cleared ? 'saved' : 'editing' }));
     } catch { setEvaluationSaveStates((current) => ({ ...current, [draftKey]: 'error' })); }
-    finally { setSavingKey(''); }
+    finally { saving.current = false; setSavingKey(''); }
   };
   const savePresentation = async (studentItem) => {
+    if (saving.current || evaluationsLoading || evaluationsError) return;
     const draft = presentationDraftFor(studentItem.id, presentationsByStudent.get(String(studentItem.id)));
     if (getRatingTotal(draft.ratings, PRESENTATION_EVALUATION_CRITERIA) === null || !draft.improvement.trim()) return;
     const key = `presentation-${studentItem.id}`;
+    saving.current = true;
     setSavingKey(key);
     try {
       const saved = await onSavePresentation({ student: studentItem, draft });
-      setEvaluationSaveStates((current) => ({ ...current, [key]: saved === false ? 'error' : 'saved' }));
-      if (saved !== false) draftStorage.remove('presentation', studentItem.id, draft);
+      const cleared = saved !== false && draftStorage.remove('presentation', studentItem.id, draft);
+      setEvaluationSaveStates((current) => ({ ...current, [key]: saved === false ? 'error' : cleared ? 'saved' : 'editing' }));
     } catch { setEvaluationSaveStates((current) => ({ ...current, [key]: 'error' })); }
-    finally { setSavingKey(''); }
+    finally { saving.current = false; setSavingKey(''); }
   };
   const saveReport = async (studentItem) => {
+    if (saving.current || evaluationsLoading || evaluationsError) return;
     const draft = reportDraftFor(studentItem.id, reportForStudent(studentItem.id));
     const score = parseFinalSprintReportScore(draft.score);
     if (score === null) {
       setReportSaveStates((current) => ({ ...current, [studentItem.id]: 'error' }));
       return;
     }
+    saving.current = true;
     setSavingKey(`report-${studentItem.id}`);
     try {
       const saved = await onSaveReport({ student: studentItem, draft: { score, note: draft.note } });
-      setReportSaveStates((current) => ({ ...current, [studentItem.id]: saved === false ? 'error' : 'saved' }));
-      if (saved !== false) draftStorage.remove('report', studentItem.id, draft);
+      const cleared = saved !== false && draftStorage.remove('report', studentItem.id, draft);
+      setReportSaveStates((current) => ({ ...current, [studentItem.id]: saved === false ? 'error' : cleared ? 'saved' : 'editing' }));
     } catch {
       setReportSaveStates((current) => ({ ...current, [studentItem.id]: 'error' }));
-    } finally { setSavingKey(''); }
+    } finally { saving.current = false; setSavingKey(''); }
   };
   const saveSelection = async (studentItem, changes = {}) => {
+    if (saving.current || !selectionReady) return;
     const draft = { ...selectionsByStudent.get(String(studentItem.id)), ...changes };
     setSelectionError('');
+    saving.current = true;
     setSavingKey(`selection-${studentItem.id}`);
     try {
       const saved = await onSaveSelection({ student: studentItem, draft });
@@ -182,10 +201,11 @@ export default function FinalSprintEvaluationsView({
       }
     } catch (error) {
       setSelectionError(error.message || 'Não foi possível salvar. Tente novamente.');
-    } finally { setSavingKey(''); }
+    } finally { saving.current = false; setSavingKey(''); }
   };
 
   const continueDraft = ({ type, key }) => {
+    if (saving.current) return;
     const separator = type === 'weekly' ? key.lastIndexOf('__') : -1;
     const studentId = separator < 0 ? key : key.slice(0, separator);
     if (!sortedStudents.some((item) => String(item.id) === studentId)) return;
@@ -204,36 +224,38 @@ export default function FinalSprintEvaluationsView({
     const ownPresentation = presentationEvaluations.find((item) => String(item.studentId) === String(student.id));
     const ownReport = reportForStudent(student.id);
     return <div className="space-y-5">
+      <EvaluationLoadStatus loading={evaluationsLoading} error={evaluationsError} onRetry={onRetryEvaluations} />
       <section className="newgears-major-panel rounded-[28px] border border-cyan-400/20 bg-gradient-to-br from-[#10232b] via-[#151922] to-[#111722] p-6 md:p-8"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-200/75">Seu acompanhamento</p><h2 className="mt-3 text-3xl font-black text-white">Meu feedback</h2><p className="mt-3 max-w-3xl text-sm leading-relaxed text-gray-300">Veja as avaliações semanais, os pontos fortes e o próximo passo indicado pelo técnico.</p></section>
       <StudentEvaluationProgress key={student.id} studentId={student.id} studentName={student.name} evaluations={evaluations} />
       {ownReport?.status === 'complete' ? <ReportEvaluationResultCard record={ownReport} /> : <section className="rounded-2xl border border-white/10 bg-[#111722] p-5 text-sm text-gray-400">A nota e o feedback dos seus relatórios aparecerão aqui depois que forem registrados.</section>}
-      {ownPresentation ? <EvaluationResultCard title="Apresentação final" subtitle={ownPresentation.presentedAt ? `Avaliada em ${new Intl.DateTimeFormat('pt-BR').format(new Date(`${ownPresentation.presentedAt}T12:00:00`))}` : 'Avaliação final'} criteria={getPresentationEvaluationCriteria(ownPresentation)} record={ownPresentation} /> : <section className="rounded-2xl border border-white/10 bg-[#111722] p-5 text-sm text-gray-400">A avaliação da apresentação aparecerá aqui depois que for registrada.</section>}
-      <section className="space-y-3"><div className="flex items-end justify-between"><div><h3 className="text-xl font-black text-white">Avaliações das semanas</h3><p className="mt-1 text-xs text-gray-400">Cada registro mostra a pontuação e o feedback daquela semana.</p></div><span className="text-xs text-gray-500">{ownWeekly.length} registro(s)</span></div>{ownWeekly.map((record) => <EvaluationResultCard key={record.id} title={record.weekLabel || `Semana de ${record.weekId}`} subtitle={record.updatedAt ? `Atualizado em ${new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit' }).format(new Date(record.updatedAt))}` : ''} criteria={WEEKLY_EVALUATION_CRITERIA} record={record} />)}{ownWeekly.length === 0 ? <div className="rounded-2xl border border-white/10 bg-[#111722] p-8 text-center text-sm text-gray-400">Sua primeira avaliação semanal aparecerá aqui.</div> : null}</section>
+      {ownPresentation ? <EvaluationResultCard title="Apresentação final" subtitle={ownPresentation.presentedAt ? `Avaliada em ${formatEvaluationDate(ownPresentation.presentedAt)}` : 'Avaliação final'} criteria={getPresentationEvaluationCriteria(ownPresentation)} record={ownPresentation} /> : <section className="rounded-2xl border border-white/10 bg-[#111722] p-5 text-sm text-gray-400">A avaliação da apresentação aparecerá aqui depois que for registrada.</section>}
+      <section className="space-y-3"><div className="flex items-end justify-between"><div><h3 className="text-xl font-black text-white">Avaliações das semanas</h3><p className="mt-1 text-xs text-gray-400">Cada registro mostra a pontuação e o feedback daquela semana.</p></div><span className="text-xs text-gray-500">{ownWeekly.length} registro(s)</span></div>{ownWeekly.map((record) => <EvaluationResultCard key={record.id} title={record.weekLabel || `Semana de ${record.weekId}`} subtitle={record.updatedAt ? `Atualizado em ${formatEvaluationDate(record.updatedAt, { day: '2-digit', month: '2-digit' })}` : ''} criteria={WEEKLY_EVALUATION_CRITERIA} record={record} />)}{ownWeekly.length === 0 ? <div className="rounded-2xl border border-white/10 bg-[#111722] p-8 text-center text-sm text-gray-400">Sua primeira avaliação semanal aparecerá aqui.</div> : null}</section>
     </div>;
   }
 
-  const readinessRows = getFinalSprintTournamentRanking({ students: sortedStudents, evaluations, selections });
   const selectionRows = readinessRows.filter((row) => row.eligibleForTournament);
   const learningOnlyRows = readinessRows.filter((row) => !row.eligibleForTournament);
   const topSixRows = selectionRows.filter((row) => row.inTopSix);
   const hasCutoffTie = selectionRows.some((row) => row.inCutoffTie);
-  const draftStudentIds = selectionDraft?.studentIds || selections.filter((item) => item.selectedForTournament === true).map((item) => String(item.studentId));
+  const draftStudentIds = Array.isArray(selectionDraft?.studentIds) ? [...new Set(selectionDraft.studentIds.filter((id) => typeof id === 'string'))] : selections.filter((item) => item.selectedForTournament === true).map((item) => String(item.studentId));
   const selectedCount = draftStudentIds.length;
   const publishedIds = selections.filter((item) => item.selectedForTournament === true).map((item) => String(item.studentId));
   const hasUnpublishedChanges = JSON.stringify([...draftStudentIds].sort()) !== JSON.stringify([...publishedIds].sort());
   const selectedNames = draftStudentIds.map((id) => sortedStudents.find((item) => String(item.id) === id) || { id, name: selectionsByStudent.get(id)?.studentName || 'Aluno indisponível' });
   const publishSelection = async () => {
+    if (saving.current || !selectionReady || evaluationsLoading || evaluationsError) return;
     if (learningOnlyRows.some((row) => draftStudentIds.includes(String(row.student.id)))) {
       setSelectionError('Retire os alunos do acompanhamento separado da lista em preparação antes de divulgar a convocação.');
       return;
     }
+    saving.current = true;
     setSavingKey('publish'); setSelectionError('');
     try {
       const saved = await onPublishSelection({ studentIds: draftStudentIds, revision: selectionDraft?.revision || 0 });
       if (saved === false) setSelectionError('A convocação não foi divulgada. Confira a mensagem do sistema e tente novamente.');
       else setReviewingPublication(false);
     } catch (error) { setSelectionError(error.message || 'Não foi possível divulgar. Tente novamente.'); }
-    finally { setSavingKey(''); }
+    finally { saving.current = false; setSavingKey(''); }
   };
   const handleExportReadinessReport = () => {
     const escapeCsvCell = (value) => `"${`${value ?? ''}`.replaceAll('"', '""').replaceAll('\r\n', '\n').replaceAll('\r', '\n')}"`;
@@ -268,6 +290,7 @@ export default function FinalSprintEvaluationsView({
   };
 
   return <div className="space-y-5">
+      <EvaluationLoadStatus loading={evaluationsLoading} error={evaluationsError} onRetry={onRetryEvaluations} />
     <section className="newgears-major-panel rounded-[28px] border border-amber-400/20 bg-gradient-to-br from-[#241d12] via-[#171922] to-[#111722] p-6 md:p-8"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-200/75">Ciclo de avaliação</p><h2 className="mt-3 text-3xl font-black text-white">Acompanhamento da reta final</h2><p className="mt-3 max-w-3xl text-sm leading-relaxed text-gray-300">Registre o que observou, dê uma orientação concreta e acompanhe a prontidão para o torneio.</p></div><div className="rounded-2xl border border-amber-300/20 bg-black/20 px-4 py-3"><p className="text-[9px] font-bold uppercase tracking-[0.15em] text-amber-100/60">Avaliações da semana</p><p className="mt-1 text-2xl font-black text-white">{completeWeeklyCount}/{weeklyStudents.length}</p><p className="mt-1 text-[10px] text-gray-400">{week.label}</p><p className="mt-1 text-[10px] text-amber-100/70">{week.isFriday ? (pendingWeeklyCount ? `Hoje é sexta: faltam ${pendingWeeklyCount}.` : 'Sexta-feira: equipe avaliada.') : `${pendingWeeklyCount} pendente(s) na semana selecionada.`}</p></div></div></section>
 
     {draftStorage.storageError ? <p role="alert" className="rounded-xl border border-rose-300/25 bg-rose-300/10 p-4 text-xs text-rose-100">Não foi possível guardar o rascunho neste navegador. Mantenha esta página aberta e finalize em Salvar avaliação para não perder o preenchimento.</p> : <p role="status" className="text-xs text-gray-400">Rascunhos são guardados automaticamente neste navegador. As notas só entram no acompanhamento após salvar a avaliação.</p>}
@@ -317,7 +340,7 @@ export default function FinalSprintEvaluationsView({
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="text-xs text-gray-400">{saveState === 'saved' ? <p role="status" className="font-bold text-emerald-200">Avaliação e feedback salvos.</p> : saveState === 'error' ? <p role="alert" className="font-bold text-red-200">Não foi possível salvar. Sua escrita foi mantida; tente novamente.</p> : saveState === 'editing' ? <p>Alterações ainda não salvas.</p> : <p>A nota e o feedback serão disponibilizados ao aluno ao salvar.</p>}</div>
-                <button type="submit" disabled={Boolean(savingKey) || score === null} className="inline-flex items-center gap-2 rounded-xl bg-violet-300 px-5 py-3 text-xs font-black text-black disabled:cursor-not-allowed disabled:opacity-40"><Save size={14} />{savingKey === key ? 'Salvando...' : 'Salvar avaliação dos relatórios'}</button>
+                <button type="submit" disabled={evaluationsLoading || Boolean(evaluationsError) || Boolean(savingKey) || score === null} className="inline-flex items-center gap-2 rounded-xl bg-violet-300 px-5 py-3 text-xs font-black text-black disabled:cursor-not-allowed disabled:opacity-40"><Save size={14} />{savingKey === key ? 'Salvando...' : 'Salvar avaliação dos relatórios'}</button>
               </div>
             </fieldset>
           </form>
@@ -327,7 +350,7 @@ export default function FinalSprintEvaluationsView({
     </div> : null}
 
     {section === 'weekly' ? <div className="space-y-4">
-      <EvaluationCalendar weeks={calendarWeeks} selectedWeekId={week.id} month={calendarMonth} onMonthChange={setCalendarMonth} onSelectWeek={changeWeek} />
+      <EvaluationCalendar weeks={calendarWeeks} selectedWeekId={week.id} month={calendarMonth} onMonthChange={setCalendarMonth} onSelectWeek={changeWeek} disabled={Boolean(savingKey)} />
       <section className="space-y-4 rounded-2xl border border-amber-300/20 bg-[#111722] p-4 md:p-5">
         <div><h3 className="text-lg font-black text-white">{week.isCurrent ? 'Avaliação desta semana' : 'Avaliação de semana anterior'}</h3><p className="mt-1 text-sm font-bold text-amber-100" aria-live="polite">{week.label} · {completeWeeklyCount}/{weeklyStudents.length} avaliados</p><p className="mt-2 text-xs leading-relaxed text-gray-400">Esqueceu de lançar uma nota? Escolha qualquer data da semana desejada. Você pode preencher ou corrigir as avaliações mesmo depois que a semana terminou.</p></div>
         <div className="flex flex-wrap items-end gap-2">
@@ -348,7 +371,7 @@ export default function FinalSprintEvaluationsView({
         const total = getRatingTotal(draft.ratings, WEEKLY_EVALUATION_CRITERIA);
         const isSaved = saved?.status === 'complete';
         const key = `weekly-${studentItem.id}`;
-        return <details key={`${id}__${week.id}`} id={`evaluation-weekly-${encodeURIComponent(`${id}__${week.id}`)}`} className="group rounded-2xl border border-white/10 bg-[#111722] open:border-amber-300/25"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4"><div className="min-w-0"><p className="truncate text-sm font-black text-white">{studentItem.name || 'Aluno'}</p><p className="mt-1 text-[10px] text-gray-500">{isSaved ? `Avaliado · ${saved.total ?? total}/25` : 'Pendente nesta semana'}</p></div><div className="flex items-center gap-2">{isSaved ? <Check size={16} className="text-emerald-300" /> : <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-1 text-[9px] font-black uppercase text-amber-100">Avaliar</span>}<ChevronDown size={15} className="text-gray-500 transition-transform group-open:rotate-180" /></div></summary><div className="space-y-4 border-t border-white/8 p-4"><DraftStatus draft={weeklyDrafts[`${id}__${week.id}`]} storageError={draftStorage.storageError} /><RatingPicker criteria={WEEKLY_EVALUATION_CRITERIA} ratings={draft.ratings} onChange={(criterion, score) => updateWeeklyDraft(id, { ratings: { [criterion]: score } })} /><FeedbackFields value={draft} onChange={(field, value) => updateWeeklyDraft(id, { [field]: value })} /><div className="flex items-center justify-between gap-3"><p className="text-xs font-black text-gray-300">Pontuação: {total === null ? '—' : `${total}/25`}</p><button type="button" disabled={savingKey === key || total === null || !draft.improvement.trim()} onClick={() => saveWeekly(studentItem)} className="inline-flex items-center gap-2 rounded-xl bg-amber-300 px-4 py-2.5 text-xs font-black text-black disabled:opacity-40"><Save size={13} />{savingKey === key ? 'Salvando...' : 'Salvar avaliação'}</button></div></div></details>;
+        return <details key={`${id}__${week.id}`} id={`evaluation-weekly-${encodeURIComponent(`${id}__${week.id}`)}`} className="group rounded-2xl border border-white/10 bg-[#111722] open:border-amber-300/25"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4"><div className="min-w-0"><p className="truncate text-sm font-black text-white">{studentItem.name || 'Aluno'}</p><p className="mt-1 text-[10px] text-gray-500">{isSaved ? `Avaliado · ${saved.total ?? total}/25` : 'Pendente nesta semana'}</p></div><div className="flex items-center gap-2">{isSaved ? <Check size={16} className="text-emerald-300" /> : <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-1 text-[9px] font-black uppercase text-amber-100">Avaliar</span>}<ChevronDown size={15} className="text-gray-500 transition-transform group-open:rotate-180" /></div></summary><div className="space-y-4 border-t border-white/8 p-4"><DraftStatus draft={weeklyDrafts[`${id}__${week.id}`]} storageError={draftStorage.storageError} /><RatingPicker criteria={WEEKLY_EVALUATION_CRITERIA} ratings={draft.ratings} onChange={(criterion, score) => updateWeeklyDraft(id, { ratings: { [criterion]: score } })} /><FeedbackFields value={draft} onChange={(field, value) => updateWeeklyDraft(id, { [field]: value })} /><div className="flex items-center justify-between gap-3"><p className="text-xs font-black text-gray-300">Pontuação: {total === null ? '—' : `${total}/25`}</p><button type="button" disabled={evaluationsLoading || Boolean(evaluationsError) || Boolean(savingKey) || total === null || !draft.improvement.trim()} onClick={() => saveWeekly(studentItem)} className="inline-flex items-center gap-2 rounded-xl bg-amber-300 px-4 py-2.5 text-xs font-black text-black disabled:opacity-40"><Save size={13} />{savingKey === key ? 'Salvando...' : 'Salvar avaliação'}</button></div></div></details>;
       })}</div>
     </div> : null}
 
@@ -373,7 +396,7 @@ export default function FinalSprintEvaluationsView({
           <FeedbackFields value={draft} onChange={(field, value) => updatePresentationDraft(id, { [field]: value })} />
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs font-black text-gray-300">Pontuação: {total === null ? '—' : `${total}/35`}</p>
-            <button type="button" disabled={savingKey === key || total === null || !draft.improvement.trim()} onClick={() => savePresentation(studentItem)} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-black text-black disabled:opacity-40"><Save size={13} />{savingKey === key ? 'Salvando...' : 'Salvar apresentação'}</button>
+            <button type="button" disabled={evaluationsLoading || Boolean(evaluationsError) || Boolean(savingKey) || total === null || !draft.improvement.trim()} onClick={() => savePresentation(studentItem)} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-black text-black disabled:opacity-40"><Save size={13} />{savingKey === key ? 'Salvando...' : 'Salvar apresentação'}</button>
           </div>
         </div>
       </details>;
@@ -382,11 +405,11 @@ export default function FinalSprintEvaluationsView({
     {section === 'selection' ? <div className="space-y-4">
       <section className="space-y-4 rounded-2xl border border-cyan-300/25 bg-[#111722] p-5">
         <div><h3 className="text-lg font-black text-white">Lista em preparação</h3><p className="mt-2 text-xs leading-relaxed text-gray-300">Marcar ou retirar um aluno altera somente esta lista. A convocação oficial, o pop-up e os fogos só mudam depois de divulgar.</p></div>
-        {selectionLoadingError ? <p role="alert" className="text-xs text-rose-200">Não foi possível carregar a lista em preparação. Recarregue a página para tentar novamente.</p> : !selectionReady ? <p role="status" className="text-xs text-gray-400">Carregando lista e convocação oficial…</p> : null}
-        <div className="flex flex-wrap gap-2">{selectedNames.map((person) => <span key={person.id} className="inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-cyan-300/10 py-2 pl-3 pr-2 text-xs text-cyan-100">{person.name}<button type="button" aria-label={`Retirar ${person.name} da lista em preparação`} disabled={Boolean(savingKey) || !selectionReady} onClick={() => saveSelection(person, { selectedForTournament: false })} className="rounded-full px-2 font-black disabled:opacity-30">×</button></span>)}{!selectedCount ? <p className="text-xs text-gray-400">Escolha os integrantes na coluna Torneio abaixo.</p> : null}</div>
+        {selectionLoadingError ? <div role="alert" className="flex flex-wrap items-center gap-3 text-xs text-rose-200"><p>Não foi possível carregar a lista em preparação.</p><button type="button" onClick={onRetrySelection} className="rounded-lg border border-rose-200/30 px-3 py-2 font-bold">Recarregar lista</button></div> : !selectionReady ? <p role="status" className="text-xs text-gray-400">Carregando lista e convocação oficial…</p> : null}
+        <div className="flex flex-wrap gap-2">{selectedNames.map((person) => <span key={person.id} className="inline-flex items-center gap-2 rounded-full border border-cyan-300/25 bg-cyan-300/10 py-2 pl-3 pr-2 text-xs text-cyan-100">{person.name}<button type="button" aria-label={`Retirar ${person.name} da lista em preparação`} disabled={evaluationsLoading || Boolean(evaluationsError) || Boolean(savingKey) || !selectionReady} onClick={() => saveSelection(person, { selectedForTournament: false })} className="rounded-full px-2 font-black disabled:opacity-30">×</button></span>)}{!selectedCount ? <p className="text-xs text-gray-400">Escolha os integrantes na coluna Torneio abaixo.</p> : null}</div>
         <p className="text-xs text-gray-400">Convocação oficial: {publishedIds.length ? publishedIds.map((id) => sortedStudents.find((item) => String(item.id) === id)?.name || selectionsByStudent.get(id)?.studentName || 'Aluno').join(', ') : 'ainda não divulgada'}.</p>
-        <div className="flex flex-wrap items-center gap-3"><button type="button" disabled={!selectionReady || Boolean(savingKey) || (!selectedCount && !publishedIds.length) || (!hasUnpublishedChanges && publishedIds.length > 0)} onClick={() => setReviewingPublication(true)} className="rounded-xl bg-cyan-300 px-5 py-3 text-xs font-black text-black disabled:cursor-not-allowed disabled:opacity-40">{selectedCount ? 'Divulgar convocação' : 'Retirar convocação oficial'}</button><span className="text-xs text-gray-400">{hasUnpublishedChanges ? 'Há alterações ainda não divulgadas.' : publishedIds.length ? 'A lista corresponde à convocação oficial.' : 'Nenhum aluno será avisado antes da divulgação.'}</span></div>
-        {reviewingPublication ? <div className="space-y-3 rounded-xl border border-amber-300/30 bg-amber-300/10 p-4"><h4 className="text-sm font-black text-amber-100">Revise antes de divulgar</h4><p className="text-xs text-gray-200">{selectedCount ? `Participantes: ${selectedNames.map((person) => person.name).join(', ')}.` : 'A lista está vazia. Confirmar retira a convocação oficial de todos os participantes.'}</p><p className="text-xs text-gray-300">Ao confirmar, esta lista passa a ser oficial. Os novos convocados recebem a mensagem ao entrar ou enquanto estiverem conectados.</p><div className="flex flex-wrap gap-2"><button type="button" disabled={Boolean(savingKey) || !selectionReady || (!selectedCount && !publishedIds.length)} onClick={publishSelection} className="rounded-lg bg-amber-300 px-4 py-2 text-xs font-black text-black disabled:opacity-40">{savingKey === 'publish' ? 'Salvando…' : selectedCount ? 'Confirmar divulgação' : 'Confirmar retirada'}</button><button type="button" disabled={Boolean(savingKey)} onClick={() => setReviewingPublication(false)} className="rounded-lg border border-white/15 px-4 py-2 text-xs text-gray-200">Continuar preparando</button></div></div> : null}
+        <div className="flex flex-wrap items-center gap-3"><button type="button" disabled={!selectionReady || evaluationsLoading || Boolean(evaluationsError) || Boolean(savingKey) || (!selectedCount && !publishedIds.length) || (!hasUnpublishedChanges && publishedIds.length > 0)} onClick={() => setReviewingPublication(true)} className="rounded-xl bg-cyan-300 px-5 py-3 text-xs font-black text-black disabled:cursor-not-allowed disabled:opacity-40">{selectedCount ? 'Divulgar convocação' : 'Retirar convocação oficial'}</button><span className="text-xs text-gray-400">{hasUnpublishedChanges ? 'Há alterações ainda não divulgadas.' : publishedIds.length ? 'A lista corresponde à convocação oficial.' : 'Nenhum aluno será avisado antes da divulgação.'}</span></div>
+        {reviewingPublication ? <div className="space-y-3 rounded-xl border border-amber-300/30 bg-amber-300/10 p-4"><h4 className="text-sm font-black text-amber-100">Revise antes de divulgar</h4><p className="text-xs text-gray-200">{selectedCount ? `Participantes: ${selectedNames.map((person) => person.name).join(', ')}.` : 'A lista está vazia. Confirmar retira a convocação oficial de todos os participantes.'}</p><p className="text-xs text-gray-300">Ao confirmar, esta lista passa a ser oficial. Os novos convocados recebem a mensagem ao entrar ou enquanto estiverem conectados.</p><div className="flex flex-wrap gap-2"><button type="button" disabled={evaluationsLoading || Boolean(evaluationsError) || Boolean(savingKey) || !selectionReady || (!selectedCount && !publishedIds.length)} onClick={publishSelection} className="rounded-lg bg-amber-300 px-4 py-2 text-xs font-black text-black disabled:opacity-40">{savingKey === 'publish' ? 'Salvando…' : selectedCount ? 'Confirmar divulgação' : 'Confirmar retirada'}</button><button type="button" disabled={Boolean(savingKey)} onClick={() => setReviewingPublication(false)} className="rounded-lg border border-white/15 px-4 py-2 text-xs text-gray-200">Continuar preparando</button></div></div> : null}
       </section>
       <section className="rounded-2xl border border-white/10 bg-[#111722] p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -437,7 +460,7 @@ export default function FinalSprintEvaluationsView({
               <td className="px-3 py-3"><p className="font-bold text-cyan-200">{formatRankPoints(row.positions.presentation)}</p><p className="mt-1 text-[10px] text-gray-400">Nota: {formatGrade(row.values.presentation)}{row.values.presentation !== null ? '/35' : ''}</p></td>
               <td className="px-3 py-3"><p className="font-bold text-cyan-200">{formatRankPoints(row.positions.xp)}</p><p className="mt-1 text-[10px] text-gray-400">{formatGrade(row.values.xp)} XP</p></td>
               <td className="px-3 py-3"><p className={`text-lg font-black ${isTopSix ? 'text-emerald-100' : 'text-white'}`}>{row.score} <span className="text-[10px] font-normal text-gray-400">pontos</span></p><p className="mt-1 text-[10px] text-gray-400">{FINAL_SPRINT_RANKING_CATEGORIES.map(({ id: categoryId }) => row.positions[categoryId]).join(' + ')}</p></td>
-              <td className="px-3 py-3"><button type="button" disabled={!selectionReady || Boolean(savingKey) || (!selected && selectedCount >= 6)} onClick={() => saveSelection(row.student, { selectedForTournament: !selected })} className={`rounded-lg border px-3 py-2 text-[10px] font-black disabled:cursor-not-allowed disabled:opacity-30 ${selected ? 'border-emerald-300/30 bg-emerald-300/15 text-emerald-100' : 'border-white/10 text-gray-300 hover:text-white'}`}>{selected ? 'Na lista' : 'Marcar'}</button></td>
+              <td className="px-3 py-3"><button type="button" disabled={!selectionReady || evaluationsLoading || Boolean(evaluationsError) || Boolean(savingKey) || (!selected && selectedCount >= 6)} onClick={() => saveSelection(row.student, { selectedForTournament: !selected })} className={`rounded-lg border px-3 py-2 text-[10px] font-black disabled:cursor-not-allowed disabled:opacity-30 ${selected ? 'border-emerald-300/30 bg-emerald-300/15 text-emerald-100' : 'border-white/10 text-gray-300 hover:text-white'}`}>{selected ? 'Na lista' : 'Marcar'}</button></td>
             </tr>;
           })}</tbody>
         </table>
@@ -459,6 +482,11 @@ export default function FinalSprintEvaluationsView({
       </section> : null}
     </div> : null}
   </div>;
+}
+
+function EvaluationLoadStatus({ loading, error, onRetry }) {
+  if (error) return <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-300/25 bg-rose-300/10 p-4 text-sm text-rose-100"><p>{error}</p><button type="button" onClick={onRetry} className="rounded-lg border border-rose-200/30 px-3 py-2 font-bold">Recarregar avaliações</button></div>;
+  return loading ? <p role="status" className="rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-4 text-sm text-cyan-100">Carregando avaliações da temporada…</p> : null;
 }
 
 function ReportEvaluationResultCard({ record }) {

@@ -10,6 +10,7 @@ import { resolveGearWorkshop } from '../utils/gearWorkshop';
 import { sanitizeGiroContext } from '../utils/giroAI';
 import useGiroKnowledge from '../hooks/useGiroKnowledge';
 import { equipTechnicianGiro, readTechnicianGiro, saveTechnicianGiro, technicianGiroState } from '../utils/gearTechnician';
+import { browserStorage } from '../utils/browserStorage';
 
 const readPending = (key) => {
   try {
@@ -23,7 +24,7 @@ export default function GearExperienceProvider({ children, db, user, student, te
   const knowledge = useGiroKnowledge({ db, seasonId, user, context: technicalContext });
   const studentId = user?.type === 'student' ? String(user.studentId || user.data?.id || student?.id || '') : '';
   const technicianMode = user?.type === 'admin';
-  const [technician, setTechnician] = useState(() => readTechnicianGiro(localStorage, user, seasonId));
+  const [technician, setTechnician] = useState(() => readTechnicianGiro(browserStorage, user, seasonId));
   const storageKey = `newgears_pending_gears_v1:${studentId}`;
   const [wallet, setWallet] = useState({ loading: Boolean(studentId), error: '', profile: gearProfile(studentId) });
   const [retryCount, setRetryCount] = useState(0);

@@ -35,9 +35,9 @@ export async function runAppStructureTests() {
   assert.match(source, /setDoc\(doc\(db,\s*"project",\s*PROJECT_MAIN_DOC_ID\),\s*projectData,\s*\{\s*merge:\s*true\s*\}\)/);
   assert.match(source, /setProjectSummary\(\{\s*\.\.\.projectData,\s*id:\s*PROJECT_MAIN_DOC_ID\s*\}\)/);
   assert.match(source, /import ActivityHistoryView from '\.\/views\/ActivityHistoryView'/);
-  assert.match(source, /import PublicTeamView from '\.\/views\/PublicTeamView'/);
-  assert.match(source, /import PublicTvModeView from '\.\/views\/PublicTvModeView'/);
-  assert.match(source, /import PublicShowcaseAdminView from '\.\/views\/PublicShowcaseAdminView'/);
+  assert.match(source, /import\('\.\/views\/PublicTeamView'\)/);
+  assert.match(source, /import\('\.\/views\/PublicTvModeView'\)/);
+  assert.match(source, /import\('\.\/views\/PublicShowcaseAdminView'\)/);
   assert.match(source, /collection\(db,\s*"activityLogs"\)/);
   assert.match(source, /saveNewContribution\('contact',\s*expertContactData,\s*draftId\)/);
   assert.match(await readFile(new URL('../src/utils/gearShop.js', import.meta.url), 'utf8'), /contact:\s*\{\s*collection:\s*'expertContacts'/);

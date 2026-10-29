@@ -50,17 +50,18 @@ export const normalizeEventTypeValue = (type) => {
 };
 
 export const parseAgendaDate = (dateString) => {
-  if (!dateString) return null;
+  if (typeof dateString !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return null;
   const [year, month, day] = dateString.split('-').map(Number);
   if (!year || !month || !day) return null;
-  return new Date(year, month - 1, day);
+  const parsed = new Date(year, month - 1, day);
+  return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day ? parsed : null;
 };
 
 export const getEventDateTime = (event) => {
   const eventDate = parseAgendaDate(event?.date);
   if (!eventDate) return new Date(0);
 
-  const safeTime = event?.time || '23:59';
+  const safeTime = typeof event?.time === 'string' ? event.time : '23:59';
   const [hours, minutes] = safeTime.split(':').map(Number);
   eventDate.setHours(Number.isFinite(hours) ? hours : 23, Number.isFinite(minutes) ? minutes : 59, 0, 0);
   return eventDate;
@@ -82,6 +83,7 @@ export const getAgendaDayOffset = (dateString, referenceStart) => {
 
 export const getAgendaRelativeLabel = (dateString, referenceStart) => {
   const dayOffset = getAgendaDayOffset(dateString, referenceStart);
+  if (!Number.isFinite(dayOffset)) return 'Data não definida';
 
   if (dayOffset === 0) return 'Hoje';
   if (dayOffset === 1) return 'Amanha';

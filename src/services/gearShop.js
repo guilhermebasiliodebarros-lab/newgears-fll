@@ -1,5 +1,5 @@
 import { doc, runTransaction } from 'firebase/firestore';
-import { contributionPath, DEFAULT_GEAR_EQUIPMENT, gearDay, gearDayIndex, gearItem, gearProfile, gearReceiptId, GEAR_CONTRIBUTIONS } from '../utils/gearShop.js';
+import { applyGearItem, contributionPath, DEFAULT_GEAR_EQUIPMENT, gearDay, gearDayIndex, gearItem, gearProfile, gearReceiptId, GEAR_CONTRIBUTIONS, isGearItemEquipped } from '../utils/gearShop.js';
 import { gearEvolution, growGearProfile } from '../utils/gearEvolution.js';
 
 const adapter = { doc, runTransaction };
@@ -73,7 +73,7 @@ export async function purchaseGearItem({ db, user, studentId, itemId, store = ad
     assertWallet(account);
     if (account.owned.includes(itemId)) throw new Error('Você já tem este item. Use Equipar para ativá-lo.');
     if (!Number.isSafeInteger(account.balance) || account.balance < item.price) throw new Error('Você ainda não tem Gears suficientes para este item.');
-    const equipped = { ...account.equipped, [item.category]: itemId };
+    const equipped = applyGearItem(account.equipped, itemId);
     const next = { ...account, balance: account.balance - item.price, spent: account.spent + item.price, refundableItems: [...account.refundableItems, itemId], owned: [...account.owned, itemId], equipped, updatedAt: new Date().toISOString(), lastAction: { type: 'purchase', id: itemId, coins: item.price } };
     transaction.set(accountRef, next);
     transaction.update(studentRef, { gearAppearance: equipped });
@@ -93,7 +93,7 @@ export async function equipGearItem({ db, user, studentId, itemId, store = adapt
     const account = gearProfile(studentId, snapshot.data());
     assertWallet(account);
     if (!account.owned.includes(itemId)) throw new Error('Desbloqueie este item antes de equipar.');
-    const equipped = { ...account.equipped, [item.category]: itemId };
+    const equipped = applyGearItem(account.equipped, itemId, { toggle: true });
     const next = { ...account, equipped, updatedAt: new Date().toISOString(), lastAction: { type: 'equip', id: itemId, coins: 0 } };
     transaction.set(accountRef, next);
     transaction.update(studentRef, { gearAppearance: equipped });
@@ -117,7 +117,7 @@ export async function refundGearItem({ db, user, studentId, itemId, store = adap
     const count = account.refundCount + 1;
     const receiptRef = store.doc(db, 'studentGearRefunds', `${studentId}__${count}`);
     if ((await transaction.get(receiptRef)).exists()) throw new Error('Este reembolso já foi registrado. Atualize a carteira.');
-    const equipped = { ...account.equipped, ...(account.equipped[item.category] === itemId ? { [item.category]: DEFAULT_GEAR_EQUIPMENT[item.category] } : {}) };
+    const equipped = isGearItemEquipped(account.equipped, itemId) ? applyGearItem(account.equipped, itemId, { remove: true }) : account.equipped;
     const updatedAt = new Date().toISOString();
     const next = { ...account, balance: account.balance + item.price, spent: account.spent - item.price, owned: account.owned.filter((id) => id !== itemId), refundableItems: account.refundableItems.filter((id) => id !== itemId), refundCount: count, equipped, updatedAt, lastAction: { type: 'refund', id: itemId, coins: item.price } };
     transaction.set(accountRef, next);

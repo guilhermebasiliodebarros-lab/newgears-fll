@@ -1,4 +1,5 @@
 import React from 'react';
+import ScreenRecovery from './ScreenRecovery';
 import { Crown, Maximize2, Minimize2, Radio, ScanSearch, Shield, Zap, RotateCcw, Flag } from 'lucide-react';
 
 export const SeasonModeControl = ({ value, onChange, disabled = false }) => (
@@ -203,11 +204,15 @@ export const WorkspaceTabs = ({ eyebrow, tabs, activeId, onChange }) => {
   );
 };
 
-export const WorkspaceScene = ({ sceneId, children }) => (
+export const WorkspaceScene = ({ sceneId, onHome, children }) => (
   <div key={sceneId} className="animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out">
-    {children}
+    <ScreenRecovery area={sceneId} onHome={onHome}>{children}</ScreenRecovery>
   </div>
 );
+
+// Keep the component type stable while running a panel's render function inside
+// React, so the surrounding screen boundary can still catch panel errors.
+export const WorkspaceContent = ({ render, options }) => render(options);
 
 export const WorkspacePanelToolbar = ({
   eyebrow,

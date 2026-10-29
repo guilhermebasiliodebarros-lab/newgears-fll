@@ -1,4 +1,4 @@
-import { GEAR_SHOP_ITEMS, gearItem, gearProfile } from './gearShop.js';
+import { applyGearItem, GEAR_SHOP_ITEMS, gearItem, gearProfile } from './gearShop.js';
 import { GEAR_LEVELS } from './gearEvolution.js';
 import { resolveGearWorkshop } from './gearWorkshop.js';
 
@@ -23,7 +23,7 @@ export function readTechnicianGiro(storage, user, seasonId) {
 export function equipTechnicianGiro(user, state, itemId) {
   const item = gearItem(itemId);
   if (!item) throw new Error('Escolha um item válido da loja.');
-  return technicianGiroState(user, { equipment: { ...state.account.equipped, [item.category]: item.id }, workshop: state.workshop });
+  return technicianGiroState(user, { equipment: applyGearItem(state.account.equipped, item.id, { toggle: true }), workshop: state.workshop });
 }
 
 export function saveTechnicianGiro(storage, user, seasonId, state) {

@@ -151,6 +151,10 @@ service cloud.firestore {
       allow update: if isGearOwner(studentId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['gearWorkshop'])
         && validGearWorkshop(request.resource.data.gearWorkshop);
+      // Appearance is only a mirror of the validated wallet, including multiple accessories.
+      allow update: if (isGearOwner(studentId) || isReportAdmin())
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['gearAppearance'])
+        && request.resource.data.gearAppearance == getAfter(/databases/$(database)/documents/studentGearProfiles/$(studentId)).data.equipped;
       match /gearWorkshopReactions/{actorId} {
         allow read: if isReportMember();
         allow create, update: if isGearOwner(actorId) && studentId != actorId
@@ -173,7 +177,7 @@ service cloud.firestore {
            'refundCount': previous.get('refundCount', 0),
            'refundableItems': previous.get('refundableItems', previous.get('spent', 0) > 0 ? previous.get('owned', []).removeAll(defaults) : []),
            'owned': defaults.concat(previous.get('owned', []).removeAll(defaults)),
-           'equipped': {'skin': equipped.get('skin', 'skin-nebula'),
+           'equipped': equipped.keys().hasAny(['accessories']) ? equipped : {'skin': equipped.get('skin', 'skin-nebula'),
              'frame': equipped.get('frame', 'frame-none'),
              'accessory': equipped.get('accessory', 'accessory-none'),
              'title': equipped.get('title', 'title-team'),
@@ -251,8 +255,28 @@ service cloud.firestore {
     }
     function gearEquipmentChange(data, before) {
       let category = gearCategory(data.lastAction.id);
-      return gearPrice(data.lastAction.id) >= 0 && data.equipped[category] == data.lastAction.id
-        && data.equipped.diff(before.equipped).affectedKeys().hasOnly([category]);
+      return gearPrice(data.lastAction.id) >= 0
+        && (category == 'accessory' ? gearAccessoryChange(data, before, false)
+          : data.equipped[category] == data.lastAction.id && data.equipped.diff(before.equipped).affectedKeys().hasOnly([category]));
+    }
+    function gearAccessories(equipped) {
+      return equipped.get('accessories', equipped.get('accessory', 'accessory-none') == 'accessory-none' ? [] : [equipped.accessory]);
+    }
+    function validGearAccessories(equipped, owned) {
+      let ids = gearAccessories(equipped);
+      return ids is list && ids.size() <= 10 && ids.toSet().size() == ids.size()
+        && ids.hasOnly(['accessory-antenna', 'accessory-visor', 'accessory-headphones', 'accessory-crown', 'accessory-goggles', 'accessory-helmet', 'accessory-medal', 'accessory-leaf', 'accessory-scientist', 'accessory-pilot'])
+        && owned.hasAll(ids)
+        && equipped.accessory == (ids.size() > 0 ? ids[ids.size() - 1] : 'accessory-none')
+        && (equipped.keys().hasAny(['accessories']) ? ids.size() >= 2 : ids.size() <= 1);
+    }
+    function gearAccessoryChange(data, before, remove) {
+      let ids = gearAccessories(before.equipped);
+      let id = data.lastAction.id;
+      let expected = id == 'accessory-none' ? []
+        : (remove || (data.lastAction.type == 'equip' && id in ids)) ? ids.removeAll([id]) : ids.concat([id]);
+      return gearAccessories(data.equipped) == expected
+        && data.equipped.diff(before.equipped).affectedKeys().hasOnly(['accessory', 'accessories']);
     }
     function gearSameDaily(data, before) {
       return data.rewardDay == before.rewardDay && data.rewardDayIndex == before.rewardDayIndex
@@ -356,8 +380,9 @@ service cloud.firestore {
       return before.refundCount < 3 && itemId in before.owned && itemId in before.refundableItems && price > 0
         && data.lastAction.coins == price && data.balance == before.balance + price && data.spent == before.spent - price && data.earned == before.earned
         && data.owned == before.owned.removeAll([itemId]) && data.refundableItems == before.refundableItems.removeAll([itemId])
-        && data.equipped[category] == (before.equipped[category] == itemId ? gearInitialEquipment()[category] : before.equipped[category])
-        && data.equipped.diff(before.equipped).affectedKeys().hasOnly([category])
+        && (category == 'accessory' ? gearAccessoryChange(data, before, true)
+          : data.equipped[category] == (before.equipped[category] == itemId ? gearInitialEquipment()[category] : before.equipped[category])
+            && data.equipped.diff(before.equipped).affectedKeys().hasOnly([category]))
         && gearSameDaily(data, before) && gearSameGrowth(data, before)
         && !exists(/databases/$(database)/documents/studentGearRefunds/$(receiptId))
         && receipt.studentId == studentId && receipt.itemId == itemId && receipt.number == data.refundCount && receipt.coins == price;
@@ -439,7 +464,8 @@ service cloud.firestore {
         && (data.lastAction.type == 'refund' ? data.refundCount == before.refundCount + 1 : data.refundCount == before.refundCount)
         && (data.lastAction.type in ['purchase', 'refund', 'purchase_reset'] || data.refundableItems == before.refundableItems)
         && data.owned is list && data.owned.size() <= 58
-        && data.equipped.keys().hasOnly(['skin', 'frame', 'accessory', 'title', 'room', 'bench', 'light', 'decor', 'animation'])
+        && data.equipped.keys().hasOnly(['skin', 'frame', 'accessory', 'accessories', 'title', 'room', 'bench', 'light', 'decor', 'animation'])
+        && validGearAccessories(data.equipped, data.owned)
         && data.owned.hasAll([data.equipped.skin, data.equipped.frame, data.equipped.accessory, data.equipped.title, data.equipped.room, data.equipped.bench, data.equipped.light, data.equipped.decor, data.equipped.animation])
         && gearCategory(data.equipped.skin) == 'skin' && gearCategory(data.equipped.frame) == 'frame' && gearCategory(data.equipped.accessory) == 'accessory' && gearCategory(data.equipped.title) == 'title' && gearCategory(data.equipped.room) == 'room' && gearCategory(data.equipped.bench) == 'bench' && gearCategory(data.equipped.light) == 'light' && gearCategory(data.equipped.decor) == 'decor' && gearCategory(data.equipped.animation) == 'animation'
         && data.lastAction.keys().hasOnly(['type', 'id', 'coins'])

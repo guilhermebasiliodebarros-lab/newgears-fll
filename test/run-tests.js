@@ -23,6 +23,11 @@ import { runGearGrantsTests } from './gearGrants.test.js';
 import { runTaskGearRewardsTests } from './taskGearRewards.test.js';
 import { runRobotTrajectoryTests } from './robotTrajectory.test.js';
 import { runTrajectoryAdvancedTests } from './trajectoryAdvanced.test.js';
+import { runWorkspaceReliabilityTests } from './workspaceReliability.test.js';
+import { runEvaluationReliabilityTests } from './evaluationReliability.test.js';
+import { runShopExperienceTests } from './shopExperience.test.js';
+import { runClientDiagnosticsTests } from './clientDiagnostics.test.js';
+import { runGearAccessoriesTests } from './gearAccessories.test.js';
 
 const suites = [
   { name: 'projectSummary', run: runProjectSummaryTests },
@@ -49,7 +54,12 @@ const suites = [
   { name: 'gearGrants', run: runGearGrantsTests },
   { name: 'taskGearRewards', run: runTaskGearRewardsTests },
   { name: 'robotTrajectory', run: runRobotTrajectoryTests },
-  { name: 'trajectoryAdvanced', run: runTrajectoryAdvancedTests }
+  { name: 'trajectoryAdvanced', run: runTrajectoryAdvancedTests },
+  { name: 'workspaceReliability', run: runWorkspaceReliabilityTests },
+  { name: 'evaluationReliability', run: runEvaluationReliabilityTests },
+  { name: 'shopExperience', run: runShopExperienceTests },
+  { name: 'clientDiagnostics', run: runClientDiagnosticsTests },
+  { name: 'gearAccessories', run: runGearAccessoriesTests }
 ];
 
 let failures = 0;

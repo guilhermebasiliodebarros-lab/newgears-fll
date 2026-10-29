@@ -1,5 +1,6 @@
 import { handleNvidiaGiroRequest } from '../giro/nvidia.js';
 import { handleReportsRequest } from '../reports/api.js';
+import { handleDiagnosticsRequest } from '../diagnostics/api.js';
 
 // Advanced-mode Pages entry for prebuilt uploads. Secrets are supplied at runtime.
 export default {
@@ -7,6 +8,7 @@ export default {
     const path = new URL(request.url).pathname;
     if (path === '/api/giro-ai' || path.startsWith('/api/giro-ai/')) return handleNvidiaGiroRequest(request, env);
     if (path === '/api/reports' || path.startsWith('/api/reports/')) return handleReportsRequest(request, env);
+    if (path === '/api/diagnostics') return handleDiagnosticsRequest(request, env);
     return env.ASSETS.fetch(request);
   },
 };

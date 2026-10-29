@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useState } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { AlertTriangle, BarChart3, Calendar, CheckCircle, ChevronDown, ChevronLeft, ChevronRight, Clock, ListTodo, Loader2, Pencil, Search, Tag, Target, Timer, Trash2, UserCheck, UserCircle, UserPlus, Users, UserX, X, Zap } from 'lucide-react';
 import { STATION_KEYS } from '../constants/workspace';
@@ -6,6 +6,7 @@ import { buildInitialKanbanTaskDraft, resolveTaskTagFromStation } from '../utils
 import { taskParticipants } from '../utils/teamProcesses';
 import TaskGearReward from '../components/TaskGearReward';
 import { GEAR_GRANT_MAX } from '../utils/gearGrants';
+import { normalizeKanbanTasks } from '../utils/workspaceRecords';
 
 export default function KanbanView({
   assignTaskToStudent,
@@ -21,13 +22,15 @@ export default function KanbanView({
   localTodayStr,
   moveTask,
   removeTask,
-  students,
+  students: rawStudents,
   takeoverTask,
-  tasks,
+  tasks: rawTasks,
   viewAsStudent,
   parseLocalDateValue,
   getLocalYYYYMMDD
 }) {
+      const tasks = useMemo(() => normalizeKanbanTasks(rawTasks), [rawTasks]);
+      const students = useMemo(() => (Array.isArray(rawStudents) ? rawStudents : []).filter((student) => student && typeof student.name === 'string'), [rawStudents]);
       const [searchTerm, setSearchTerm] = useState("");
       const [onlyBlocked, setOnlyBlocked] = useState(false);
       const deferredSearchTerm = useDeferredValue(searchTerm);
@@ -42,31 +45,20 @@ export default function KanbanView({
       const [showAllDone, setShowAllDone] = useState(false);
       const [editingTaskId, setEditingTaskId] = useState(null);
       const [editingTaskText, setEditingTaskText] = useState("");
+      const [editState, setEditState] = useState({ saving: false, error: '' });
+      const [creationState, setCreationState] = useState({ saving: false, error: '' });
       const [draggedOverCol, setDraggedOverCol] = useState(null);
       const [kanbanTaskDraft, setKanbanTaskDraft] = useState(() =>
           buildInitialKanbanTaskDraft(isAdmin ? null : viewAsStudent?.station, localTodayStr)
       );
 
-      useEffect(() => {
-          const nextTag = isAdmin ? 'geral' : resolveTaskTagFromStation(viewAsStudent?.station);
-
-          setKanbanTaskDraft((prev) => {
-              const nextDraft = {
-                  ...prev,
-                  dueDate: prev.dueDate || localTodayStr
-              };
-
-              if (!prev.text.trim()) {
-                  nextDraft.tag = nextTag;
-              }
-
-              if (prev.tag === nextDraft.tag && prev.dueDate === nextDraft.dueDate) {
-                  return prev;
-              }
-
-              return nextDraft;
-          });
-      }, [isAdmin, viewAsStudent?.station, localTodayStr]);
+      const defaultTag = isAdmin ? 'geral' : resolveTaskTagFromStation(viewAsStudent?.station);
+      const [draftTagSource, setDraftTagSource] = useState(defaultTag);
+      // The student's station can arrive after the saved login. Adjust only an empty draft.
+      if (draftTagSource !== defaultTag) {
+          setDraftTagSource(defaultTag);
+          if (!kanbanTaskDraft.text.trim()) setKanbanTaskDraft({ ...kanbanTaskDraft, tag: defaultTag });
+      }
 
       const updateKanbanTaskDraft = (field, value) => {
           setKanbanTaskDraft((prev) => ({ ...prev, [field]: value }));
@@ -78,21 +70,28 @@ export default function KanbanView({
 
       const handleAddTaskSubmit = async (event) => {
           event.preventDefault();
-
-          const created = await handleAddTask(kanbanTaskDraft);
-          if (!created) return;
-
-          setKanbanTaskDraft(buildInitialKanbanTaskDraft(isAdmin ? null : viewAsStudent?.station, localTodayStr));
+          if (creationState.saving || !kanbanTaskDraft.text.trim()) return;
+          setCreationState({ saving: true, error: '' });
+          try {
+              const created = await handleAddTask(kanbanTaskDraft);
+              if (created) setKanbanTaskDraft(buildInitialKanbanTaskDraft(isAdmin ? null : viewAsStudent?.station, localTodayStr));
+              setCreationState({ saving: false, error: '' });
+          } catch {
+              setCreationState({ saving: false, error: 'Não foi possível criar a tarefa. Confira a conexão e tente novamente.' });
+          }
       };
 
       const handleSaveTaskEdit = async (taskId) => {
-          if (!editingTaskText.trim()) return;
+          if (editState.saving || !editingTaskText.trim()) return;
+          setEditState({ saving: true, error: '' });
           try {
               await updateDoc(doc(db, "tasks", taskId), { text: editingTaskText });
               setEditingTaskId(null);
               setEditingTaskText("");
+              setEditState({ saving: false, error: '' });
           } catch (error) {
               console.error("Erro ao editar tarefa:", error);
+              setEditState({ saving: false, error: 'Não foi possível salvar a edição. Seu texto foi mantido; confira a conexão e tente novamente.' });
           }
       };
       
@@ -131,20 +130,6 @@ export default function KanbanView({
           { id: 'geral', label: 'Geral', color: 'bg-gray-500/10 text-gray-400 border-gray-500/20' }
       ];
 
-      const focusOptions = isAdmin
-          ? [
-              { id: 'all', label: 'Tudo', icon: <BarChart3 size={12} /> },
-              { id: 'priority', label: 'Prioritarias', icon: <Zap size={12} /> },
-              { id: 'overdue', label: 'Atrasadas', icon: <AlertTriangle size={12} /> },
-              { id: 'unassigned', label: 'Sem dono', icon: <Users size={12} /> }
-          ]
-          : [
-              { id: 'all', label: 'Tudo', icon: <BarChart3 size={12} /> },
-              { id: 'mine', label: 'Minhas', icon: <Target size={12} /> },
-              { id: 'priority', label: 'Prioritarias', icon: <Zap size={12} /> },
-              { id: 'overdue', label: 'Atrasadas', icon: <AlertTriangle size={12} /> }
-          ];
-
       const priorityRank = { urgente: 4, alta: 3, normal: 2, baixa: 1 };
 
       const getDeadlineStatus = (date) => {
@@ -167,6 +152,7 @@ export default function KanbanView({
           const start = new Date(createdAt);
           const end = new Date(completedAt);
           const diffMs = end.getTime() - start.getTime();
+          if (!Number.isFinite(diffMs)) return null;
           if (diffMs < 0) return '0 min';
           
           const diffMins = Math.floor(diffMs / 60000);
@@ -183,7 +169,8 @@ export default function KanbanView({
           if (!createdAt) return 'agora';
 
           const createdTime = new Date(createdAt).getTime();
-          const diffMs = Date.now() - createdTime;
+          if (!Number.isFinite(createdTime)) return 'data não registrada';
+          const diffMs = localTodayObj.getTime() - createdTime;
           const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
 
           if (diffMinutes < 60) return `${diffMinutes} min`;
@@ -220,16 +207,8 @@ export default function KanbanView({
           return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
       };
 
-      const ownerOptions = [
-          { value: 'all', label: 'Todos os responsaveis' },
-          { value: 'unassigned', label: 'Equipe (livre)' },
-          { value: 'Tecnico', label: 'Tecnico' },
-          ...[...students]
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map((student) => ({ value: student.name, label: student.name }))
-      ].filter((option, index, arr) => arr.findIndex((item) => item.value === option.value) === index);
-
-      const TaskCard = ({ t, showMoveRight, showMoveLeft, showDelete, cardIndex = 0, laneIndex = 0, columnIndex = 0 }) => {
+      // Keep element identity stable so typing and reward drafts survive board updates.
+      const renderTaskCard = ({ t, showMoveRight, showMoveLeft, showDelete, cardIndex = 0, laneIndex = 0, columnIndex = 0 }) => {
           const status = getDeadlineStatus(t.dueDate);
           const tagObj = KANBAN_TAGS.find(tag => tag.id === (t.tag || 'geral')) || KANBAN_TAGS[3];
           // So pisca se estiver atrasado e ainda nao foi concluida
@@ -271,10 +250,11 @@ export default function KanbanView({
 
           return (
               <div 
+                  key={t.id}
                   draggable
                   onDragStart={(e) => handleDragStart(e, t.id)}
                   onDragEnd={handleDragEnd}
-                  className={`bg-black/40 p-3 rounded-xl border flex flex-col gap-2 group cursor-grab active:cursor-grabbing ${cardEntranceClass} transition-[transform,box-shadow,border-color,background-color,opacity] duration-500 ease-out will-change-transform motion-reduce:animate-none motion-reduce:transition-none hover:-translate-y-1 hover:shadow-[0_16px_32px_rgba(15,23,42,0.28)] ${status && t.status !== 'done' ? status.border : 'border-white/5'} ${isPulsing ? 'animate-pulse hover:animate-none shadow-[0_0_15px_rgba(239,68,68,0.15)]' : 'hover:border-white/20'}`}
+                  className={`bg-black/40 p-3 rounded-xl border flex flex-col gap-2 group cursor-grab active:cursor-grabbing ${cardEntranceClass} transition-[transform,box-shadow,border-color,background-color,opacity] duration-500 ease-out will-change-transform motion-reduce:animate-none motion-reduce:transition-none hover:shadow-[0_16px_32px_rgba(15,23,42,0.28)] ${status && t.status !== 'done' ? status.border : 'border-white/5'} ${isPulsing ? 'animate-pulse hover:animate-none shadow-[0_0_15px_rgba(239,68,68,0.15)]' : 'hover:border-white/20'}`}
                   style={cardEntranceClass ? { animationDelay: `${entranceDelay}ms`, animationFillMode: 'both' } : undefined}
               >
                   <div className="flex justify-between items-start gap-2">
@@ -314,6 +294,8 @@ export default function KanbanView({
                   {editingTaskId === t.id ? (
                       <div className="flex flex-col gap-2 mt-1">
                           <textarea 
+                              aria-label="Editar texto da tarefa"
+                              disabled={editState.saving}
                               value={editingTaskText} 
                               onChange={(e) => setEditingTaskText(e.target.value)} 
                               className="w-full bg-black/60 border border-blue-500/50 rounded-lg p-2 text-xs text-white outline-none resize-none focus:border-blue-400" 
@@ -321,9 +303,10 @@ export default function KanbanView({
                               autoFocus 
                           />
                           <div className="flex justify-end gap-2">
-                              <button onClick={() => setEditingTaskId(null)} className="text-[10px] text-gray-400 hover:text-white px-2 py-1">Cancelar</button>
-                              <button onClick={() => handleSaveTaskEdit(t.id)} className="text-[10px] bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded font-bold">Salvar</button>
+                              <button disabled={editState.saving} onClick={() => setEditingTaskId(null)} className="text-[10px] text-gray-400 hover:text-white px-2 py-1">Cancelar</button>
+                              <button disabled={editState.saving || !editingTaskText.trim()} onClick={() => handleSaveTaskEdit(t.id)} className="text-[10px] bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded font-bold disabled:opacity-50">{editState.saving ? 'Salvando…' : 'Salvar'}</button>
                           </div>
+                          {editState.error && <p role="alert" className="text-xs text-rose-200">{editState.error}</p>}
                       </div>
                   ) : (
                       <>
@@ -362,11 +345,11 @@ export default function KanbanView({
                       <div className="flex gap-1 flex-wrap">
                           {t.status !== 'done' && (isAdmin || authors.includes(viewAsStudent?.name)) && <button onClick={() => onOpenBlock(t)} className="rounded px-2 py-1 text-[10px] font-bold text-amber-200 hover:bg-amber-300/10">{t.block && !t.block.resolvedAt ? 'Impedimento' : 'Bloquear'}</button>}
                           {isAdmin && editingTaskId !== t.id && (
-                              <button onClick={() => { setEditingTaskId(t.id); setEditingTaskText(t.text); }} className="text-blue-400 hover:bg-blue-500/20 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition-colors" title="Editar Tarefa">
+                              <button disabled={editState.saving} onClick={() => { setEditingTaskId(t.id); setEditingTaskText(t.text); setEditState({ saving: false, error: '' }); }} className="text-blue-400 hover:bg-blue-500/20 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition-colors" title="Editar Tarefa">
                                   <Pencil size={14}/> Editar
                               </button>
                           )}
-                          {viewAsStudent && (!t.author || !t.author.includes(viewAsStudent.name)) && t.status !== 'done' && (
+                          {viewAsStudent && !authors.includes(viewAsStudent.name) && t.status !== 'done' && (
                               <>
                                   <button onClick={() => joinTask(t.id)} className="text-green-500 hover:bg-green-500/20 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition-colors" title="Participar junto na tarefa">
                                       <UserPlus size={14}/> Participar
@@ -376,7 +359,7 @@ export default function KanbanView({
                                   </button>
                               </>
                           )}
-                          {viewAsStudent && t.author && t.author.includes(viewAsStudent.name) && t.status !== 'done' && (
+                          {viewAsStudent && authors.includes(viewAsStudent.name) && t.status !== 'done' && (
                               <button onClick={() => leaveTask(t.id)} className="text-red-500 hover:bg-red-500/20 px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition-colors" title="Sair desta tarefa">
                                   <UserX size={14}/> Sair
                               </button>
@@ -434,11 +417,11 @@ export default function KanbanView({
 
       const activeTasksCount = filteredTasks.filter((task) => task.status !== 'done').length;
       const overdueFilteredCount = filteredTasks.filter((task) => isTaskOverdue(task)).length;
-      const priorityFilteredCount = filteredTasks.filter((task) => isTaskPriority(task)).length;
       const doneLast7Days = tasks.filter((task) => {
           if (task.status !== 'done' || !task.completedAt) return false;
           const completedTime = new Date(task.completedAt).getTime();
-          return Date.now() - completedTime <= (7 * 24 * 60 * 60 * 1000);
+          const elapsed = localTodayObj.getTime() - completedTime;
+          return elapsed >= 0 && elapsed <= (7 * 24 * 60 * 60 * 1000);
       }).length;
 
       const boardMessage = overdueFilteredCount > 0
@@ -461,15 +444,9 @@ export default function KanbanView({
       const currentWeekStart = currentWeekData?.startDate || getLocalYYYYMMDD(defaultWeekStart);
       const currentWeekEnd = currentWeekData?.endDate || localTodayStr;
       const tasksThisWeek = tasks.filter((task) => {
-          const referenceDate = task.dueDate || getLocalYYYYMMDD(new Date(task.createdAt || Date.now()));
+          const referenceDate = task.dueDate || getLocalYYYYMMDD(new Date(task.createdAt || localTodayObj.getTime()));
           return referenceDate >= currentWeekStart && referenceDate <= currentWeekEnd;
       });
-      const completedThisWeek = tasksThisWeek.filter((task) => task.status === 'done').length;
-      const weeklyGoalProgress = tasksThisWeek.length > 0 ? Math.round((completedThisWeek / tasksThisWeek.length) * 100) : 0;
-      const avgThroughput = tasksThisWeek.length > 0 ? (completedThisWeek / Math.max(1, 7)).toFixed(1) : '0.0';
-      const weeklyUnassignedCount = tasksThisWeek.filter((task) => !task.author).length;
-      const weeklyReviewCount = tasksThisWeek.filter((task) => task.status === 'review').length;
-      const weeklyBacklogCount = tasksThisWeek.filter((task) => task.status !== 'done').length;
 
       const tacticalAlerts = [
           overdueFilteredCount > 0 && {
@@ -500,7 +477,7 @@ export default function KanbanView({
 
       const studentTasksThisWeek = !isAdmin && viewAsStudent?.name
           ? tasksThisWeek
-              .filter((task) => task.author && task.author.includes(viewAsStudent.name))
+              .filter((task) => taskParticipants(task, students).some((person) => person.id ? person.id === viewAsStudent.id : person.name === viewAsStudent.name))
               .sort((a, b) => {
                   if (a.status === 'done' && b.status !== 'done') return 1;
                   if (a.status !== 'done' && b.status === 'done') return -1;
@@ -760,6 +737,7 @@ export default function KanbanView({
 
                           {column.id === 'todo' && (
                               <form onSubmit={handleAddTaskSubmit} onKeyDown={stopKanbanInputKeyDown} className="mb-4 space-y-2">
+                                  <fieldset disabled={creationState.saving} className="min-w-0 space-y-2">
                                   {isAdmin && <label className="block text-[11px] font-bold text-amber-100">Gears por participante ao aprovar<input aria-label="Gears da nova tarefa" type="number" min="0" max={GEAR_GRANT_MAX} step="1" value={kanbanTaskDraft.gearReward} onChange={(event) => updateKanbanTaskDraft('gearReward', event.target.value)} className="mt-1 w-full rounded-lg border border-amber-200/20 bg-black/30 p-2 text-sm text-white" /><span className="mt-1 block font-normal text-slate-400">0 = sem recompensa. Cada participante recebe o valor uma única vez.</span></label>}
                                   <input
                                       name="taskText"
@@ -808,12 +786,14 @@ export default function KanbanView({
                                       />
                                       <button
                                           type="submit"
-                                          disabled={!kanbanTaskDraft.text.trim()}
+                                          disabled={creationState.saving || !kanbanTaskDraft.text.trim()}
                                           className="flex-1 bg-orange-600 hover:bg-orange-500 disabled:bg-orange-900/40 disabled:text-white/50 disabled:cursor-not-allowed text-white rounded-lg text-xs font-bold uppercase"
                                       >
-                                          Criar
+                                          {creationState.saving ? 'Criando…' : 'Criar'}
                                       </button>
                                   </div>
+                                  </fieldset>
+                                  {creationState.error && <p role="alert" className="text-xs text-rose-200">{creationState.error}</p>}
                               </form>
                           )}
 
@@ -842,16 +822,15 @@ export default function KanbanView({
 
                                       <div className="space-y-2">
                                           {lane.tasks.map((task, taskIndex) => (
-                                              <TaskCard
-                                                  key={task.id}
-                                                  t={task}
-                                                  showMoveLeft={column.moveLeft}
-                                                  showMoveRight={column.moveRight}
-                                                  showDelete={true}
-                                                  cardIndex={taskIndex}
-                                                  laneIndex={laneIndex}
-                                                  columnIndex={columnIndex}
-                                              />
+                                              renderTaskCard({
+                                                  t: task,
+                                                  showMoveLeft: column.moveLeft,
+                                                  showMoveRight: column.moveRight,
+                                                  showDelete: true,
+                                                  cardIndex: taskIndex,
+                                                  laneIndex,
+                                                  columnIndex,
+                                              })
                                           ))}
                                       </div>
                                   </div>

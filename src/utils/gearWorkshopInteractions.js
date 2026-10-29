@@ -1,4 +1,4 @@
-import { gearItem, resolveGearEquipment } from './gearShop.js';
+import { equippedGearAccessories, gearItem, resolveGearEquipment } from './gearShop.js';
 import { gearCollectionProgress } from './gearCollections.js';
 import { clampWorkshopPoint, resolveGearWorkshop } from './gearWorkshop.js';
 
@@ -43,7 +43,7 @@ export const buildWorkshopInteraction = ({ action, equipment, lightOn = true, co
   if (action === 'work') return [walk('bench', 'O Giro está indo até a bancada.'), work, home()];
   if (action === 'decorate') return [walk('decor', 'O Giro foi investigar sua decoração.'), decorate, home()];
   if (action === 'light') return [walk('light', 'O Giro está indo até o controle da luminária.'), step('switch', 'light', 1400, lightOn ? 'O Giro apagou a luminária.' : 'O Giro acendeu a luminária!', { lightOn: !lightOn, effect: 'signal' }), home()];
-  if (action === 'accessory') return [accessoryMoment(accessory)];
+  if (action === 'accessory') return equippedGearAccessories(selected).length ? equippedGearAccessories(selected).map((id) => accessoryMoment(gearItem(id).variant)) : [accessoryMoment(accessory)];
   if (action === 'tour') return [walk('bench'), work, walk('light'), step('switch', 'light', 1400, 'O Giro conferiu a iluminação da oficina.', { effect: 'signal' }), walk('decor'), decorate, home(), accessoryMoment(accessory)];
   if (action === 'collection') {
     if (!gearCollectionProgress(collectionId, owned).complete) return [];

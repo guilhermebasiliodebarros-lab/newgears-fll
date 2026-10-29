@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { giroAIDevPlugin } from './server/giro/vite.js'
+import { diagnosticsDevPlugin } from './server/diagnostics/vite.js'
 import { readFileSync } from 'node:fs'
 
 const voiceRuntime = JSON.parse(readFileSync(new URL('./node_modules/onnxruntime-web/package.json', import.meta.url), 'utf8'))
@@ -18,8 +19,8 @@ const voiceCDNPlugin = {
 }
 
 export default defineConfig({
-  plugins: [react(), giroAIDevPlugin(), voiceCDNPlugin],
-  define: { __GIRO_VOICE_WASM_URL__: JSON.stringify(voiceWasmURL) },
+  plugins: [react(), giroAIDevPlugin(), diagnosticsDevPlugin(), voiceCDNPlugin],
+  define: { __GIRO_VOICE_WASM_URL__: JSON.stringify(voiceWasmURL), 'import.meta.env.VITE_APP_BUILD': JSON.stringify(new Date().toISOString()) },
   optimizeDeps: { include: ['@huggingface/transformers'] },
   worker: { format: 'es' },
   base: "./",
@@ -27,6 +28,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (id.includes('vite/preload-helper') || id.includes('vite/modulepreload-polyfill')) return 'vendor-loader'
           if (!id.includes('node_modules')) return undefined
           if (id.includes('pdfjs-dist')) return 'vendor-pdf-reader'
           if (id.includes('pdf-lib') || id.includes('/pako/')) return 'vendor-pdf'
