@@ -43,18 +43,28 @@ service cloud.firestore {
     // Planejador de trajetos: equipe lê; autor e técnico editam na temporada ativa.
     function validRobotTrajectory(data) {
       let settings = data.settings;
-      return data.keys().hasOnly(['title', 'roundId', 'notes', 'settings', 'points', 'seasonId', 'ownerId', 'author', 'createdAt', 'updatedAt', 'updatedBy', 'revision'])
+      return data.keys().hasOnly(['title', 'roundId', 'exitNumber', 'notes', 'settings', 'points', 'obstacles', 'seasonId', 'ownerId', 'author', 'createdAt', 'updatedAt', 'updatedBy', 'revision'])
         && data.title is string && data.title.size() >= 3 && data.title.size() <= 100
         && data.roundId is string && data.roundId.size() <= 160
+        && data.get('exitNumber', 0) is int && data.get('exitNumber', 0) >= 0 && data.get('exitNumber', 0) <= 8
         && data.notes is string && data.notes.size() <= 2000
         && data.points is list && data.points.size() >= 2 && data.points.size() <= 80
-        && settings is map && settings.keys().hasOnly(['width', 'height', 'robotWidth', 'robotLength', 'heading', 'map'])
+        && data.get('obstacles', []) is list && data.get('obstacles', []).size() <= 40
+        && settings is map && settings.keys().hasOnly(['width', 'height', 'robotWidth', 'robotLength', 'heading', 'map', 'robotName', 'robotVersionId', 'gripperName', 'gripperId', 'gripperLength', 'gripperWidth', 'gripperX', 'gripperY'])
         && settings.width is number && settings.width >= 50 && settings.width <= 500
         && settings.height is number && settings.height >= 50 && settings.height <= 500
         && settings.robotWidth is number && settings.robotWidth >= 5 && settings.robotWidth <= 50
         && settings.robotLength is number && settings.robotLength >= 5 && settings.robotLength <= 50
         && settings.heading is number && settings.heading >= -180 && settings.heading <= 180
         && settings.map in ['grid', 'bioglow']
+        && settings.get('robotName', '') is string && settings.get('robotName', '').size() <= 100
+        && settings.get('gripperName', '') is string && settings.get('gripperName', '').size() <= 100
+        && settings.get('robotVersionId', '') is string && settings.get('robotVersionId', '').size() <= 160
+        && settings.get('gripperId', '') is string && settings.get('gripperId', '').size() <= 160
+        && settings.get('gripperLength', 0) is number && settings.get('gripperLength', 0) >= 0 && settings.get('gripperLength', 0) <= 80
+        && settings.get('gripperWidth', 0) is number && settings.get('gripperWidth', 0) >= 0 && settings.get('gripperWidth', 0) <= 80
+        && settings.get('gripperX', 0) is number && settings.get('gripperX', 0) >= -100 && settings.get('gripperX', 0) <= 100
+        && settings.get('gripperY', 0) is number && settings.get('gripperY', 0) >= -100 && settings.get('gripperY', 0) <= 100
         && data.seasonId is string && data.ownerId is string && data.author is string && data.author.size() <= 120
         && data.createdAt is string && data.updatedAt is string && data.updatedBy == request.auth.uid
         && data.revision is int && data.revision >= 1;
@@ -220,7 +230,21 @@ service cloud.firestore {
               'animation-default': 0,
               'animation-stage': 50,
               'animation-gears': 60,
-              'animation-trophy': 80}.get(id, -1);
+              'animation-trophy': 80,
+              'skin-bioglow': 55,
+              'skin-ocean': 50,
+              'skin-plasma': 95,
+              'skin-graphite': 80,
+              'frame-leaves': 50,
+              'frame-circuit': 75,
+              'accessory-leaf': 40,
+              'accessory-scientist': 60,
+              'accessory-pilot': 55,
+              'title-bioglow': 35,
+              'title-navigator': 45,
+              'title-explorer': 30,
+              'animation-fireflies': 85,
+              'animation-rocket': 100}.get(id, -1);
     }
     function gearCategory(id) {
       return id.matches('skin-.*') ? 'skin' : id.matches('frame-.*') ? 'frame' : id.matches('accessory-.*') ? 'accessory' : id.matches('title-.*') ? 'title' : id.matches('room-.*') ? 'room' : id.matches('bench-.*') ? 'bench' : id.matches('light-.*') ? 'light' : id.matches('decor-.*') ? 'decor' : id.matches('animation-.*') ? 'animation' : '';
@@ -410,11 +434,11 @@ service cloud.firestore {
         && data.earned is int && data.spent is int && data.spent >= 0 && data.earned == data.balance + data.spent
         && data.growthPoints is int && data.growthPoints >= 0 && data.contributionCounts is map
         && data.refundCount is int && data.refundCount >= 0 && data.refundCount <= 3
-        && data.refundableItems is list && data.refundableItems.size() <= 44 && data.refundableItems.toSet().size() == data.refundableItems.size()
+        && data.refundableItems is list && data.refundableItems.size() <= 58 && data.refundableItems.toSet().size() == data.refundableItems.size()
         && data.owned.hasAll(data.refundableItems)
         && (data.lastAction.type == 'refund' ? data.refundCount == before.refundCount + 1 : data.refundCount == before.refundCount)
         && (data.lastAction.type in ['purchase', 'refund', 'purchase_reset'] || data.refundableItems == before.refundableItems)
-        && data.owned is list && data.owned.size() <= 44
+        && data.owned is list && data.owned.size() <= 58
         && data.equipped.keys().hasOnly(['skin', 'frame', 'accessory', 'title', 'room', 'bench', 'light', 'decor', 'animation'])
         && data.owned.hasAll([data.equipped.skin, data.equipped.frame, data.equipped.accessory, data.equipped.title, data.equipped.room, data.equipped.bench, data.equipped.light, data.equipped.decor, data.equipped.animation])
         && gearCategory(data.equipped.skin) == 'skin' && gearCategory(data.equipped.frame) == 'frame' && gearCategory(data.equipped.accessory) == 'accessory' && gearCategory(data.equipped.title) == 'title' && gearCategory(data.equipped.room) == 'room' && gearCategory(data.equipped.bench) == 'bench' && gearCategory(data.equipped.light) == 'light' && gearCategory(data.equipped.decor) == 'decor' && gearCategory(data.equipped.animation) == 'animation'

@@ -22,6 +22,7 @@ import { runGearRefundsTests } from './gearRefunds.test.js';
 import { runGearGrantsTests } from './gearGrants.test.js';
 import { runTaskGearRewardsTests } from './taskGearRewards.test.js';
 import { runRobotTrajectoryTests } from './robotTrajectory.test.js';
+import { runTrajectoryAdvancedTests } from './trajectoryAdvanced.test.js';
 
 const suites = [
   { name: 'projectSummary', run: runProjectSummaryTests },
@@ -47,7 +48,8 @@ const suites = [
   { name: 'gearRefunds', run: runGearRefundsTests },
   { name: 'gearGrants', run: runGearGrantsTests },
   { name: 'taskGearRewards', run: runTaskGearRewardsTests },
-  { name: 'robotTrajectory', run: runRobotTrajectoryTests }
+  { name: 'robotTrajectory', run: runRobotTrajectoryTests },
+  { name: 'trajectoryAdvanced', run: runTrajectoryAdvancedTests }
 ];
 
 let failures = 0;

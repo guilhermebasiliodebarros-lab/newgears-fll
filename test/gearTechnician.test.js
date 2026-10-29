@@ -14,7 +14,7 @@ export async function runGearTechnicianTests() {
   const initial = readTechnicianGiro(storage, user, 'current');
   assert.equal(initial.account.owned.length, GEAR_SHOP_ITEMS.length);
   assert.equal(gearEvolution(initial.account).level, 5);
-  assert.equal(completedGearCollections(initial.account.owned).length, 5);
+  assert.equal(completedGearCollections(initial.account.owned).length, 6);
   assert.equal(Number.isFinite(initial.account.balance), true, 'Only the display uses infinity; stored balances stay finite');
   const equipped = equipTechnicianGiro(user, initial, 'animation-trophy');
   assert.equal(equipped.account.equipped.animation, 'animation-trophy');

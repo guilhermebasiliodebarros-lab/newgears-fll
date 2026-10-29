@@ -1,6 +1,7 @@
 import { GEAR_SHOP_COLLECTIONS, gearCollectionItems } from './gearShop.js';
 
 export const GEAR_COLLECTION_REWARDS = {
+  bioglow: { name: 'Expedição iluminada', description: 'O Giro explora a oficina e celebra suas descobertas com sinais e órbitas de luz.' },
   mechanic: { name: 'Invenção na forja', description: 'O Giro monta uma invenção, liga a projeção da bancada e celebra entre faíscas.' },
   space: { name: 'Missão gravidade zero', description: 'O Giro investiga a decoração e faz uma descoberta entre órbitas e estrelas.' },
   neon: { name: 'Show de circuitos', description: 'A oficina vira um palco com equalizador, luzes e os passos do Giro.' },

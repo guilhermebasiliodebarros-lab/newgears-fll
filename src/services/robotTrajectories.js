@@ -31,6 +31,12 @@ export async function saveTrajectory({ db, user, seasonId, id, expectedRevision 
       const round = (await transaction.get(store.doc(db, 'rounds', clean.roundId))).data();
       if (!round || (round.seasonId && round.seasonId !== seasonId)) throw new Error('A saída vinculada foi removida ou pertence a outra temporada.');
     }
+    for (const [collectionName, referenceId] of [['robotVersions', clean.settings.robotVersionId], ['attachments', clean.settings.gripperId]]) {
+      if (referenceId) {
+        const linked = (await transaction.get(store.doc(db, collectionName, referenceId))).data();
+        if (!linked || (linked.seasonId && linked.seasonId !== seasonId)) throw new Error('A versão do robô ou a garra vinculada foi removida ou pertence a outra temporada.');
+      }
+    }
     const now = new Date().toISOString();
     const record = { ...clean, seasonId, ownerId: previous?.ownerId || trajectoryActorId(user), author: previous?.author || String(user.name || user.data?.name || 'Integrante').slice(0, 120), createdAt: previous?.createdAt || now, updatedAt: now, updatedBy: trajectoryActorId(user), revision: (previous?.revision || 0) + 1 };
     transaction.set(ref, record);

@@ -17,6 +17,9 @@ export const workshopResidentPosition = (target, layout) => {
 
 const accessoryMoment = (accessory) => {
   const variants = {
+    leaf: ['discover', 'signal', 'O brotinho do Giro brilhou com uma nova descoberta!'],
+    scientist: ['scan', 'scan', 'Hipótese anotada! O Giro está conferindo seu experimento.'],
+    pilot: ['salute', 'racing', 'Viseira pronta. O Giro conferiu a próxima saída!'],
     headphones: ['stage', 'music', 'O Giro ajustou os fones e entrou no ritmo!'],
     visor: ['scan', 'scan', 'O visor está verificando os circuitos da oficina.'],
     goggles: ['scan', 'scan', 'Os óculos de inventor revelaram uma nova ideia.'],
@@ -45,6 +48,7 @@ export const buildWorkshopInteraction = ({ action, equipment, lightOn = true, co
   if (action === 'collection') {
     if (!gearCollectionProgress(collectionId, owned).complete) return [];
     const performances = {
+      bioglow: [walk('decor'), step('discover', 'decor', 2600, 'Uma expedição Bioglow cheia de descobertas!', { effect: 'signal' }), walk('center'), step('celebrate', 'center', 2200, 'As ideias da equipe estão iluminando a oficina!', { effect: 'orbit' }), home()],
       mechanic: [walk('bench'), { ...work, duration: 3000 }, step('celebrate', 'bench', 1800, 'Invenção pronta! A forja está cheia de ideias.', { effect: 'forge' }), home()],
       space: [walk('decor'), step('discover', 'decor', 3200, 'Missão gravidade zero: o Giro descobriu uma nova órbita!', { effect: 'orbit' }), step('hop', 'decor', 1800, 'Um salto entre as estrelas!', { effect: 'orbit' }), home()],
       neon: [walk('center'), step('stage', 'center', 4200, 'Show de circuitos! O Giro dança com o equalizador da oficina.', { effect: 'music' }), home()],

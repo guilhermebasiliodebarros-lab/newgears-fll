@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import { analyzeTrajectory, importTrajectory, newTrajectory, rectanglesOverlap, trajectoryCollisions, trajectoryCommands, trajectoryDocument, trajectoryOutside, trajectoryPath, trajectoryPoint, trajectoryPose, trajectoryTimeline, validateTrajectory } from '../src/utils/robotTrajectory.js';
+import { saveTrajectory } from '../src/services/robotTrajectories.js';
+import { memoryStore } from './teamProcesses.test.js';
+
+export async function runTrajectoryAdvancedTests() {
+  const point = (id, x, y, extra = {}) => trajectoryPoint({ id, x, y, action: 'none', note: '', ...extra });
+  const reverse = { ...newTrajectory(), title: 'Retorno de ré', points: [point('a', 100, 50), point('b', 40, 50, { direction: 'reverse' })] };
+  const reverseCommands = trajectoryCommands(reverse);
+  assert.equal(reverseCommands.length, 1, 'Moving backwards along the body axis does not turn the robot around');
+  assert.equal(reverseCommands[0].direction, 'reverse'); assert.match(reverseCommands[0].label, /Recuar 60/);
+  const reverseTime = trajectoryTimeline(reverse);
+  const reverseHalf = trajectoryPose(reverse, reverseTime, reverseTime[0].end / 2);
+  assert.equal(reverseHalf.x, 70); assert.equal(reverseHalf.heading, 0);
+  const curve = { ...newTrajectory(), title: 'Curva com controle', points: [point('a', 20, 20), point('b', 80, 80, { path: 'curve', controlX: 80, controlY: 20 })] };
+  const curveTime = trajectoryTimeline(curve); assert.equal(curveTime[0].type, 'curve');
+  const curveHalf = trajectoryPose(curve, curveTime, curveTime[0].end / 2);
+  assert.equal(curveHalf.x, 65); assert.equal(curveHalf.y, 35); assert.equal(curveHalf.heading, 45);
+  assert.equal(trajectoryPose(curve, curveTime, curveTime[0].end).heading, 90);
+  assert.ok(curveTime[0].distance > Math.hypot(60, 60) && curveTime[0].distance < 120);
+  assert.match(trajectoryPath(curve), /Q 80 100 80 40/);
+  const reverseCurve = { ...curve, settings: { ...curve.settings, heading: 180 }, points: [curve.points[0], { ...curve.points[1], direction: 'reverse' }] };
+  const reverseCurveTime = trajectoryTimeline(reverseCurve);
+  assert.equal(reverseCurveTime[0].type, 'curve');
+  assert.equal(trajectoryPose(reverseCurve, reverseCurveTime, reverseCurveTime[0].end / 2).heading, 225);
+  assert.deepEqual(importTrajectory(trajectoryDocument(reverseCurve)), reverseCurve);
+
+  const rect = (x, y, width, height, heading = 0) => ({ x, y, width, height, heading });
+  assert.equal(rectanglesOverlap(rect(0, 0, 10, 2, 45), rect(3, 3, 1, 1)), true);
+  assert.equal(rectanglesOverlap(rect(0, 0, 10, 2, 45), rect(3, -3, 1, 1)), false, 'Rotated rectangles do not use a broad circle as collision shape');
+  assert.equal(rectanglesOverlap(rect(0, 0, 10, 10), rect(10, 0, 10, 10)), true, 'Boundary contact is reported');
+  const obstacle = { id: 'model', name: 'Modelo 1', type: 'mission', ...rect(70, 50, 4, 4) };
+  const gripperPlan = { ...reverse, settings: { ...reverse.settings, gripperName: 'Coletora', gripperLength: 12, gripperWidth: 10, gripperX: 16, gripperY: 0 }, obstacles: [obstacle] };
+  const contacts = trajectoryCollisions(gripperPlan, { x: 50, y: 50, heading: 0 });
+  assert.deepEqual(contacts.map((item) => item.part), ['gripper'], 'A protruding attachment can collide even when the chassis is clear');
+  assert.equal(trajectoryCollisions({ ...gripperPlan, obstacles: [{ ...obstacle, x: 50, y: 70 }] }, { x: 50, y: 50, heading: 90 })[0].part, 'gripper');
+  assert.equal(trajectoryOutside(gripperPlan, { x: 225, y: 50, heading: 0 }), true);
+  const crossing = { ...reverse, obstacles: [{ ...obstacle, x: 70, y: 50 }] };
+  assert.equal(trajectoryCollisions(crossing, { x: 100, y: 50, heading: 0 }).length, 0);
+  assert.equal(trajectoryCollisions(crossing, { x: 40, y: 50, heading: 0 }).length, 0);
+  assert.equal(analyzeTrajectory(crossing).contacts[0].name, 'Modelo 1', 'Full-path analysis catches contacts between the endpoints');
+  assert.ok(analyzeTrajectory(curve).samples >= 180);
+  for (const change of [{ obstacles: Array(41).fill(obstacle) }, { obstacles: [obstacle, obstacle] }, { obstacles: [{ ...obstacle, x: -1 }] }, { obstacles: [{ ...obstacle, width: 0 }] }, { settings: { ...reverse.settings, gripperLength: 10, gripperWidth: 0 } }, { settings: { ...reverse.settings, gripperX: 101 } }, { points: [curve.points[0], { ...curve.points[1], controlX: 241 }] }, { points: [curve.points[0], { ...curve.points[1], direction: 'sideways' }] }]) assert.throws(() => validateTrajectory({ ...reverse, ...change }));
+  const legacy = { ...reverse, points: reverse.points.map(({ id, x, y, action, note }) => ({ id, x, y, action, note })) };
+  delete legacy.obstacles;
+  legacy.settings = { width: 240, height: 120, robotWidth: 16, robotLength: 20, heading: 0, map: 'bioglow' };
+  const migrated = validateTrajectory(legacy); assert.equal(migrated.points[1].direction, 'forward'); assert.deepEqual(migrated.obstacles, []); assert.equal(migrated.settings.gripperLength, 0);
+  const memory = memoryStore({ 'settings/workspace_season': { activeSeasonId: 'current' }, 'robotVersions/v1': { name: 'Base', seasonId: 'current' }, 'attachments/g1': { name: 'Coletora' } });
+  const context = { db: {}, user: { type: 'student', uid: 'ana', name: 'Ana' }, seasonId: 'current', id: 'advanced', store: memory.store, plan: { ...gripperPlan, settings: { ...gripperPlan.settings, robotVersionId: 'v1', gripperId: 'g1' } } };
+  const saved = await saveTrajectory(context);
+  assert.deepEqual(validateTrajectory(saved.record), validateTrajectory(context.plan));
+  await assert.rejects(saveTrajectory({ ...context, id: 'missing', plan: { ...context.plan, settings: { ...context.plan.settings, gripperId: 'removed' } } }), /removida/);
+  assert.equal(memory.records.has('robotTrajectories/missing'), false);
+}

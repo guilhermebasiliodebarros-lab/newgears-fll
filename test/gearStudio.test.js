@@ -23,13 +23,14 @@ export async function runGearStudioTests() {
   assert.equal(resolveGearEquipment({ room: 'skin-lava', animation: 'missing' }).room, 'room-base');
   assert.equal(resolveGearEquipment({ animation: 'room-orbit' }).animation, 'animation-default');
   assert.equal(gearCollectionItems('missing').length, 0);
-  assert.equal(GEAR_SHOP_COLLECTIONS.length, 5);
+  assert.equal(GEAR_SHOP_COLLECTIONS.length, 6);
   for (const collection of GEAR_SHOP_COLLECTIONS) {
     assert.equal(gearCollectionItems(collection.id).length, Object.keys(DEFAULT_GEAR_EQUIPMENT).length);
     for (const [category, id] of Object.entries(collection.equipment)) assert.equal(gearItem(id)?.category, category, `${collection.name} contains a valid ${category}`);
     const owned = [...Object.values(DEFAULT_GEAR_EQUIPMENT), ...Object.values(collection.equipment)];
     const before = structuredClone(owned);
     const progress = gearCollectionProgress(collection.id, owned);
+    assert.ok(progress.reward?.name && progress.reward?.description, 'Every collection needs a usable workshop reward and card');
     assert.equal(progress.complete, true, 'Past purchases unlock the collection without a claim or an extra purchase');
     assert.equal(progress.count, 9);
     assert.equal(completedGearCollections(owned).some((entry) => entry.id === collection.id), true);

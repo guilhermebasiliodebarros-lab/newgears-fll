@@ -1,14 +1,23 @@
 import assert from 'node:assert/strict';
-import { importTrajectory, newTrajectory, normalizeHeading, trajectoryCommands, trajectoryDocument, trajectoryOutside, trajectoryPose, trajectoryTimeline, validateTrajectory } from '../src/utils/robotTrajectory.js';
+import { importTrajectory, newTrajectory, normalizeHeading, trajectoriesForExit, trajectoryCommands, trajectoryDocument, trajectoryExitNumber, trajectoryOutside, trajectoryPose, trajectoryTimeline, validateTrajectory } from '../src/utils/robotTrajectory.js';
 import { canEditTrajectory, deleteTrajectory, saveTrajectory, subscribeTrajectories } from '../src/services/robotTrajectories.js';
 import { memoryStore } from './teamProcesses.test.js';
 import { SEASON_COLLECTIONS } from '../src/utils/teamProcesses.js';
 
 export async function runRobotTrajectoryTests() {
-  const plan = { ...newTrajectory(), title: 'Coleta e retorno', points: [{ id: 'p1', x: 20, y: 20, action: 'open', note: '' }, { id: 'p2', x: 80, y: 20, action: 'close', note: 'Coletar' }, { id: 'p3', x: 80, y: 80, action: 'raise', note: '' }, { id: 'p4', x: 20, y: 80, action: 'lower', note: '' }] };
+  const plan = validateTrajectory({ ...newTrajectory(), title: 'Coleta e retorno', points: [{ id: 'p1', x: 20, y: 20, action: 'open', note: '' }, { id: 'p2', x: 80, y: 20, action: 'close', note: 'Coletar' }, { id: 'p3', x: 80, y: 80, action: 'raise', note: '' }, { id: 'p4', x: 20, y: 80, action: 'lower', note: '' }] });
   assert.deepEqual(importTrajectory(trajectoryDocument(plan)), plan);
   assert.ok(SEASON_COLLECTIONS.includes('robotTrajectories'), 'Plans are included in season archives and backups');
   assert.deepEqual(validateTrajectory(newTrajectory(), { allowEmpty: true }), newTrajectory());
+  const legacy = { ...plan }; delete legacy.exitNumber;
+  assert.equal(importTrajectory(JSON.stringify({ format: 'newgears-trajectory', version: 1, plan: legacy })).exitNumber, 0, 'Older exported plans remain importable');
+  for (const number of [-1, 9, 1.5, '1']) assert.throws(() => validateTrajectory({ ...plan, exitNumber: number }));
+  const rounds = [{ id: 'r1', name: 'Saída 1' }, { id: 'r2', name: 'Saida 2' }];
+  assert.equal(trajectoryExitNumber({ title: 'Saída 3 — coleta' }), 3);
+  assert.equal(trajectoryExitNumber({ title: 'Saída 10' }), 0);
+  assert.equal(trajectoryExitNumber({ title: 'Plano', roundId: 'r2' }, rounds), 2);
+  assert.equal(trajectoryExitNumber({ exitNumber: 4, roundId: 'r1' }, rounds), 4);
+  assert.deepEqual(trajectoriesForExit([{ id: 'old', exitNumber: 1, updatedAt: '1' }, { id: 'new', roundId: 'r1', updatedAt: '2' }, { id: 'other', exitNumber: 2, updatedAt: '3' }], 1, rounds).map((record) => record.id), ['new', 'old']);
   for (const changes of [{ title: '' }, { title: 'a'.repeat(101) }, { notes: 'a'.repeat(2001) }, { roundId: '../other' }, { points: [] }, { points: Array(81).fill(plan.points[0]) }, { points: [plan.points[0], plan.points[0]] }, { points: [{ ...plan.points[0], x: -1 }, plan.points[1]] }, { points: [{ ...plan.points[0], y: 121 }, plan.points[1]] }, { points: [{ ...plan.points[0], x: NaN }, plan.points[1]] }, { points: [{ ...plan.points[0], action: 'execute' }, plan.points[1]] }, { settings: { ...plan.settings, width: 0 } }, { settings: { ...plan.settings, height: Infinity } }, { settings: { ...plan.settings, heading: 181 } }, { settings: { ...plan.settings, map: 'https://external' } }]) assert.throws(() => validateTrajectory({ ...plan, ...changes }));
   for (const invalid of ['not json', JSON.stringify({ format: 'other', version: 1, plan }), 'a'.repeat(100001)]) assert.throws(() => importTrajectory(invalid));
   const commands = trajectoryCommands(plan);
@@ -34,6 +43,10 @@ export async function runRobotTrajectoryTests() {
   assert.equal(trajectoryOutside(plan, halfway), false);
   assert.equal(trajectoryOutside(plan, { x: 3, y: 30, heading: 0 }), true);
   assert.equal(trajectoryOutside(plan, { x: 12, y: 12, heading: 45 }), true, 'Rotated footprint, not only robot center, must fit in the field');
+  const sideways = { ...plan, exitNumber: 1, settings: { ...plan.settings, heading: 90 } };
+  assert.equal(trajectoryPose(sideways, trajectoryTimeline(sideways), 0).heading, 90, 'The robot retains its chosen orientation at the start');
+  assert.equal(trajectoryCommands(sideways).find((command) => command.type === 'turn').angle, -90, 'Initial side orientation is considered before moving forward');
+  assert.equal(importTrajectory(trajectoryDocument(sideways)).settings.heading, 90);
 
   const memory = memoryStore({ 'settings/workspace_season': { activeSeasonId: 'current' }, 'rounds/r1': { name: 'Saída 1', seasonId: 'current' } });
   const user = { type: 'student', uid: 'ana', name: 'Ana' };
@@ -53,6 +66,11 @@ export async function runRobotTrajectoryTests() {
   const failingStore = { ...memory.store, runTransaction: (_db, callback) => memory.store.runTransaction(_db, async (transaction) => { await callback(transaction); throw new Error('Interrupted'); }) };
   await assert.rejects(saveTrajectory({ ...context, id: 'failed-route', store: failingStore }), /Interrupted/);
   assert.deepEqual([...memory.records], original);
+  await saveTrajectory({ ...context, id: 'exit-one', plan: sideways });
+  await saveTrajectory({ ...context, id: 'exit-two', plan: { ...plan, exitNumber: 2, settings: { ...plan.settings, heading: -90 } } });
+  assert.equal(memory.records.get('robotTrajectories/exit-one').settings.heading, 90);
+  assert.equal(memory.records.get('robotTrajectories/exit-two').settings.heading, -90);
+  assert.equal(trajectoriesForExit([...memory.records.values()].filter((record) => record.points), 1).length, 1, 'Each numbered exit retains its own plan and orientation');
   const admin = { type: 'admin', uid: 'coach', name: 'Coach' };
   await saveTrajectory({ ...context, user: admin, expectedRevision: 2, plan: { ...plan, notes: 'Ajustado pelo técnico' } });
   assert.equal(memory.records.get('robotTrajectories/route-1').ownerId, 'ana', 'Technician editing preserves authorship');

@@ -86,7 +86,7 @@ export default function GearShopView() {
     {tab === 'team' && <GearWorkshopGallery />}
 
     {tab === 'collections' && <section>
-      <div className="giro-studio-heading"><div><p className="giro-studio-eyebrow"><Layers3 size={14} />Coleções temáticas</p><h2>Cinco mundos. Cinco novas interações.</h2><p>Complete os conjuntos para liberar os bônus do Giro. As peças já compradas contam e você pode continuar misturando seus estilos favoritos.</p></div></div>
+      <div className="giro-studio-heading"><div><p className="giro-studio-eyebrow"><Layers3 size={14} />Coleções temáticas</p><h2>Coleções para explorar com o Giro.</h2><p>Complete os conjuntos para liberar os bônus do Giro. As peças já compradas contam e você pode continuar misturando seus estilos favoritos.</p></div></div>
       <div className="giro-collections">{GEAR_SHOP_COLLECTIONS.map((entry) => <GearCollectionCard key={entry.id} collection={entry} owned={account.owned} ready={!loading && !walletError} onExplore={(itemId) => { setOnlyOwned(false); browse('all', entry.id); setPreviewId(itemId || gearCollectionItems(entry.id)[0].id); }} />)}</div>
     </section>}
 

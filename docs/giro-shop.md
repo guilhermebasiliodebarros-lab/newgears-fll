@@ -10,7 +10,7 @@ Balões abertos manualmente permanecem até serem fechados. Os avisos automátic
 
 ## Loja
 
-A aba **Loja New Gears** reúne 44 itens entre cores do Giro, molduras de avatar, acessórios, títulos, cenários, bancadas, iluminação, decoração e comemorações. As áreas **Minha oficina**, **Loja** e **Coleções** separam o espaço do aluno, o catálogo e os conjuntos temáticos. No perfil técnico, o saldo aparece como **∞** e todos os itens, níveis e interações ficam liberados para teste. O técnico pode equipar acessórios, cenários e animações e organizar a oficina; essas escolhas ficam salvas somente neste navegador, separadas por técnico e temporada. O modo de teste não altera carteiras, compras ou personalizações de alunos. Para alunos, compras e trocas continuam usando o saldo do próprio perfil.
+A aba **Loja New Gears** reúne 58 itens entre cores do Giro, molduras de avatar, acessórios, títulos, cenários, bancadas, iluminação, decoração e comemorações. As áreas **Minha oficina**, **Loja** e **Coleções** separam o espaço do aluno, o catálogo e os conjuntos temáticos. No perfil técnico, o saldo aparece como **∞** e todos os itens, níveis e interações ficam liberados para teste. O técnico pode equipar acessórios, cenários e animações e organizar a oficina; essas escolhas ficam salvas somente neste navegador, separadas por técnico e temporada. O modo de teste não altera carteiras, compras ou personalizações de alunos. Para alunos, compras e trocas continuam usando o saldo do próprio perfil.
 
 Cada aluno começa com **40 Gears de boas-vindas**. Essa quantidade é inicializada uma única vez na carteira, junto da primeira recompensa, compra ou troca. Gears são moedas virtuais e não têm valor monetário. Comprar itens não altera XP, notas ou posições no ranking.
 
@@ -51,6 +51,12 @@ Integre as regras atualizadas de `studentGearProfiles`, `studentGearRefunds` e `
 Selecione um item para experimentá-lo no provador. **Comprar e usar** desconta o preço mostrado e equipa o item na mesma transação. Itens da coleção podem ser equipados novamente sem custo. O saldo insuficiente desativa a compra; erros mantêm o saldo e o visual anteriores. Molduras e títulos aparecem no perfil, e cores e acessórios acompanham o Giro.
 
 ### Oficina e coleções
+
+A expansão Bioglow acrescenta **14 itens**, totalizando **58**: quatro cores (Núcleo Bioglow, Maré de ideias, Energia plasma e Engrenagem grafite), duas molduras (Círculo da floresta e Circuito de precisão), três acessórios (Broto de descobertas, Giro cientista e Boné de piloto), três títulos e duas comemorações. As molduras também aparecem no avatar; os acessórios têm desenho e reação próprios. A coleção **Expedição Bioglow** combina peças novas e existentes e libera **Expedição iluminada** ao completar o conjunto. Agora são seis coleções.
+
+**Festa dos vaga-lumes** custa 85 Gears e mostra folhas e luzes verdes; **Decolagem de ideias** custa 100 e mostra um foguete subindo entre estrelas. Ambas podem ser experimentadas sem compra, respeitam a preferência por movimento reduzido e terminam automaticamente. Os itens seguem o mesmo fluxo de compra, equipamento e reembolso, com o limite existente de três reembolsos. Nenhuma moeda, compra antiga ou XP foi alterado pela expansão.
+
+As regras do Firestore precisam acompanhar o catálogo: `gearPrice` inclui os 14 IDs e os limites de inventário/itens reembolsáveis passaram para 58. Os novos itens ficam disponíveis no teste ilimitado do técnico. Verificações automatizadas e de navegador usam dados simulados ou o perfil técnico local; nenhuma compra de aluno real foi feita.
 
 Todo aluno recebe gratuitamente a Garagem New Gears, bancada inicial, luz da garagem, placa da equipe e comemoração original. A leitura de carteiras antigas completa os novos espaços de equipamento sem alterar saldo, compras, XP ou pontos de evolução. A configuração é gravada na próxima operação normal da carteira; não é necessário executar uma migração de moedas.
 

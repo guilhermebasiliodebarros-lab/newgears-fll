@@ -970,7 +970,7 @@ const RobotRoundsPanel = ({
         </>
       ) : robotSubTab === 'trajectory' ? (
         <React.Suspense fallback={<p role="status" className="p-6 text-sm text-slate-300">Carregando simulador de trajetos…</p>}>
-          <RobotTrajectoryPlanner rounds={rounds} readonly={readonly} />
+          <RobotTrajectoryPlanner rounds={rounds} attachments={attachments} robotVersions={robotVersions} readonly={readonly} />
         </React.Suspense>
       ) : robotSubTab === 'exits' ? (
         <>
