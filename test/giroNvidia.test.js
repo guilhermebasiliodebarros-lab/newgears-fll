@@ -80,6 +80,20 @@ export async function runGiroNvidiaTests() {
   assert.equal((await publicStatus.json()).ready, false, 'Published routes require configured authentication');
   const documents = { 'settings/workspace_season': { activeSeasonId: 'current' }, 'giroKnowledgeMaterials/guide': { title: 'Título verificado', status: 'published', seasonId: 'current', sourceURL: 'https://example.com/original', pages: [{ number: 2, text: reference.excerpt }] } };
   const records = { getRecord: async (_env, path) => structuredClone(documents[path] || null) };
+  for (const role of ['admin', 'student']) {
+    let authenticated = false;
+    let usageOwner = '';
+    const memberRequest = new Request('https://team.example/api/giro-ai/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://team.example', Authorization: 'Bearer fixture-member-token' }, body: JSON.stringify(valid) });
+    const memberResult = await handleNvidiaGiroRequest(memberRequest, prodEnv, {
+      ...runtime, records,
+      authenticate: async () => { authenticated = true; return { uid: `member-${role}`, role, studentId: role === 'student' ? 'a' : '' }; },
+      reserveUsage: async (_env, member, local) => { assert.equal(local, false); usageOwner = member.uid; },
+    });
+    assert.equal(memberResult.status, 200, `Authenticated ${role} must be able to use the published Giro API`);
+    assert.equal(authenticated, true, 'Production never uses the local development exemption');
+    assert.equal(usageOwner, `member-${role}`, 'Usage belongs to the caller, not the technician');
+    assert.match((await memberResult.json()).text, /solução/);
+  }
   const resolved = await resolveNvidiaReferences(validateNvidiaConversation(valid), prodEnv, false, records);
   assert.equal(resolved[0].title, 'Título verificado'); assert.equal(resolved[0].url, 'https://example.com/original');
   documents['giroKnowledgeMaterials/guide'].status = 'draft';

@@ -1,5 +1,27 @@
 # Ativar o Giro IA para os alunos
 
+## Situação verificada em 30/10/2026
+
+Antes da publicação desta etapa, a rota pública do Giro já retornava JSON, mas informava `configured: false` e `ready: false`; a rota de sessão retornava 503 por configuração incompleta do servidor. Os testes da API confirmam acesso tanto para `student` quanto para `admin`: não existe bloqueio exclusivo ao técnico.
+
+Após autorização do login Cloudflare, `NVIDIA_API_KEY` foi cadastrada como **Secret** no ambiente **Production** de `newgears-fll`, preservando as variáveis existentes. Nenhuma chave foi incluída no frontend ou neste documento. Esse cadastro ainda não ativa o segredo nas versões já publicadas: é necessária uma nova publicação após completar a configuração.
+
+O técnico solicitou explicitamente acesso aberto à IA para manter os logins atuais. Foi implementada a opção de servidor **`GIRO_AI_ACCESS=public`**. Nesse modo, o Giro não exige Firebase Authentication nem credenciais administrativas do Firebase. A chave NVIDIA continua somente no servidor. As APIs de relatórios, avaliações e outros dados privados mantêm suas próprias permissões.
+
+O modo aberto usa um cookie `HttpOnly`, `Secure`, `SameSite=Strict` somente para identificar o navegador no controle de uso. Há limites por minuto de 8 perguntas por navegador, 60 por rede e 120 por instância do Worker, com até 6 chamadas simultâneas por instância. São limites em memória, de melhor esforço: não constituem uma cota global entre instâncias ou após reinicializações. Não há gravações de uso no Firestore nem serviços adicionais pagos.
+
+O endpoint público não lê documentos do Firestore com privilégios administrativos. Os trechos que o navegador enviar são identificados como **Trecho enviado**, sem alegar verificação oficial pelo servidor. A validação das mensagens/fotos, o controle de origem e o prazo de resposta continuam ativos.
+
+Após autorização explícita do técnico, `GIRO_AI_ACCESS=public` foi configurada no runtime **Production**, preservando os segredos e as variáveis existentes, e o build revisado foi publicado em 30/10/2026. Deployment: [f5b926e1.newgears-fll.pages.dev](https://f5b926e1.newgears-fll.pages.dev). O domínio principal [newgears-fll.pages.dev](https://newgears-fll.pages.dev/) já entrega essa versão.
+
+A [API publicada](https://newgears-fll.pages.dev/api/giro-ai/status) confirmou HTTP 200, `configured: true`, `ready: true`, `authentication: "public"`. Uma conversa real em navegador novo, sem login anterior, recebeu HTTP 200 e a resposta “Giro pronto para a equipe.”. Os arquivos JavaScript entregues pelo domínio principal foram comparados por hash com o build local validado e são idênticos. A chave NVIDIA foi conferida como ausente dos arquivos do build.
+
+Passaram os 37 conjuntos de testes, lint, build e os testes de navegador das ações manuais, retomada do modo tranquilo, movimento reduzido, fechamento do balão após rolagem e conversa sem token Firebase. Dançar, pular, girar e comemorar explicitamente não ficam mais bloqueados pelo modo tranquilo; as preferências de movimento reduzido do dispositivo continuam respeitadas e são informadas no balão.
+
+Nenhuma conta ou documento do Firestore foi migrado ou alterado. A publicação foi feita diretamente da pasta `dist`, sem commit ou push. As alterações de código permanecem no projeto local e precisam ser incluídas em uma futura revisão do Git para que novos builds automáticos preservem esse comportamento. Após a publicação, recarregar as abas já abertas para carregar a nova versão.
+
+Sem essa opção, o modo padrão continua autenticado e exige as credenciais Firebase do servidor (`FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`) e os vínculos abaixo. `VITE_FIREBASE_AUTH_ENABLED` permanece desativada para preservar os acessos legados; não ativá-la antes de validar as contas.
+
 ## Diagnóstico de newgears-fll.pages.dev em 29/10/2026
 
 A consulta pública a `https://newgears-fll.pages.dev/api/giro-ai/status` retornou HTTP 200 com HTML da página inicial, em vez de JSON da API. A rota `/api/reports/session` retornou HTTP 503 com a mensagem de configuração incompleta. Nenhuma chave foi consultada ou exposta.

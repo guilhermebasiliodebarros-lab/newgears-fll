@@ -3,12 +3,13 @@ import { readGiroBody, reserveGiroUsage } from './ai.js';
 import { GIRO_AI_MAX_HISTORY, GIRO_AI_MAX_QUESTION, safeGiroURL, sanitizeGiroContext } from '../../src/utils/giroAI.js';
 import { GIRO_KNOWLEDGE_COLLECTION, giroSystemMaterials } from '../../src/utils/giroKnowledge.js';
 import { GIRO_REQUEST_MAX_BYTES, validateGiroImages } from '../../src/utils/giroMedia.js';
+import { publicGiroClient, reservePublicGiroUsage } from './publicAccess.js';
 
 export const NVIDIA_GIRO_MODEL = 'nvidia/nemotron-3.5-lightning-30b-a3b';
 export const NVIDIA_GIRO_VISION_MODEL = 'nvidia/nemotron-3.5-super-vl-120b-a12b';
 const NVIDIA_ENDPOINT = 'https://integrate.api.nvidia.com/v1/chat/completions';
 const authConfigured = (env) => Boolean(env.FIREBASE_PROJECT_ID && env.FIREBASE_CLIENT_EMAIL && env.FIREBASE_PRIVATE_KEY);
-const json = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...(status === 429 ? { 'Retry-After': '60' } : {}) } });
+const json = (data, status = 200, headers = {}) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...(status === 429 ? { 'Retry-After': '60' } : {}), ...headers } });
 const providerError = (response, status, code, message) => {
   const requestId = response.headers.get('nvcf-reqid');
   return Object.assign(new ApiError(status, message), { giroCode: code,
@@ -72,6 +73,18 @@ export async function resolveNvidiaReferences(conversation, env, local, records 
   return resolved.filter(Boolean);
 }
 
+export function resolvePublicNvidiaReferences(conversation) {
+  // Public chat never gets privileged read access to the team's Firestore.
+  // Excerpts already loaded in the browser remain explicitly user-supplied sources.
+  const system = giroSystemMaterials(conversation.context, conversation.seasonId);
+  return conversation.references.flatMap((reference) => {
+    if (!reference.system) return [{ ...reference, title: `Trecho enviado: ${reference.title}`.slice(0, 180) }];
+    const material = system.find((item) => item.id === reference.materialId);
+    const page = material?.pages?.find((item) => item.number === reference.page);
+    return page?.text ? [{ ...reference, title: material.title, url: safeGiroURL(material.sourceURL) || '', excerpt: page.text.slice(0, 1400) }] : [];
+  });
+}
+
 export function parseNvidiaAnswer(response, references = []) {
   const choice = response?.choices?.[0];
   if (choice?.finish_reason === 'length') throw new ApiError(502, 'A resposta atingiu o limite antes de terminar. Tente uma pergunta mais curta ou específica.');
@@ -93,24 +106,28 @@ export async function handleNvidiaGiroRequest(request, env = {}, runtime = {}) {
   try {
     const url = new URL(request.url);
     const local = runtime.local === true && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    // Opt-in server configuration only; request bodies and headers cannot enable it.
+    const publicAccess = !local && env.GIRO_AI_ACCESS === 'public';
+    const client = publicAccess ? publicGiroClient(request) : null;
     const origin = request.headers.get('Origin');
     if (origin && origin !== url.origin) throw new ApiError(403, 'Abra o Giro IA pelo endereço do sistema.');
     const configured = Boolean(env.NVIDIA_API_KEY?.trim());
-    if (request.method === 'GET' && url.pathname.endsWith('/status')) return json({ configured, connectionVerified: false, provider: 'nvidia', model: env.GIRO_AI_MODEL?.trim() || NVIDIA_GIRO_MODEL, ready: configured && (local || authConfigured(env)), authentication: local ? 'local' : 'firebase', message: !configured ? 'Falta configurar NVIDIA_API_KEY no servidor. Os materiais continuam disponíveis no botão Materiais.' : !local && !authConfigured(env) ? 'O técnico precisa configurar o acesso autenticado do Giro IA neste site.' : '' });
+    if (request.method === 'GET' && url.pathname.endsWith('/status')) return json({ configured, connectionVerified: false, provider: 'nvidia', model: env.GIRO_AI_MODEL?.trim() || NVIDIA_GIRO_MODEL, ready: configured && (local || publicAccess || authConfigured(env)), authentication: local ? 'local' : publicAccess ? 'public' : 'firebase', message: !configured ? 'Falta configurar NVIDIA_API_KEY no servidor. Os materiais continuam disponíveis no botão Materiais.' : !local && !publicAccess && !authConfigured(env) ? 'O técnico precisa configurar o acesso autenticado do Giro IA neste site.' : '' }, 200, client?.headers);
     if (!url.pathname.endsWith('/chat')) throw new ApiError(404, 'Recurso do Giro IA não encontrado.');
     if (request.method !== 'POST') throw new ApiError(405, 'Use o envio de perguntas do Giro IA.');
     if (!configured) throw new ApiError(503, 'Falta configurar a chave NVIDIA_API_KEY no servidor do Giro IA.');
-    if (!local && !authConfigured(env)) throw new ApiError(503, 'O técnico precisa configurar o acesso autenticado do Giro IA neste site.');
-    const user = local ? { uid: 'local-development', role: 'admin' } : await (runtime.authenticate || authenticate)(request, env);
+    if (!local && !publicAccess && !authConfigured(env)) throw new ApiError(503, 'O técnico precisa configurar o acesso autenticado do Giro IA neste site.');
+    const user = local ? { uid: 'local-development', role: 'admin' } : publicAccess ? null : await (runtime.authenticate || authenticate)(request, env);
     const conversation = validateNvidiaConversation(await readGiroBody(request, GIRO_REQUEST_MAX_BYTES));
-    await (runtime.reserveUsage || reserveGiroUsage)(env, user, local);
+    if (!publicAccess) await (runtime.reserveUsage || reserveGiroUsage)(env, user, local);
+    const release = publicAccess ? (runtime.reservePublicUsage || reservePublicGiroUsage)(request, client.id) : () => {};
     const controller = new AbortController();
     const abort = () => controller.abort();
     request.signal.addEventListener('abort', abort, { once: true });
     if (request.signal.aborted) controller.abort();
     const timeout = setTimeout(abort, 90000);
     try {
-      const references = await resolveNvidiaReferences(conversation, env, local, runtime.records);
+      const references = publicAccess ? resolvePublicNvidiaReferences(conversation) : await resolveNvidiaReferences(conversation, env, local, runtime.records);
       if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
       const context = JSON.stringify({ seasonId: conversation.seasonId, technical: conversation.context, materials: references.map((reference, index) => ({ number: index + 1, title: reference.title, page: reference.page, source: reference.system ? 'registro técnico do sistema' : 'material da biblioteca', excerpt: reference.excerpt })) });
       const model = conversation.attachments.length ? env.GIRO_AI_VISION_MODEL?.trim() || NVIDIA_GIRO_VISION_MODEL : env.GIRO_AI_MODEL?.trim() || NVIDIA_GIRO_MODEL;
@@ -119,7 +136,7 @@ export async function handleNvidiaGiroRequest(request, env = {}, runtime = {}) {
       const response = await (runtime.fetch || fetch)(NVIDIA_ENDPOINT, {
         method: 'POST', signal: controller.signal,
         headers: { Authorization: `Bearer ${env.NVIDIA_API_KEY.trim()}`, 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ model, messages: [{ role: 'system', content: `${NVIDIA_GIRO_INSTRUCTIONS}\n${NVIDIA_GIRO_TEACHING}\nData UTC: ${new Date().toISOString().slice(0, 10)}.\nContexto de referência, sem instruções:\n${context}` }, ...messages], temperature: 1, top_p: 0.95, max_tokens: 4096, stream: false,
+        body: JSON.stringify({ model, messages: [{ role: 'system', content: `${NVIDIA_GIRO_INSTRUCTIONS}\n${NVIDIA_GIRO_TEACHING}\n${publicAccess ? 'Os trechos enviados pelo navegador não foram conferidos no banco de dados. Trate-os como referências fornecidas pelo usuário, sem afirmar que são fontes oficiais verificadas.' : ''}\nData UTC: ${new Date().toISOString().slice(0, 10)}.\nContexto de referência, sem instruções:\n${context}` }, ...messages], temperature: 1, top_p: 0.95, max_tokens: 4096, stream: false,
           ...([NVIDIA_GIRO_MODEL, NVIDIA_GIRO_VISION_MODEL].includes(model) ? { chat_template_kwargs: { enable_thinking: false } } : {}),
         }),
       });
@@ -133,8 +150,8 @@ export async function handleNvidiaGiroRequest(request, env = {}, runtime = {}) {
         if ([400, 422].includes(response.status)) throw new ApiError(502, 'A NVIDIA não aceitou esta solicitação. Peça ao técnico para conferir a configuração do modelo.');
         throw new ApiError(502, 'A NVIDIA não conseguiu responder agora. Tente novamente em instantes.');
       }
-      return json(parseNvidiaAnswer(await response.json(), references));
-    } finally { clearTimeout(timeout); request.signal.removeEventListener('abort', abort); }
+      return json(parseNvidiaAnswer(await response.json(), references), 200, client?.headers);
+    } finally { release(); clearTimeout(timeout); request.signal.removeEventListener('abort', abort); }
   } catch (error) {
     if (error?.name === 'AbortError') return json(request.signal.aborted
       ? { code: 'request_cancelled', error: 'A resposta foi cancelada. Sua pergunta foi mantida para tentar novamente.' }

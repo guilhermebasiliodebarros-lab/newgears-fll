@@ -6,15 +6,15 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 async function run() {
   const browser = await chromium.launch({ channel: process.env.GIRO_BROWSER_CHANNEL || (process.platform === 'win32' ? 'msedge' : undefined), headless: true });
   try {
-    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'no-preference' });
     await context.route('https://**/*', (route) => route.abort());
-    await context.route('**/src/firebase.js*', (route) => route.fulfill({ contentType: 'application/javascript', body: 'export const db={};export const auth={currentUser:null};export const FIREBASE_AUTH_ENABLED=false;' }));
+    await context.route('**/src/firebase.js*', (route) => route.fulfill({ contentType: 'application/javascript', body: 'export const db={};export const auth={currentUser:{getIdToken:()=>Promise.reject(Error("Public mode must not request an account token"))}};export const FIREBASE_AUTH_ENABLED=false;' }));
     let calls = 0;
     let mode = 'pending';
     let stalled;
     await context.route('**/api/**', async (route) => {
       const url = new URL(route.request().url());
-      if (url.pathname === '/api/giro-ai/status') return route.fulfill({ json: { ready: true, configured: true } });
+      if (url.pathname === '/api/giro-ai/status') return route.fulfill({ json: { ready: true, configured: true, authentication: 'public' } });
       if (url.pathname !== '/api/giro-ai/chat') return route.fulfill({ status: 403, json: { error: 'No production API access in tests.' } });
       calls++;
       if (mode === 'pending') { stalled = route; return; }
@@ -40,6 +40,32 @@ async function run() {
     assert.equal(calls, 0, 'local advice must not use the API');
     await companion.getByRole('button', { name: 'Modo tranquilo', exact: true }).click();
     assert.equal(await companion.locator('.gear-mascot__eyes').evaluate((node) => getComputedStyle(node).animationName), 'none');
+    for (const [label, animation] of [['Dançar', 'gear-dance'], ['Pular', 'gear-celebrate'], ['Giro especial', 'gear-spin'], ['Mais uma dança!', 'gear-dance']]) {
+      const previous = await companion.locator('.gear-mascot').elementHandle();
+      await companion.getByRole('button', { name: label, exact: true }).click();
+      await page.waitForFunction(() => document.querySelector('.gear-companion .gear-mascot')?.dataset.paused !== 'true');
+      assert.equal(await previous.evaluate((node) => node.isConnected), false, 'Each explicit action restarts its animation');
+      assert.equal(await companion.locator('.gear-mascot__character').evaluate((node) => getComputedStyle(node).animationName), animation, 'Manual actions also work in quiet mode');
+      assert.equal(await companion.locator('.gear-mascot__character').evaluate((node) => getComputedStyle(node).animationPlayState), 'running');
+      const moved = await companion.locator('.gear-mascot__character').evaluate(async (node) => {
+        const before = getComputedStyle(node).transform;
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        return before !== getComputedStyle(node).transform;
+      });
+      assert.equal(moved, true, 'The SVG character actually moves between frames');
+      await previous.dispose();
+    }
+    await page.waitForFunction(() => document.querySelector('.gear-companion')?.classList.contains('gear-companion--quiet'));
+    assert.equal(await companion.locator('.gear-mascot__character').evaluate((node) => getComputedStyle(node).animationName), 'none', 'Quiet mode resumes when the action finishes');
+    await companion.getByRole('button', { name: 'Comemorar', exact: true }).click();
+    await page.locator('.giro-celebration:not(.giro-celebration--calm)').waitFor();
+    await page.waitForFunction(() => !document.querySelector('.giro-celebration'));
+    assert.equal(await companion.locator('.gear-mascot__character').evaluate((node) => getComputedStyle(node).animationName), 'none');
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await companion.getByRole('button', { name: 'Dançar', exact: true }).click();
+    await companion.getByText(/Movimentos reduzidos ativos no dispositivo/).waitFor();
+    assert.equal(await companion.locator('.gear-mascot__character').evaluate((node) => getComputedStyle(node).animationName), 'none', 'Operating system reduced motion is still respected');
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
     await companion.getByRole('button', { name: 'Fechar mensagem do Giro', exact: true }).click();
     await companion.getByRole('button', { name: 'Giro IA', exact: true }).click();
     const chat = page.getByRole('dialog', { name: 'Giro IA', exact: true });
@@ -77,7 +103,7 @@ async function run() {
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => document.activeElement === document.querySelector('.gear-companion__button'));
     assert.deepEqual(errors, []);
-    console.log('ok - Giro browser regressions: local advice, task, quiet mode, cancellation, late reply, rate limit, invalid reply, retry, mobile and keyboard');
+    console.log('ok - Giro browser regressions: local advice, task, manual dance/jump/spin, restart, quiet mode recovery, reduced motion, cancellation, late reply, rate limit, invalid reply, retry, mobile and keyboard');
   } finally { await browser.close(); }
 }
 
