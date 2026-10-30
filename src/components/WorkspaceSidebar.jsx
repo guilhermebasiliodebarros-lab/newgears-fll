@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronRight, LogOut, Star, X } from 'lucide-react';
+import { ChevronRight, LogOut, Search, Star, X } from 'lucide-react';
 import { favoritesStorageKey, readWorkspaceFavorites, saveWorkspaceFavorites } from '../utils/workspaceFavorites';
+import { navigationText } from '../utils/workspaceNavigation';
 import './WorkspaceSidebar.css';
 
 const desktopQuery = '(min-width: 1100px)';
@@ -26,8 +27,11 @@ export default function WorkspaceSidebar({ tabs, activeId, onNavigate, open, onC
   const mobileOpen = open && !desktop;
   const [favorites, setFavorites] = useState(() => { try { return readWorkspaceFavorites(localStorage, accountKey); } catch { return []; } });
   const [favoritesError, setFavoritesError] = useState('');
+  const [search, setSearch] = useState('');
+  const searchText = navigationText(search);
+  const visibleTabs = tabs.filter((tab) => !searchText || navigationText(`${tab.label} ${tab.description}`).includes(searchText));
   useEffect(() => {
-    const sync = (event) => { if (event.key === favoritesStorageKey(accountKey) || event.key === null) setFavorites(readWorkspaceFavorites(localStorage, accountKey)); };
+    const sync = (event) => { if (event.key === favoritesStorageKey(accountKey) || event.key === null) { try { setFavorites(readWorkspaceFavorites(localStorage, accountKey)); } catch { /* Keep this session's shortcuts when storage is blocked. */ } } };
     window.addEventListener('storage', sync);
     return () => window.removeEventListener('storage', sync);
   }, [accountKey]);
@@ -70,7 +74,7 @@ export default function WorkspaceSidebar({ tabs, activeId, onNavigate, open, onC
     };
   }, [mobileOpen, onClose]);
 
-  const select = (id) => { onClose(); onNavigate(id); };
+  const select = (id) => { setSearch(''); onClose(); onNavigate(id); };
   const renderTab = (tab) => (
     <div key={tab.id} className="workspace-sidebar__row"><button type="button" className="workspace-sidebar__link" aria-label={tab.label} aria-current={activeId === tab.id ? 'page' : undefined} title={tab.description} onClick={() => select(tab.id)}>
       <span className="workspace-sidebar__icon" aria-hidden="true">{tab.icon}</span>
@@ -84,7 +88,7 @@ export default function WorkspaceSidebar({ tabs, activeId, onNavigate, open, onC
     <aside ref={sidebarRef} id="workspace-navigation" className={`workspace-sidebar ${mobileOpen ? 'workspace-sidebar--open' : ''}`} role={mobileOpen ? 'dialog' : undefined} aria-modal={mobileOpen || undefined} aria-label="Menu principal">
       <div className="workspace-sidebar__brand">
         <div className="workspace-sidebar__logo">{brand}</div>
-        <span>BASE DA EQUIPE</span>
+        <span><strong>NEW GEARS</strong><small>Robótica em equipe</small></span>
         <button type="button" className="workspace-sidebar__close" onClick={onClose} aria-label="Fechar menu"><X size={21} /></button>
       </div>
       <button type="button" className="workspace-sidebar__profile" disabled={!onProfile} onClick={() => { onClose(); onProfile?.(); }} aria-label={`Abrir perfil de ${profile.name}`}>
@@ -93,15 +97,17 @@ export default function WorkspaceSidebar({ tabs, activeId, onNavigate, open, onC
         <ChevronRight size={16} aria-hidden="true" />
       </button>
       {meta && <div className="workspace-sidebar__meta">{meta}</div>}
+      <label className="workspace-sidebar__search"><Search size={16} aria-hidden="true" /><span className="sr-only">Filtrar menu de navegação</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Encontrar uma área…" autoComplete="off" />{search && <button type="button" onClick={() => setSearch('')} aria-label="Limpar filtro do menu"><X size={14} /></button>}</label>
       <nav className="workspace-sidebar__nav custom-scrollbar" aria-label="Áreas do sistema">
-        <section className="workspace-sidebar__group" aria-label="Favoritos"><h2><Star size={11} />Favoritos</h2>{favorites.map((id) => tabs.find((tab) => tab.id === id)).filter(Boolean).map(renderTab)}{!favorites.some((id) => tabs.some((tab) => tab.id === id)) && <p className="workspace-sidebar__hint">Use a estrela ao lado dos menus para criar seus atalhos.</p>}{favoritesError && <p role="status" className="workspace-sidebar__hint">{favoritesError}</p>}</section>
+        {!searchText && <section className="workspace-sidebar__group" aria-label="Favoritos"><h2><Star size={12} />Seus atalhos</h2>{favorites.map((id) => tabs.find((tab) => tab.id === id)).filter(Boolean).map(renderTab)}{!favorites.some((id) => tabs.some((tab) => tab.id === id)) && <p className="workspace-sidebar__hint">Marque uma estrela para fixar uma área aqui.</p>}{favoritesError && <p role="status" className="workspace-sidebar__hint">{favoritesError}</p>}</section>}
+        {searchText && <p className="workspace-sidebar__hint" role="status">{visibleTabs.length ? `${visibleTabs.length} área(s) encontrada(s)` : 'Nenhuma área encontrada. Tente outro nome.'}</p>}
         {groups.map((group) => {
-          const items = group.ids.map((id) => tabs.find((tab) => tab.id === id)).filter(Boolean);
+          const items = group.ids.map((id) => visibleTabs.find((tab) => tab.id === id)).filter(Boolean);
           return items.length ? <section key={group.label} className="workspace-sidebar__group" aria-label={group.label}>
             <h2>{group.label}</h2>{items.map(renderTab)}
           </section> : null;
         })}
-        {tabs.some((tab) => !knownIds.has(tab.id)) && <section className="workspace-sidebar__group" aria-label="Outras áreas"><h2>Outras áreas</h2>{tabs.filter((tab) => !knownIds.has(tab.id)).map(renderTab)}</section>}
+        {visibleTabs.some((tab) => !knownIds.has(tab.id)) && <section className="workspace-sidebar__group" aria-label="Outras áreas"><h2>Outras áreas</h2>{visibleTabs.filter((tab) => !knownIds.has(tab.id)).map(renderTab)}</section>}
       </nav>
       <div className="workspace-sidebar__footer"><span>New Gears · FLL</span><button type="button" onClick={onLogout}><LogOut size={15} /> Sair</button></div>
     </aside>

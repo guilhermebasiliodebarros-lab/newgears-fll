@@ -40,7 +40,7 @@ export default function PublicQrCodes({ settings, compact = false }) {
             {url ? (
               <>
                 <div className="rounded-lg bg-white p-3 shadow-lg">
-                  <QRCodeSVG value={url} size={compact ? 116 : 190} level="M" />
+                  <QRCodeSVG value={url} size={compact ? 116 : 190} level="M" title={`QR Code: ${label}`} role="img" aria-label={`QR Code: ${label}`} />
                 </div>
                 {compact && (
                   <a

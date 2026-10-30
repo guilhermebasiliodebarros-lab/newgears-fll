@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   CalendarDays,
   Camera,
@@ -88,16 +88,15 @@ export default function PublicShowcaseAdminView({
   const [busyPhotoId, setBusyPhotoId] = useState('');
   const [draggedPhotoId, setDraggedPhotoId] = useState('');
   const [dragOverPhotoId, setDragOverPhotoId] = useState('');
-  const [previewOrderIds, setPreviewOrderIds] = useState([]);
+  const [previewOrder, setPreviewOrder] = useState({});
   const [uploadError, setUploadError] = useState('');
 
   const basePhotos = useMemo(
     () => buildTrainingGallery({ galleryPhotos, robotVersions, attachments, includeHidden: true, prioritizeFeatured: false }),
     [attachments, galleryPhotos, robotVersions],
   );
-  useEffect(() => {
-    setPreviewOrderIds(basePhotos.map((photo) => photo.id));
-  }, [basePhotos]);
+  const previewOrderIds = useMemo(() => previewOrder.base === basePhotos ? previewOrder.ids : basePhotos.map((photo) => photo.id), [basePhotos, previewOrder]);
+  const setPreviewOrderIds = (ids) => setPreviewOrder({ base: basePhotos, ids });
 
   const allPhotos = useMemo(() => {
     const positions = new Map(previewOrderIds.map((id, index) => [id, index]));

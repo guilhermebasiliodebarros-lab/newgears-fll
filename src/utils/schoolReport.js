@@ -76,7 +76,8 @@ export const normalizeSchoolGrades = (schoolGrades) => {
 };
 
 export const getSchoolStageRecord = (studentOrGrades, stageId) => {
-  const schoolGrades = studentOrGrades?.schoolGrades ?? studentOrGrades;
+  const isStudent = studentOrGrades && typeof studentOrGrades === 'object' && ('schoolGrades' in studentOrGrades || 'xp' in studentOrGrades || 'name' in studentOrGrades || 'id' in studentOrGrades);
+  const schoolGrades = isStudent ? studentOrGrades.schoolGrades : studentOrGrades;
   const normalized = normalizeSchoolGrades(schoolGrades);
   return normalized?.[stageId] || null;
 };

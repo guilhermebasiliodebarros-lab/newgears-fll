@@ -657,7 +657,7 @@ const RobotRoundsPanel = ({
                       className={`relative rounded-[24px] border p-5 transition-colors ${hasStructure ? 'border-cyan-500/20 bg-gradient-to-br from-[#131c2d] via-[#111722] to-[#0f131b]' : 'border-white/10 bg-black/25'}`}
                     >
                       {!readonly ? (
-                        <div className="absolute right-4 top-4 flex items-center gap-2">
+                        <div className="ng-round-card-actions absolute right-4 top-4 flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => onOpenRoundEdit(round)}

@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { AlertTriangle, BarChart3, Calendar, CheckCircle, ChevronDown, ChevronLeft, ChevronRight, Clock, ListTodo, Loader2, Pencil, Search, Tag, Target, Timer, Trash2, UserCheck, UserCircle, UserPlus, Users, UserX, X, Zap } from 'lucide-react';
 import { STATION_KEYS } from '../constants/workspace';
@@ -9,6 +9,8 @@ import { GEAR_GRANT_MAX } from '../utils/gearGrants';
 import { normalizeKanbanTasks } from '../utils/workspaceRecords';
 
 export default function KanbanView({
+  focusRequest = 0,
+  onFocusRequestHandled,
   assignTaskToStudent,
   onOpenBlock,
   currentWeekData,
@@ -29,6 +31,9 @@ export default function KanbanView({
   parseLocalDateValue,
   getLocalYYYYMMDD
 }) {
+  const taskComposer = useRef(null);
+  useEffect(() => { if (focusRequest) { taskComposer.current?.focus(); onFocusRequestHandled?.(); } }, [focusRequest, onFocusRequestHandled]);
+
       const tasks = useMemo(() => normalizeKanbanTasks(rawTasks), [rawTasks]);
       const students = useMemo(() => (Array.isArray(rawStudents) ? rawStudents : []).filter((student) => student && typeof student.name === 'string'), [rawStudents]);
       const [searchTerm, setSearchTerm] = useState("");
@@ -252,6 +257,7 @@ export default function KanbanView({
               <div 
                   key={t.id}
                   draggable
+                  data-task-status={t.status}
                   onDragStart={(e) => handleDragStart(e, t.id)}
                   onDragEnd={handleDragEnd}
                   className={`bg-black/40 p-3 rounded-xl border flex flex-col gap-2 group cursor-grab active:cursor-grabbing ${cardEntranceClass} transition-[transform,box-shadow,border-color,background-color,opacity] duration-500 ease-out will-change-transform motion-reduce:animate-none motion-reduce:transition-none hover:shadow-[0_16px_32px_rgba(15,23,42,0.28)] ${status && t.status !== 'done' ? status.border : 'border-white/5'} ${isPulsing ? 'animate-pulse hover:animate-none shadow-[0_0_15px_rgba(239,68,68,0.15)]' : 'hover:border-white/20'}`}
@@ -262,7 +268,7 @@ export default function KanbanView({
                           {isAdmin ? (
                               <div className="relative flex items-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 transition-colors px-2 py-0.5 rounded border border-blue-500/30 group focus-within:border-blue-500/50">
                                   {renderAvatars()}
-                                  <select
+                                  <select aria-label="Responsavel pela tarefa"
                                       value={authors.length === 1 ? authors[0] : ''} // So pre-seleciona se for um unico autor
                                       onChange={(e) => assignTaskToStudent(t.id, e.target.value)}
                                       className="text-[10px] font-bold uppercase bg-transparent border-none text-blue-100 focus:ring-0 outline-none appearance-none cursor-pointer pr-3"
@@ -540,7 +546,7 @@ export default function KanbanView({
               id: 'doing',
               title: 'Fazendo',
               subtitle: 'execucao em andamento',
-              icon: <Loader2 size={16} className="animate-spin" />,
+              icon: <Timer size={16} />,
               total: doingTasks.length,
               tasks: displayedDoingTasks,
               showAll: showAllDoing,
@@ -707,7 +713,8 @@ export default function KanbanView({
               </div>
           )}
 
-          <div className="flex overflow-x-auto snap-x md:grid md:grid-cols-4 gap-6 flex-1 min-h-[600px] pb-4 custom-scrollbar">
+          <p className="ng-board-hint">Deslize o quadro para acompanhar as etapas. Use as setas de cada tarefa para mover pelo teclado.</p>
+          <div role="region" tabIndex={0} aria-label="Quadro de tarefas por etapa" className="ng-kanban-board flex overflow-x-auto snap-x md:grid md:grid-cols-4 gap-6 flex-1 min-h-[600px] pb-4 custom-scrollbar">
               {columnConfigs.map((column, columnIndex) => {
                   const columnSignal = getColumnSignal(column.id, column.total);
                   const laneGroups = buildLaneGroups(column.tasks);
@@ -745,11 +752,12 @@ export default function KanbanView({
                                       onChange={(e) => updateKanbanTaskDraft('text', e.target.value)}
                                       onKeyDown={stopKanbanInputKeyDown}
                                       autoComplete="off"
+                                      ref={taskComposer}
                                       placeholder="+ Nova Tarefa..."
                                       className="w-full bg-black/30 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-orange-500 outline-none transition-all"
                                   />
                                   <div className="flex flex-col gap-2 md:flex-row">
-                                      <select
+                                      <select aria-label="Area da tarefa"
                                           name="taskTag"
                                           value={kanbanTaskDraft.tag}
                                           onChange={(e) => updateKanbanTaskDraft('tag', e.target.value)}
@@ -761,7 +769,7 @@ export default function KanbanView({
                                           <option value="gestao">Gestao</option>
                                           <option value="geral">Geral</option>
                                       </select>
-                                      <select
+                                      <select aria-label="Prioridade da tarefa"
                                           name="taskPriority"
                                           value={kanbanTaskDraft.priority}
                                           onChange={(e) => updateKanbanTaskDraft('priority', e.target.value)}

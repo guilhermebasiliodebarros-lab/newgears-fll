@@ -82,7 +82,7 @@ export default function ActivityHistoryView({ activityLogs }) {
             />
           </label>
 
-          <select
+          <select aria-label="Filtrar historico por area"
             value={categoryFilter}
             onChange={(event) => setCategoryFilter(event.target.value)}
             className="rounded-lg border border-white/10 bg-[#111827] p-3 text-sm text-white outline-none focus:border-cyan-300/50"

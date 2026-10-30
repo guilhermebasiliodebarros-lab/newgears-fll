@@ -25,8 +25,7 @@ export async function runAppStructureTests() {
   const cssSource = await readFile(cssFile, 'utf8');
 
   for (const viewName of extractedViews) {
-    assert.match(source, new RegExp(`import ${viewName} from './views/${viewName}'`));
-    assert.doesNotMatch(source, new RegExp(`const ${viewName}\\s*=`));
+    assert.match(source, new RegExp(`const ${viewName} = lazy`));
     assert.match(source, new RegExp(`<${viewName} \\{\\.\\.\\.[^}]+\\} ?/>`));
   }
 
@@ -34,7 +33,7 @@ export async function runAppStructureTests() {
   assert.match(source, /doc\(db,\s*"project",\s*PROJECT_MAIN_DOC_ID\)/);
   assert.match(source, /setDoc\(doc\(db,\s*"project",\s*PROJECT_MAIN_DOC_ID\),\s*projectData,\s*\{\s*merge:\s*true\s*\}\)/);
   assert.match(source, /setProjectSummary\(\{\s*\.\.\.projectData,\s*id:\s*PROJECT_MAIN_DOC_ID\s*\}\)/);
-  assert.match(source, /import ActivityHistoryView from '\.\/views\/ActivityHistoryView'/);
+  assert.match(source, /import\('\.\/views\/ActivityHistoryView'\)/);
   assert.match(source, /import\('\.\/views\/PublicTeamView'\)/);
   assert.match(source, /import\('\.\/views\/PublicTvModeView'\)/);
   assert.match(source, /import\('\.\/views\/PublicShowcaseAdminView'\)/);

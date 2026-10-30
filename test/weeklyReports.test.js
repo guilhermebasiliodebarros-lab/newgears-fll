@@ -53,6 +53,7 @@ export async function runWeeklyReportsTests() {
     tokens[uid] = await mint({ ...claimsFor(uid), role: 'admin' }); // O papel do JWT fornecido pelo cliente não deve promover alunos.
     accountState.set(uid, { localId: uid, email: `${uid}@example.com`, validSince: String(now - 60) });
     setRecord(`weeklyReportMembers/${uid}`, { name: uid, email: `${uid}@example.com`, active: true, role: uid === 'coach' ? 'admin' : 'student', studentId: uid === 'coach' ? '' : `student-${uid}` });
+    if (uid !== 'coach') setRecord(`students/student-${uid}`, { name: uid, status: 'active' });
   }
   const ok = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
   globalThis.fetch = async (address, options = {}) => {
@@ -115,6 +116,11 @@ export async function runWeeklyReportsTests() {
     tampered[1] = Buffer.from(JSON.stringify(claimsFor('coach'))).toString('base64url');
     assert.equal((await call('alice', '/session', 'GET', null, tampered.join('.'))).status, 401);
     assert.equal((await call('alice', '/session')).data.user.role, 'student');
+    records.delete('students/student-alice');
+    assert.equal((await call('alice', '/session')).status, 403);
+    setRecord('students/student-alice', { status: 'inactive' });
+    assert.equal((await call('alice', '/session')).status, 403);
+    setRecord('students/student-alice', { status: 'active' });
     accountState.get('alice').disabled = true;
     assert.equal((await call('alice', '/session')).status, 401);
     accountState.get('alice').disabled = false;

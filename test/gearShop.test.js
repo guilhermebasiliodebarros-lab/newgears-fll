@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { memoryStore } from './teamProcesses.test.js';
 import { equipGearItem, purchaseGearItem, rewardGearContribution } from '../src/services/gearShop.js';
-import { gearDay, gearItem, GEAR_SHOP_ITEMS, newGearProfile } from '../src/utils/gearShop.js';
+import { gearDay, gearItem, GEAR_SHOP_ITEMS } from '../src/utils/gearShop.js';
 
 export async function runGearShopTests() {
   assert.equal(new Set(GEAR_SHOP_ITEMS.map((item) => item.id)).size, GEAR_SHOP_ITEMS.length);

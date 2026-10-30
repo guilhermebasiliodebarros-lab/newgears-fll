@@ -1,6 +1,6 @@
 import React from 'react';
 import ScreenRecovery from './ScreenRecovery';
-import { Crown, Maximize2, Minimize2, Radio, ScanSearch, Shield, Zap, RotateCcw, Flag } from 'lucide-react';
+import { Maximize2, Minimize2, ScanSearch, Shield, Zap, RotateCcw, Flag } from 'lucide-react';
 
 export const SeasonModeControl = ({ value, onChange, disabled = false }) => (
   <div className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/25 p-1" aria-label="Temporada ativa">
@@ -25,107 +25,16 @@ export const SeasonModeControl = ({ value, onChange, disabled = false }) => (
   </div>
 );
 
-export const WorkspaceHero = ({
-  eyebrow,
-  title,
-  subtitle,
-  metrics,
-  actions,
-  shortcutLabel = 'Atalhos',
-  accent = 'from-[#15254a] via-[#2a1458] to-[#140b2e]',
-  footerContent = null,
-}) => (
-  <section className={`newgears-workspace-hero newgears-hud-shell relative overflow-hidden rounded-[32px] border border-white/12 bg-gradient-to-br ${accent} p-6 md:p-8 shadow-[0_36px_110px_rgba(0,0,0,0.34)]`}>
-    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.045)_0%,transparent_26%,transparent_70%,rgba(255,255,255,0.04)_100%),linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:auto,26px_26px,26px_26px]" />
-    <div className="pointer-events-none absolute left-6 top-5 h-24 w-24 border-l-2 border-t-2 border-blue-300/25" />
-    <div className="pointer-events-none absolute bottom-6 right-6 h-24 w-24 border-b-2 border-r-2 border-fuchsia-300/20" />
-    <div className="pointer-events-none absolute left-[8%] top-0 h-full w-24 -skew-x-[24deg] bg-[linear-gradient(180deg,rgba(255,255,255,0.12),transparent_22%,transparent_78%,rgba(255,255,255,0.08))] opacity-35" />
-    <div className="pointer-events-none absolute right-[12%] top-0 h-full w-16 -skew-x-[24deg] bg-[linear-gradient(180deg,rgba(208,27,241,0.22),transparent_24%,transparent_76%,rgba(98,147,233,0.18))] opacity-45" />
-    <div className="pointer-events-none absolute -left-12 top-0 h-44 w-44 rounded-full bg-[#6293E9]/18 blur-3xl" />
-    <div className="pointer-events-none absolute right-[-38px] top-[-14px] h-48 w-48 rounded-full bg-[#D01BF1]/18 blur-3xl" />
-    <div className="pointer-events-none absolute bottom-[-84px] right-[8%] h-64 w-64 rounded-full bg-[#820AAF]/14 blur-3xl" />
-
-    <div className="relative z-10 grid gap-7 xl:grid-cols-[1.08fr,0.92fr]">
-      <div>
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="newgears-kicker inline-flex items-center gap-2 border border-white/20 bg-black/24 px-3 py-2 text-[10px] font-black uppercase tracking-[0.26em] text-white shadow-[0_12px_24px_rgba(0,0,0,0.22)]">
-            <Crown size={12} />
-            {eyebrow}
-          </span>
-          <span className="newgears-status-strip inline-flex items-center gap-2 border border-blue-400/20 bg-blue-400/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.24em] text-blue-100">
-            <Radio size={12} />
-            Interface ativa
-          </span>
-        </div>
-
-        <div className="mt-5 max-w-3xl">
-          <h2 className="newgears-display text-3xl font-black leading-[0.95] text-white drop-shadow-[0_10px_28px_rgba(0,0,0,0.3)] md:text-[3.15rem]">
-            {title}
-          </h2>
-          <p className="mt-4 max-w-3xl text-sm leading-relaxed text-slate-100/88 md:text-base">{subtitle}</p>
-        </div>
-
-        <div className="mt-6 flex flex-wrap gap-3">
-          <div className="newgears-mini-hud border border-white/12 bg-black/22 px-4 py-3">
-            <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-300/72">Blocos</span>
-            <span className="newgears-display mt-2 block text-lg font-black text-white">{metrics.length}</span>
-          </div>
-          <div className="newgears-mini-hud border border-white/12 bg-black/22 px-4 py-3">
-            <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-300/72">{shortcutLabel}</span>
-            <span className="newgears-display mt-2 block text-lg font-black text-white">{actions.length}</span>
-          </div>
-          <div className="newgears-status-strip inline-flex items-center gap-2 border border-fuchsia-400/20 bg-fuchsia-400/10 px-4 py-3 text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-100">
-            <Shield size={12} />
-            Leitura pronta
-          </div>
-        </div>
-
-        <div className="mt-7 flex flex-wrap gap-3">
-          {actions.map((action) => (
-            <button
-              key={action.label}
-              onClick={action.onClick}
-              className={`newgears-workspace-action newgears-action-button inline-flex items-center gap-2 rounded-full border px-5 py-3 text-xs font-black uppercase tracking-[0.14em] text-white shadow-[0_18px_36px_rgba(0,0,0,0.2)] transition-all hover:-translate-y-1 ${action.style}`}
-            >
-              {action.icon}
-              {action.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        {metrics.map((metric, index) => (
-          <div key={metric.label} className="newgears-workspace-metric newgears-metric-card rounded-[24px] border border-white/12 bg-black/24 p-4 shadow-[0_20px_40px_rgba(0,0,0,0.18)]">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <span className="text-[9px] font-black uppercase tracking-[0.24em] text-slate-100/50">Setor {String(index + 1).padStart(2, '0')}</span>
-                <span className="mt-1 block text-[10px] font-black uppercase tracking-[0.2em] text-slate-100/72">{metric.label}</span>
-              </div>
-              <div className={`newgears-metric-emblem border px-2.5 py-1.5 shadow-[0_12px_24px_rgba(0,0,0,0.12)] ${metric.tone || 'border-white/10 bg-white/10 text-white'}`}>
-                {metric.icon}
-              </div>
-            </div>
-            <p className="newgears-display mt-4 text-[1.9rem] font-black leading-none text-white md:text-[2.25rem]">{metric.value}</p>
-            <p className="mt-2 text-xs leading-relaxed text-slate-100/74">{metric.helper}</p>
-            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/8">
-              <div
-                className="newgears-scan-bar h-full rounded-full bg-gradient-to-r from-blue-300 via-violet-400 to-fuchsia-400"
-                style={{ width: `${42 + (index * 13)}%` }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
+export const WorkspaceHero = ({ eyebrow, title, subtitle, metrics, actions, shortcutLabel = 'Atalhos', footerContent = null }) => (
+  <section className="newgears-workspace-hero ng-context-hero">
+    <div className="ng-context-hero__heading"><div><p className="ng-eyebrow">{eyebrow}</p><h2>{title}</h2><p>{subtitle}</p></div>
+      <div className="ng-context-hero__actions" role="group" aria-label={shortcutLabel}>{actions.map((action) => <button type="button" key={action.label} onClick={action.onClick} className={'ng-button ' + (action.style || '')}>{action.icon}{action.label}</button>)}</div>
     </div>
-
-    {footerContent ? (
-      <div className="newgears-footer-shell relative z-10 mt-7 border border-white/10 bg-black/18 p-4 md:p-5">
-        {footerContent}
-      </div>
-    ) : null}
+    <div className="ng-context-hero__metrics">{metrics.map((metric) => <div key={metric.label}><span>{metric.label}<span aria-hidden="true">{metric.icon}</span></span><strong>{metric.value}</strong><p>{metric.helper}</p></div>)}</div>
+    {footerContent && <div className="ng-context-hero__footer">{footerContent}</div>}
   </section>
 );
+
 
 export const WorkspaceSectionHeading = ({ tab }) => tab ? (
   <div className="workspace-section-heading">
@@ -205,7 +114,7 @@ export const WorkspaceTabs = ({ eyebrow, tabs, activeId, onChange }) => {
 };
 
 export const WorkspaceScene = ({ sceneId, onHome, children }) => (
-  <div key={sceneId} className="animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out">
+  <div key={sceneId} className="ng-scene" data-scene={sceneId}>
     <ScreenRecovery area={sceneId} onHome={onHome}>{children}</ScreenRecovery>
   </div>
 );
@@ -288,7 +197,7 @@ export const WorkspaceCollapsible = ({ isOpen, children }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-3 duration-500 ease-out">
+    <div className="ng-scene">
       {children}
     </div>
   );

@@ -1,3 +1,4 @@
+import ProjectVisual from '../components/ProjectVisual';
 import {
   ArrowLeft,
   Award,
@@ -44,7 +45,7 @@ export default function PublicTeamView({
   const projectDescription = cleanText(projectSummary?.solution)
     || cleanText(projectSummary?.problem)
     || 'A equipe esta construindo uma solucao com pesquisa, criatividade e impacto real.';
-  const projectImage = projectSummary?.image || '/Unearthed.jpg';
+  const projectImage = projectSummary?.image || '';
 
   return (
     <div className="newgears-public-shell min-h-screen bg-[#070b14] text-white">
@@ -92,11 +93,7 @@ export default function PublicTeamView({
 
       <main>
         <section className="relative min-h-[540px] overflow-hidden border-b border-white/10">
-          <img
-            src="/Unearthed.jpg"
-            alt="Temporada FLL"
-            className="absolute inset-0 h-full w-full object-cover opacity-35"
-          />
+          <div className="ng-public-grid" aria-hidden="true" />
           <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,9,19,0.98),rgba(5,9,19,0.86)_48%,rgba(5,9,19,0.58)),linear-gradient(180deg,rgba(5,9,19,0.18),rgba(5,9,19,0.96))]" />
           <div className="relative mx-auto grid min-h-[540px] w-full max-w-7xl items-center gap-8 px-5 py-12 md:grid-cols-[minmax(0,1fr)_minmax(260px,0.72fr)] md:px-8 md:py-16">
             <div className="order-2 max-w-3xl self-end md:order-1">
@@ -222,7 +219,7 @@ export default function PublicTeamView({
             </div>
 
             <div className="overflow-hidden rounded-lg border border-white/10 bg-white/5 shadow-2xl">
-              <img src={projectImage} alt={projectTitle} className="aspect-[4/3] w-full object-cover" />
+              <ProjectVisual src={projectImage} title={projectTitle} />
             </div>
           </div>
         </section>

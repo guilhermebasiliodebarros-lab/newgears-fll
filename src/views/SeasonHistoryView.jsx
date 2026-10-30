@@ -63,26 +63,17 @@ const getRecordSummary = (collectionId, record) => {
 export default function SeasonHistoryView({ db, seasons = [], reports = [], reportsEnabled = false }) {
   const archivedSeasons = useMemo(() => seasons.filter((season) => season.status === 'archived'), [seasons]);
   const [selectedSeasonId, setSelectedSeasonId] = useState('');
-  const [recordsByCollection, setRecordsByCollection] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [archive, setArchive] = useState({});
+  const [actionError, setError] = useState('');
   const selectedSeason = archivedSeasons.find((season) => season.id === selectedSeasonId) || archivedSeasons[0] || null;
+  const currentArchive = archive.seasonId === selectedSeason?.id ? archive : {};
+  const recordsByCollection = currentArchive.records || {};
+  const loading = Boolean(db && selectedSeason && !currentArchive.ready);
+  const error = actionError || currentArchive.error || '';
 
   useEffect(() => {
-    if (archivedSeasons.length && !archivedSeasons.some((season) => season.id === selectedSeasonId)) {
-      setSelectedSeasonId(archivedSeasons[0].id);
-    }
-  }, [archivedSeasons, selectedSeasonId]);
-
-  useEffect(() => {
-    if (!db || !selectedSeason?.id) {
-      setRecordsByCollection({});
-      return undefined;
-    }
+    if (!db || !selectedSeason?.id) return undefined;
     let active = true;
-    setLoading(true);
-    setError('');
-    setRecordsByCollection({});
     Promise.all(ARCHIVED_COLLECTIONS.map(async ({ id }) => {
       const source = id === 'workspaceSnapshots' ? collection(db, 'teamSeasons', selectedSeason.id, 'workspace') : id === 'studentSubmissions' ? collection(db, 'teamSeasons', selectedSeason.id, 'students') : id === 'logbook' ? collectionGroup(db, 'logbook') : query(collection(db, id), where('seasonId', '==', selectedSeason.id));
       const snapshot = await getDocs(source);
@@ -90,12 +81,10 @@ export default function SeasonHistoryView({ db, seasons = [], reports = [], repo
       records.sort((left, right) => String(getRecordDate(right)).localeCompare(String(getRecordDate(left))));
       return [id, records];
     })).then((entries) => {
-      if (active) setRecordsByCollection(Object.fromEntries(entries));
+      if (active) setArchive({ seasonId: selectedSeason.id, ready: true, records: Object.fromEntries(entries) });
     }).catch((loadError) => {
       console.error('Falha ao abrir o histórico da temporada:', loadError);
-      if (active) setError('Não foi possível carregar os registros arquivados. Confira a conexão e tente novamente.');
-    }).finally(() => {
-      if (active) setLoading(false);
+      if (active) setArchive({ seasonId: selectedSeason.id, ready: true, error: 'Não foi possível carregar os registros arquivados. Confira a conexão e tente novamente.' });
     });
     return () => { active = false; };
   }, [db, selectedSeason?.id]);

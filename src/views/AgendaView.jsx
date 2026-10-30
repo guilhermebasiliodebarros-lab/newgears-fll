@@ -121,11 +121,11 @@ export default function AgendaView({
                           </div>
 
                           {canManageEvent && (
-                              <div className="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                                  <button type="button" onClick={() => setModal({type: 'eventForm', data: event})} className="rounded-xl border border-white/10 bg-black/35 p-2 text-gray-300 hover:bg-white/10 hover:text-white">
+                              <div className="flex gap-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                                  <button type="button" aria-label={`Editar evento: ${event.title}`} onClick={() => setModal({type: 'eventForm', data: event})} className="rounded-xl border border-white/10 bg-black/35 p-2 text-gray-300 hover:bg-white/10 hover:text-white">
                                       <Pencil size={14}/>
                                   </button>
-                                  <button type="button" onClick={() => handleDeleteEvent(event.id)} className="rounded-xl border border-white/10 bg-black/35 p-2 text-gray-300 hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300">
+                                  <button type="button" aria-label={`Excluir evento: ${event.title}`} onClick={() => handleDeleteEvent(event.id)} className="rounded-xl border border-white/10 bg-black/35 p-2 text-gray-300 hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300">
                                       <Trash2 size={14}/>
                                   </button>
                               </div>
@@ -285,7 +285,7 @@ export default function AgendaView({
                           />
                       </div>
 
-                      <select
+                      <select aria-label="Filtrar por tipo de evento"
                           value={agendaTypeFilter}
                           onChange={(e) => setAgendaTypeFilter(e.target.value)}
                           className="w-full rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-white outline-none transition-all focus:border-indigo-400"
@@ -303,6 +303,7 @@ export default function AgendaView({
                               key={option.id}
                               type="button"
                               onClick={() => setAgendaScopeFilter(option.id)}
+                              aria-pressed={agendaScopeFilter === option.id}
                               className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-xs font-bold transition-all ${agendaScopeFilter === option.id ? 'border-indigo-500/30 bg-indigo-500 text-white shadow-lg shadow-indigo-900/20' : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 hover:text-white'}`}
                           >
                               {option.label}

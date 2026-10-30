@@ -1,3 +1,4 @@
+import ProjectVisual from '../components/ProjectVisual';
 import { createElement, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
@@ -112,7 +113,7 @@ export default function PublicTvModeView({
   const projectDescription = cleanText(projectSummary?.solution)
     || cleanText(projectSummary?.problem)
     || 'Uma solucao em desenvolvimento com pesquisa, criatividade e impacto real.';
-  const projectImage = projectSummary?.image || '/Unearthed.jpg';
+  const projectImage = projectSummary?.image || '';
 
   const slides = useMemo(() => [
     { id: 'intro', label: 'New Gears' },
@@ -350,7 +351,7 @@ export default function PublicTvModeView({
             )}
           </div>
           <div className="overflow-hidden rounded-lg border border-white/12 bg-white/5 shadow-2xl">
-            <img src={projectImage} alt={projectTitle} className="aspect-[4/3] w-full object-cover" />
+            <ProjectVisual src={projectImage} title={projectTitle} />
           </div>
         </section>
       );
@@ -481,7 +482,7 @@ export default function PublicTvModeView({
 
   return (
     <div className="newgears-public-tv-shell relative h-screen overflow-hidden bg-[#070b14] text-white">
-      <img src="/Unearthed.jpg" alt="" className="absolute inset-0 h-full w-full object-cover opacity-20" />
+      <div className="ng-public-grid" aria-hidden="true" />
       <div className="newgears-public-tv-backdrop absolute inset-0" />
 
       <header className="absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-6 border-b border-white/10 bg-black/22 px-6 py-3 backdrop-blur-sm">

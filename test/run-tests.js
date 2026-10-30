@@ -1,4 +1,5 @@
 import { runProjectSummaryTests } from './projectSummary.test.js';
+import { runWorkspaceBriefingTests } from './workspaceBriefing.test.js';
 import { runAppStructureTests } from './appStructure.test.js';
 import { runSchoolReportTests } from './schoolReport.test.js';
 import { runPublicShowcaseTests } from './publicShowcase.test.js';
@@ -28,8 +29,10 @@ import { runEvaluationReliabilityTests } from './evaluationReliability.test.js';
 import { runShopExperienceTests } from './shopExperience.test.js';
 import { runClientDiagnosticsTests } from './clientDiagnostics.test.js';
 import { runGearAccessoriesTests } from './gearAccessories.test.js';
+import { runAuditCorrectionsTests } from './auditCorrections.test.js';
 
 const suites = [
+  { name: 'workspaceBriefing', run: runWorkspaceBriefingTests },
   { name: 'projectSummary', run: runProjectSummaryTests },
   { name: 'appStructure', run: runAppStructureTests },
   { name: 'schoolReport', run: runSchoolReportTests },
@@ -59,7 +62,8 @@ const suites = [
   { name: 'evaluationReliability', run: runEvaluationReliabilityTests },
   { name: 'shopExperience', run: runShopExperienceTests },
   { name: 'clientDiagnostics', run: runClientDiagnosticsTests },
-  { name: 'gearAccessories', run: runGearAccessoriesTests }
+  { name: 'gearAccessories', run: runGearAccessoriesTests },
+  { name: 'auditCorrections', run: runAuditCorrectionsTests }
 ];
 
 let failures = 0;

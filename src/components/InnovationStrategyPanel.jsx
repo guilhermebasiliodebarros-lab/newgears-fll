@@ -133,7 +133,6 @@ const InnovationStrategyPanel = ({
     },
   ];
   const projectReadinessScore = Math.round((projectReadinessChecklist.filter((item) => item.ready).length / projectReadinessChecklist.length) * 100);
-  const missingReadinessCount = projectReadinessChecklist.filter((item) => !item.ready).length;
 
   const strategySignals = [
     {
@@ -666,12 +665,12 @@ const InnovationStrategyPanel = ({
                 onClick={() => onOpenExpertView(expert)}
                 className="group relative cursor-pointer rounded-[24px] border border-white/10 bg-black/25 p-4 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/5"
               >
-                <div className="absolute right-3 top-3 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                  <button onClick={(event) => { event.stopPropagation(); onOpenExpertEdit(expert); }} className="rounded-xl bg-black/60 p-2 text-gray-400 backdrop-blur-sm transition-colors hover:text-white">
+                <div className="absolute right-3 top-3 z-10 flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                  <button aria-label={`Editar especialista: ${expert.name}`} onClick={(event) => { event.stopPropagation(); onOpenExpertEdit(expert); }} className="rounded-xl bg-black/60 p-2 text-gray-400 backdrop-blur-sm transition-colors hover:text-white">
                     <Pencil size={14} />
                   </button>
                   {(isAdmin || expert.author === viewAsStudent?.name) && (
-                    <button onClick={(event) => onDeleteExpert(event, expert.id)} className="rounded-xl bg-black/60 p-2 text-gray-400 backdrop-blur-sm transition-colors hover:text-red-300">
+                    <button aria-label={`Excluir especialista: ${expert.name}`} onClick={(event) => onDeleteExpert(event, expert.id)} className="rounded-xl bg-black/60 p-2 text-gray-400 backdrop-blur-sm transition-colors hover:text-red-300">
                       <Trash2 size={14} />
                     </button>
                   )}
@@ -766,9 +765,9 @@ const InnovationStrategyPanel = ({
           <div className="space-y-3 max-h-[460px] overflow-y-auto pr-2 custom-scrollbar">
             {sortedImpactEvents.map((event) => (
               <div key={event.id} className="group relative rounded-[24px] border border-white/10 bg-black/25 p-4 transition-all hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/5">
-                <div className="absolute right-3 top-3 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="absolute right-3 top-3 z-10 flex gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                   {(isAdmin || event.author === viewAsStudent?.name) && (
-                    <button onClick={() => onDeleteOutreach(event.id)} className="rounded-xl bg-black/60 p-2 text-gray-400 backdrop-blur-sm transition-colors hover:text-red-300">
+                    <button aria-label={`Excluir impacto: ${event.name}`} onClick={() => onDeleteOutreach(event.id)} className="rounded-xl bg-black/60 p-2 text-gray-400 backdrop-blur-sm transition-colors hover:text-red-300">
                       <Trash2 size={14} />
                     </button>
                   )}

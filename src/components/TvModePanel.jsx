@@ -185,7 +185,9 @@ const TvSlideHero = ({ slideMeta, slideNumber, weekLabel, insights, compact = fa
 const TvModePanel = ({ isTvMode, setIsTvMode, standalone = false, currentWeekData, students, missions, tasks, events, outreachEvents, ScoreEvolutionChart }) => {
   const [slide, setSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const [autoProgress, setAutoProgress] = useState(0);
+  const [progressState, setProgressState] = useState({});
+  const progressKey = JSON.stringify([slide, isPaused, isTvMode]);
+  const autoProgress = progressState.key === progressKey ? progressState.value : 0;
   const [isFullscreenActive, setIsFullscreenActive] = useState(() => (typeof document !== 'undefined' ? Boolean(document.fullscreenElement) : false));
   const [viewportHeight, setViewportHeight] = useState(() => (typeof window !== 'undefined' ? window.innerHeight : 1080));
   const slidesCount = TV_SLIDES.length;
@@ -233,21 +235,16 @@ const TvModePanel = ({ isTvMode, setIsTvMode, standalone = false, currentWeekDat
     }
   };
 
-  useEffect(() => {
-    if (!isTvMode) return;
-    setSlide(0);
-    setIsPaused(false);
-    setAutoProgress(0);
-  }, [isTvMode]);
+
 
   useEffect(() => {
     if (!isTvMode || isPaused) return;
-    setAutoProgress(0);
+
 
     const startedAt = Date.now();
     const progressTimer = setInterval(() => {
       const elapsed = Date.now() - startedAt;
-      setAutoProgress(Math.min(100, (elapsed / SLIDE_DURATION) * 100));
+      setProgressState({ key: progressKey, value: Math.min(100, (elapsed / SLIDE_DURATION) * 100) });
     }, 120);
 
     const slideTimer = setTimeout(() => setSlide((current) => (current + 1) % slidesCount), SLIDE_DURATION);
@@ -256,7 +253,7 @@ const TvModePanel = ({ isTvMode, setIsTvMode, standalone = false, currentWeekDat
       clearInterval(progressTimer);
       clearTimeout(slideTimer);
     };
-  }, [isTvMode, isPaused, slide, slidesCount]);
+  }, [isTvMode, isPaused, slide, slidesCount, progressKey]);
 
   useEffect(() => {
     if (!isTvMode) return;
@@ -412,7 +409,7 @@ const TvModePanel = ({ isTvMode, setIsTvMode, standalone = false, currentWeekDat
   if (!isTvMode) return null;
 
   return (
-    <div className={`newgears-shell relative z-[200] flex flex-col overflow-hidden bg-[linear-gradient(135deg,#050913_0%,#091121_16%,#101633_42%,#181132_68%,#080b12_100%)] text-white ${standalone ? 'min-h-screen' : 'fixed inset-0'}`}>
+    <div className={`newgears-shell newgears-tv-shell relative z-[200] flex flex-col overflow-hidden bg-[linear-gradient(135deg,#050913_0%,#091121_16%,#101633_42%,#181132_68%,#080b12_100%)] text-white ${standalone ? 'min-h-screen' : 'fixed inset-0'}`}>
       <div className="newgears-floating-layer">
         <div className="newgears-orb newgears-orb--cyan" />
         <div className="newgears-orb newgears-orb--yellow" />

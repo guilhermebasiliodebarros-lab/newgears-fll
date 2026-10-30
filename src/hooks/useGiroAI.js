@@ -5,7 +5,10 @@ import { prepareGiroAIRequest } from '../utils/giroConversation';
 
 export default function useGiroAI(scope, knowledge, context) {
   const key = `newgears_giro_nvidia_v1:${encodeURIComponent(scope)}`;
-  const [session, setSession] = useState(() => restoreGiroConversation(localStorage, key));
+  const [session, setSession] = useState(() => {
+    try { return restoreGiroConversation(localStorage, key); }
+    catch { return { draft: '', messages: [] }; }
+  });
   const latest = useRef(session);
   const [storageError, setStorageError] = useState(false);
   const [status, setStatus] = useState(null);

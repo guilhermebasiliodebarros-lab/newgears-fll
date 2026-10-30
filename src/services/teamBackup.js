@@ -13,6 +13,8 @@ const SHARED = [
   "students",
   "studentGearProfiles",
   "studentGearRewards",
+  "studentGearRefunds",
+  "gearPurchaseResets",
   "gearHistoryMigrations",
   "teamSeasons",
   "project",
@@ -26,6 +28,8 @@ const SHARED = [
   "publicGalleryPhotos",
   "strategies",
   "pitstop_records",
+  "giroKnowledgeMaterials",
+  "giroAnswerFeedback",
 ];
 const SETTINGS = [
   "admin_profile",
@@ -83,6 +87,14 @@ async function collectTeamData({
     const snapshot = await getDoc(doc(db, "settings", name));
     if (snapshot.exists())
       documents.push({ path: snapshot.ref.path, data: snapshot.data() });
+  }
+  // A Firestore collection read does not include its subcollections.
+  for (const parent of documents.filter((item) => /^(students|studentGearProfiles)\/[^/]+$/.test(item.path))) {
+    const children = parent.path.startsWith('students/') ? ['gearWorkshopReactions'] : ['manualGrants', 'taskGrants'];
+    for (const child of children) {
+      const snapshot = await getDocs(collection(db, parent.path, child));
+      snapshot.docs.forEach((item) => documents.push({ path: item.ref.path, data: item.data() }));
+    }
   }
   for (const season of documents.filter(
     (item) =>

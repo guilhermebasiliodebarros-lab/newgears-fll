@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState } from 'react';
 import { Search, Lightbulb, Wrench, RotateCcw, Megaphone, AlertTriangle, ArrowUpRight, CheckCircle2, Sparkles, Target } from 'lucide-react';
 
 const SCORE_LEVELS = [
@@ -12,7 +12,7 @@ const SCORE_LEVELS = [
   {
     value: 2,
     label: 'Em Desenvolvimento',
-    shortLabel: 'Desenvolvimento',
+    shortLabel: 'Desenv.',
     tone: 'border-blue-500/20 bg-blue-500/10 text-blue-100',
     activeTone: 'border-blue-400/40 bg-blue-500/15 text-white shadow-[0_0_18px_rgba(59,130,246,0.16)]'
   },
@@ -403,7 +403,9 @@ const RadarChart = ({ items, values, polygonFill, polygonStroke }) => {
       width={size}
       height={size}
       viewBox={`0 0 ${size} ${size}`}
-      className="mx-auto h-auto w-full max-w-[360px] rounded-full border border-white/5 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.05),rgba(0,0,0,0.12))]"
+      className="ng-radar mx-auto h-auto w-full max-w-[360px]"
+      role="img"
+      aria-label={items.map((item) => `${item.name}: ${values[item.key] || 1} de 4`).join('; ')}
     >
       {[1, 2, 3, 4].map((level) => (
         <circle
@@ -412,7 +414,7 @@ const RadarChart = ({ items, values, polygonFill, polygonStroke }) => {
           cy={center}
           r={(level / maxVal) * radius}
           fill="none"
-          stroke="#333"
+          stroke="#62708a"
           strokeWidth="1"
           strokeDasharray="4 4"
         />
@@ -420,7 +422,7 @@ const RadarChart = ({ items, values, polygonFill, polygonStroke }) => {
 
       {items.map((_, index) => {
         const { x, y } = getCoords(maxVal, index);
-        return <line key={index} x1={center} y1={center} x2={x} y2={y} stroke="#333" strokeWidth="1" />;
+        return <line key={index} x1={center} y1={center} x2={x} y2={y} stroke="#62708a" strokeWidth="1" />;
       })}
 
       <polygon points={points} fill={polygonFill} stroke={polygonStroke} strokeWidth="2" />
@@ -436,8 +438,8 @@ const RadarChart = ({ items, values, polygonFill, polygonStroke }) => {
         return (
           <text
             key={item.key}
-            x={x}
-            y={y}
+            x={Math.max(60, Math.min(size - 60, x))}
+            y={Math.max(15, Math.min(size - 15, y))}
             textAnchor="middle"
             dominantBaseline="middle"
             fill="#e5e7eb"
@@ -461,7 +463,7 @@ const RubricCriterionCard = ({ item, value, rubricType, handleRubricUpdate }) =>
   const targetGuidance = currentScore >= 3 ? item.levels[4] : item.levels[3];
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/25 p-4 md:p-5">
+    <details className="ng-rubric-criterion"><summary><span><strong>{item.icon}{item.name}</strong><small>{item.prompt}</small></span><span className="ng-badge">{currentScore}/4 · {currentMeta.label}</span><span className="ng-disclosure__indicator" aria-hidden="true">+</span></summary><div className="ng-rubric-criterion__body">
       <div className="grid gap-4 xl:grid-cols-[300px,1fr]">
         <div className="space-y-3">
           <div className="flex items-start justify-between gap-3">
@@ -486,6 +488,7 @@ const RubricCriterionCard = ({ item, value, rubricType, handleRubricUpdate }) =>
 
             <input
               type="range"
+              aria-label={`Nota: ${item.name || item.key}`}
               min="1"
               max="4"
               value={currentScore}
@@ -550,7 +553,7 @@ const RubricCriterionCard = ({ item, value, rubricType, handleRubricUpdate }) =>
           })}
         </div>
       </div>
-    </div>
+    </div></details>
   );
 };
 
@@ -729,8 +732,14 @@ const RubricView = ({
   robotDesignRubric,
   handleRubricUpdate
 }) => {
+  const [activeRubric, setActiveRubric] = useState('innovation');
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="ng-tabs ng-rubric-tabs" role="group" aria-label="Escolher rubrica">
+        <button type="button" aria-pressed={activeRubric === 'innovation'} onClick={() => setActiveRubric('innovation')}><Lightbulb size={17} />Projeto de inovação<span>{getRubricSummary(INNOVATION_RUBRIC_ITEMS, innovationRubric).average}/4</span></button>
+        <button type="button" aria-pressed={activeRubric === 'robot_design'} onClick={() => setActiveRubric('robot_design')}><Wrench size={17} />Design do robô<span>{getRubricSummary(ROBOT_DESIGN_RUBRIC_ITEMS, robotDesignRubric).average}/4</span></button>
+      </div>
+      <div hidden={activeRubric !== 'innovation'}>
       <RubricSection
         title="Rubrica: Projeto de Inovacao"
         titleIcon={<Lightbulb className="text-yellow-500" />}
@@ -745,7 +754,8 @@ const RubricView = ({
         rubricType="innovation"
         handleRubricUpdate={handleRubricUpdate}
       />
-
+      </div>
+      <div hidden={activeRubric !== 'robot_design'}>
       <RubricSection
         title="Rubrica: Design do Robo"
         titleIcon={<Wrench className="text-blue-500" />}
@@ -760,6 +770,7 @@ const RubricView = ({
         rubricType="robot_design"
         handleRubricUpdate={handleRubricUpdate}
       />
+      </div>
     </div>
   );
 };

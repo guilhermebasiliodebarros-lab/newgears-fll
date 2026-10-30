@@ -675,7 +675,7 @@ export const StudentManagementPanel = ({
                   </div>
                   <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.1em] text-gray-500 lg:block">
                     <span className="lg:hidden">Estacao:</span>
-                    <select value={student.station || ''} disabled={!canManage || student.status === 'inactive'} onChange={(event) => onMoveStudent(student.id, event.target.value || null)} className="min-w-0 flex-1 rounded-full border border-white/10 bg-[#151b27] px-3.5 py-2.5 text-xs font-bold text-white outline-none transition focus:border-emerald-400/40 disabled:opacity-50 lg:mt-1 lg:w-full">
+                    <select aria-label={`Estação de ${student.name}`} value={student.station || ''} disabled={!canManage || student.status === 'inactive'} onChange={(event) => onMoveStudent(student.id, event.target.value || null)} className="min-w-0 flex-1 rounded-full border border-white/10 bg-[#151b27] px-3.5 py-2.5 text-xs font-bold text-white outline-none transition focus:border-emerald-400/40 disabled:opacity-50 lg:mt-1 lg:w-full">
                       <option value="">Sem estacao</option>
                       {STATION_CONFIGS.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}
                     </select>

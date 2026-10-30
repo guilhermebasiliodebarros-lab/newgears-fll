@@ -1,13 +1,18 @@
-import { Suspense, lazy, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy, limit, writeBatch, deleteField, runTransaction } from "firebase/firestore";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, where, setDoc, collectionGroup, orderBy, limit, writeBatch, runTransaction } from "firebase/firestore";
 import { auth, db, FIREBASE_AUTH_ENABLED } from './firebase'; // Reutiliza o mesmo projeto Firebase
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { loadReportsSession } from './services/weeklyReports';
+import useTeamRecords from './hooks/useTeamRecords';
+import useWorkspaceClock from './hooks/useWorkspaceClock';
 import useWeeklyReports from './hooks/useWeeklyReports';
 import useSeasonEvaluations from './hooks/useSeasonEvaluations';
 const WeeklyReportsView = lazy(() => import('./views/WeeklyReportsView'));
 const ReportRecipientsView = lazy(() => import('./views/ReportRecipientsView'));
 import WeeklyReportsSummary from './components/WeeklyReportsSummary';
+import WorkspaceBriefing from './components/WorkspaceBriefing';
+import WorkspaceSearch from './components/WorkspaceSearch';
+import { DialogSurface, NotificationToast, PanelSkeleton, SectionDisclosure } from './components/InterfacePrimitives';
 import WorkspaceActionQueue from './components/WorkspaceActionQueue';
 import SeasonPlanningPanel from './components/SeasonPlanningPanel';
 import AttendancePanel from './components/AttendancePanel';
@@ -36,17 +41,24 @@ import LogoNewGears from './components/LogoNewGears';
 import WorkspaceSidebar from './components/WorkspaceSidebar';
 import { workshopMember } from './utils/gearWorkshop';
 import { WorkspaceHero, WorkspaceSectionHeading, WorkspaceScene, WorkspaceContent, WorkspaceCollapsible, WorkspacePanelToolbar, SeasonModeControl } from './components/WorkspaceChrome';
-import StrategyView from './views/StrategyView';
-import RoundsView from './views/RoundsView';
-import LogbookView from './views/LogbookView';
-import KanbanView from './views/KanbanView';
+const StrategyView = lazy(() => import('./views/StrategyView'));
+const RoundsView = lazy(() => import('./views/RoundsView'));
+const LogbookView = lazy(() => import('./views/LogbookView'));
+const KanbanView = lazy(() => import('./views/KanbanView'));
 import { normalizeTaskRecord, normalizeEventRecord, normalizeWorkspaceRecord, recordDay, recordDate } from './utils/workspaceRecords';
+import { deleteRobotRound, applyOfficialCode, saveEvaluation } from './services/workspaceMutations';
+const ScoreEvolutionChart = lazy(() => import('./components/ScoreEvolutionChart'));
+import { ScoreEvolutionChartContext } from './hooks/useScoreEvolutionChartContext';
+import { studentAttendanceStats, studentLevel } from './utils/studentMetrics';
+import { adjustStudentXp, undoStudentXp, reviewLeaderPenalty, saveSchoolGrades, claimEnglishReward, changeStudentBadge } from './services/studentXp';
+import { readInlineMedia } from './utils/inlineMedia';
+import { legacySessionIdentity } from './utils/legacySession';
 import { browserStorage } from './utils/browserStorage';
 import { reportClientIssue, setDiagnosticsContext } from './services/clientDiagnostics';
-import AgendaView from './views/AgendaView';
-import FinalSprintView from './views/FinalSprintView';
+const AgendaView = lazy(() => import('./views/AgendaView'));
+const FinalSprintView = lazy(() => import('./views/FinalSprintView'));
 import { FINAL_SPRINT_FRONTS } from './constants/finalSprintFronts';
-import ActivityHistoryView from './views/ActivityHistoryView';
+const ActivityHistoryView = lazy(() => import('./views/ActivityHistoryView'));
 const SeasonHistoryView = lazy(() => import('./views/SeasonHistoryView'));
 const PublicShowcaseAdminView = lazy(() => import('./views/PublicShowcaseAdminView'));
 const GiroKnowledgeView = lazy(() => import('./views/GiroKnowledgeView'));
@@ -62,7 +74,6 @@ import {
   calculateSchoolReportXp,
   getSchoolGradeXp,
   getSchoolStageRecord,
-  normalizeSchoolGrades,
   parseSchoolGrade
 } from './utils/schoolReport';
 import { 
@@ -200,17 +211,7 @@ const readStoredTheme = () => {
   return browserStorage.getItem('newgears_visual_theme') === 'gold' ? 'gold' : 'classic';
 };
 
-const LazyPanelFallback = ({ label = 'Carregando modulo...', minHeightClass = 'min-h-[220px]' }) => (
-  <div className={`newgears-major-panel flex ${minHeightClass} items-center justify-center rounded-[28px] border border-white/10 bg-[#11131d]/92 p-6 text-center shadow-[0_18px_48px_rgba(0,0,0,0.24)]`}>
-    <div>
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[18px] border border-cyan-400/20 bg-cyan-400/10">
-        <Loader2 size={24} className="animate-spin text-cyan-300" />
-      </div>
-      <p className="mt-4 text-[10px] font-black uppercase tracking-[0.22em] text-slate-300/70">Streaming de interface</p>
-      <p className="mt-2 text-sm text-slate-200/80">{label}</p>
-    </div>
-  </div>
-);
+const LazyPanelFallback = ({ label = 'Carregando esta \u00e1rea...', minHeightClass = '' }) => <PanelSkeleton label={label} className={minHeightClass} />;
 
 const LazyOverlayFallback = ({ label = 'Carregando modo...' }) => (
   <div className="fixed inset-0 z-[210] flex items-center justify-center bg-[#05060a]/96 px-6 text-center text-white backdrop-blur-sm">
@@ -337,7 +338,7 @@ const readStoredUser = () => {
     if (!raw) return null;
 
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : null;
+    return parsed && typeof parsed === 'object' ? legacySessionIdentity(parsed) : null;
   } catch {
     return null;
   }
@@ -766,7 +767,7 @@ const persistStoredUser = (user) => {
       return;
     }
 
-    browserStorage.setItem("roboquest_user", JSON.stringify(user));
+    browserStorage.setItem("roboquest_user", JSON.stringify(legacySessionIdentity(user)));
   } catch {
     // Ignore storage errors so the interface keeps working.
   }
@@ -957,7 +958,39 @@ const SchoolGradesForm = ({ data, onSubmit }) => {
   );
 };
 
+const getLogbookEntryDate = (entry) => {
+      return recordDate(entry?.date) || new Date(0);
+  };
+const sortLogbookEntries = (entries) => [...entries].sort((left, right) => getLogbookEntryDate(right) - getLogbookEntryDate(left));
+const getLogbookStudentId = (entry) => {
+      if (!entry?.refPath) return null;
+      const pathParts = entry.refPath.split('/');
+      return pathParts.length > 1 ? pathParts[1] : null;
+  };
+const buildLocalDate = (year, monthIndex, day, hour = 12, minute = 0, second = 0, millisecond = 0) =>
+      new Date(year, monthIndex, day, hour, minute, second, millisecond);
+const parseLocalDateValue = (dateString, endOfDay = false) => {
+      const normalizedDay = recordDay(dateString);
+      if (!normalizedDay) return null;
+
+      const [year, month, day] = normalizedDay.split('-').map(Number);
+      if (!year || !month || !day) return null;
+
+      return buildLocalDate(
+        year,
+        month - 1,
+        day,
+        endOfDay ? 23 : 0,
+        endOfDay ? 59 : 0,
+        endOfDay ? 59 : 0,
+        endOfDay ? 999 : 0
+      );
+  };
+const getCurrentLevel = (xp) => studentLevel(xp, LEVELS);
+
 function App() {
+  const workspaceNow = useWorkspaceClock();
+  const moodDate = gearDay(new Date(workspaceNow));
   // === TODOS OS ESTADOS (HOOKS) ===
   const [currentUser, setCurrentUser] = useState(() => FIREBASE_AUTH_ENABLED ? null : readStoredUser());
   const [loginUser, setLoginUser] = useState("");
@@ -985,7 +1018,7 @@ function App() {
         const student = user.role === 'student' ? { id: user.studentId, name: user.name, email: user.email } : null;
         const session = { type: user.role, uid: user.uid, name: user.name, email: user.email, studentId: user.studentId, ...(student ? { data: student } : {}) };
         setCurrentUser(session); setIsAdmin(user.role === 'admin'); setViewAsStudent(student);
-        browserStorage.setItem('roboquest_user', JSON.stringify(session));
+        browserStorage.setItem('roboquest_user', JSON.stringify(legacySessionIdentity(session)));
         setLoginError('');
       } catch (error) {
         if (!mounted || attempt !== generation) return;
@@ -1006,6 +1039,8 @@ function App() {
   const [logoutCountdown, setLogoutCountdown] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+  const [taskComposerRequest, setTaskComposerRequest] = useState(0);
+  const completeTaskComposerRequest = useCallback(() => setTaskComposerRequest(0), []);
   const closeWorkspaceMenu = useCallback(() => setWorkspaceMenuOpen(false), []);
   const [badgeStudent, setBadgeStudent] = useState(null);
   const [showConfetti, setShowConfetti] = useState(false);
@@ -1014,9 +1049,8 @@ function App() {
   const prevXpRef = useRef(null);
   const confettiTimeoutRef = useRef(null);
   const [showBatteryModal, setShowBatteryModal] = useState(false);
-  const [teamMoods, setTeamMoods] = useState([]);
-  const [isStudentLink, setIsStudentLink] = useState(false);
-  const [currentWeekData, setCurrentWeekData] = useState(null);
+  const [teamMoodSnapshot, setTeamMoods] = useState({});
+
   const [adminPanelState, setAdminPanelState] = useState(() => readStoredPrefs('newgears_admin_panel_prefs_v2', ADMIN_PANEL_DEFAULTS));
   const [studentPanelState, setStudentPanelState] = useState(() => readStoredPrefs('newgears_student_panel_prefs_v2', STUDENT_PANEL_DEFAULTS));
   const [studentMissionMode, setStudentMissionMode] = useState(() => {
@@ -1029,17 +1063,26 @@ function App() {
   };
   const [isPublicMode, setIsPublicMode] = useState(() => getStandaloneView() === 'public');
   const [focusedReportId, setFocusedReportId] = useState(() => new URLSearchParams(window.location.search).get('report') || '');
-  const [adminTab, setAdminTab] = useState(() => new URLSearchParams(window.location.search).has('report') ? 'weekly_reports' : 'sprint');
+  const [adminTab, setAdminTabValue] = useState(() => new URLSearchParams(window.location.search).has('report') ? 'weekly_reports' : 'overview');
   const [workspaceSeason, setWorkspaceSeason] = useState(() => browserStorage.getItem('newgears_workspace_season') === 'rotation' ? 'rotation' : 'final');
   const [isSavingWorkspaceSeason, setIsSavingWorkspaceSeason] = useState(false);
   const [activeTeamSeasonId, setActiveTeamSeasonId] = useState(() => browserStorage.getItem('newgears_active_season_id') || null);
   const [activeTeamSeasonName, setActiveTeamSeasonName] = useState(() => browserStorage.getItem('newgears_active_season_name') || 'Temporada atual');
   const [seasonLifecycleReady, setSeasonLifecycleReady] = useState(() => Boolean(browserStorage.getItem('newgears_active_season_id')));
   const [workspaceSeasonLoaded, setWorkspaceSeasonLoaded] = useState(false);
-  const [teamSeasons, setTeamSeasons] = useState([]);
+  const [seasonRecords, setTeamSeasons] = useState([]);
+  const teamSeasons = currentUser?.type === 'admin' && isAdmin ? seasonRecords : [];
   const [isTransitioningSeason, setIsTransitioningSeason] = useState(false);
   const [seasonTransitionLock, setSeasonTransitionLock] = useState(null);
-  const [studentTab, setStudentTab] = useState(() => new URLSearchParams(window.location.search).has('report') ? 'weekly_reports' : 'sprint');
+  const [studentTab, setStudentTabValue] = useState(() => new URLSearchParams(window.location.search).has('report') ? 'weekly_reports' : 'overview');
+  const setAdminTab = useCallback((next) => {
+    if (next !== adminTab) setAdminPanelState((previous) => previous.dashboard ? { ...previous, dashboard: false } : previous);
+    setAdminTabValue(next);
+  }, [adminTab]);
+  const setStudentTab = useCallback((next) => {
+    if (next !== studentTab) setStudentPanelState((previous) => previous.dashboard ? { ...previous, dashboard: false } : previous);
+    setStudentTabValue(next);
+  }, [studentTab]);
   const openWeeklyReports = (reportId = '') => {
     setFocusedReportId(reportId);
     setAdminTab('weekly_reports'); setStudentTab('weekly_reports');
@@ -1057,34 +1100,38 @@ function App() {
   const [prototypeIterations, setPrototypeIterations] = useState([]);
   const [allStudents, setStudents] = useState([]);
   const students = useMemo(() => allStudents.filter(isActiveStudent), [allStudents]);
-  useEffect(() => {
-    if (currentUser?.type !== 'student') return;
-    const studentId = currentUser.studentId || currentUser.data?.id;
-    if (!allStudents.some((student) => student.id === studentId && student.status === 'inactive')) return;
-    setCurrentUser(null); setViewAsStudent(null); setIsAdmin(false); browserStorage.removeItem('roboquest_user');
-    setLoginError('Seu cadastro foi arquivado. Peça ao técnico para reativá-lo.');
-    if (FIREBASE_AUTH_ENABLED) void signOut(auth);
-  }, [allStudents, currentUser]);
+  const teamMoods = useMemo(() => teamMoodSnapshot.date === moodDate ? (teamMoodSnapshot.rows || []).filter((mood) => (!seasonLifecycleReady || !mood.seasonId || mood.seasonId === activeTeamSeasonId) && students.some((student) => student.id === mood.studentId)) : [], [teamMoodSnapshot, moodDate, seasonLifecycleReady, activeTeamSeasonId, students]);
+
   const [planningConfig, setPlanningConfig] = useState(null);
   const effectivePlanning = useMemo(() => resolvePlanningConfig(planningConfig, students, !activeTeamSeasonId), [planningConfig, students, activeTeamSeasonId]);
+  const rotationSchedule = useMemo(() => buildRotationSchedule(students, effectivePlanning), [students, effectivePlanning]);
+  const currentWeekData = useMemo(() => {
+    const now = new Date(workspaceNow);
+    return rotationSchedule.find((week) => now >= parseLocalDateValue(week.startDate) && now <= parseLocalDateValue(week.endDate, true))
+      || rotationSchedule.find((week) => parseLocalDateValue(week.startDate) > now) || rotationSchedule.at(-1) || null;
+  }, [rotationSchedule, workspaceNow]);
   const [rotationApplications, setRotationApplications] = useState([]);
   const [isProcessingRotation, setIsProcessingRotation] = useState(false);
   const [isSavingPlanning, setIsSavingPlanning] = useState(false);
   const [tasks, setTasks] = useState([]);
-  const [finalSprintAssignments, setFinalSprintAssignments] = useState([]);
-  const [finalSprintAssignmentsState, setFinalSprintAssignmentsState] = useState({ loading: true, error: false });
+
+
   const [finalSprintAssignmentsRetry, setFinalSprintAssignmentsRetry] = useState(0);
   const evaluationWorkspace = useSeasonEvaluations({ db, user: currentUser, technical: currentUser?.type === 'admin' && isAdmin, studentId: viewAsStudent?.id, seasonId: activeTeamSeasonId, ready: workspaceSeasonLoaded });
   const finalSprintEvaluations = evaluationWorkspace.records;
-  const [selectionRecords, setFinalSprintSelections] = useState([]);
-  const [selectionReadScope, setSelectionReadScope] = useState('');
-  const [selectionReadError, setSelectionReadError] = useState(false);
+
   const [selectionRetry, setSelectionRetry] = useState(0);
-  const selectionScope = JSON.stringify([currentUser?.uid || currentUser?.studentId || currentUser?.name, currentUser?.type, isAdmin, viewAsStudent?.id, activeTeamSeasonId, selectionRetry]);
-  const finalSprintSelections = selectionReadScope === selectionScope ? selectionRecords : [];
-  const [finalSprintSelectionsReady, setFinalSprintSelectionsReady] = useState(false);
+
+  const assignmentWorkspace = useTeamRecords({ db, user: currentUser, studentId: viewAsStudent?.id, technical: isAdmin, seasonId: seasonLifecycleReady ? activeTeamSeasonId : null,
+    enabled: isAdmin ? adminTab === 'sprint' : studentTab === 'sprint', attempt: finalSprintAssignmentsRetry, collectionName: 'finalSprintAssignments' });
+  const finalSprintAssignments = assignmentWorkspace.records;
+  const finalSprintAssignmentsState = assignmentWorkspace;
+  const selectionWorkspace = useTeamRecords({ db, user: currentUser, studentId: viewAsStudent?.id, technical: isAdmin, seasonId: seasonLifecycleReady ? activeTeamSeasonId : null,
+    enabled: workspaceSeasonLoaded, attempt: selectionRetry, collectionName: 'finalSprintSelectionScores' });
+  const finalSprintSelections = selectionWorkspace.records;
+  const selectionReadError = selectionWorkspace.error;
   const [tournamentDraftState, setTournamentDraftState] = useState({ seasonId: '', loading: true, error: false, record: null });
-  const tournamentDraftReady = selectionReadScope === selectionScope && finalSprintSelectionsReady && tournamentDraftState.seasonId === (activeTeamSeasonId || 'legacy') && !tournamentDraftState.loading && !tournamentDraftState.error;
+  const tournamentDraftReady = selectionWorkspace.ready && tournamentDraftState.seasonId === (activeTeamSeasonId || 'legacy') && !tournamentDraftState.loading && !tournamentDraftState.error;
   const ownTournamentSelection = getStudentTournamentSelection({ user: currentUser, studentId: viewAsStudent?.id, selections: finalSprintSelections, seasonId: activeTeamSeasonId || 'legacy' });
   const [logbookEntries, setLogbookEntries] = useState([]);
   const [events, setEvents] = useState([]);
@@ -1127,17 +1174,28 @@ function App() {
   const [notification, setNotification] = useState(null);
   const [xpPenaltyReason, setXpPenaltyReason] = useState('');
   const [xpPenaltyShouldNotify, setXpPenaltyShouldNotify] = useState(true);
-  const [xpLossAlertNotice, setXpLossAlertNotice] = useState(null);
+  const [xpLossAlertState, setXpLossAlertNotice] = useState(null);
+  const xpLossAlertNotice = currentUser?.type === 'student' && xpLossAlertState?.studentId === viewAsStudent?.id
+    && normalizeXpLossNotifications(viewAsStudent?.xpLossNotifications).some((notice) => notice.id === xpLossAlertState.id) ? xpLossAlertState : null;
   const notificationTimeoutRef = useRef(null);
   const xpLossLastAlertAtRef = useRef(new Map());
+  const showStudentXpLossNotice = useCallback((student) => {
+    const now = Date.now();
+    const next = normalizeXpLossNotifications(student?.xpLossNotifications).reverse().find((notice) => now - (xpLossLastAlertAtRef.current.get(student.id + ':' + notice.id) || 0) >= XP_LOSS_ALERT_REPEAT_MS);
+    if (!next) return;
+    xpLossLastAlertAtRef.current.set(student.id + ':' + next.id, now);
+    setXpLossAlertNotice({ ...next, studentId: student.id });
+  }, []);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submissionText, setSubmissionText] = useState("");
+  const [, setSubmissionText] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [showFullSchedule, setShowFullSchedule] = useState(false); 
   const [agendaSearchQuery, setAgendaSearchQuery] = useState('');
   const [agendaTypeFilter, setAgendaTypeFilter] = useState('all');
   const [agendaScopeFilter, setAgendaScopeFilter] = useState('all');
-  const [adminLogbookStudentId, setAdminLogbookStudentId] = useState(null);
+  const [adminLogbookSelection, setAdminLogbookStudentId] = useState(null);
+  const adminLogbookStudentId = students.some((student) => student.id === adminLogbookSelection) ? adminLogbookSelection
+    : sortLogbookEntries(logbookEntries).map(getLogbookStudentId).find((id) => students.some((student) => student.id === id)) || students[0]?.id || null;
   const [adminLogbookSearchQuery, setAdminLogbookSearchQuery] = useState('');
   const [adminLogbookStudentQuery, setAdminLogbookStudentQuery] = useState('');
   const [adminLogbookWeekFilter, setAdminLogbookWeekFilter] = useState('all');
@@ -1157,9 +1215,9 @@ function App() {
   const [leaderPenaltyFileInputKey, setLeaderPenaltyFileInputKey] = useState(0);
   const isTvOnlyView = getStandaloneView() === 'tv';
   const isPublicTvMode = getStandaloneView() === 'public-tv';
-  const today = new Date().toISOString().split('T')[0];
+  const today = dateKey(new Date(workspaceNow));
   const isLogbookViewActive = isAdmin ? adminTab === 'logbook' : studentTab === 'logbook';
-  const isFinalSprintActive = Boolean(currentUser) && (isAdmin ? adminTab === 'sprint' : studentTab === 'sprint');
+
   const isActivityHistoryActive = currentUser?.type === 'admin' && isAdmin && adminTab === 'history';
   const isPitStopModalOpen = modal.type === 'pitstop';
   const dashboardNeedsStrategyData = isAdmin
@@ -1191,7 +1249,7 @@ function App() {
     || ((adminTab === 'strategy' || studentTab === 'strategy') && ['robot_design', 'judge_practice'].includes(strategySubTab))
     || dashboardNeedsRobotData;
   useEffect(() => {
-    setDiagnosticsContext({ area: currentUser ? (isAdmin ? adminTab : studentTab) : isPublicMode ? 'public' : isTvOnlyView || isPublicTvMode ? 'tv' : 'startup', role: currentUser?.type === 'admin' ? 'technical' : currentUser?.type === 'student' ? 'student' : 'visitor' });
+    setDiagnosticsContext({ area: currentUser?.type ? (isAdmin ? adminTab : studentTab) : isPublicMode ? 'public' : isTvOnlyView || isPublicTvMode ? 'tv' : 'startup', role: currentUser?.type === 'admin' ? 'technical' : currentUser?.type === 'student' ? 'student' : 'visitor' });
   }, [currentUser?.type, isAdmin, adminTab, studentTab, isPublicMode, isTvOnlyView, isPublicTvMode]);
   const [missions, setMissions] = useState({
     [STATION_KEYS.ENGINEERING]: { text: 'Definir estrategia do robo.', deadline: today },
@@ -1206,14 +1264,6 @@ function App() {
   useEffect(() => {
       browserStorage.setItem('newgears_student_panel_prefs_v2', JSON.stringify(studentPanelState));
   }, [studentPanelState]);
-
-  useEffect(() => {
-      setAdminPanelState((prev) => (prev.dashboard ? { ...prev, dashboard: false } : prev));
-  }, [adminTab]);
-
-  useEffect(() => {
-      setStudentPanelState((prev) => (prev.dashboard ? { ...prev, dashboard: false } : prev));
-  }, [studentTab]);
 
   useEffect(() => {
       browserStorage.setItem('newgears_student_mission_mode', studentMissionMode);
@@ -1405,14 +1455,14 @@ function App() {
       return normalizedStudent;
   };
 
-  const showNotification = (msg, type = 'success', action = null, duration = 3000) => { 
+  const showNotification = useCallback((msg, type = 'success', action = null, duration = 3000) => {
       if (notificationTimeoutRef.current) {
           clearTimeout(notificationTimeoutRef.current);
       }
 
       setNotification({ msg, type, action }); 
-      notificationTimeoutRef.current = setTimeout(() => setNotification(null), action ? 7000 : duration); 
-  }
+      notificationTimeoutRef.current = setTimeout(() => setNotification(null), action ? 7000 : type === 'error' ? Math.max(8000, duration) : duration);
+  }, [])
 
   const getFinalSprintAssignmentDocId = (studentId, frontId, seasonId = activeTeamSeasonId || 'legacy') => encodeURIComponent(`${seasonId}__${studentId}__${frontId}`);
 
@@ -1520,12 +1570,12 @@ function App() {
               updatedAt: now,
           };
           const evaluationId = existing?.id || getFinalSprintEvaluationDocId('weekly', studentId, week.id);
-          await setDoc(doc(db, 'finalSprintEvaluations', evaluationId), evaluation, { merge: true });
+          await saveEvaluation({ db, user: currentUser, id: evaluationId, evaluation, expected: existing });
           showNotification(`Avaliação semanal de ${student.name || 'aluno'} salva.`, 'success');
           return true;
       } catch (error) {
           console.error('Erro ao salvar avaliação semanal da reta final:', error);
-          showNotification('Não foi possível salvar a avaliação semanal.', 'error');
+          showNotification(error.message || 'Não foi possível salvar a avaliação semanal.', 'error');
           return false;
       }
   };
@@ -1559,12 +1609,12 @@ function App() {
           };
           const evaluationId = existing?.id || getFinalSprintEvaluationDocId('presentation', studentId);
           // Replace the ratings map as a whole so removed criteria do not survive a reevaluation.
-          await setDoc(doc(db, 'finalSprintEvaluations', evaluationId), evaluation, { mergeFields: Object.keys(evaluation) });
+          await saveEvaluation({ db, user: currentUser, id: evaluationId, evaluation, expected: existing });
           showNotification(`Avaliação da apresentação de ${student.name || 'aluno'} salva.`, 'success');
           return true;
       } catch (error) {
           console.error('Erro ao salvar avaliação da apresentação:', error);
-          showNotification('Não foi possível salvar a avaliação da apresentação.', 'error');
+          showNotification(error.message || 'Não foi possível salvar a avaliação da apresentação.', 'error');
           return false;
       }
   };
@@ -1593,12 +1643,12 @@ function App() {
       };
       const evaluationId = existing?.id || getFinalSprintEvaluationDocId('report', studentId);
       try {
-          await setDoc(doc(db, 'finalSprintEvaluations', evaluationId), evaluation, { merge: true });
+          await saveEvaluation({ db, user: currentUser, id: evaluationId, evaluation, expected: existing });
           showNotification(`Avaliação do relatório de ${student.name || 'aluno'} salva.`, 'success');
           return true;
       } catch (error) {
           console.error('Erro ao salvar avaliação do relatório:', error);
-          showNotification('Não foi possível salvar a avaliação do relatório.', 'error');
+          showNotification(error.message || 'Não foi possível salvar a avaliação do relatório.', 'error');
           return false;
       }
   };
@@ -1749,159 +1799,29 @@ function App() {
 
   // --- DESAFIO DE INGLÊS: Função do Aluno ---
   const claimEnglishXP = async () => {
-      if (!viewAsStudent || !viewAsStudent.englishChallengeUnlocked) return;
-
-      try {
-          const studentRef = doc(db, "students", viewAsStudent.id);
-          const xpBonus = 20; // Quanto de XP ele ganha por falar inglês
-
-          await updateDoc(studentRef, {
-              xp: (viewAsStudent.xp || 0) + xpBonus,
-              englishChallengeUnlocked: false // Bloqueia o botão de novo automaticamente!
-          });
-
-          await recordXpOrigin({
-              student: viewAsStudent,
-              amount: xpBonus,
-              source: 'english_challenge',
-              mode: 'reward',
-              reason: 'Desafio de ingles concluido'
-          });
-
-          // Atualiza a tela do aluno
-          syncStudentLocally({
-              ...viewAsStudent,
-              xp: (viewAsStudent.xp || 0) + xpBonus,
-              englishChallengeUnlocked: false
-          });
-          
-          alert("Great job! Mandou bem no inglês! +20 XP 🇺🇸✨");
-      } catch (error) {
-          console.error("Erro ao resgatar XP de inglês:", error);
-      }
+    if (!viewAsStudent?.englishChallengeUnlocked) return;
+    try {
+      const result = await claimEnglishReward({ db, user: currentUser, studentId: viewAsStudent.id, seasonId: activeTeamSeasonId });
+      syncStudentLocally(result.student);
+      showNotification('Great job! +20 XP pelo desafio de ingl\u00eas.');
+    } catch (error) { showNotification(error.message || 'N\u00e3o foi poss\u00edvel resgatar o desafio.', 'error'); }
   };
- // Função atualizada para o Técnico dar Badges
   const toggleBadge = async (student, badgeId) => {
-      if (!isAdmin || !student?.id) return;
-
-      const previousStudent = normalizeStudentRecord(student);
-      const badgeMeta = BADGES_LIST.find((badge) => badge.id === badgeId);
-      const badgeName = badgeMeta?.name || 'Conquista FLL';
-      const badgeXpBonus = getBadgeXpBonus(badgeMeta);
-      const currentBadges = normalizeStudentBadges(previousStudent.badges);
-      const currentBadgeAchievements = Array.isArray(previousStudent.badgeAchievements) ? previousStudent.badgeAchievements : [];
-      const isRemovingBadge = currentBadges.includes(badgeId);
-      const xpDelta = isRemovingBadge ? -badgeXpBonus : badgeXpBonus;
-      const newBadges = isRemovingBadge
-          ? currentBadges.filter(badge => badge !== badgeId)
-          : [...currentBadges, badgeId];
-      const nextBadgeAchievements = isRemovingBadge
-          ? currentBadgeAchievements.filter((achievement) => normalizeBadgeToken(achievement?.badgeId || achievement?.id || achievement?.badgeName) !== badgeId)
-          : [
-              ...currentBadgeAchievements,
-              {
-                  badgeId,
-                  badgeName,
-                  awardedAt: new Date().toISOString(),
-                  xpAmount: badgeXpBonus,
-                  xpSource: 'badge'
-              }
-          ];
-      const nextXp = (previousStudent.xp || 0) + xpDelta;
-      const updateData = {
-         badges: newBadges,
-         badgeAchievements: nextBadgeAchievements,
-         xp: nextXp
-      };
-
-      try {
-          const studentRef = doc(db, "students", previousStudent.id);
-          await updateDoc(studentRef, updateData);
-
-          const xpRecordRef = await recordXpOrigin({
-              student: previousStudent,
-              amount: xpDelta,
-              source: 'badge',
-              mode: isRemovingBadge ? 'correction' : 'reward',
-              reason: isRemovingBadge ? `Badge removida: ${badgeName}` : `Badge aplicada: ${badgeName}`,
-              notifyStudent: false,
-              badgeId,
-              badgeName
-          });
-
-          const updatedStudent = syncStudentLocally({ ...previousStudent, ...updateData });
-          void recordActivity({
-              action: isRemovingBadge ? 'corrigiu uma conquista' : 'entregou uma conquista',
-              category: 'team',
-              title: `${badgeName} para ${previousStudent.name}`,
-              detail: isRemovingBadge
-                  ? badgeXpBonus > 0
-                      ? `${xpDelta} XP por remocao de badge, sem notificacao ao aluno.`
-                      : 'Badge sem XP removida.'
-                  : badgeXpBonus > 0
-                      ? `+${badgeXpBonus} XP com origem badge.`
-                      : 'Badge sem XP aplicada.',
-              entityId: previousStudent.id
-          });
-
-          let undoUsed = false;
-          const undoBadgeChange = async () => {
-              if (undoUsed) return;
-              undoUsed = true;
-
-              const restoreData = {
-                  badges: currentBadges,
-                  badgeAchievements: currentBadgeAchievements,
-                  xp: previousStudent.xp || 0
-              };
-
-              try {
-                  await updateDoc(studentRef, restoreData);
-                  await recordXpOrigin({
-                      student: previousStudent,
-                      amount: -xpDelta,
-                      source: 'undo',
-                      mode: 'undo',
-                      reason: `Desfazer alteracao de badge: ${badgeName}`,
-                      notifyStudent: false,
-                      badgeId,
-                      badgeName,
-                      referenceRecordId: xpRecordRef?.id || ''
-                  });
-                  syncStudentLocally({ ...previousStudent, ...restoreData });
-                  void recordActivity({
-                      action: 'desfez uma alteracao de conquista',
-                      category: 'team',
-                      title: `${badgeName} para ${previousStudent.name}`,
-                      detail: `XP restaurado para ${previousStudent.xp || 0}.`,
-                      entityId: previousStudent.id
-                  });
-                  showNotification("Alteracao de badge desfeita.", "success");
-              } catch (error) {
-                  console.error("Erro ao desfazer badge:", error);
-                  showNotification("Nao foi possivel desfazer a badge.", "error");
-              }
-          };
-
-          showNotification(
-              isRemovingBadge
-                  ? badgeXpBonus > 0
-                      ? `${badgeName} removida. ${xpDelta} XP corrigidos.`
-                      : `${badgeName} removida. Sem XP.`
-                  : badgeXpBonus > 0
-                      ? `${badgeName} aplicada. +${badgeXpBonus} XP.`
-                      : `${badgeName} aplicada. Sem XP.`,
-              "success",
-              { label: 'Desfazer', onClick: undoBadgeChange }
-          );
-
-          return updatedStudent;
-      } catch (error) {
-          console.error("Erro ao atualizar badge:", error);
-          showNotification("Erro ao atualizar badge.", "error");
-          return null;
-      }
-      };
+    if (!isAdmin || !student?.id) return;
+    const badge = BADGES_LIST.find((item) => item.id === badgeId);
+    if (!badge) return;
+    try {
+      const result = await changeStudentBadge({ db, user: currentUser, studentId: student.id, seasonId: activeTeamSeasonId, badgeId,
+        badgeName: badge.name, bonus: getBadgeXpBonus(badge), removing: hasStudentBadge(student, badgeId), normalizeBadges: normalizeStudentBadges, normalizeAchievementId: (entry) => normalizeBadgeToken(entry.badgeId || entry.id || entry.badgeName) });
+      syncStudentLocally(result.student);
+      void recordActivity({ action: result.amount < 0 ? 'corrigiu uma conquista' : 'entregou uma conquista', category: 'team', title: badge.name, entityId: student.id });
+      showNotification('Conquista atualizada.', 'success', { label: 'Desfazer', onClick: async () => {
+        try { const restored = await undoStudentXp({ db, user: currentUser, studentId: student.id, seasonId: activeTeamSeasonId, recordId: result.recordId }); syncStudentLocally(restored.student); showNotification('Altera\u00e7\u00e3o desfeita.'); }
+        catch (error) { showNotification(error.message || 'N\u00e3o foi poss\u00edvel desfazer.', 'error'); }
+      } });
+      return result.student;
+    } catch (error) { showNotification(error.message || 'Erro ao atualizar conquista.', 'error'); return null; }
+  };
   // --- LÓGICA DA CHUVA DE CONFETES (LEVEL UP E GRANDES GANHOS DE XP) ---
 
   useEffect(() => {
@@ -1914,12 +1834,6 @@ function App() {
           }
       };
   }, []);
-
-  useEffect(() => {
-      if (isLiteMode && showConfetti) {
-          setShowConfetti(false);
-      }
-  }, [isLiteMode, showConfetti]);
 
   useEffect(() => {
       if (viewAsStudent) {
@@ -1938,8 +1852,8 @@ function App() {
           let msg = "";
 
           // 3. Se não for o primeiro carregamento da tela, verifica as vitórias
-          if (prevXpRef.current !== null) {
-              const prevXp = prevXpRef.current;
+          if (prevXpRef.current?.studentId === viewAsStudent.id) {
+              const prevXp = prevXpRef.current.xp;
               const gainedXp = currentXp - prevXp;
 
               // Condição A: Subiu de nível!
@@ -1973,31 +1887,31 @@ function App() {
           browserStorage.setItem(storageKey, currentLevelIndex.toString());
           
           // Atualiza o valor anterior para a próxima renderização
-          prevXpRef.current = currentXp;
+          prevXpRef.current = { studentId: viewAsStudent.id, xp: currentXp };
       } else {
           // Se deslogar, limpa a memória temporária do XP
           prevXpRef.current = null;
       }
-  }, [isLiteMode, viewAsStudent?.xp, viewAsStudent?.id]);
+  }, [isLiteMode, viewAsStudent, showNotification]);
 
   const getTodayMoodDate = () => gearDay();
 
   // Função para carregar a bateria de hoje do banco
   useEffect(() => {
-      if (!db) return;
-      const today = getTodayMoodDate();
+      if (!db || !currentUser?.type) return;
+      const today = moodDate;
       
       // Cria uma "escuta" no banco para ver os humores de hoje em tempo real
       const q = query(collection(db, "dailyMoods"), where("date", "==", today));
       const unsubscribe = onSnapshot(q, (snapshot) => {
           const moods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setTeamMoods(moods.filter((mood) => (!seasonLifecycleReady || !mood.seasonId || mood.seasonId === activeTeamSeasonId) && students.some((student) => student.id === mood.studentId)));
+          setTeamMoods({ date: today, rows: moods });
       });
       return () => unsubscribe();
-  }, [activeTeamSeasonId, seasonLifecycleReady, students]);
+  }, [moodDate, currentUser?.uid, currentUser?.type]);
 
   // Função para Salvar o Humor
-  const handleMoodSubmit = (level) => handleTeamCheckInSubmit(level);
+
 
   // Cálculo da Média da Equipe (Para você ver)
   const teamAverage = teamMoods.length > 0 
@@ -2049,13 +1963,9 @@ function App() {
         setCurrentUser(userObj);
         setIsAdmin(true);
         setViewAsStudent(null);
-        browserStorage.setItem("roboquest_user", JSON.stringify(userObj)); // Salva na memória
+        browserStorage.setItem("roboquest_user", JSON.stringify(legacySessionIdentity(userObj))); // Salva na memória
         return;
     }
-
-    console.log("Tentando logar aluno:", userClean);
-    console.log("Alunos carregados no sistema:", students.length);
-
     // 2. Tenta logar como Aluno (busca no array 'students' que já existe no seu código)
     // Nota: Certifique-se de que o cadastro de aluno salva 'username' e 'password'
     const studentFound = students.find(s => 
@@ -2067,17 +1977,13 @@ function App() {
         setCurrentUser(userObj);
         setIsAdmin(false); // Remove flag de admin
         setViewAsStudent(studentFound); // Força a visão para este aluno
-        browserStorage.setItem("roboquest_user", JSON.stringify(userObj)); // Salva na memória
+        browserStorage.setItem("roboquest_user", JSON.stringify(legacySessionIdentity(userObj))); // Salva na memória
     } else {
-        // Log para ajudar a descobrir o erro (veja no F12)
-        console.log("Falha no login. Usuários disponíveis:", students.map(s => s.username));
-        setLoginError("Usuário ou senha incorretos.");
+        // Log para ajudar a descobrir o erro (veja no F12)        setLoginError("Usuário ou senha incorretos.");
     }
   };
 
-  
-
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
       if (FIREBASE_AUTH_ENABLED) {
           try { await signOut(auth); }
           catch { showNotification('Não foi possível encerrar a sessão. Tente novamente.', 'error'); return; }
@@ -2085,13 +1991,14 @@ function App() {
       setCurrentUser(null);
       setIsAdmin(false);
       setViewAsStudent(null);
+      setLogoutCountdown(null);
       setLoginUser("");
       setLoginPass("");
       xpLossLastAlertAtRef.current = new Map();
       setXpLossAlertNotice(null);
       browserStorage.removeItem("roboquest_user"); // Limpa a memória
         browserStorage.removeItem("roboquest_last_activity"); // Limpa o controle de tempo
-  };
+  }, [showNotification]);
   // ----------------------------------
 
 
@@ -2116,6 +2023,7 @@ function App() {
         
         if (lastActivity) {
             const timeIdle = now - parseInt(lastActivity);
+            if (timeIdle >= TIMEOUT_MS) { void handleLogout(); return; }
             // Se houve atividade recente (outra aba), não mostra o aviso e reseta
             if (timeIdle < IDLE_TIME_BEFORE_WARNING) {
                 resetTimer();
@@ -2168,15 +2076,11 @@ function App() {
       };
 
       if (currentUser) {
-        const lastActivity = browserStorage.getItem("roboquest_last_activity");
-        const now = new Date().getTime();
-        if (lastActivity && now - parseInt(lastActivity) > TIMEOUT_MS) {
-          handleLogout();
-          alert("Sessão encerrada por inatividade (30 minutos). Por favor, faça login novamente.");
-          return;
-        }
-        
-        resetTimer();
+        const lastActivity = Number(browserStorage.getItem('roboquest_last_activity'));
+        const now = Date.now();
+        const last = Number.isFinite(lastActivity) && lastActivity > 0 ? lastActivity : now;
+        if (last === now) browserStorage.setItem('roboquest_last_activity', String(now));
+        warningTimeoutId = setTimeout(checkInactivity, Math.max(0, IDLE_TIME_BEFORE_WARNING - (now - last)));
         window.addEventListener('mousemove', handleActivity);
         window.addEventListener('keydown', handleActivity);
         window.addEventListener('click', handleActivity);
@@ -2192,7 +2096,7 @@ function App() {
         window.removeEventListener('click', handleActivity);
         window.removeEventListener('scroll', handleActivity);
       };
-    }, [currentUser]);
+    }, [currentUser, handleLogout]);
 
 
   // --- LÓGICA DE NOTIFICAÇÕES DA AGENDA EM TEMPO REAL ---
@@ -2202,9 +2106,9 @@ function App() {
       const day = String(dateObj.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
   };
-  const localTodayObj = new Date();
+  const localTodayObj = new Date(workspaceNow);
   const localTodayStr = getLocalYYYYMMDD(localTodayObj);
-  const localTomorrowObj = new Date();
+  const localTomorrowObj = new Date(workspaceNow);
   localTomorrowObj.setDate(localTodayObj.getDate() + 1);
   const localTomorrowStr = getLocalYYYYMMDD(localTomorrowObj);
   const officialStudentDeadlineObj = getNextOrSameWeekday(localTodayObj, [...effectivePlanning.trainingDays].sort((a, b) => ((b + 6) % 7) - ((a + 6) % 7))[0] ?? 3);
@@ -2347,12 +2251,6 @@ function App() {
       return true;
   };
 
-  const getLogbookEntryDate = (entry) => {
-      return recordDate(entry?.date) || new Date(0);
-  };
-
-  const sortLogbookEntries = (entries) => [...entries].sort((left, right) => getLogbookEntryDate(right) - getLogbookEntryDate(left));
-
   const getLogbookEntryWordCount = (entry) => {
       if (entry?.wordCount) return entry.wordCount;
       return (entry?.text || '').trim().split(/\s+/).filter(Boolean).length;
@@ -2367,12 +2265,6 @@ function App() {
   const getLogbookEntryTags = (entry) => {
       if (Array.isArray(entry?.tags) && entry.tags.length > 0) return entry.tags;
       return Array.from(new Set(((entry?.text || '').match(/#[^\s#]+/g) || []).map((tag) => tag.toLowerCase())));
-  };
-
-  const getLogbookStudentId = (entry) => {
-      if (!entry?.refPath) return null;
-      const pathParts = entry.refPath.split('/');
-      return pathParts.length > 1 ? pathParts[1] : null;
   };
 
   const buildLogbookWeekOptions = (entries) => {
@@ -2417,21 +2309,6 @@ function App() {
       });
   };
 
-  useEffect(() => {
-      if (!isAdmin) return;
-
-      const selectedExists = students.some((student) => student.id === adminLogbookStudentId);
-      if (adminLogbookStudentId && selectedExists) return;
-
-      const nextStudentId = sortLogbookEntries(logbookEntries)
-          .map((entry) => getLogbookStudentId(entry))
-          .find(Boolean) || students[0]?.id || null;
-
-      if (nextStudentId !== adminLogbookStudentId) {
-          setAdminLogbookStudentId(nextStudentId);
-      }
-  }, [isAdmin, students, logbookEntries, adminLogbookStudentId]);
-
   const eventsToday = events.filter(e => e.date === localTodayStr);
   const eventsTomorrow = events.filter(e => e.date === localTomorrowStr);
   const urgentEventsCount = eventsToday.length + eventsTomorrow.length;
@@ -2441,171 +2318,40 @@ function App() {
   const urgentTasksCount = urgentTasks.length;
 
   const renderUrgentEventsBanner = () => {
-      if (eventsToday.length === 0 && eventsTomorrow.length === 0) return null;
-      if (eventsToday.length === 0 && eventsTomorrow.length === 0 && urgentTasks.length === 0) return null;
-      return (
-          <div className="mb-6 space-y-3">
-              {eventsToday.map(ev => (
-                  <div key={ev.id} className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl flex items-center justify-between animate-in slide-in-from-top-4 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
-                      <div className="flex items-center gap-4">
-                          <div className="p-3 bg-red-500/20 rounded-full animate-pulse"><AlertTriangle className="text-red-500" size={24} /></div>
-                          <div><h4 className="text-red-400 font-bold text-xs uppercase tracking-widest mb-1 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-red-500 animate-ping"></div> EVENTO HOJE</h4><p className="text-white font-bold md:text-lg leading-none">{ev.title} <span className="text-gray-300 font-normal text-xs md:text-sm ml-2">às {ev.time}</span></p></div>
-                      </div>
-                      <button onClick={() => { isAdmin ? setAdminTab('agenda') : setStudentTab('agenda') }} className="hidden md:block text-xs bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg font-bold transition-all shadow-lg shadow-red-900/20 whitespace-nowrap">Ver na Agenda</button>
-                  </div>
-              ))}
-              {eventsTomorrow.map(ev => (
-                  <div key={ev.id} className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-xl flex items-center justify-between animate-in slide-in-from-top-4 shadow-[0_0_15px_rgba(234,179,8,0.1)]">
-                      <div className="flex items-center gap-4">
-                          <div className="p-3 bg-yellow-500/20 rounded-full"><CalendarDays className="text-yellow-500" size={24} /></div>
-                          <div><h4 className="text-yellow-500 font-bold text-xs uppercase tracking-widest mb-1">EVENTO AMANHÃ</h4><p className="text-white font-bold md:text-lg leading-none">{ev.title} <span className="text-gray-300 font-normal text-xs md:text-sm ml-2">às {ev.time}</span></p></div>
-                      </div>
-                      <button onClick={() => { isAdmin ? setAdminTab('agenda') : setStudentTab('agenda') }} className="hidden md:block text-xs bg-yellow-600 hover:bg-yellow-500 text-black px-4 py-2 rounded-lg font-bold transition-all shadow-lg shadow-yellow-900/20 whitespace-nowrap">Ver na Agenda</button>
-                  </div>
-              ))}
-              {urgentTasks.map(task => (
-                  <div key={task.id} className="bg-orange-500/10 border border-orange-500/50 p-4 rounded-xl flex items-center justify-between animate-in slide-in-from-top-4 shadow-[0_0_20px_rgba(249,115,22,0.2)]">
-                      <div className="flex items-center gap-4">
-                          <div className="p-3 bg-orange-500/20 rounded-full animate-pulse"><ClipboardList className="text-orange-500" size={24} /></div>
-                          <div><h4 className="text-orange-400 font-bold text-xs uppercase tracking-widest mb-1 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-orange-500 animate-ping"></div> TAREFA VENCENDO</h4><p className="text-white font-bold md:text-lg leading-none">{task.text}</p></div>
-                      </div>
-                      <button onClick={() => { isAdmin ? setAdminTab('kanban') : setStudentTab('kanban') }} className="hidden md:block text-xs bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-lg font-bold transition-all shadow-lg shadow-orange-900/20 whitespace-nowrap">{isAdmin ? 'Ver Kanban' : STUDENT_TASKS_VIEW_LABEL}</button>
-                  </div>
-              ))}
-          </div>
-      );
-  }
+    const items = [...eventsToday.map((event) => ({ id: 'today-' + event.id, label: event.title, detail: 'Hoje' + (event.time ? ' \u00b7 ' + event.time : ''), tab: 'agenda' })),
+      ...eventsTomorrow.map((event) => ({ id: 'tomorrow-' + event.id, label: event.title, detail: 'Amanh\u00e3', tab: 'agenda' })),
+      ...urgentTasks.map((task) => ({ id: 'task-' + task.id, label: task.text, detail: 'Prazo da tarefa', tab: 'kanban' }))];
+    if (!items.length) return null;
+    return <details className="ng-attention-strip"><summary><AlertCircle size={17} /><span>{items.length} {items.length === 1 ? 'ponto de aten\u00e7\u00e3o' : 'pontos de aten\u00e7\u00e3o'} da equipe</span><ChevronDown size={15} /></summary>
+      <div>{items.map((item) => <button type="button" key={item.id} onClick={() => isAdmin ? setAdminTab(item.tab) : setStudentTab(item.tab)}><span><strong>{item.label}</strong><small>{item.detail}</small></span><ChevronRight size={15} /></button>)}</div>
+    </details>;
+  };
 
   // --- NOVO: Sincroniza dados do aluno logado com o Firebase em tempo real ---
-  useEffect(() => {
-    if (currentUser?.type !== 'student' || students.length === 0) return;
-    const freshStudent = resolveStudentFromStoredUser(currentUser, students);
-    if (!freshStudent) return;
 
-    setViewAsStudent(freshStudent);
-
-    const storedStudentId = currentUser.data?.id || currentUser.studentId || currentUser.id;
-    if (!currentUser.data || storedStudentId !== freshStudent.id) {
-      const normalizedUser = { ...currentUser, type: 'student', data: freshStudent, studentId: freshStudent.id };
-      setCurrentUser(normalizedUser);
-      persistStoredUser(normalizedUser);
-    }
-  }, [students, currentUser]);
 
   useEffect(() => {
-    if (currentUser?.type !== 'student' || !viewAsStudent?.id) {
-      setXpLossAlertNotice(null);
-      return;
-    }
-
-    const notices = normalizeXpLossNotifications(viewAsStudent.xpLossNotifications);
-    if (notices.length === 0) {
-      setXpLossAlertNotice(null);
-      return;
-    }
-
-    const showDueNotice = () => {
-      const now = Date.now();
-      const latestNotice = [...notices].reverse().find((notice) => {
-        const noticeKey = `${viewAsStudent.id}:${notice.id}`;
-        const lastShownAt = xpLossLastAlertAtRef.current.get(noticeKey) || 0;
-        return now - lastShownAt >= XP_LOSS_ALERT_REPEAT_MS;
-      });
-
-      if (!latestNotice) return;
-
-      xpLossLastAlertAtRef.current.set(`${viewAsStudent.id}:${latestNotice.id}`, now);
-      setXpLossAlertNotice(latestNotice);
-    };
-
-    showDueNotice();
-    const intervalId = setInterval(showDueNotice, XP_LOSS_ALERT_REPEAT_MS);
-    return () => clearInterval(intervalId);
-  }, [currentUser?.type, viewAsStudent?.id, viewAsStudent?.xpLossNotifications]);
+    if (currentUser?.type !== 'student' || !viewAsStudent?.id) return undefined;
+    const timer = setInterval(() => showStudentXpLossNotice(viewAsStudent), XP_LOSS_ALERT_REPEAT_MS);
+    return () => clearInterval(timer);
+  }, [currentUser?.type, viewAsStudent, showStudentXpLossNotice]);
 
 // --- FUNÇÃO DE CRONOGRAMA OFICIAL (12 ALUNOS) ---
   // Usamos useMemo para reconectar os dados assim que os alunos carregarem do Firebase
-  const buildLocalDate = (year, monthIndex, day, hour = 12, minute = 0, second = 0, millisecond = 0) =>
-      new Date(year, monthIndex, day, hour, minute, second, millisecond);
 
-  const parseLocalDateValue = (dateString, endOfDay = false) => {
-      const normalizedDay = recordDay(dateString);
-      if (!normalizedDay) return null;
-
-      const [year, month, day] = normalizedDay.split('-').map(Number);
-      if (!year || !month || !day) return null;
-
-      return buildLocalDate(
-        year,
-        month - 1,
-        day,
-        endOfDay ? 23 : 0,
-        endOfDay ? 59 : 0,
-        endOfDay ? 59 : 0,
-        endOfDay ? 999 : 0
-      );
-  };
-
-  const rotationSchedule = useMemo(() => buildRotationSchedule(students, effectivePlanning), [students, effectivePlanning]);
-
-  // --- 1. CÁLCULO DA SEMANA ATUAL (CÓDIGO NOVO) ---
-  useEffect(() => {
-    // Se não tiver cronograma, não faz nada
-    if (!rotationSchedule.length) { setCurrentWeekData(null); return; }
-    
-    const calculateCurrentWeek = () => {
-        const now = new Date();
-        
-        // Procura qual semana engloba o dia de hoje
-        const found = rotationSchedule.find(w => {
-            const start = parseLocalDateValue(w.startDate);
-            const end = parseLocalDateValue(w.endDate, true);
-            if (!start || !end) return false;
-            return now >= start && now <= end;
-        });
-
-        if (found) {
-            // Atualiza apenas se mudou de semana para não causar re-renders atoa
-            setCurrentWeekData(found);
-        } else {
-            const firstWeek = rotationSchedule[0];
-            const lastWeek = rotationSchedule[rotationSchedule.length - 1];
-            const firstWeekStart = parseLocalDateValue(firstWeek?.startDate);
-            const fallbackWeek = firstWeekStart && now < firstWeekStart ? firstWeek : rotationSchedule.find((week) => parseLocalDateValue(week.startDate) > now) || lastWeek;
-            setCurrentWeekData(fallbackWeek);
-        }
-    };
-
-    // 1. Calcula imediatamente ao carregar
-    calculateCurrentWeek();
-
-    // 2. Configura um timer para checar a data a cada 1 minuto (60000 milissegundos)
-    const intervalId = setInterval(calculateCurrentWeek, 60000);
-
-    // 3. Limpa o timer para não dar vazamento de memória
-    return () => clearInterval(intervalId);
-  }, [rotationSchedule]);
-
-
-
-  const getAttendanceStats = (student) => { const total = student.totalClasses || 1; const attended = student.attendedClasses || 0; const percent = Math.round((attended / total) * 100); const absences = total - attended; return { percent, absences }; }
-
-  
-
-  const getCurrentLevel = (xp) => LEVELS.find(l => xp >= l.min && xp <= l.max) || LEVELS[LEVELS.length - 1];
+  const getAttendanceStats = (student) => studentAttendanceStats(student)
 
   const getNextLevel = (xp) => { const current = getCurrentLevel(xp); const next = LEVELS[LEVELS.indexOf(current) + 1]; return next ? next : null; }
 
-
-
  // 1. Sincronização com Firebase (Carrega os dados)
   useEffect(() => {
-    if (!db) return;
+    if (!db || (FIREBASE_AUTH_ENABLED && !currentUser?.type && !isPublicMode && !isPublicTvMode && !isTvOnlyView)) return;
 
     // Função auxiliar para criar ouvintes seguros
     const createListener = (colName, setter, mapRecord = (record) => record) => {
         const source = collection(db, colName);
-        const scoped = source;
+        const studentId = currentUser?.studentId || currentUser?.data?.id;
+        const scoped = currentUser?.type === 'student' && studentId && ['xpLossRecords', 'leaderPenaltyRequests'].includes(colName) ? query(source, where(colName === 'xpLossRecords' ? 'studentId' : 'requestedByLeaderId', '==', studentId)) : source;
         return onSnapshot(scoped, (snapshot) => {
             const data = snapshot.docs.map((docSnap) => mapRecord(normalizeWorkspaceRecord(colName, { ...docSnap.data(), id: docSnap.id })));
             console.log(`✅ ${colName} carregados com sucesso:`, data.length);
@@ -2617,10 +2363,22 @@ function App() {
         });
     };
 
-    const unsubStudents = createListener("students", setStudents, normalizeStudentRecord);
+    const unsubStudents = createListener("students", (records) => {
+      setStudents(records);
+      if (currentUser?.type !== 'student') return;
+      const identity = currentUser.studentId || currentUser.data?.id;
+      if (records.some((student) => student.id === identity && student.status === 'inactive')) {
+        setCurrentUser(null); setViewAsStudent(null); setIsAdmin(false); persistStoredUser(null);
+        setLoginError('Seu cadastro foi arquivado. Pe\u00e7a ao t\u00e9cnico para reativ\u00e1-lo.');
+        if (FIREBASE_AUTH_ENABLED) void signOut(auth).catch(() => {});
+        return;
+      }
+      const fresh = resolveStudentFromStoredUser(currentUser, records.filter(isActiveStudent));
+      if (fresh) { setViewAsStudent(fresh); showStudentXpLossNotice(fresh); }
+    }, normalizeStudentRecord);
 
-    const unsubXpLossRecords = createListener("xpLossRecords", setXpLossRecords);
-    const unsubLeaderPenaltyRequests = createListener("leaderPenaltyRequests", setLeaderPenaltyRequests);
+    const unsubXpLossRecords = currentUser?.type ? createListener("xpLossRecords", setXpLossRecords) : () => {};
+    const unsubLeaderPenaltyRequests = currentUser?.type ? createListener("leaderPenaltyRequests", setLeaderPenaltyRequests) : () => {};
     const unsubGalleryPhotos = createListener("publicGalleryPhotos", setGalleryPhotos);
     
 
@@ -2696,20 +2454,17 @@ function App() {
         unsubPublicShowcase();
         unsubWorkspaceSeason();
     };
-  }, [seasonLifecycleReady, activeTeamSeasonId]);
+  }, [seasonLifecycleReady, activeTeamSeasonId, currentUser, isPublicMode, isPublicTvMode, isTvOnlyView, showStudentXpLossNotice, showNotification]);
 
   useEffect(() => {
-    if (!db || currentUser?.type !== 'admin' || !isAdmin) {
-      setTeamSeasons([]);
-      return undefined;
-    }
+    if (!db || currentUser?.type !== 'admin' || !isAdmin) return undefined;
     return onSnapshot(collection(db, 'teamSeasons'), (snapshot) => {
       setTeamSeasons(snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id })).sort((left, right) => String(right.closedAt || right.startedAt || '').localeCompare(String(left.closedAt || left.startedAt || ''))));
     }, (error) => console.error('Não foi possível carregar o histórico de temporadas:', error));
   }, [currentUser?.type, isAdmin]);
 
   useEffect(() => {
-    if (!db) return undefined;
+    if (!db || (FIREBASE_AUTH_ENABLED && !currentUser?.type) || isPublicMode || isPublicTvMode) return undefined;
     const listenToSeasonCollection = (collectionName, setter, normalize = (record) => record) => {
       const source = collection(db, collectionName);
       const sourceQuery = !['attendanceSessions', 'rotationApplications'].includes(collectionName) && seasonLifecycleReady && activeTeamSeasonId
@@ -2733,14 +2488,15 @@ function App() {
       unsubscribeAttendance();
       unsubscribeRotations();
     };
-  }, [seasonLifecycleReady, activeTeamSeasonId]);
+  }, [seasonLifecycleReady, activeTeamSeasonId, currentUser?.uid, currentUser?.type, isPublicMode, isPublicTvMode, isTvOnlyView, showNotification]);
 
   useEffect(() => {
-    if (!db || !shouldLoadStrategyWorkspaceData) return;
+    if (!db || !shouldLoadStrategyWorkspaceData || (FIREBASE_AUTH_ENABLED && !currentUser?.type && !isPublicMode && !isPublicTvMode && !isTvOnlyView)) return;
 
     const createListener = (colName, setter) => {
         const source = collection(db, colName);
-        const scoped = source;
+        const studentId = currentUser?.studentId || currentUser?.data?.id;
+        const scoped = currentUser?.type === 'student' && studentId && ['xpLossRecords', 'leaderPenaltyRequests'].includes(colName) ? query(source, where(colName === 'xpLossRecords' ? 'studentId' : 'requestedByLeaderId', '==', studentId)) : source;
         return onSnapshot(scoped, (snapshot) => {
             const data = snapshot.docs.map(doc => normalizeWorkspaceRecord(colName, { ...doc.data(), id: doc.id }));
             setter(SEASON_COLLECTIONS.includes(colName) && seasonLifecycleReady ? data.filter((record) => !record.seasonId || record.seasonId === activeTeamSeasonId) : data);
@@ -2788,14 +2544,15 @@ function App() {
         unsubProjectMain();
         unsubProjectFallback();
     };
-  }, [shouldLoadStrategyWorkspaceData, seasonLifecycleReady, activeTeamSeasonId]);
+  }, [shouldLoadStrategyWorkspaceData, seasonLifecycleReady, activeTeamSeasonId, currentUser?.uid, currentUser?.type, currentUser?.studentId, currentUser?.data?.id, isPublicMode, isPublicTvMode, isTvOnlyView, showNotification]);
 
   useEffect(() => {
-    if (!db || !shouldLoadRobotWorkspaceData) return;
+    if (!db || !shouldLoadRobotWorkspaceData || (FIREBASE_AUTH_ENABLED && !currentUser?.type && !isPublicMode && !isPublicTvMode && !isTvOnlyView)) return;
 
     const createListener = (colName, setter) => {
         const source = collection(db, colName);
-        const scoped = source;
+        const studentId = currentUser?.studentId || currentUser?.data?.id;
+        const scoped = currentUser?.type === 'student' && studentId && ['xpLossRecords', 'leaderPenaltyRequests'].includes(colName) ? query(source, where(colName === 'xpLossRecords' ? 'studentId' : 'requestedByLeaderId', '==', studentId)) : source;
         return onSnapshot(scoped, (snapshot) => {
             const data = snapshot.docs.map(doc => normalizeWorkspaceRecord(colName, { ...doc.data(), id: doc.id }));
             setter(SEASON_COLLECTIONS.includes(colName) && seasonLifecycleReady ? data.filter((record) => !record.seasonId || record.seasonId === activeTeamSeasonId) : data);
@@ -2824,7 +2581,7 @@ function App() {
         unsubScoreHistory();
         unsubMissions();
     };
-  }, [shouldLoadRobotWorkspaceData, seasonLifecycleReady, activeTeamSeasonId]);
+  }, [shouldLoadRobotWorkspaceData, seasonLifecycleReady, activeTeamSeasonId, currentUser?.uid, currentUser?.type, currentUser?.studentId, currentUser?.data?.id, isPublicMode, isPublicTvMode, isTvOnlyView, showNotification]);
 
   useEffect(() => {
     if (!db || !isLogbookViewActive) return;
@@ -2864,66 +2621,6 @@ function App() {
   }, [isActivityHistoryActive, seasonLifecycleReady, activeTeamSeasonId]);
 
   useEffect(() => {
-    if (!isFinalSprintActive) return;
-    if (!db) {
-      setFinalSprintAssignmentsState({ loading: false, error: true });
-      return;
-    }
-    setFinalSprintAssignments([]);
-    setFinalSprintAssignmentsState({ loading: true, error: false });
-    const isTechnicalProfile = currentUser?.type === 'admin' && isAdmin;
-    const assignmentsRef = collection(db, 'finalSprintAssignments');
-    const assignmentsQuery = isTechnicalProfile
-      ? assignmentsRef
-      : viewAsStudent?.id
-        ? query(assignmentsRef, where('studentId', '==', String(viewAsStudent.id)))
-        : null;
-    if (!assignmentsQuery) {
-      setFinalSprintAssignmentsState({ loading: false, error: false });
-      return;
-    }
-
-    const unsubscribe = onSnapshot(assignmentsQuery, (snapshot) => {
-      const records = snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id }));
-      setFinalSprintAssignments((seasonLifecycleReady && activeTeamSeasonId ? records.filter((record) => record.seasonId === activeTeamSeasonId) : records).map((record) => normalizeWorkspaceRecord('finalSprintAssignments', record)));
-      setFinalSprintAssignmentsState({ loading: false, error: false });
-    }, (error) => {
-      console.error('Erro ao carregar frentes da reta final:', error);
-      setFinalSprintAssignmentsState({ loading: false, error: true });
-    });
-
-    return () => unsubscribe();
-  }, [isFinalSprintActive, currentUser?.type, isAdmin, viewAsStudent?.id, finalSprintAssignmentsRetry, seasonLifecycleReady, activeTeamSeasonId]);
-
-  useEffect(() => {
-    const selectionsRef = db ? collection(db, 'finalSprintSelectionScores') : null;
-    const selectionsQuery = currentUser?.type === 'admin' && isAdmin
-      ? selectionsRef
-      : currentUser?.type === 'student' && viewAsStudent?.id
-        ? selectionsRef && query(selectionsRef, where('studentId', '==', String(viewAsStudent.id)))
-        : null;
-    if (!selectionsQuery) {
-      setFinalSprintSelections([]);
-      setFinalSprintSelectionsReady(false);
-      return;
-    }
-    const unsubscribe = onSnapshot(selectionsQuery, (snapshot) => {
-      const records = snapshot.docs.map((docSnap) => ({ ...docSnap.data(), id: docSnap.id }));
-      setFinalSprintSelections(seasonLifecycleReady && activeTeamSeasonId ? records.filter((record) => record.seasonId === activeTeamSeasonId) : records);
-      setSelectionReadScope(selectionScope);
-      setSelectionReadError(false);
-      setFinalSprintSelectionsReady(true);
-    }, (error) => {
-      setFinalSprintSelections([]);
-      setFinalSprintSelectionsReady(false);
-      setSelectionReadError(true);
-      console.error('Erro ao carregar pontuações de prontidão:', error);
-      showNotification('Não foi possível carregar os dados de prontidão.', 'error');
-    });
-    return () => unsubscribe();
-  }, [currentUser?.type, isAdmin, viewAsStudent?.id, seasonLifecycleReady, activeTeamSeasonId, selectionScope]);
-
-  useEffect(() => {
     if (!db || currentUser?.type !== 'admin' || !isAdmin) return;
     const seasonId = activeTeamSeasonId || 'legacy';
     return onSnapshot(doc(db, 'finalSprintTournamentDrafts', tournamentDraftId(seasonId)), (snapshot) => {
@@ -2936,7 +2633,7 @@ function App() {
   useEffect(() => {
     if (!db || !isPitStopModalOpen) return;
 
-    const pitStopQuery = query(collection(db, "pitstop_records"), orderBy("time", "asc"), limit(5));
+    const pitStopQuery = collection(db, "pitstop_records");
     const unsubPitStop = onSnapshot(pitStopQuery, (snapshot) => {
         setPitStopRecords(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })));
     });
@@ -3192,71 +2889,20 @@ function App() {
       }
   };
 
-  const getStudentName = (id) => { const s = students.find(stud => stud.id === id); return s ? s.name : "Vaga"; }
-
-  const convertBase64 = (file) => new Promise((resolve, reject) => { const reader = new FileReader(); reader.readAsDataURL(file); reader.onload = () => resolve(reader.result); reader.onerror = error => reject(error); });
-  const convertExpertContactEvidence = async (file) => {
-      const maxDataLength = 680000;
-      const originalData = await convertBase64(file);
-
-      if (!file.type.startsWith('image/')) {
-          if (originalData.length > maxDataLength) {
-              throw new Error('O PDF ultrapassa o limite de 500 KB.');
-          }
-          return originalData;
-      }
-
-      if (originalData.length <= maxDataLength) return originalData;
-
-      return new Promise((resolve, reject) => {
-          const image = new Image();
-          image.onload = () => {
-              const canvas = document.createElement('canvas');
-              const context = canvas.getContext('2d');
-              let scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
-              let quality = 0.88;
-
-              for (let attempt = 0; attempt < 10; attempt += 1) {
-                  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-                  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-                  context.fillStyle = '#ffffff';
-                  context.fillRect(0, 0, canvas.width, canvas.height);
-                  context.drawImage(image, 0, 0, canvas.width, canvas.height);
-
-                  const compressedData = canvas.toDataURL('image/jpeg', quality);
-                  if (compressedData.length <= maxDataLength) {
-                      resolve(compressedData);
-                      return;
-                  }
-
-                  if (quality > 0.58) {
-                      quality -= 0.1;
-                  } else {
-                      scale *= 0.82;
-                      quality = 0.82;
-                  }
-              }
-
-              reject(new Error('Nao foi possivel compactar a imagem.'));
-          };
-          image.onerror = () => reject(new Error('Nao foi possivel ler a imagem.'));
-          image.src = originalData;
-      });
-  };
-
- 
+  const convertBase64 = (file) => readInlineMedia(file);
+  const convertExpertContactEvidence = (file) => readInlineMedia(file, { allowPdf: true });
 
   // --- FUNÇÃO ESPECÍFICA PARA FOTO DE PERFIL (COM CROP) ---
-  const handleProfilePicSelect = async (e) => {
-    const file = e.target.files[0];
-    if (file) {
+  const handleProfilePicSelect = async (event) => {
+    const input = event.target;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
       const base64 = await convertBase64(file);
-      setCropImgSrc(base64);
-      setCropScale(1);
-      setCropPos({ x: 0, y: 0 });
-      setIsCropping(true);
-      e.target.value = null; // Limpa input
-    }
+      if (!input.isConnected) return;
+      setCropImgSrc(base64); setCropScale(1); setCropPos({ x: 0, y: 0 }); setIsCropping(true);
+    } catch (error) { showNotification(error.message || 'N\u00e3o foi poss\u00edvel abrir a foto.', 'error'); }
+    finally { input.value = ''; }
   };
 
   // --- SALVAR O RECORTE ---
@@ -3287,13 +2933,7 @@ function App() {
       };
   };
 
-
-
   // --- ACTIONS ---
-
-  const saveStudent = (newStudentData) => { setStudents(prev => { const exists = prev.find(s => s.id === newStudentData.id); return exists ? prev.map(s => s.id === newStudentData.id ? newStudentData : s) : [...prev, newStudentData]; }); }
-
-  const deleteStudent = (id) => { setStudents(prev => prev.filter(s => s.id !== id)); }
 
   // --- FUNÇÕES DO KANBAN (TAREFAS) ---
   const createKanbanTask = async ({ text, dueDate = '', tag = 'geral', priority = 'normal', gearReward = 0, author, ...extraData }) => {
@@ -3461,135 +3101,14 @@ function App() {
   }
 
   const handleLeaderPenaltyReview = async (request, decision) => {
-      if (!isAdmin || !request?.id) {
-          showNotification("Apenas tecnicos podem revisar penalizacoes.", "error");
-          return;
-      }
-
-      if ((request.status || 'pending') !== 'pending') {
-          showNotification("Essa solicitacao ja foi revisada.", "error");
-          return;
-      }
-
+    if (!isAdmin || !request?.id) return;
+    try {
       const approved = decision === 'approved';
-      const reviewedAt = new Date().toISOString();
-      const reviewedBy = adminProfile?.name || currentUser?.name || 'Tecnico';
-      const requestRef = doc(db, "leaderPenaltyRequests", request.id);
-
-      if (!approved) {
-          try {
-              await updateDoc(requestRef, {
-                  status: 'rejected',
-                  reviewedAt,
-                  reviewedBy,
-                  evidenceImage: deleteField(),
-                  evidenceFileName: deleteField(),
-                  evidenceMimeType: deleteField()
-              });
-              void recordActivity({
-                  action: 'rejeitou penalidade da lideranca',
-                  category: 'team',
-                  title: `${request.studentName || 'Aluno'}`,
-                  detail: `${request.requestedByLeaderName || 'Lider'} | ${request.reason || 'Sem motivo informado.'}`,
-                  entityId: request.studentId || ''
-              });
-              showNotification("Penalizacao rejeitada. Nenhum XP foi retirado.", "success");
-          } catch (error) {
-              console.error("Erro ao rejeitar penalizacao:", error);
-              showNotification("Erro ao rejeitar penalizacao.", "error");
-          }
-          return;
-      }
-
-      const targetStudent = students.find((student) => student.id === request.studentId);
-      if (!targetStudent) {
-          showNotification("Aluno da solicitacao nao foi encontrado.", "error");
-          return;
-      }
-
-      const previousStudent = normalizeStudentRecord(targetStudent);
-      const cleanReason = `${request.reason || ''}`.trim();
-      const requestAmount = Number(request.amount) || LEADER_PENALTY_XP;
-      const penaltyAmount = requestAmount < 0 ? requestAmount : -Math.abs(requestAmount);
-      const penaltyReason = `Penalizacao aprovada pelo tecnico (${request.requestedByLeaderName || 'lider'}): ${cleanReason || 'Sem motivo informado.'}`;
-      const xpLossNotice = {
-          id: `leader-penalty-approved-${Date.now()}`,
-          amount: penaltyAmount,
-          reason: penaltyReason,
-          date: reviewedAt,
-          createdAt: reviewedAt,
-      };
-      const nextNotifications = [
-          ...normalizeXpLossNotifications(previousStudent.xpLossNotifications),
-          xpLossNotice,
-      ];
-      const nextXp = (previousStudent.xp || 0) + penaltyAmount;
-
-      try {
-          await updateDoc(doc(db, "students", previousStudent.id), {
-              xp: nextXp,
-              xpLossNotifications: nextNotifications
-          });
-
-          await addDoc(collection(db, "xpLossRecords"), {
-              seasonId: activeTeamSeasonId || 'legacy',
-              noticeId: xpLossNotice.id,
-              leaderPenaltyRequestId: request.id,
-              studentId: previousStudent.id,
-              studentName: previousStudent.name,
-              amount: penaltyAmount,
-              reason: penaltyReason,
-              source: 'penalty',
-              sourceLabel: getXpSourceLabel('penalty'),
-              mode: 'penalty',
-              notifyStudent: true,
-              date: xpLossNotice.date,
-              createdAt: xpLossNotice.createdAt,
-              createdBy: reviewedBy,
-              requestedByLeaderId: request.requestedByLeaderId || '',
-              requestedByLeaderName: request.requestedByLeaderName || '',
-              leaderWeekId: request.leaderWeekId || '',
-              leaderWeekName: request.leaderWeekName || ''
-          });
-
-          await recordXpOrigin({
-              student: previousStudent,
-              amount: penaltyAmount,
-              source: 'penalty',
-              mode: 'penalty',
-              reason: penaltyReason,
-              notifyStudent: true
-          });
-
-          await updateDoc(requestRef, {
-              status: 'approved',
-              reviewedAt,
-              reviewedBy,
-              xpLossNoticeId: xpLossNotice.id,
-              evidenceImage: deleteField(),
-              evidenceFileName: deleteField(),
-              evidenceMimeType: deleteField()
-          });
-
-          syncStudentLocally({
-              ...previousStudent,
-              xp: nextXp,
-              xpLossNotifications: nextNotifications
-          });
-
-          void recordActivity({
-              action: 'aprovou penalidade da lideranca',
-              category: 'team',
-              title: `${penaltyAmount} XP para ${previousStudent.name}`,
-              detail: `${request.requestedByLeaderName || 'Lider'} | ${cleanReason || 'Sem motivo informado.'}`,
-              entityId: previousStudent.id
-          });
-
-          showNotification(`${previousStudent.name} perdeu ${Math.abs(penaltyAmount)} XP apos revisao.`, "success");
-      } catch (error) {
-          console.error("Erro ao aprovar penalizacao:", error);
-          showNotification("Erro ao aprovar penalizacao.", "error");
-      }
+      const result = await reviewLeaderPenalty({ db, user: currentUser, seasonId: activeTeamSeasonId || 'legacy', id: request.id, approved, actor: adminProfile?.name || currentUser.name });
+      if (result.student) syncStudentLocally(result.student);
+      void recordActivity({ action: approved ? 'aprovou penalidade' : 'rejeitou penalidade', category: 'team', title: request.studentName || 'Aluno', entityId: request.studentId });
+      showNotification(approved ? 'Penalidade registrada com o XP atualizado.' : 'Solicita\u00e7\u00e3o rejeitada.');
+    } catch (error) { showNotification(error.message || 'N\u00e3o foi poss\u00edvel revisar a penalidade.', 'error'); }
   }
 
   // --- FUNÇÕES DA GARRA / ANEXO ---
@@ -3677,10 +3196,7 @@ function App() {
               await updateDoc(doc(db, "codeSnippets", modal.data.id), codeData);
 
               if (shouldSetAsOfficial) {
-                  const updates = codeSnippets.map((item) =>
-                      updateDoc(doc(db, "codeSnippets", item.id), { applied: item.id === modal.data.id })
-                  );
-                  await Promise.all(updates);
+                  await applyOfficialCode({ db, user: currentUser, seasonId: activeTeamSeasonId || 'legacy', id: modal.data.id, knownIds: codeSnippets.map((item) => item.id) });
               }
           } else {
               const newSnippetRef = await saveNewContribution('code', { ...codeData, applied: false }, draftId);
@@ -3688,11 +3204,7 @@ function App() {
               celebrateGearContribution({ type: 'code', sourceId: newSnippetRef.id, studentId: gearActorId, record: codeData });
 
               if (shouldSetAsOfficial) {
-                  const updates = [
-                      ...codeSnippets.map((item) => updateDoc(doc(db, "codeSnippets", item.id), { applied: false })),
-                      updateDoc(doc(db, "codeSnippets", newSnippetRef.id), { applied: true })
-                  ];
-                  await Promise.all(updates);
+                  await applyOfficialCode({ db, user: currentUser, seasonId: activeTeamSeasonId || 'legacy', id: newSnippetRef.id, knownIds: codeSnippets.map((item) => item.id) });
               }
           }
           void recordActivity({
@@ -3732,29 +3244,13 @@ function App() {
   };
 
   const handleApplyCodeSnippet = async (snippet) => {
-      try {
-          const updates = codeSnippets.map((item) =>
-              updateDoc(doc(db, "codeSnippets", item.id), { applied: item.id === snippet.id })
-          );
-          await Promise.all(updates);
-
-          setCodeSnippets(prev => prev.map((item) => ({ ...item, applied: item.id === snippet.id })));
-          setModal(prev => ({
-              ...prev,
-              data: prev?.data ? { ...prev.data, applied: true } : prev.data
-          }));
-          void recordActivity({
-              action: 'definiu a programacao oficial',
-              category: 'programming',
-              title: snippet.title,
-              detail: 'Esta passou a ser a base principal para os treinos.',
-              entityId: snippet.id
-          });
-          showNotification(`Programacao "${snippet.title}" definida como ativa!`, "success");
-      } catch (error) {
-          console.error("Erro ao aplicar programacao:", error);
-          showNotification("Erro ao aplicar a nova programacao.", "error");
-      }
+    try {
+      await applyOfficialCode({ db, user: currentUser, seasonId: activeTeamSeasonId || 'legacy', id: snippet.id, knownIds: codeSnippets.map((item) => item.id) });
+      setCodeSnippets((previous) => previous.map((item) => ({ ...item, applied: item.id === snippet.id })));
+      setModal((previous) => ({ ...previous, data: previous.data ? { ...previous.data, applied: true } : previous.data }));
+      void recordActivity({ action: 'definiu a programa\u00e7\u00e3o oficial', category: 'programming', title: snippet.title, entityId: snippet.id });
+      showNotification('Programa oficial atualizado.');
+    } catch (error) { showNotification(error.message || 'N\u00e3o foi poss\u00edvel aplicar o programa.', 'error'); }
   };
 
   const persistTaskStage = async (task, status, details = {}) => {
@@ -3882,33 +3378,9 @@ const handleDeleteStudent = async (studentId) => {
 };
 
 const handleDeleteRound = async (id) => {
-    console.log("Tentando apagar ID:", id); // Isso vai aparecer no F12 se funcionar
-
-    if (confirm("Tem certeza que quer apagar esse registro?")) {
-      try {
-        // Tenta apagar com o nome 'strategies'
-        await deleteDoc(doc(db, "strategies", id));
-        
-        // Tenta apagar com o nome 'robot_rounds'
-        await deleteDoc(doc(db, "robot_rounds", id));
-
-        // Tenta apagar com o nome 'rounds' (Muito comum!)
-        await deleteDoc(doc(db, "rounds", id));
-
-        // Tenta apagar com o nome 'history'
-        await deleteDoc(doc(db, "history", id));
-        
-        // --- NOVO: Apaga também o histórico do gráfico deste round ---
-        // Usamos o state 'scoreHistory' que já está carregado para não precisar fazer outra busca
-        const historyToDelete = scoreHistory.filter(h => h.roundId === id);
-        historyToDelete.forEach(async (h) => await deleteDoc(doc(db, "score_history", h.id)));
-
-        showNotification("Registro apagado do banco!");
-      } catch (error) {
-        console.error("Erro fatal ao apagar:", error);
-        alert("Erro no sistema: Olhe o Console (F12)");
-      }
-    }
+    if (!window.confirm('Excluir esta sa\u00edda? O hist\u00f3rico dos treinos ser\u00e1 preservado.')) return;
+    try { await deleteRobotRound({ db, user: currentUser, seasonId: activeTeamSeasonId || 'legacy', id }); showNotification('Sa\u00edda exclu\u00edda. Hist\u00f3rico preservado.'); }
+    catch (error) { showNotification(error.message || 'N\u00e3o foi poss\u00edvel excluir a sa\u00edda.', 'error'); }
   };
   
   // --- FUNÇÕES DE EXCLUSÃO (MATRIZ, ESPECIALISTAS, ROBÔ) ---
@@ -4278,9 +3750,6 @@ const handleDeleteRound = async (id) => {
       }
   }
 
-
-
-
   const handleRoundSubmit = async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
@@ -4316,50 +3785,6 @@ const handleDeleteRound = async (id) => {
       } catch (error) {
           console.error("Erro ao salvar round:", error);
           showNotification("Erro ao salvar.", "error");
-      }
-  }
-
-  const handleComplimentSubmit = async (e) => {
-      e.preventDefault();
-      const fd = new FormData(e.target);
-      
-      const complimentData = {
-          from: viewAsStudent.name,
-          to: getStudentName(parseInt(fd.get('to'))), // Pega o nome do destinatário
-          msg: fd.get('msg'),
-          date: new Date().toLocaleDateString().slice(0,5)
-      };
-
-      try {
-          // 1. Salva o elogio
-          await addDoc(collection(db, "compliments"), complimentData);
-
-          // 2. Dá XP para quem enviou (Gamificação!)
-          const senderRef = doc(db, "students", viewAsStudent.id);
-          // Nota: Para atualizar XP de forma segura, o ideal seria ler o doc atual, 
-          // mas para simplificar vamos assumir o dado local:
-          await updateDoc(senderRef, { 
-              xp: (viewAsStudent.xp || 0) + 1 
-          });
-
-          await recordXpOrigin({
-              student: viewAsStudent,
-              amount: 1,
-              source: 'compliment',
-              mode: 'reward',
-              reason: `Elogio enviado para ${complimentData.to}`
-          });
-
-          syncStudentLocally({
-              ...viewAsStudent,
-              xp: (viewAsStudent.xp || 0) + 1
-          });
-
-          closeModal();
-          showNotification("Elogio enviado! (+1 XP)", "success");
-      } catch (error) {
-          console.error("Erro ao enviar elogio:", error);
-          showNotification("Erro ao enviar.", "error");
       }
   }
 
@@ -4401,96 +3826,23 @@ const handleDeleteRound = async (id) => {
       }
   }
 
-  const handleGradesSubmit = async (e) => {
-      e.preventDefault();
-      if (currentUser?.type !== 'admin') {
-          showNotification("Apenas técnicos podem lançar notas.", "error");
-          closeModal();
-          return;
-      }
-
-      const fd = new FormData(e.target);
-      const student = modal.data.student;
-      const stageId = modal.data.stageId || 'etapa1';
-      const stageMeta = SCHOOL_REPORT_STAGE_CONFIG[stageId] || SCHOOL_REPORT_STAGE_CONFIG.etapa1;
-
-      let bonusXP = 0;
-      const newGrades = {};
-      let hasInvalidGrade = false;
-
-      SCHOOL_REPORT_SUBJECTS.forEach(subj => {
-          const val = fd.get(`grade_${subj}`);
-          const rawValue = `${val ?? ''}`.trim();
-          if (rawValue !== '') {
-              const grade = parseSchoolGrade(rawValue);
-              if (grade === null) {
-                  hasInvalidGrade = true;
-              } else {
-                  newGrades[subj] = grade;
-              }
-          }
-      });
-
-      if (hasInvalidGrade) {
-          showNotification("Confira as notas: use valores de 0 a 10, com ponto ou virgula.", "error");
-          return;
-      }
-
-      bonusXP = calculateSchoolReportXp(newGrades);
-
-      try {
-          const studentRef = doc(db, "students", student.id);
-          const currentSchoolGrades = normalizeSchoolGrades(student.schoolGrades);
-          const previousStageRecord = getSchoolStageRecord(student, stageId);
-          const previousStageXp = previousStageRecord?.xpApplied ?? calculateSchoolReportXp(previousStageRecord?.grades || {});
-          const xpDelta = bonusXP - previousStageXp;
-          const nowIso = new Date().toISOString();
-          const nextSchoolGrades = {
-              ...currentSchoolGrades,
-              [stageId]: {
-                  ...previousStageRecord,
-                  label: stageMeta.label,
-                  grades: newGrades,
-                  xpApplied: bonusXP,
-                  submittedAt: previousStageRecord?.submittedAt || nowIso,
-                  updatedAt: nowIso
-              }
-          };
-          
-          await updateDoc(studentRef, {
-              xp: (student.xp || 0) + xpDelta,
-              schoolGrades: nextSchoolGrades
-          });
-
-          if (xpDelta !== 0) {
-              await recordXpOrigin({
-                  student,
-                  amount: xpDelta,
-                  source: 'school_report',
-                  mode: xpDelta > 0 ? 'reward' : 'correction',
-                  reason: stageMeta.label,
-                  notifyStudent: false
-              });
-          }
-
-          syncStudentLocally({
-              ...student,
-              xp: (student.xp || 0) + xpDelta,
-              schoolGrades: nextSchoolGrades
-          });
-
-          closeModal();
-          const xpChangeLabel = xpDelta > 0 ? `+${xpDelta}` : `${xpDelta}`;
-          const previousXpLabel = previousStageXp > 0 ? ` (${previousStageXp} XP ja estavam aplicados)` : '';
-          showNotification(`${stageMeta.label} salva! ${bonusXP} XP da etapa; ${xpChangeLabel} XP agora${previousXpLabel}.`, "success");
-      } catch (error) {
-          console.error("Erro ao lançar notas:", error);
-          showNotification("Erro ao atualizar XP.", "error");
-      }
+  const handleGradesSubmit = async (event) => {
+    event.preventDefault();
+    if (currentUser?.type !== 'admin') return;
+    const student = modal.data.student; const stageId = modal.data.stageId || 'etapa1';
+    const fields = new FormData(event.target); const grades = {};
+    for (const subject of SCHOOL_REPORT_SUBJECTS) {
+      const raw = String(fields.get('grade_' + subject) ?? '').trim();
+      if (!raw) continue;
+      const value = parseSchoolGrade(raw);
+      if (value === null) { showNotification('Confira as notas: use valores de 0 a 10.', 'error'); return; }
+      grades[subject] = value;
+    }
+    try {
+      const result = await saveSchoolGrades({ db, user: currentUser, actor: adminProfile?.name || currentUser.name, studentId: student.id, seasonId: activeTeamSeasonId || 'legacy', stageId, grades, expectedGrades: getSchoolStageRecord(student, stageId)?.grades || {} });
+      syncStudentLocally(result.student); closeModal(); showNotification('Notas salvas e XP atualizado.');
+    } catch (error) { showNotification(error.message || 'N\u00e3o foi poss\u00edvel salvar as notas.', 'error'); }
   }
-
-  
-
 
   const handleMatrixSubmit = async (e, { draftId } = {}) => {
       e.preventDefault();
@@ -4606,65 +3958,6 @@ const handleDeleteRound = async (id) => {
       }
   }
 
-  const handleCloseStationWeek = async (station) => {
-      const stationStudents = students.filter(s => s.station === station);
-      if(stationStudents.length === 0) return;
-
-      const approvedCount = stationStudents.filter(s => s.submission?.status === 'approved').length;
-      const totalInStation = stationStudents.length;
-      const isCompleteTeam = approvedCount === totalInStation;
-      const successfulWeekIds = Array.isArray(teamSeasonStats.successfulWeekIds) ? teamSeasonStats.successfulWeekIds.map(String) : [];
-      const previousSuccessfulWeeks = Math.max(Number(teamSeasonStats.successfulWeeks) || 0, successfulWeekIds.length);
-      const currentWeekKey = String(currentWeekData?.id ?? currentWeekData?.weekName ?? localTodayStr);
-      const allStudentsApprovedForWeek = students.length > 0 && students.every((student) => student.submission?.status === 'approved');
-      const shouldRecordSuccessfulWeek = allStudentsApprovedForWeek && currentWeekKey && !successfulWeekIds.includes(currentWeekKey);
-      const FULL_TEAM_XP = 50; 
-      const PARTIAL_TEAM_XP = 35;
-
-      try {
-          // Cria uma lista de atualizações para enviar tudo de uma vez
-          const stationXpAwards = [];
-          const updates = stationStudents.map(student => {
-              const studentRef = doc(db, "students", student.id);
-              
-              // Lógica de XP
-              let xpGain = 0;
-              if (student.submission?.status === 'approved') {
-                  xpGain = isCompleteTeam ? FULL_TEAM_XP : PARTIAL_TEAM_XP;
-                  stationXpAwards.push({ student, xpGain });
-              }
-
-              // Prepara a atualização: Dá XP, remove a estação e limpa a entrega
-              return updateDoc(studentRef, {
-                  xp: (student.xp || 0) + xpGain,
-                  station: null,
-                  submission: null
-              });
-          });
-
-          // Executa todas as atualizações no banco
-          await Promise.all(updates);
-
-          if (shouldRecordSuccessfulWeek) {
-              const nextSuccessfulWeekIds = [...successfulWeekIds, currentWeekKey];
-
-              await setDoc(doc(db, "settings", "team_stats"), {
-                  successfulWeekIds: nextSuccessfulWeekIds,
-                  successfulWeeks: previousSuccessfulWeeks + 1,
-                  updatedAt: new Date().toISOString()
-              }, { merge: true });
-          }
-
-          if(shouldRecordSuccessfulWeek) showNotification(`Semana fechada com sucesso! ${previousSuccessfulWeeks + 1}/40 semanas perfeitas.`, "success");
-          else if(isCompleteTeam) showNotification(`Semana ${station} fechada! Sucesso Total!`, "success");
-          else showNotification(`Semana ${station} fechada com penalidade.`, "error");
-
-      } catch (error) {
-          console.error("Erro ao fechar semana:", error);
-          showNotification("Erro ao salvar fechamento.", "error");
-      }
-  }
-
   // --- FUNÇÃO PARA APLICAR O RODÍZIO AUTOMATICAMENTE ---
   const handleApplyRotation = async () => {
     if (!isAdmin || !currentWeekData || isProcessingRotation) return;
@@ -4734,8 +4027,6 @@ const handleDeleteRound = async (id) => {
 
   const openNewStudentModal = (data = null) => { setSelectedFile(null); setModal({ type: 'newStudent', data }); }
 
-  const openReviewModal = (student) => setModal({ type: 'review', data: student });
-
   const openExpertModal = (data = null) => { setSelectedFile(null); setModal({ type: 'expertForm', data }); }
   const openExpertContactModal = (data = null) => { setSelectedFile(null); setModal({ type: 'expertContactForm', data }); };
 
@@ -4743,12 +4034,8 @@ const handleDeleteRound = async (id) => {
   const openAttachmentModal = (data = null) => { setSelectedFile(null); setModal({ type: 'attachmentForm', data }); } // <--- NOVO
   const openCodeModal = (data = null) => { setSelectedFile(null); setModal({ type: 'codeForm', data }); } // <--- NOVO
 
-  const openRubricModal = () => setModal({ type: 'rubric' });
-
   const openNewRoundModal = () => setModal({ type: 'newRound' });
   const openEditRoundModal = (data) => setModal({ type: 'newRound', data });
-
-  const openComplimentModal = () => setModal({ type: 'compliment' });
 
   const openAttendanceModal = () => setModal({ type: 'attendance' });
 
@@ -4973,7 +4260,7 @@ const handleDeleteRound = async (id) => {
       ? `${formatShortDateLabel(bisCycleStartWeek.startDate)} ate ${formatShortDateLabel(bisCycleEndWeek.endDate)}`
       : 'Ciclo em sincronizacao';
   const bisDaysRemaining = bisCycleEndDate
-      ? Math.max(0, Math.ceil((bisCycleEndDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+      ? Math.max(0, Math.ceil((bisCycleEndDate.getTime() - workspaceNow) / (24 * 60 * 60 * 1000)))
       : 0;
   const currentWeekStartDate = parseLocalDateValue(currentWeekData?.startDate);
   const currentWeekEndDate = parseLocalDateValue(currentWeekData?.endDate, true);
@@ -5268,7 +4555,7 @@ const handleDeleteRound = async (id) => {
                       <Crown size={12} /> {unlockedTeamAchievements.length}/{teamAchievementsSummary.length}
                   </span>
               </div>
-              <div className="space-y-2 mt-4 max-h-72 overflow-y-auto custom-scrollbar pr-1">
+              <div tabIndex={0} role="region" aria-label="Conquistas da equipe" className="space-y-2 mt-4 max-h-72 overflow-y-auto custom-scrollbar pr-1">
                   {teamAchievementsSummary.map((achievement) => {
                       const progress = Math.min(100, (achievement.current / achievement.target) * 100);
                       const isUnlocked = achievement.current >= achievement.target;
@@ -5372,8 +4659,6 @@ const handleDeleteRound = async (id) => {
     } catch (error) { showNotification(error.message + ' Reabra o encerramento para retomar, se necessário.', 'error'); }
     finally { setIsTransitioningSeason(false); }
   };
-
-
 
   const adminHeroActions = workspaceSeason === 'rotation'
       ? [
@@ -5516,7 +4801,7 @@ const handleDeleteRound = async (id) => {
 
   const toggleDashboardPanel = () => {
       if (isAdmin) {
-          setAdminTab('overview');
+          setAdminTabValue('overview');
           setAdminPanelState((prev) => {
               const nextDashboard = adminTab === 'overview' ? !prev.dashboard : true;
 
@@ -5529,17 +4814,13 @@ const handleDeleteRound = async (id) => {
           return;
       }
 
-      setStudentTab('overview');
+      setStudentTabValue('overview');
       setStudentPanelState((prev) => ({ ...prev, dashboard: studentTab === 'overview' ? !prev.dashboard : true }));
   };
 
   const toggleAdminHeroPanel = () => {
       setAdminTab('overview');
       setAdminPanelState((prev) => ({ ...prev, hero: adminTab === 'overview' ? !prev.hero : true }));
-  };
-
-  const toggleStudentHeroPanel = () => {
-      setStudentPanelState((prev) => ({ ...prev, hero: !prev.hero }));
   };
 
   const toggleAdminCompactMode = () => {
@@ -5975,167 +5256,29 @@ const handleDeleteRound = async (id) => {
 
 
   // --- MODAL DE XP E APROVAÇÃO (CONECTADO) ---
-  const openXPModal = (student, context = "manual") => { 
-      if (currentUser?.type !== 'admin') {
-          showNotification("Apenas técnicos podem gerenciar XP.", "error");
-          return;
-      }
-
-      setXpPenaltyReason('');
-      setXpPenaltyShouldNotify(true);
-      setModal({ 
-          type: 'xp', 
-          data: { 
-              student: student, 
-              onConfirm: async (amount, reason = '', notifyStudent = true) => { 
-                  const val = parseInt(amount); 
-                  if (isNaN(val)) return; 
-
-                  const cleanReason = reason.trim();
-                  const shouldNotifyStudent = val < 0 && notifyStudent;
-
-                  if (shouldNotifyStudent && !cleanReason) {
-                      showNotification("Escreva o motivo para retirar XP.", "error");
-                      return;
-                  }
-
-                  const previousStudent = normalizeStudentRecord(student);
-                  const xpSource = context === 'approval'
-                      ? 'activity'
-                      : val > 0
-                          ? 'manual_reward'
-                          : shouldNotifyStudent
-                              ? 'penalty'
-                              : 'correction';
-                  const xpMode = val > 0 ? 'reward' : shouldNotifyStudent ? 'penalty' : 'correction';
-                  
-                  try {
-                      const studentRef = doc(db, "students", previousStudent.id);
-                      let xpLossNotice = null;
-                      let xpLossRecordRef = null;
-                      
-                      // Prepara a atualização do XP
-                      const updateData = { xp: (previousStudent.xp || 0) + val };
-
-                      if (shouldNotifyStudent) {
-                          const now = new Date();
-                          xpLossNotice = {
-                              id: `xp-loss-${now.getTime()}`,
-                              amount: val,
-                              reason: cleanReason,
-                              date: now.toISOString(),
-                              createdAt: now.toISOString(),
-                          };
-
-                          updateData.xpLossNotifications = [
-                              ...normalizeXpLossNotifications(previousStudent.xpLossNotifications),
-                              xpLossNotice,
-                          ];
-                      }
-
-                      // Se for contexto de aprovação, muda o status da entrega também
-                      if (context === 'approval') {
-                          // Mantém os dados da entrega, mas muda status para 'approved'
-                          const newSubmission = { ...previousStudent.submission, status: 'approved' };
-                          updateData.submission = newSubmission;
-                      }
-
-                      await updateDoc(studentRef, updateData);
-                      if (xpLossNotice) {
-                          xpLossRecordRef = await addDoc(collection(db, "xpLossRecords"), {
-              seasonId: activeTeamSeasonId || 'legacy',
-                              noticeId: xpLossNotice.id,
-                              studentId: previousStudent.id,
-                              studentName: previousStudent.name,
-                              amount: val,
-                              reason: cleanReason,
-                              source: xpSource,
-                              sourceLabel: getXpSourceLabel(xpSource),
-                              mode: xpMode,
-                              notifyStudent: true,
-                              date: xpLossNotice.date,
-                              createdAt: xpLossNotice.createdAt,
-                              createdBy: currentUser?.name || 'Tecnico'
-                          });
-                      }
-
-                      const xpRecordRef = await recordXpOrigin({
-                          student: previousStudent,
-                          amount: val,
-                          source: xpSource,
-                          mode: xpMode,
-                          reason: cleanReason,
-                          notifyStudent: shouldNotifyStudent
-                      });
-
-                      const updatedStudent = syncStudentLocally({ ...previousStudent, ...updateData });
-                      void recordActivity({
-                          action: val > 0 ? 'registrou ganho de XP' : shouldNotifyStudent ? 'registrou penalidade de XP' : 'corrigiu XP',
-                          category: 'team',
-                          title: `${val > 0 ? '+' : ''}${val} XP para ${previousStudent.name}`,
-                          detail: `Origem: ${getXpSourceLabel(xpSource)}${cleanReason ? ` | ${cleanReason}` : ''}`,
-                          entityId: previousStudent.id
-                      });
-
-                      let undoUsed = false;
-                      const undoXpChange = async () => {
-                          if (undoUsed) return;
-                          undoUsed = true;
-
-                          const restoreData = {
-                              xp: previousStudent.xp || 0,
-                              xpLossNotifications: normalizeXpLossNotifications(previousStudent.xpLossNotifications)
-                          };
-
-                          if (context === 'approval') {
-                              restoreData.submission = previousStudent.submission || null;
-                          }
-
-                          try {
-                              await updateDoc(studentRef, restoreData);
-                              if (xpLossRecordRef?.id) {
-                                  await deleteDoc(doc(db, "xpLossRecords", xpLossRecordRef.id));
-                              }
-                              await recordXpOrigin({
-                                  student: previousStudent,
-                                  amount: -val,
-                                  source: 'undo',
-                                  mode: 'undo',
-                                  reason: `Desfazer ajuste de XP: ${getXpSourceLabel(xpSource)}`,
-                                  notifyStudent: false,
-                                  referenceRecordId: xpRecordRef?.id || ''
-                              });
-                              syncStudentLocally({ ...updatedStudent, ...restoreData });
-                              void recordActivity({
-                                  action: 'desfez ajuste de XP',
-                                  category: 'team',
-                                  title: `${previousStudent.name}`,
-                                  detail: `XP restaurado para ${previousStudent.xp || 0}.`,
-                                  entityId: previousStudent.id
-                              });
-                              showNotification("Ajuste de XP desfeito.", "success");
-                          } catch (error) {
-                              console.error("Erro ao desfazer XP:", error);
-                              showNotification("Nao foi possivel desfazer o XP.", "error");
-                          }
-                      };
-                      
-                      closeModal(); 
-                      let msg = `XP atualizado: ${val > 0 ? '+' : ''}${val}`;
-                      if (val < 0) msg = shouldNotifyStudent ? `XP retirado: ${val}. Aviso enviado ao aluno.` : `XP corrigido: ${val}. Sem aviso ao aluno.`;
-                      if (context === 'approval') msg = "Atividade Aprovada com Sucesso!";
-                      showNotification(msg, "success", { label: 'Desfazer', onClick: undoXpChange });
-
-                  } catch (error) {
-                      console.error("Erro ao atualizar XP:", error);
-                      showNotification("Erro ao salvar.", "error");
-                  }
-              } 
-          } 
-      }) 
+  const openXPModal = (student, context = 'manual') => {
+    if (currentUser?.type !== 'admin') { showNotification('Apenas t\u00e9cnicos podem gerenciar XP.', 'error'); return; }
+    setXpPenaltyReason(''); setXpPenaltyShouldNotify(true);
+    const operationId = crypto.randomUUID(); let saving = false;
+    setModal({ type: 'xp', data: { student, onConfirm: async (amount, reason = '', notifyStudent = true) => {
+      const val = Number(amount); if (saving || !Number.isSafeInteger(val) || !val) return;
+      const cleanReason = reason.trim(); const shouldNotifyStudent = val < 0 && notifyStudent;
+      if (shouldNotifyStudent && !cleanReason) { showNotification('Escreva o motivo para retirar XP.', 'error'); return; }
+      const source = context === 'approval' ? 'activity' : val > 0 ? 'manual_reward' : shouldNotifyStudent ? 'penalty' : 'correction';
+      saving = true;
+      try {
+        const result = await adjustStudentXp({ db, user: currentUser, actor: adminProfile?.name || currentUser.name, studentId: student.id, seasonId: activeTeamSeasonId || 'legacy', operationId, amount: val, source, sourceLabel: getXpSourceLabel(source), mode: val > 0 ? 'reward' : shouldNotifyStudent ? 'penalty' : 'correction', reason: cleanReason, notifyStudent: shouldNotifyStudent, approval: context === 'approval', expectedSubmission: student.submission || null });
+        syncStudentLocally(result.student);
+        void recordActivity({ action: 'atualizou XP', category: 'team', title: student.name, detail: String(result.amount), entityId: student.id });
+        closeModal();
+        showNotification(context === 'approval' ? 'Atividade aprovada.' : 'XP atualizado.', 'success', { label: 'Desfazer', onClick: async () => {
+          try { const undone = await undoStudentXp({ db, user: currentUser, actor: adminProfile?.name || currentUser.name, studentId: student.id, seasonId: activeTeamSeasonId || 'legacy', recordId: result.recordId }); syncStudentLocally(undone.student); showNotification('Ajuste de XP desfeito.'); }
+          catch (error) { showNotification(error.message || 'N\u00e3o foi poss\u00edvel desfazer o XP.', 'error'); }
+        } });
+      } catch (error) { showNotification(error.message || 'N\u00e3o foi poss\u00edvel salvar o XP.', 'error'); }
+      finally { saving = false; }
+    } } });
   }
-
-  const handleDeleteClick = (id) => { setModal({ type: 'confirm', data: { title: "Excluir?", msg: "Irreversível.", onConfirm: () => { deleteStudent(id); closeModal(); showNotification("Removido."); } } }) }
 
   const dismissXpLossNotification = async (notificationId) => {
       if (!viewAsStudent?.id) return;
@@ -6290,6 +5433,7 @@ const handleDeleteRound = async (id) => {
 
 // --- CARREGAR AS METAS DO BANCO (Memória Longa) ---
   useEffect(() => {
+    if (FIREBASE_AUTH_ENABLED && !currentUser?.type) return;
     const docRef = doc(db, "settings", "weekly_missions");
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -6303,7 +5447,7 @@ const handleDeleteRound = async (id) => {
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, [currentUser?.uid, currentUser?.type]);
 
   // --- ATUALIZAR NA TELA ENQUANTO DIGITAM (Memória Curta) ---
   const updateMission = (station, field, value) => {
@@ -6315,65 +5459,41 @@ const handleDeleteRound = async (id) => {
 
   // --- FUNÇÃO PARA SALVAR A AUTO-AVALIAÇÃO DA RUBRICA ---
   const handleRubricUpdate = async (rubricType, category, value) => {
-      const isInnovation = rubricType === 'innovation';
-      const currentRubric = isInnovation ? innovationRubric : robotDesignRubric;
-      const setRubricState = isInnovation ? setInnovationRubric : setRobotDesignRubric;
-      const docId = isInnovation ? 'rubric_innovation' : 'rubric_robot_design';
-      const defaults = isInnovation ? DEFAULT_INNOVATION_RUBRIC : DEFAULT_ROBOT_DESIGN_RUBRIC;
- 
-      const newRubric = normalizeRubricValues({ ...currentRubric, [category]: value }, defaults);
-      setRubricState(newRubric); // Atualiza na tela imediatamente
-      try {
-          // Salva no banco de dados sem precisar de botão "Salvar"
-          await setDoc(doc(db, "settings", docId), newRubric);
-          void recordActivity({
-              action: 'atualizou uma rubrica',
-              category: 'team',
-              title: isInnovation ? 'Projeto de inovacao' : 'Design do robo',
-              detail: `${category}: nivel ${value}`,
-              entityId: docId
-          });
-      } catch (error) {
-          console.error(`Erro ao salvar rubrica de ${rubricType}:`, error);
-          showNotification("Erro ao salvar auto-avaliação.", "error");
-      }
+    if (!currentUser || !['innovation', 'robot_design'].includes(rubricType)) return;
+    const defaults = rubricType === 'innovation' ? DEFAULT_INNOVATION_RUBRIC : DEFAULT_ROBOT_DESIGN_RUBRIC;
+    if (!Object.hasOwn(defaults, category) || !Number.isInteger(Number(value)) || Number(value) < 1 || Number(value) > 4) return;
+    const docId = rubricType === 'innovation' ? 'rubric_innovation' : 'rubric_robot_design';
+    try {
+      await runTransaction(db, async (transaction) => {
+        await assertActiveSeason(transaction, db, activeTeamSeasonId || 'legacy');
+        transaction.set(doc(db, 'settings', docId), { [category]: Number(value) }, { merge: true });
+      });
+      void recordActivity({ action: 'atualizou uma rubrica', category: 'team', title: rubricType, detail: category + ': ' + value, entityId: docId });
+    } catch { showNotification('N\u00e3o foi poss\u00edvel salvar a rubrica. Confira a conex\u00e3o e tente novamente.', 'error'); }
   };
 
   // --- SALVAR NO BANCO QUANDO CLICAR FORA DA CAIXA (O Pulo do Gato) ---
   const saveMissionToFirebase = async (station) => {
     try {
-      const docRef = doc(db, "settings", "weekly_missions");
-      await setDoc(docRef, {
-        [station]: missions[station]
-      }, { merge: true });
-      console.log(`Meta de ${station} salva no banco com sucesso!`); 
+      await runTransaction(db, async (transaction) => {
+        await assertActiveSeason(transaction, db, activeTeamSeasonId || 'legacy');
+        transaction.set(doc(db, 'settings', 'weekly_missions'), { [station]: missions[station] }, { merge: true });
+      });
     } catch (error) {
-      console.error("Erro ao salvar a meta da semana:", error);
+      showNotification('N\u00e3o foi poss\u00edvel salvar a meta. Seu texto continua na tela.', 'error');
+      throw error;
     }
   };
 
   const handleSaveStationMission = async (station) => {
-    await saveMissionToFirebase(station);
-    void recordActivity({
-        action: 'atualizou a missao de uma estacao',
-        category: 'team',
-        title: station,
-        detail: missions[station]?.text || 'Meta semanal atualizada.'
-    });
-    showNotification(`Meta de ${station} salva com sucesso!`, 'success');
+    try { await saveMissionToFirebase(station); void recordActivity({ action: 'atualizou a miss\u00e3o de uma esta\u00e7\u00e3o', category: 'team', title: station, detail: missions[station]?.text || '' }); showNotification('Meta salva.'); }
+    catch { /* The failed write is displayed by saveMissionToFirebase. */ }
   };
 
-  const closeModal = () => { setModal({ type: null, data: null }); setSelectedFile(null); }
+  const closeModal = () => { setModal({ type: null, data: null }); setSelectedFile(null); setIsCropping(false); }
 
 // --- FUNÇÃO AUXILIAR PARA TRANSFORMAR O ARQUIVO EM TEXTO ---
-  const convertToBase64 = (file) => {
-      return new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(file);
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = (error) => reject(error);
-      });
-  };
+
 const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -6416,19 +5536,7 @@ const handleFileSelect = (e) => {
   };
 // ATENÇÃO: COLOQUE ISSO NO SEU CÓDIGO DO TÉCNICO
 // --- FUNÇÃO DO BOTÃO 'BAIXAR ARQUIVO' NO PAINEL DO TÉCNICO ---
-  const handleDownloadFile = (sub) => { 
-      if (sub && sub.fileData) {
-          // O navegador recria o arquivo a partir do texto e força o download
-          const link = document.createElement("a");
-          link.href = sub.fileData;
-          link.download = sub.fileName || "atividade_baixada.pdf";
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-      } else {
-          showNotification("Não há arquivo anexado ou o link está quebrado.", "error");
-      }
-  };
+
   // --- UI COMPONENTS ---
 
   // --- COMPONENTE DE ESTATÍSTICAS DA EQUIPE (VISÃO DOS JUÍZES) ---
@@ -6758,8 +5866,6 @@ const handleFileSelect = (e) => {
   const renderNotification = () => {
       if (!notification) return null;
 
-      const isError = notification.type === 'error';
-      const isDownload = notification.type === 'download';
       const action = notification.action;
       const handleActionClick = () => {
           if (notificationTimeoutRef.current) {
@@ -6770,21 +5876,7 @@ const handleFileSelect = (e) => {
       };
 
       return (
-        <div className={`newgears-toast fixed top-6 right-6 z-[100] max-w-[min(92vw,520px)] rounded-[22px] border px-5 py-4 animate-in slide-in-from-right duration-300 ${isError ? 'bg-red-500/12 border-red-400/40 text-red-200' : isDownload ? 'bg-cyan-500/12 border-cyan-400/40 text-cyan-100' : 'bg-emerald-500/12 border-emerald-400/40 text-emerald-100'}`}>
-          <div className="flex items-center gap-3">
-            {isError ? <AlertCircle size={24}/> : isDownload ? <Download size={24}/> : <CheckCircle size={24}/>}
-            <span className="min-w-0 flex-1 text-sm font-black leading-snug">{notification.msg}</span>
-            {action ? (
-              <button
-                type="button"
-                onClick={handleActionClick}
-                className="shrink-0 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] text-white transition-colors hover:bg-white hover:text-black"
-              >
-                {action.label || 'Desfazer'}
-              </button>
-            ) : null}
-          </div>
-        </div>
+        <NotificationToast notification={notification} onAction={handleActionClick} onDismiss={() => { clearTimeout(notificationTimeoutRef.current); setNotification(null); }} />
       );
   }
 
@@ -6858,8 +5950,6 @@ const handleFileSelect = (e) => {
           </div>
       );
   }
-
-
 
   // --- MODAL DE CRONOGRAMA (CORRIGIDO E ROBUSTO) ---
   const ScheduleModal = () => { 
@@ -6982,8 +6072,6 @@ const handleFileSelect = (e) => {
     ) 
   }
 
-
-
   // --- MODAL GERAL ---
 
   const renderModal = () => {
@@ -7002,11 +6090,7 @@ const handleFileSelect = (e) => {
 
     return (
 
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/92 p-4 animate-in fade-in backdrop-blur-sm">
-
-        <div className={`newgears-modal-frame w-full relative animate-in zoom-in-95 z-60 ${isScrollableModal ? 'newgears-modal-scrollable' : ''} ${modalFrameClass}`}>
-
-          <button onClick={closeModal} className="absolute top-4 right-4 text-slate-400 hover:text-white p-2 z-50 rounded-full border border-white/10 bg-white/5"><X size={20}/></button>
+      <DialogSurface key={modal.type} onClose={closeModal} label="Detalhes" closeButton className={`newgears-modal-frame w-full relative animate-in zoom-in-95 z-60 ${isScrollableModal ? 'newgears-modal-scrollable' : ''} ${modalFrameClass}`}>
 
 
 
@@ -7014,8 +6098,7 @@ const handleFileSelect = (e) => {
 
           {/* --- MODAL DE RECORTE (CROP) --- */}
           {isCropping && (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 animate-in fade-in">
-                <div className="bg-zinc-800 border border-white/10 rounded-2xl p-6 w-full max-w-sm flex flex-col items-center">
+            <DialogSurface onClose={() => setIsCropping(false)} label="Ajustar foto" closeButton className="bg-zinc-800 border border-white/10 rounded-2xl p-6 w-full max-w-sm flex flex-col items-center">
                     <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Crop size={20}/> Ajustar Foto</h3>
                     
                     {/* Área de Visualização e Arrastar */}
@@ -7061,8 +6144,7 @@ const handleFileSelect = (e) => {
                         <button onClick={() => { setIsCropping(false); setCropImgSrc(null); }} className="flex-1 py-3 rounded-lg text-gray-400 bg-white/5 hover:bg-white/10 font-bold">Cancelar</button>
                         <button onClick={handleCropSave} className="flex-1 py-3 rounded-lg bg-purple-600 text-white hover:bg-purple-500 font-bold shadow-lg shadow-purple-900/20">Confirmar</button>
                     </div>
-                </div>
-            </div>
+                </DialogSurface>
           )}
 
           {/* --- NOVO MODAL: PERFIL DO ALUNO DETALHADO --- */}
@@ -7217,8 +6299,6 @@ const handleFileSelect = (e) => {
             </div>
           )}
 
-          
-
           {/* ... MODAIS EXISTENTES (newStudent, expertForm, robotForm, rubric, xp, review, expertView, robotView, newRound, compliment, attendance, grades) MANTIDOS IGUAIS ... */}
 
 {modal.type === 'newStudent' && (
@@ -7337,8 +6417,6 @@ const handleFileSelect = (e) => {
           {modal.type === 'expertForm' && (<DraftForm key={JSON.stringify([currentUser?.studentId || currentUser?.data?.id || currentUser?.name, activeTeamSeasonId, modal.type, modal.data?.id])} kind="expert" recordId={modal.data?.id} onDiscard={() => setSelectedFile(null)} onSubmit={handleExpertSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><Briefcase className="text-purple-500"/> {modal.data ? 'Editar' : 'Novo'} Especialista</h3><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Nome</label><input name="name" defaultValue={modal.data?.name} required autoFocus className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div><div className="grid grid-cols-2 gap-4 mb-4"><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Cargo</label><input name="role" defaultValue={modal.data?.role} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data</label><input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none" /></div></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Anotações</label><textarea name="notes" defaultValue={modal.data?.notes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-purple-500 outline-none h-20" /></div><div className="mb-4 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Evidência (Foto)</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-purple-500/10 file:text-purple-500 hover:file:bg-purple-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}</div><div className="mb-6 flex items-center justify-between bg-white/5 p-3 rounded-lg border border-white/10"><div><span className="text-sm font-bold text-white">Impactou?</span></div><select name="impact" defaultValue={modal.data?.impact} className="bg-black/50 border border-white/20 text-white p-2 rounded text-sm"><option value="Baixo">Baixo</option><option value="Médio">Médio</option><option value="Alto">Alto</option></select><label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" name="applied" defaultChecked={modal.data?.applied} className="w-5 h-5 accent-green-500" /><span className="text-xs text-white">Aplicado</span></label></div><button className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg">Salvar Registro</button></DraftForm>)}
 
           {modal.type === 'robotForm' && (<DraftForm key={JSON.stringify([currentUser?.studentId || currentUser?.data?.id || currentUser?.name, activeTeamSeasonId, modal.type, modal.data?.id])} kind="robot" recordId={modal.data?.id} onDiscard={() => setSelectedFile(null)} onSubmit={handleRobotSubmit}><h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-white"><GitCommit className="text-blue-500"/> {modal.data ? 'Editar' : 'Novo'} Versão</h3><div className="grid grid-cols-2 gap-4 mb-4"><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Versão</label><input name="version" defaultValue={modal.data?.version} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" placeholder="Ex: V2.0" /></div><div><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Data</label><input name="date" type="date" defaultValue={modal.data?.date} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">Apelido</label><input name="name" defaultValue={modal.data?.name} className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none" /></div><div className="mb-4"><label className="text-xs text-gray-400 uppercase font-bold mb-1 block">O que mudou?</label><textarea name="changes" defaultValue={modal.data?.changes} required className="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:border-blue-500 outline-none h-24" /></div><div className="mb-6 bg-white/5 p-3 rounded-lg border border-white/10"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block">Evidência (Foto)</label><input type="file" onChange={handleFileSelect} className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-500/10 file:text-blue-500 hover:file:bg-blue-500/20 cursor-pointer" />{selectedFile ? <span className="text-xs text-green-500 block mt-2 font-bold flex items-center gap-1"><CheckCircle size={10}/> Selecionado: {selectedFile.name}</span> : modal.data?.image && <div className="mt-2 text-xs text-blue-500 flex items-center gap-1"><CheckCircle size={10}/> Imagem já salva</div>}</div><button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">Salvar Versão</button></DraftForm>)}
-
-        
 
           {modal.type === 'expertContactForm' && (
             <DraftForm key={JSON.stringify([currentUser?.studentId || currentUser?.data?.id || currentUser?.name, activeTeamSeasonId, modal.type, modal.data?.id])} kind="contact" recordId={modal.data?.id} onDiscard={() => setSelectedFile(null)} onSubmit={handleExpertContactSubmit}>
@@ -7635,8 +6713,6 @@ const handleFileSelect = (e) => {
 
               <div className="mb-6 max-h-40 overflow-y-auto custom-scrollbar border border-white/10 rounded-lg p-2"><label className="text-xs text-gray-400 uppercase font-bold mb-2 block sticky top-0 bg-[#151520] pb-2">Missões (Selecione)</label>{missionsList.map(m => (<label key={m.id} className="flex items-center gap-3 p-2 hover:bg-white/5 rounded cursor-pointer"><input type="checkbox" name="missions" value={m.id} defaultChecked={modal.data?.missions?.includes(m.id)} className="accent-blue-500 w-4 h-4"/><div className="flex items-center gap-2 flex-1">{m.image && <img src={m.image} className="w-6 h-6 rounded object-cover" alt="M" />}<span className="text-sm text-gray-300">{m.code} - {m.name}</span></div><span className="text-xs font-bold text-blue-500">+{m.points}pts</span></label>))}</div><button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg">{modal.data ? 'Salvar alteracoes' : 'Salvar Saída'}</button></form>)}
 
-    
-
           {modal.type === 'attendance' && <AttendancePanel students={allStudents} sessions={attendanceSessions} onSave={handleAttendanceSave} onClose={closeModal} />}
 
           {modal.type === 'grades' && (
@@ -7651,7 +6727,7 @@ const handleFileSelect = (e) => {
           {/* --- NOVO MODAL: TREINO DE PIT STOP --- */}
           {modal.type === 'pitstop' && (
             <Suspense fallback={<LazyOverlayFallback label="Carregando treino de pit stop..." />}>
-              <PitStopModal viewAsStudent={viewAsStudent} pitStopRecords={pitStopRecords} showNotification={showNotification} />
+              <PitStopModal seasonId={activeTeamSeasonId} viewAsStudent={viewAsStudent} pitStopRecords={pitStopRecords} showNotification={showNotification} />
             </Suspense>
           )}
 
@@ -7722,8 +6798,6 @@ const handleFileSelect = (e) => {
                  </div>
              </div>
           )}
-
-
 
           {/* NOVO MODAL: MATRIZ DE DECISÃƒÆ’O */}
 
@@ -7918,419 +6992,16 @@ const handleFileSelect = (e) => {
              </DraftForm>
           )}
 
-        </div>
-
-      </div>
+        </DialogSurface>
 
     )
 
   }
 
-
-
   // --- COMPONENTE DE ESTRATÉGIA ---
 
   // --- GRÁFICO DE EVOLUÇÃO (SVG PURO) ---
-  const scoreEvolutionChartContextRef = useRef({});
-  scoreEvolutionChartContextRef.current = {
-      db,
-      rounds,
-      scoreHistory,
-      showNotification,
-  };
 
-  const ScoreEvolutionChart = useMemo(() => {
-      return function ScoreEvolutionChartInner({ isTvMode = false, tvModeVariant = 'default' }) {
-      const {
-          db,
-          rounds,
-          scoreHistory,
-          showNotification,
-      } = scoreEvolutionChartContextRef.current;
-      // Estado local para filtrar o gráfico
-      const [chartFilter, setChartFilter] = useState('score_total'); // 'score_total' ou ID do round
-      const [isFullscreen, setIsFullscreen] = useState(false);
-      const isTvFullRoundsView = isTvMode && tvModeVariant === 'full_rounds';
-      
-      // Prepara os dados baseado no filtro
-      const isGeneral = chartFilter === 'score_total';
-      const chartPalette = isTvMode
-          ? {
-              primary: "#D01BF1",
-              secondary: "#6293E9",
-              better: "#D01BF1",
-              worse: "#6293E9",
-              avg: "#E8D9FF",
-              grid: "rgba(255,255,255,0.16)",
-              tooltipBorder: "#5D58D3",
-              tooltipSubtle: "#A5B8D7",
-            }
-          : {
-              primary: "#22c55e",
-              secondary: "#3b82f6",
-              better: "#22c55e",
-              worse: "#ef4444",
-              avg: "#facc15",
-              grid: "#333",
-              tooltipBorder: "#555",
-              tooltipSubtle: "#9ca3af",
-            };
-      let rawData = [];
-      let color = chartPalette.primary;
-
-      if (isGeneral) {
-          // Pega apenas históricos de pontuação total
-          rawData = scoreHistory.filter(h => !h.roundId && h.practiceType !== 'exit_practice');
-      } else {
-          // Pega histórico de TEMPO de um round específico
-          rawData = scoreHistory.filter(h => h.roundId === chartFilter);
-          color = chartPalette.secondary;
-      }
-
-      if (isTvFullRoundsView) {
-          rawData = scoreHistory.filter(h => !h.roundId && h.practiceType !== 'exit_practice' && (h.practiceType === 'full_round' || h.time != null));
-          color = chartPalette.secondary;
-      }
-
-      // --- FUNÇÃO PARA LIMPAR O GRÁFICO ATUAL ---
-      const handleClearChart = async () => {
-        const confirmMsg = isGeneral 
-            ? "ZERAR o gráfico geral de Pontos/Tempo? Isso apaga todo o histórico da equipe." 
-            : "Limpar o histórico de tempos deste round?";
-            
-        if (!window.confirm(confirmMsg)) return;
-        
-        // Apaga apenas os documentos que estão sendo mostrados no gráfico agora
-        try {
-            const deletePromises = rawData.map(d => deleteDoc(doc(db, "score_history", d.id)));
-            await Promise.all(deletePromises);
-            showNotification("Histórico do gráfico limpo!", "success");
-        } catch (error) {
-            console.error("Erro ao limpar gráfico:", error);
-            showNotification("Erro ao limpar.", "error");
-        }
-      };
-
-      const data = [...rawData].sort((a,b) => new Date(a.date) - new Date(b.date));
-
-      if (data.length < 2 && (isGeneral || isTvFullRoundsView)) return (
-        <div className={`border rounded-2xl p-6 text-center text-sm flex flex-col items-center justify-center h-48 ${isTvMode ? 'bg-black/20 border-white/10 text-slate-300' : 'bg-[#151520] border-white/10 text-gray-500 mb-8'}`}>
-            <TrendingUp size={32} className="mb-2 opacity-50"/>
-            <p>{isTvFullRoundsView ? 'Registre pelo menos 2 rounds completos para acompanhar a meta de 2:30.' : 'Registre pelo menos 2 treinos para ver o grafico de evolucao.'}</p>
-        </div>
-      );
-
-      const width = 800;
-      const height = isTvFullRoundsView ? 188 : isTvMode ? 146 : 200;
-      const padding = isTvFullRoundsView ? 16 : isTvMode ? 14 : 20;
-      
-      // Se for tempo, queremos ver cair (mas gráfico svg padrão sobe valores, então tratamos visualmente)
-      const valKey = isTvFullRoundsView ? 'time' : chartFilter === 'score_total' ? 'score' : 'time';
-      
-      // ESCALAS (Máximos)
-      const maxScore = Math.max(...data.map(d => d.score || 0), 100);
-      const maxTime = Math.max(...data.map(d => d.time || 0), isGeneral ? 150 : 60); // 150s para geral, 60s para round
-
-      // Função para converter dados em coordenadas X,Y
-      const getX = (index) => padding + (index / (data.length - 1)) * (width - 2 * padding);
-      
-      // Y dinÃ¢mico (Pontos ou Tempo)
-      const getY = (val, type = 'score') => {
-          const max = type === 'time' ? maxTime : maxScore;
-          return height - padding - ((val || 0) / max) * (height - 2 * padding);
-      };
-
-      // Cria o caminho da linha (path d)
-      const pathDataMain = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d[valKey], isTvFullRoundsView ? 'time' : isGeneral ? 'score' : 'time')}`).join(' ');
-      
-      // Linha secundária (Tempo) apenas se for Geral
-      const pathDataTime = isGeneral && !isTvFullRoundsView ? data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(d.time || 0, 'time')}`).join(' ') : "";
-
-      // Cria o caminho para o preenchimento (area fill)
-      const fillPathData = `${pathDataMain} L ${width - padding} ${height} L ${padding} ${height} Z`;
-
-      // Cálculos de Média
-      const avgScore = data.length > 0 ? (data.reduce((sum, d) => sum + (d.score || 0), 0) / data.length).toFixed(1) : 0;
-      const avgTime = data.length > 0 ? (data.reduce((sum, d) => sum + (d.time || 0), 0) / data.length).toFixed(1) : 0;
-      const recentGeneralAttempts = isGeneral
-          ? [...data].filter((entry) => entry.practiceType === 'full_round').slice(-10)
-          : [];
-      const attemptsWithinLimit = isGeneral ? recentGeneralAttempts.filter((entry) => Number(entry.time) <= 150).length : 0;
-      const consistencyLabel = isGeneral && recentGeneralAttempts.length > 0
-          ? `${attemptsWithinLimit}/${recentGeneralAttempts.length} em 2:30`
-          : '--';
-      const recentTvRounds = isTvFullRoundsView ? data.slice(-10) : [];
-      const tvWithinLimitCount = recentTvRounds.filter((entry) => Number(entry.time) <= 150).length;
-      const tvConsistencyLabel = recentTvRounds.length > 0 ? `${tvWithinLimitCount}/${recentTvRounds.length}` : '--';
-      const buildLocalDateKey = (value) => {
-          const parsed = new Date(value);
-          if (Number.isNaN(parsed.getTime())) return 'sem-data';
-          const year = parsed.getFullYear();
-          const month = String(parsed.getMonth() + 1).padStart(2, '0');
-          const day = String(parsed.getDate()).padStart(2, '0');
-          return `${year}-${month}-${day}`;
-      };
-      const roundsByDay = isTvFullRoundsView
-          ? data.reduce((acc, entry) => {
-                const key = buildLocalDateKey(entry.date);
-                acc[key] = (acc[key] || 0) + 1;
-                return acc;
-            }, {})
-          : {};
-      const roundDays = Object.keys(roundsByDay);
-      const roundsToday = roundsByDay[buildLocalDateKey(new Date())] || 0;
-      const averageRoundsPerDay = roundDays.length > 0 ? (data.length / roundDays.length) : 0;
-
-      // Coordenadas da Média para o Gradiente
-      const currentAvg = isTvFullRoundsView ? parseFloat(avgTime) : isGeneral ? parseFloat(avgScore) : parseFloat(avgTime);
-      const avgY = getY(currentAvg, isTvFullRoundsView ? 'time' : isGeneral ? 'score' : 'time');
-      const avgPercent = Math.max(0, Math.min(100, (avgY / height) * 100));
-      const tvTargetY = getY(150, 'time');
-
-      const renderChartContent = () => (
-          <>
-              <div className={`${isTvMode ? 'mb-0 hidden' : 'mb-6 flex items-center justify-between'}`}>
-                  <h3 className={`text-white font-bold flex items-center gap-2 ${isFullscreen ? 'text-2xl' : ''}`}>
-                      <TrendingUp style={{ color }}/> {isGeneral ? 'Evolução (Pontos vs Tempo)' : 'Melhoria de Tempo (Segundos)'}
-                  </h3>
-                  
-                  <div className="flex items-center gap-2">
-                  {/* Botão de Limpar Histórico */}
-                  {!isTvMode && data.length > 0 && (
-                      <button onClick={handleClearChart} className="p-2 text-gray-500 hover:text-red-500 hover:bg-white/5 rounded-lg transition-colors" title="Zerar este gráfico">
-                          <Trash2 size={16}/>
-                      </button>
-                  )}
-
-                  {/* BOTÃƒÆ’O TELA CHEIA */}
-                  {!isTvMode && (
-                      <button onClick={() => setIsFullscreen(!isFullscreen)} className="p-2 text-gray-500 hover:text-white hover:bg-white/5 rounded-lg transition-colors" title={isFullscreen ? "Minimizar" : "Tela Cheia"}>
-                          {isFullscreen ? <Minimize size={16}/> : <Maximize size={16}/>}
-                      </button>
-                  )}
-
-                  {/* SELETOR DE GRÁFICO */}
-                  {!isTvMode && (
-                  <select 
-                    className="bg-black/40 border border-white/20 text-xs text-white rounded-lg p-2 outline-none focus:border-blue-500"
-                    value={chartFilter}
-                    onChange={(e) => setChartFilter(e.target.value)}
-                  >
-                      <option value="score_total">📊 Pontuação Geral</option>
-                      {rounds.map(r => (
-                          <option key={r.id} value={r.id}>⏱️ Tempo: {r.name}</option>
-                      ))}
-                  </select>
-                  )}
-                  </div>
-              </div>
-
-              {data.length === 0 ? (
-                  <div className={`flex items-center justify-center text-gray-500 text-xs italic border border-dashed border-white/10 rounded-xl ${isFullscreen ? 'flex-1 min-h-[400px]' : isTvMode ? 'h-28' : 'h-32'}`}>
-                      Sem dados registrados para este gráfico ainda.
-                  </div>
-              ) : (
-              <div className="w-full overflow-hidden relative flex-1 flex flex-col justify-center">
-                  {isTvFullRoundsView ? (
-                      <div className="mb-3 grid gap-2 md:grid-cols-3">
-                          <div className="rounded-[18px] border border-[#6293E9]/20 bg-[#6293E9]/10 px-3 py-2.5">
-                              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-200/68">Meta 2:30</p>
-                              <p className="mt-1.5 text-lg font-black text-white">{tvConsistencyLabel}</p>
-                              <p className="mt-1 text-[10px] text-slate-100/68">ultimos 10 rounds dentro do tempo</p>
-                          </div>
-                          <div className="rounded-[18px] border border-[#5D58D3]/20 bg-[#5D58D3]/10 px-3 py-2.5">
-                              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-200/68">Hoje</p>
-                              <p className="mt-1.5 text-lg font-black text-white">{roundsToday}</p>
-                              <p className="mt-1 text-[10px] text-slate-100/68">rounds registrados no dia</p>
-                          </div>
-                          <div className="rounded-[18px] border border-[#D01BF1]/20 bg-[#D01BF1]/10 px-3 py-2.5">
-                              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-200/68">Media/dia</p>
-                              <p className="mt-1.5 text-lg font-black text-white">{averageRoundsPerDay.toFixed(1)}</p>
-                              <p className="mt-1 text-[10px] text-slate-100/68">quantas tentativas por dia</p>
-                          </div>
-                      </div>
-                  ) : null}
-
-                  <svg viewBox={`0 0 ${width} ${height}`} className={`w-full h-auto drop-shadow-2xl ${isFullscreen ? 'max-h-[60vh]' : ''}`}>
-                      {/* Gradiente de Fundo */}
-                      <defs>
-                          <linearGradient id="trendLineGradient" x1="0" y1="0" x2="0" y2={height} gradientUnits="userSpaceOnUse">
-                              <stop offset={`${avgPercent}%`} stopColor={chartPalette.better} />
-                              <stop offset={`${avgPercent}%`} stopColor={chartPalette.worse} />
-                          </linearGradient>
-                          <linearGradient id="trendFillGradient" x1="0" y1="0" x2="0" y2={height} gradientUnits="userSpaceOnUse">
-                              <stop offset="0%" stopColor={chartPalette.better} stopOpacity="0.2"/>
-                              <stop offset={`${avgPercent}%`} stopColor={chartPalette.better} stopOpacity="0.1"/>
-                              <stop offset={`${avgPercent}%`} stopColor={chartPalette.worse} stopOpacity="0.1"/>
-                              <stop offset="100%" stopColor={chartPalette.worse} stopOpacity="0"/>
-                          </linearGradient>
-                      </defs>
-
-                      {/* Linhas de Grade Horizontal (Baseadas na escala principal) */}
-                      {[0, 0.25, 0.5, 0.75, 1].map(p => {
-                          const y = height - padding - (p * (height - 2 * padding));
-                          return <line key={p} x1={padding} y1={y} x2={width-padding} y2={y} stroke={chartPalette.grid} strokeDasharray="4 4" strokeWidth="1"/>
-                      })}
-
-                      {/* Linha da Média */}
-                      {isTvFullRoundsView ? (
-                        <>
-                            <line x1={padding} y1={tvTargetY} x2={width-padding} y2={tvTargetY} stroke={chartPalette.avg} strokeDasharray="5 5" strokeWidth="1" opacity="0.75"/>
-                            <text x={padding + 5} y={tvTargetY - 5} fill={chartPalette.avg} fontSize="10" fontWeight="bold" opacity="0.92">META 2:30</text>
-                        </>
-                      ) : (
-                        <>
-                            <line x1={padding} y1={avgY} x2={width-padding} y2={avgY} stroke={chartPalette.avg} strokeDasharray="5 5" strokeWidth="1" opacity="0.6"/>
-                            <text x={padding + 5} y={avgY - 5} fill={chartPalette.avg} fontSize="10" fontWeight="bold" opacity="0.8">MÉDIA: {currentAvg}</text>
-                        </>
-                      )}
-
-                      {/* Área Preenchida (Apenas Principal) */}
-                      <path d={fillPathData} fill={isGeneral && !isTvFullRoundsView ? "url(#trendFillGradient)" : "none"} />
-
-                      {/* SEGUNDA LINHA: TEMPO (AZUL) - Só no Geral */}
-                      {isGeneral && !isTvFullRoundsView && (
-                        <>
-                            <path d={pathDataTime} fill="none" stroke={chartPalette.secondary} strokeWidth="2" strokeDasharray="5 5" strokeLinecap="round" strokeLinejoin="round" opacity="0.7"/>
-                            {data.map((d, i) => (
-                                <circle key={`t-${d.id}`} cx={getX(i)} cy={getY(d.time || 0, 'time')} r="3" fill="#151520" stroke={chartPalette.secondary} strokeWidth="2" />
-                            ))}
-                        </>
-                      )}
-
-                      {/* LINHA PRINCIPAL (VERDE ou AZUL) */}
-                      <path d={pathDataMain} fill="none" stroke={isTvFullRoundsView ? chartPalette.secondary : "url(#trendLineGradient)"} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-
-                      {/* Pontos */}
-                      {data.map((d, i) => (
-                          (() => {
-                            const yPos = getY(d[valKey], isTvFullRoundsView ? 'time' : isGeneral ? 'score' : 'time');
-                            const dateText = new Date(d.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-
-                            const isBetter = isTvFullRoundsView ? Number(d.time) <= 150 : isGeneral ? d[valKey] >= currentAvg : d[valKey] <= currentAvg;
-                            const ptColor = isBetter ? chartPalette.better : chartPalette.worse;
-
-                            return (
-                                <g key={d.id} className="group">
-                                    <circle cx={getX(i)} cy={yPos} r="4" fill="#151520" stroke={ptColor} strokeWidth="2" />
-                                    
-                                    {/* Textos fixos (Sempre visíveis, alternando altura para não encavalar) */}
-                                    <text x={getX(i)} y={yPos - (i % 2 === 0 ? 12 : -18)} textAnchor="middle" fill={ptColor} fontSize="10" fontWeight="bold">
-                                        {d[valKey]}
-                                    </text>
-
-                                    {/* Tooltip Aprimorado */}
-                                    <g className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                        <rect 
-                                            x={getX(i) - 45} 
-                                            y={yPos - (isGeneral ? 60 : 48)} 
-                                            width="90" 
-                                            height={isGeneral ? 55 : 40} 
-                                            rx="5" 
-                                            fill="black" 
-                                            fillOpacity="0.9"
-                                            stroke={chartPalette.tooltipBorder}
-                                            strokeWidth="1"
-                                        />
-                                        
-                                        {isTvFullRoundsView ? (
-                                            <>
-                                                <text x={getX(i)} y={yPos - 45} textAnchor="middle" fill="white" fontSize="12" fontWeight="bold">{d.time} seg</text>
-                                                <text x={getX(i)} y={yPos - 30} textAnchor="middle" fill={chartPalette.avg} fontSize="10" fontWeight="bold">{Number(d.time) <= 150 ? 'Dentro de 2:30' : 'Acima de 2:30'}</text>
-                                                <text x={getX(i)} y={yPos - 15} textAnchor="middle" fill={chartPalette.tooltipSubtle} fontSize="10">{dateText}</text>
-                                            </>
-                                        ) : isGeneral ? (
-                                            <>
-                                                <text x={getX(i)} y={yPos - 45} textAnchor="middle" fill="white" fontSize="12" fontWeight="bold">{d.score} pts</text>
-                                                <text x={getX(i)} y={yPos - 30} textAnchor="middle" fill={chartPalette.secondary} fontSize="10" fontWeight="bold">{d.time ? `${d.time}s` : '--'}</text>
-                                                <text x={getX(i)} y={yPos - 15} textAnchor="middle" fill={chartPalette.tooltipSubtle} fontSize="10">{dateText}</text>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <text x={getX(i)} y={yPos - 35} textAnchor="middle" fill="white" fontSize="12" fontWeight="bold">{d.time} seg</text>
-                                                <text x={getX(i)} y={yPos - 20} textAnchor="middle" fill="#9ca3af" fontSize="10">{dateText}</text>
-                                            </>
-                                        )}
-                                    </g>
-                                </g>
-                            )
-                          })()
-                      ))}
-                  </svg>
-                  
-                  {/* Legenda X (Datas) */}
-                  <div className={`flex justify-between ${isTvMode ? 'mt-0.5 px-2 text-[8px]' : 'mt-2 px-4 text-[10px]'} text-gray-500 uppercase font-mono select-none`}>
-                      <span>{new Date(data[0].date).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})}</span>
-                      {data.length > 3 && (<span>{new Date(data[Math.floor(data.length / 2)].date).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})}</span>)}
-                      <span>{new Date(data[data.length-1].date).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'})}</span>
-                  </div>
-              </div>
-              )}
-
-              {/* HISTÓRICO COMPLETO ABAIXO DO GRÁFICO (SÓ FORA DO MODO TV E NÃO EM TELA CHEIA) */}
-              {!isTvMode && !isFullscreen && data.length > 0 && (
-                  <div className="mt-8 pt-6 border-t border-white/10">
-                      <div className="flex justify-between items-center mb-4">
-                          <h4 className="text-gray-400 font-bold uppercase text-xs flex items-center gap-2"><ListTodo size={14}/> Histórico Detalhado</h4>
-                          <div className="flex gap-4">
-                              <div className="text-right bg-white/5 px-3 py-1 rounded-lg">
-                                  <span className="text-[10px] text-gray-500 uppercase font-bold block">Média Pontos</span>
-                                  <span className="text-green-500 font-bold">{avgScore} pts</span>
-                              </div>
-                              <div className="text-right bg-white/5 px-3 py-1 rounded-lg">
-                                  <span className="text-[10px] text-gray-500 uppercase font-bold block">Média Tempo</span>
-                                  <span className="text-blue-500 font-bold">{avgTime} s</span>
-                              </div>
-                              {isGeneral && (
-                                  <div className="text-right bg-white/5 px-3 py-1 rounded-lg">
-                                      <span className="text-[10px] text-gray-500 uppercase font-bold block">Consistencia 2:30</span>
-                                      <span className={`font-bold ${attemptsWithinLimit >= 7 && recentGeneralAttempts.length >= 10 ? 'text-green-400' : 'text-yellow-300'}`}>{consistencyLabel}</span>
-                                  </div>
-                              )}
-                          </div>
-                      </div>
-                      
-                      <div className="max-h-64 overflow-y-auto custom-scrollbar pr-2 space-y-2">
-                          {[...data].reverse().map((d, i) => (
-                              <div key={d.id} className="flex items-center justify-between bg-black/40 p-3 rounded-lg border border-white/5 hover:bg-white/5 transition-colors">
-                                  <div className="flex items-center gap-3">
-                                      <span className="text-gray-500 text-xs font-mono font-bold w-6">#{data.length - i}</span>
-                                      <div className="flex flex-col">
-                                          <span className="text-gray-200 text-xs font-bold">{new Date(d.date).toLocaleDateString('pt-BR')} às {new Date(d.date).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</span>
-                                          {d.author && <span className="text-[10px] text-gray-500 flex items-center gap-1 mt-0.5"><UserCircle size={10}/> {d.author}</span>}
-                                      </div>
-                                  </div>
-                                  <div className="flex items-center gap-4 text-right">
-                                      <div className="w-16"><span className="text-[9px] text-gray-500 uppercase block">Tempo</span><span className="text-blue-400 font-bold text-sm">{d.time || '--'}s</span></div>
-                                      <div className="w-16"><span className="text-[9px] text-gray-500 uppercase block">Pontos</span><span className="text-green-400 font-bold text-sm">{d.score || '--'}</span></div>
-                                  </div>
-                              </div>
-                          ))}
-                      </div>
-                  </div>
-              )}
-          </>
-      );
-
-      if (isFullscreen) {
-          return (
-              <div className="fixed inset-0 z-[150] bg-black/95 backdrop-blur-sm p-4 md:p-8 flex flex-col overflow-auto animate-in fade-in">
-                  <div className="max-w-7xl w-full mx-auto flex-1 flex flex-col">
-                      <div className="bg-[#151520] border border-white/10 rounded-2xl p-6 md:p-10 flex-1 flex flex-col shadow-2xl relative">
-                          {renderChartContent()}
-                      </div>
-                  </div>
-              </div>
-          );
-      }
-
-      return (
-          <div className={`rounded-2xl ${isTvMode ? 'border-0 bg-transparent p-0 shadow-none' : 'bg-[#151520] border border-white/10 p-6 mb-8'}`}>
-              {renderChartContent()}
-          </div>
-      );
-      };
-  }, []);
 
   // Função para salvar pontuação no histórico
   const handleSavePracticeScore = async (totalPoints, totalTime) => {
@@ -8691,7 +7362,7 @@ const handleFileSelect = (e) => {
       selectionDraft: tournamentDraftReady ? tournamentDraftState.record : null,
       selectionReady: tournamentDraftReady,
       selectionLoadingError: tournamentDraftState.error || selectionReadError,
-      onRetrySelection: () => { setSelectionReadError(false); setTournamentDraftState({ seasonId: activeTeamSeasonId || 'legacy', loading: true, error: false, record: null }); setSelectionRetry((attempt) => attempt + 1); },
+      onRetrySelection: () => { setTournamentDraftState({ seasonId: activeTeamSeasonId || 'legacy', loading: true, error: false, record: null }); setSelectionRetry((attempt) => attempt + 1); },
       onPublishSelection: handlePublishTournamentSelection,
       onSaveWeekly: handleSaveWeeklyEvaluation,
       onSavePresentation: handleSavePresentationEvaluation,
@@ -8731,6 +7402,8 @@ const handleFileSelect = (e) => {
   };
 
   const kanbanViewProps = {
+      focusRequest: taskComposerRequest,
+      onFocusRequestHandled: completeTaskComposerRequest,
       onOpenBlock: (task) => setModal({ type: 'taskBlock', data: { task } }),
       assignTaskToStudent,
       currentWeekData,
@@ -8958,7 +7631,7 @@ const handleFileSelect = (e) => {
 
   if (isTvOnlyView) {
       return (
-          <Suspense fallback={<LazyOverlayFallback label="Carregando modo TV..." />}>
+          <ScoreEvolutionChartContext.Provider value={{ db, rounds, scoreHistory, showNotification, user: currentUser, seasonId: activeTeamSeasonId || 'legacy' }}><Suspense fallback={<LazyOverlayFallback label="Carregando modo TV..." />}>
             <TvModePanel
                 isTvMode={true}
                 setIsTvMode={setIsTvMode}
@@ -8971,13 +7644,13 @@ const handleFileSelect = (e) => {
                 outreachEvents={outreachEvents}
                 ScoreEvolutionChart={ScoreEvolutionChart}
             />
-          </Suspense>
+          </Suspense></ScoreEvolutionChartContext.Provider>
       );
   }
 
   // --- RENDER PRINCIPAL (SÓ CHEGA AQUI SE ESTIVER LOGADO) ---
   return (
-    <GearExperienceProvider key={`${currentUser.type}:${currentUser.studentId || currentUser.data?.id || currentUser.uid || currentUser.name}:${activeTeamSeasonId || 'legacy'}`} db={db} user={currentUser} student={viewAsStudent} teamMembers={students.filter(isActiveStudent).map(workshopMember)} seasonId={activeTeamSeasonId || 'legacy'} isLiteMode={isLiteMode} aiContext={{ season: activeTeamSeasonName, project: projectSummary, robots: robotVersions, attachments, codes: codeSnippets }} onOpenKnowledge={() => setAdminTab('giro_knowledge')} onOpenShop={() => isAdmin ? setAdminTab('shop') : setStudentTab('shop')}>
+    <ScoreEvolutionChartContext.Provider value={{ db, rounds, scoreHistory, showNotification, user: currentUser, seasonId: activeTeamSeasonId || 'legacy' }}><GearExperienceProvider key={`${currentUser.type}:${currentUser.studentId || currentUser.data?.id || currentUser.uid || currentUser.name}:${activeTeamSeasonId || 'legacy'}`} db={db} user={currentUser} student={viewAsStudent} teamMembers={students.filter(isActiveStudent).map(workshopMember)} seasonId={activeTeamSeasonId || 'legacy'} isLiteMode={isLiteMode} aiContext={{ season: activeTeamSeasonName, project: projectSummary, robots: robotVersions, attachments, codes: codeSnippets }} onOpenKnowledge={() => setAdminTab('giro_knowledge')} onOpenShop={() => isAdmin ? setAdminTab('shop') : setStudentTab('shop')}>
     <div className={`newgears-shell newgears-workspace min-h-screen text-white selection:bg-yellow-300 selection:text-slate-950 pb-20 relative overflow-hidden ${isLiteMode ? 'newgears-lite-mode' : ''}`}>
       {/* Estilo da Animação de Fundo */}
       <div className="newgears-floating-layer">
@@ -8993,7 +7666,7 @@ const handleFileSelect = (e) => {
       <div className="newgears-content">
         
         {/* EFEITO DE CONFETES (Fica no topo de tudo, z-index gigante) */}
-        {showConfetti && (
+        {showConfetti && !isLiteMode && (
           <div className="fixed inset-0 z-[9999] pointer-events-none">
             <Suspense fallback={null}>
               <ConfettiBurst width={window.innerWidth} height={window.innerHeight} recycle={false} numberOfPieces={420} gravity={0.14} />
@@ -9005,7 +7678,7 @@ const handleFileSelect = (e) => {
         <WorkspaceContent render={renderNotification} />
         <WorkspaceContent render={renderXpLossAlertModal} />
         {renderModal()}
-        {seasonTransitionLock && modal.type !== 'seasonTransition' && <div role="dialog" aria-modal="true" aria-label="Encerramento em andamento" className="fixed inset-0 z-[250] flex items-center justify-center bg-black/90 p-5"><div className="max-w-md rounded-3xl border border-white/15 bg-[#111827] p-6"><h2 className="text-xl font-bold">Encerramento em andamento</h2><p className="mt-3 text-sm text-slate-300">Aguarde a preparação da próxima temporada. Se a conexão caiu, o técnico pode retomar de onde parou.</p>{isAdmin && <button onClick={() => setModal({ type: 'seasonTransition', data: null })} className="mt-5 rounded-full bg-cyan-300 px-5 py-3 font-bold text-slate-950">Retomar encerramento</button>}</div></div>}
+        {seasonTransitionLock && modal.type !== 'seasonTransition' && <DialogSurface priority label="Encerramento em andamento"><div><h2 className="text-xl font-bold">Encerramento em andamento</h2><p className="mt-3 text-sm text-slate-300">Aguarde a preparação da próxima temporada. Se a conexão caiu, o técnico pode retomar de onde parou.</p>{isAdmin && <button onClick={() => setModal({ type: 'seasonTransition', data: null })} className="mt-5 rounded-full bg-cyan-300 px-5 py-3 font-bold text-slate-950">Retomar encerramento</button>}</div></DialogSurface>}
 
         {/* --- ALERTA DE LOGOUT POR INATIVIDADE --- */}
         {logoutCountdown !== null && (
@@ -9188,6 +7861,7 @@ const handleFileSelect = (e) => {
               </div>
           </div>
 
+          <div className="ng-topbar-actions"><WorkspaceSearch tabs={currentWorkspaceTabs} activeId={isAdmin ? adminTab : studentTab} onNavigate={navigateWorkspace} />
           <details className="workspace-tools" onClick={(event) => { if (event.target.closest('button')) event.currentTarget.open = false; }} onKeyDown={(event) => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); } }} onBlur={(event) => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false; }}>
             <summary aria-label="Ferramentas da equipe"><SlidersHorizontal size={18} /><span>Ferramentas</span><ChevronDown size={14} /></summary>
             <div className="workspace-tools__panel flex items-center gap-2 md:gap-3 flex-wrap justify-start">
@@ -9339,7 +8013,7 @@ const handleFileSelect = (e) => {
               </button>
             </div>
           </details>
-      </header>
+      </div></header>
 
       <div className="px-4 pt-4 md:px-8"><ReminderInbox authenticated={reportsWorkspace.enabled} user={currentUser} seasonId={activeTeamSeasonId || 'legacy'} tasks={tasks} students={students} reportsVersion={reportsWorkspace.reports.map((report) => report.id + (report.updatedAt || '')).join('|')} onOpen={(tab) => isAdmin ? setAdminTab(tab) : setStudentTab(tab)} /></div>
       {/* --- ÁREA DO TÉCNICO (ADMIN) --- */}
@@ -9377,9 +8051,11 @@ const handleFileSelect = (e) => {
 
       {isAdmin && (
         <main id="workspace-content" tabIndex={-1} aria-label={currentWorkspaceTab?.label} className={`newgears-stage workspace-section-anchor max-w-[1600px] mx-auto animate-in fade-in duration-500 ${adminPanelState.compact ? 'p-4 md:p-6' : 'p-4 md:p-8'}`}>
-          {!adminPanelState.compact && <WorkspaceContent render={renderUrgentEventsBanner} />}
+          {!adminPanelState.compact && adminTab !== 'overview' && <WorkspaceContent render={renderUrgentEventsBanner} />}
 
           <div className="mb-6" hidden={adminTab !== 'overview'}>
+            {adminTab === 'overview' && <WorkspaceBriefing technical name={adminProfile?.name} students={students} tasks={tasks} events={events} today={localTodayStr} season={activeTeamSeasonName} onNavigate={navigateWorkspace} readiness={commandCenterReadinessScore} onNewTask={() => { setTaskComposerRequest((value) => value + 1); navigateWorkspace('kanban'); }} onNewEvent={() => setModal({ type: 'eventForm' })} />}
+            <SectionDisclosure title={"Vis\u00e3o estrat\u00e9gica da equipe"} description="Indicadores completos, conquistas e controles da equipe">
             <WorkspaceCollapsible isOpen={adminPanelState.hero}>
               <WorkspaceHero
                 eyebrow="Temporada FLL"
@@ -9395,6 +8071,7 @@ const handleFileSelect = (e) => {
             <div className={`newgears-footer-shell newgears-hud-shell relative z-10 border border-white/10 bg-black/18 ${adminPanelState.compact ? 'p-3 md:p-4' : 'p-4 md:p-5'} ${adminPanelState.hero ? 'mt-2' : ''}`}>
               {adminHeroFooter}
             </div>
+          </SectionDisclosure>
           </div>
 
           {adminTab === 'overview' && !adminPanelState.compact && (
@@ -9490,7 +8167,7 @@ const handleFileSelect = (e) => {
                       <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-300/60">Foco da equipe</p>
                       <p className="mt-1 text-sm font-bold text-white">{activeTeamSeasonName} · {workspaceSeason === 'rotation' ? 'Rodízio de estações' : 'Reta final e torneio'}</p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="ng-season-actions flex items-center gap-3">
                       {isSavingWorkspaceSeason && <span role="status" className="text-[10px] font-bold text-slate-300">Sincronizando…</span>}
                       {currentUser?.type === 'admin' && <SeasonModeControl value={workspaceSeason} onChange={handleWorkspaceSeasonChange} disabled={isSavingWorkspaceSeason} />}
                       {currentUser?.type === 'admin' && db && <button type="button" disabled={!workspaceSeasonLoaded || isTransitioningSeason} onClick={() => setModal({ type: 'seasonTransition', data: null })} className="rounded-full border border-white/10 bg-white/[0.045] px-4 py-2.5 text-[11px] font-bold text-slate-300 transition hover:border-cyan-200/25 hover:bg-cyan-200/10 hover:text-cyan-50 disabled:cursor-wait disabled:opacity-50">{workspaceSeasonLoaded ? 'Encerrar temporada' : 'Carregando temporada…'}</button>}
@@ -9589,11 +8266,13 @@ const handleFileSelect = (e) => {
       {/* --- ÁREA DO ALUNO --- */}
       {!isAdmin && viewAsStudent && (
         <main id="workspace-content" tabIndex={-1} aria-label={currentWorkspaceTab?.label} className="newgears-stage workspace-section-anchor p-4 md:p-8 w-full max-w-[1800px] mx-auto animate-in slide-in-from-bottom-8">
-          <WorkspaceContent render={renderUrgentEventsBanner} />
+          {studentTab !== 'overview' && <WorkspaceContent render={renderUrgentEventsBanner} />}
 
           {ownTournamentSelection ? <TournamentSelectionNotice key={`${viewAsStudent.id}__${activeTeamSeasonId || 'legacy'}__${ownTournamentSelection.selectedAt || ownTournamentSelection.createdAt || 'selected'}`} studentName={viewAsStudent.name || 'Integrante'} seasonName={activeTeamSeasonName} isLiteMode={isLiteMode} /> : null}
 
           <div hidden={studentTab !== 'overview'}>
+          {studentTab === 'overview' && <WorkspaceBriefing name={viewAsStudent.name} student={viewAsStudent} students={students} tasks={tasks} events={events} today={localTodayStr} season={activeTeamSeasonName} onNavigate={navigateWorkspace} level={studentCurrentLevel} nextLevel={studentNextLevel} />}
+          <SectionDisclosure title="Meu perfil e minhas conquistas" description={"Veja sua evolu\u00e7\u00e3o, detalhes da semana e todos os atalhos"}>
           <div className="mb-2">
             <WorkspaceCollapsible isOpen={studentPanelState.hero}>
               <WorkspaceHero
@@ -9611,6 +8290,7 @@ const handleFileSelect = (e) => {
               {studentHeroFooter}
             </div>
           </div>
+          </SectionDisclosure>
 
           <WorkspaceCollapsible isOpen={studentPanelState.dashboard}>
             <div className="flex flex-col gap-6 mb-6">
@@ -10235,15 +8915,9 @@ const handleFileSelect = (e) => {
       </div>
     </div>
     </div>
-    </GearExperienceProvider>
+    </GearExperienceProvider></ScoreEvolutionChartContext.Provider>
   );
 }
 
 export default App;
-
-
-
-
-
-
 
