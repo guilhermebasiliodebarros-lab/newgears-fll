@@ -1,9 +1,10 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { BookOpen, Check, Copy, LoaderCircle, MessageCircle, RefreshCw, Send, Settings2, Sparkles, Square, Trash2, Volume2, X } from 'lucide-react';
+import { ArrowDown, BookOpen, Check, Copy, Lightbulb, LoaderCircle, MessageCircle, RefreshCw, Send, Settings2, Sparkles, Square, Trash2, Volume2, X } from 'lucide-react';
 import useGearShopContext from '../hooks/useGearShopContext';
 import useGiroAI from '../hooks/useGiroAI';
 import useGiroSpeech from '../hooks/useGiroSpeech';
 import { GIRO_AI_MAX_QUESTION, GIRO_AI_SUGGESTIONS, giroSpeechText } from '../utils/giroAI';
+import { giroLocalAdvice } from '../utils/giroCompanion';
 import GearMascot from './GearMascot';
 import GiroAIMessage from './GiroAIMessage';
 import GiroMaterialLibrary from './GiroMaterialLibrary';
@@ -13,8 +14,8 @@ import './GiroAIChat.css';
 import './GiroKnowledge.css';
 import './GiroEnhancements.css';
 
-export default function GiroAIChat({ onClose }) {
-  const { account, draftScope, knowledge, aiContext, workshop, user, onOpenKnowledge } = useGearShopContext();
+export default function GiroAIChat({ onClose, calm = false }) {
+  const { account, draftScope, knowledge, aiContext, workshop, user, onOpenKnowledge, companionContext = {}, student, technicianMode, isLiteMode } = useGearShopContext();
   const chat = useGiroAI(draftScope || account.studentId || 'technical', knowledge, aiContext);
   const titleId = useId();
   const dialog = useRef(null);
@@ -26,6 +27,10 @@ export default function GiroAIChat({ onClose }) {
   const [images, setImages] = useState([]);
   const [mediaBusy, setMediaBusy] = useState(false);
   const [mediaSession, setMediaSession] = useState(0);
+  const [away, setAway] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const [tipStep, setTipStep] = useState(0);
+  const advice = giroLocalAdvice({ ...companionContext, student, technical: technicianMode }, tipStep);
   const lastAnswer = chat.messages.filter((item) => item.role === 'assistant').at(-1);
   const speech = useGiroSpeech(lastAnswer ? giroSpeechText(lastAnswer.text) : '', lastAnswer?.id, account.studentId || 'tecnico');
   useEffect(() => {
@@ -35,20 +40,21 @@ export default function GiroAIChat({ onClose }) {
     input.current?.focus({ preventScroll: true });
     return () => { document.body.style.overflow = previousOverflow; };
   }, []);
-  useEffect(() => { bottom.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' }); }, [chat.messages.length, chat.pending, chat.error]);
+  useEffect(() => { if (!away) bottom.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' }); }, [chat.messages.length, chat.pending, chat.error, away, library]);
   const copy = async (message) => {
     try { await navigator.clipboard.writeText(message.text); setCopied(message.id); setCopyError(''); }
     catch { setCopyError('Não foi possível copiar. Você pode selecionar o texto da resposta.'); }
   };
   const ready = chat.ready;
   const openLibrary = (source = {}) => { speech.stop(); setLibrary(source); };
-  const clearConversation = () => { speech.stop(); chat.clear(); setImages([]); setMediaBusy(false); setMediaSession((value) => value + 1); setLibrary(null); requestAnimationFrame(() => input.current?.focus()); };
-  return <dialog ref={dialog} className="giro-ai" aria-labelledby={titleId} onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); onClose(); } }} onCancel={(event) => { event.preventDefault(); onClose(); }} onClick={(event) => { if (event.target === dialog.current) { const bounds = dialog.current.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose(); } }}>
-    <header className="giro-ai__header"><div className="giro-ai__mascot"><GearMascot equipment={account.equipped} mood={chat.pending ? 'work' : 'wave'} speaking={speech.speaking} expression={workshop?.expression} decorative /></div><div><p><Sparkles size={12} />New Gears</p><h2 id={titleId}>Giro IA</h2><span>Vamos transformar dúvidas em descobertas.</span></div><button type="button" onClick={onClose} aria-label="Fechar Giro IA"><X size={20} /></button></header>
+  const clearConversation = () => { speech.stop(); chat.clear(); setAway(false); setImages([]); setMediaBusy(false); setMediaSession((value) => value + 1); setLibrary(null); requestAnimationFrame(() => input.current?.focus()); };
+  return <dialog ref={dialog} className="giro-ai" aria-labelledby={titleId} onKeyDown={(event) => { if (event.key === 'Escape' && !event.nativeEvent.isComposing) { event.preventDefault(); onClose(); } }} onCancel={(event) => { event.preventDefault(); onClose(); }} onClick={(event) => { if (event.target === dialog.current) { const bounds = dialog.current.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose(); } }}>
+    <header className="giro-ai__header"><div className="giro-ai__mascot"><GearMascot key={lastAnswer?.id || 'welcome'} equipment={account.equipped} mood={chat.pending ? 'thinking' : chat.error ? 'help' : lastAnswer ? 'excited' : 'greet'} speaking={speech.speaking} expression={workshop?.expression} still={isLiteMode || calm} decorative /></div><div><p><Sparkles size={12} />New Gears</p><h2 id={titleId}>Giro IA</h2><span>{chat.pending ? 'Pensando com você…' : 'Vamos transformar dúvidas em descobertas.'}</span></div><button type="button" onClick={onClose} aria-label="Fechar Giro IA"><X size={20} /></button></header>
     <div className="giro-ai__toolbar"><button type="button" onClick={() => library ? setLibrary(null) : openLibrary()} aria-pressed={Boolean(library)}><BookOpen size={15} />{library ? 'Conversa' : `Materiais (${knowledge.published.length})`}</button>{user?.type === 'admin' && onOpenKnowledge && <button type="button" onClick={() => { onClose(); onOpenKnowledge(); }}><Settings2 size={14} />Gerenciar biblioteca</button>}<button type="button" onClick={clearConversation}><Trash2 size={14} />Nova conversa</button></div>
-    {!library && <div className="giro-ai__toolbar"><label><input type="checkbox" checked={chat.useKnowledge} disabled={Boolean(chat.pending)} onChange={(event) => chat.setUseKnowledge(event.target.checked)} /><BookOpen size={14} />Usar materiais da equipe</label><span>Respostas com inteligência artificial</span></div>}
-    <div className="giro-ai__conversation" aria-label={library ? 'Biblioteca do Giro' : 'Conversa com Giro IA'}>
+    {!library && <div className="giro-ai__toolbar"><label><input type="checkbox" checked={chat.useKnowledge} disabled={Boolean(chat.pending)} onChange={(event) => chat.setUseKnowledge(event.target.checked)} /><BookOpen size={14} />Usar materiais da equipe</label><button type="button" onClick={() => setLocalOpen((value) => !value)} aria-pressed={localOpen}><Lightbulb size={14} />Dicas sem IA</button></div>}
+    <div className="giro-ai__conversation" aria-label={library ? 'Biblioteca do Giro' : 'Conversa com Giro IA'} onScroll={(event) => { const node = event.currentTarget; setAway(node.scrollHeight - node.scrollTop - node.clientHeight > 90); }}>
       {library ? <GiroMaterialLibrary materials={knowledge.published} initialSource={library.materialId ? library : null} onReturn={() => { setLibrary(null); requestAnimationFrame(() => input.current?.focus()); }} /> : <>
+        {(localOpen || (!chat.ready && !chat.checking)) && <section className="giro-ai__local" aria-label="Dica local, sem inteligência artificial"><p><Lightbulb size={15} />Dica local · não usa IA</p><h3>{advice.title}</h3><p>{advice.message}</p><div><button type="button" onClick={() => setTipStep((value) => value + 1)}><RefreshCw size={13} />Outra dica</button><button type="button" disabled={Boolean(chat.pending)} onClick={() => { chat.setDraft(advice.question); input.current?.focus(); }}>Preparar uma pergunta</button></div></section>}
         {!chat.messages.length && <section className="giro-ai__welcome"><div><MessageCircle size={28} /></div><h3>O que vamos descobrir?</h3><p>Converse comigo sobre robô, programação, projeto de inovação, apresentações e outras dúvidas. Também posso explicar os trechos relevantes dos materiais publicados pela equipe e indicar suas fontes. Para regras do torneio, confira os documentos da temporada.</p><div className="giro-ai__suggestions">{GIRO_AI_SUGGESTIONS.map((question) => <button type="button" key={question} disabled={Boolean(chat.pending)} onClick={() => { chat.setDraft(question); input.current?.focus(); }}>{question}</button>)}</div></section>}
         {chat.messages.map((message, messageIndex) => <article key={message.id} className={`giro-ai__message giro-ai__message--${message.role}`}><p className="giro-ai__author">{message.role === 'assistant' ? 'Giro IA' : 'Você'}{message.role === 'assistant' && <span><Sparkles size={11} />Resposta da IA</span>}</p><GiroAIMessage text={message.text} />
           {message.media?.length > 0 && <p className="giro-ai__media-history">{message.media.length} foto(s) enviada(s) · anexe novamente para uma nova análise visual</p>}
@@ -57,17 +63,20 @@ export default function GiroAIChat({ onClose }) {
           {message.role === 'assistant' && <GiroAnswerFeedback message={message} question={chat.messages.slice(0, messageIndex).filter((item) => item.role === 'user').at(-1)?.text} />}
         </article>)}
         {chat.pending && <><article className="giro-ai__message giro-ai__message--user"><p className="giro-ai__author">Você</p><p>{chat.pending}</p></article><p role="status" className="giro-ai__thinking"><LoaderCircle size={17} />O Giro está preparando sua resposta…</p></>}
-        {chat.error && <p role="alert" className="giro-ai__error">{chat.error}</p>}
+        {chat.error && <div role="alert" className="giro-ai__error"><p>{chat.error}</p><span>Sua pergunta foi mantida. O Giro não reenvia automaticamente.</span>{chat.ready && <button type="button" disabled={Boolean(chat.pending) || mediaBusy} onClick={() => { speech.stop(); void chat.send(images).then((sent) => { if (sent) setImages([]); }); }}><RefreshCw size={13} />Tentar enviar novamente</button>}</div>}
+        {chat.notice && <p role="status" className="giro-ai__notice">{chat.notice}</p>}
         {copyError && <p role="alert" className="giro-ai__error">{copyError}</p>}
         {speech.error && <p role="alert" className="giro-ai__error">{speech.error}</p>}
         <div ref={bottom} />
       </>}
     </div>
+    {!library && away && (chat.messages.length > 0 || chat.pending) && <button type="button" className="giro-ai__jump" onClick={() => { setAway(false); bottom.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' }); }}><ArrowDown size={14} />Ir para a última mensagem</button>}
+    <span className="sr-only" role="status" aria-live="polite">{chat.pending ? 'Giro está pensando.' : lastAnswer ? 'Nova resposta do Giro disponível na conversa.' : ''}</span>
     {!library && <footer className="giro-ai__footer">
-      {!ready && <div className="giro-ai__connection" role="status"><p>{chat.connectionError || chat.status?.message || (chat.useKnowledge && knowledge.error ? `${knowledge.error} Você pode desativar “Usar materiais da equipe” para perguntas gerais.` : chat.useKnowledge && knowledge.loading ? 'Carregando os materiais da equipe…' : 'Conectando ao Giro IA…')}</p>{(chat.status || chat.connectionError || knowledge.error) && <button type="button" onClick={chat.reconnect}><RefreshCw size={13} />Tentar novamente</button>}</div>}
+      {!ready && <div className="giro-ai__connection" role="status"><p>{chat.waitSeconds ? `Aguarde ${chat.waitSeconds}s para enviar outra pergunta. As dicas locais continuam disponíveis.` : chat.checking ? 'Conectando ao Giro IA…' : chat.connectionError || chat.status?.message || (chat.useKnowledge && knowledge.error ? `${knowledge.error} Você pode desativar “Usar materiais da equipe” para perguntas gerais.` : chat.useKnowledge && knowledge.loading ? 'Carregando os materiais da equipe…' : 'Conectando ao Giro IA…')}</p>{!chat.waitSeconds && (chat.status || chat.connectionError || knowledge.error) && <button type="button" disabled={chat.checking} onClick={chat.reconnect}><RefreshCw size={13} />{chat.checking ? 'Conectando…' : 'Tentar novamente'}</button>}</div>}
       {chat.storageError && <p role="alert" className="giro-ai__storage">O navegador não conseguiu guardar esta conversa. Mantenha a janela aberta para continuar.</p>}
       <GiroMediaInput key={mediaSession} images={images} onImages={setImages} onTranscript={chat.appendTranscript} disabled={Boolean(chat.pending)} onBusy={setMediaBusy} />
-      <form onSubmit={async (event) => { event.preventDefault(); if (mediaBusy) return; speech.stop(); if (await chat.send(images)) setImages([]); }}><label className="sr-only" htmlFor={`${titleId}-question`}>Sua pergunta para o Giro IA</label><textarea autoFocus ref={input} id={`${titleId}-question`} value={chat.draft} disabled={Boolean(chat.pending)} maxLength={GIRO_AI_MAX_QUESTION} rows={2} placeholder="Pergunte ao Giro…" onChange={(event) => chat.setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form.requestSubmit(); } }} />{chat.pending ? <button type="button" className="giro-ai__send" onClick={chat.cancel} aria-label="Cancelar resposta do Giro IA"><Square size={18} /></button> : <button type="submit" className="giro-ai__send" disabled={!ready || mediaBusy || (!chat.draft.trim() && !images.length)} aria-label="Enviar pergunta ao Giro IA"><Send size={19} /></button>}</form>
+      <form onSubmit={async (event) => { event.preventDefault(); if (mediaBusy) return; speech.stop(); if (await chat.send(images)) setImages([]); }}><label className="sr-only" htmlFor={`${titleId}-question`}>Sua pergunta para o Giro IA</label><textarea autoFocus ref={input} id={`${titleId}-question`} value={chat.draft} disabled={Boolean(chat.pending)} maxLength={GIRO_AI_MAX_QUESTION} rows={2} placeholder="Pergunte ao Giro…" onChange={(event) => chat.setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form.requestSubmit(); } }} />{chat.pending ? <button type="button" className="giro-ai__send" onClick={(event) => { event.preventDefault(); chat.cancel(); input.current?.focus(); }} aria-label="Cancelar resposta do Giro IA"><Square size={18} /></button> : <button type="submit" className="giro-ai__send" disabled={!ready || mediaBusy || (!chat.draft.trim() && !images.length)} aria-label="Enviar pergunta ao Giro IA"><Send size={19} /></button>}</form>
       <p className="giro-ai__hint">{chat.draft.length}/{GIRO_AI_MAX_QUESTION} · Confira as fontes: a IA pode errar · Histórico neste navegador</p>
     </footer>}
   </dialog>;

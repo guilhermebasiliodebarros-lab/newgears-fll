@@ -120,15 +120,7 @@
 
 @media (prefers-reduced-motion: reduce) { .gear-mascot *, .gear-shop *, .gear-companion * { animation: none !important; transition: none !important; } }
 /* A short dance is an explicit request; ambient motion remains disabled. */
-@media (prefers-reduced-motion: reduce) {
-  .gear-companion--dance .gear-mascot__character { animation: gear-dance 1.25s ease-in-out infinite !important; }
-  .gear-companion--dance .gear-mascot__arm { animation: gear-hello .85s ease-in-out infinite !important; }
-  .gear-companion--dance .gear-mascot__arm-right { animation: gear-arm-dance .85s ease-in-out infinite !important; }
-  .gear-companion--dance .gear-mascot__leg { animation: gear-step 1.25s ease-in-out infinite !important; }
-  .gear-companion--dance .gear-mascot__leg--right { animation-delay: -.625s !important; }
-  .gear-companion--spin .gear-mascot__character { animation: gear-spin 1.65s cubic-bezier(.45,0,.25,1) 1 both !important; }
-  .gear-companion--hop .gear-mascot__character { animation: gear-celebrate 1.25s ease-in-out infinite !important; }
-}
+/* Manual celebrations also respect reduced motion. */
 
 .gear-companion__bubble-content { max-height: calc(100dvh - 170px); overflow-y: auto; padding: 20px; border-radius: inherit; scrollbar-width: thin; }
 @media (max-width: 639px) { .gear-companion__bubble-content { max-height: calc(100dvh - 140px); } }

@@ -1,4 +1,5 @@
 import DraftForm from '../components/DraftForm';
+import EngineeringEntryComposer from '../components/EngineeringEntryComposer';
 import { BookOpen, Calendar, CheckCircle, Clock, Plus, Search, Trash2, UserCircle, Users } from 'lucide-react';
 
 export default function LogbookView({
@@ -90,7 +91,7 @@ export default function LogbookView({
                                                   </div>
                                                   <button onClick={() => handleDeleteLogbookEntry(entry)} className="rounded-2xl border border-white/10 bg-black/20 p-3 text-gray-400 transition-all hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300" title="Excluir Registro"><Trash2 size={15} /></button>
                                               </div>
-                                              <p className="mt-5 whitespace-pre-wrap text-sm leading-relaxed text-gray-200">{entry.text}</p>
+                                              <p className="mt-5 whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-200">{entry.text}</p>
                                               {renderTags(tags)}
                                           </div>
                                       </article>
@@ -193,6 +194,7 @@ export default function LogbookView({
               <div className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
                   <section className="rounded-[30px] border border-white/10 bg-[#151520] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-yellow-200">Novo registro</p><h3 className="mt-2 text-2xl font-black text-white">Escreva o que vale lembrar</h3><p className="mt-3 text-sm leading-relaxed text-gray-400">Registre testes, falhas, aprendizados e proximos passos para a equipe retomar rapido depois.</p></div><div className="inline-flex items-center gap-2 self-start rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-200"><CheckCircle size={14} /> Rascunho salvo automaticamente</div></div>
+                      <EngineeringEntryComposer onInsert={(text) => setStudentLogbookDraft((current) => current.includes(text) ? current : [current.trim(), text].filter(Boolean).join("\n\n"))} />
                       <DraftForm key={currentWeekValue} kind="logbook" recordId={currentWeekValue} values={studentLogbookDraft} onDiscard={() => setStudentLogbookDraft('')} onSubmit={handleLogbookSubmit} className="mt-6 space-y-5">
                           <div className="rounded-[28px] border border-white/10 bg-black/20 p-4">
                               <div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-yellow-100">{currentWeekData?.weekName || 'Semana atual'}</span><span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">{draftWordCount} palavras</span><span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">{draftTags.length} hashtag(s)</span></div>

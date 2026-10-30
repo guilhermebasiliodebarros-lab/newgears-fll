@@ -58,3 +58,8 @@ export const saveReportRecipient = (recipient) => api(`/recipients${recipient.id
   method: recipient.id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(recipient),
 });
 export const deleteReportRecipient = (id) => api(`/recipients/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+// Confidential observations use the authenticated reports API, never client Firestore reads.
+export const loadCoachingStatus = (signal) => api('/coaching/status', { signal });
+export const loadCoachingHistory = (seasonId, studentId, cursor, signal) => api(`/coaching?${new URLSearchParams({ seasonId, studentId, ...(cursor ? { cursor } : {}) })}`, { signal });
+export const saveCoachingObservation = (data) => api('/coaching', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });

@@ -1,0 +1,41 @@
+import assert from 'node:assert/strict';
+import { appendTrainingResult, readTrainingHistory, trainingDeck, trainingSeconds, trainingSummary, validateTrainingResult } from '../src/utils/judgeTraining.js';
+import { buildEngineeringEntry } from '../src/utils/engineeringNotebook.js';
+import { collaborationProgress, reportCalendarWeek, reportWeekIndex } from '../src/utils/learningProgress.js';
+import { csvCell, teamCsv } from '../src/utils/teamExport.js';
+
+export function runLearningFeaturesTests() {
+  const deck = trainingDeck('all', 10, () => .4);
+  assert.equal(new Set(deck).size, 10);
+  assert.ok(trainingDeck('game', 5).every((id) => id.startsWith('g')));
+  assert.throws(() => trainingDeck('invented', 3)); assert.throws(() => trainingDeck('robot', 11));
+  assert.equal(trainingSeconds({ elapsed: 12, startedAt: 1000 }, 4500), 15.5);
+  assert.equal(trainingSeconds({ elapsed: 12, startedAt: null }, 99999), 12, 'paused clocks never advance');
+  assert.equal(trainingSeconds({ elapsed: 12, startedAt: 4500 }, 1000), 12, 'a backwards system clock does not subtract training');
+  const result = { version: 1, id: 'fixture-1', mode: 'individual', area: 'robot', participants: [{ id: 'a', name: 'Ana' }], answers: [{ questionId: 'r1', rating: 2, note: 'Preparar uma evidência.', seconds: 40, helped: true }], finishedAt: '2026-10-30T12:00:00Z' };
+  const memory = new Map(); const storage = { getItem: (key) => memory.get(key), setItem: (key, value) => memory.set(key, value) };
+  assert.equal(appendTrainingResult(storage, 'one', result).length, 1);
+  assert.equal(appendTrainingResult(storage, 'one', result).length, 1, 'retries do not duplicate a result');
+  assert.equal(readTrainingHistory(storage, 'another-account').length, 0);
+  assert.match(trainingSummary(result), /consultou orientação/);
+  assert.throws(() => validateTrainingResult({ ...result, answers: [{ ...result.answers[0], rating: 4 }] }));
+  assert.throws(() => validateTrainingResult({ ...result, answers: [result.answers[0], result.answers[0]] }));
+  for (let i = 0; i < 60; i++) appendTrainingResult(storage, 'one', { ...result, id: `result-${i}` });
+  assert.equal(readTrainingHistory(storage, 'one').length, 50);
+  assert.throws(() => appendTrainingResult({ ...storage, setItem: () => { throw Error('quota'); } }, 'one', result), /quota/);
+  const note = { type: 'robot-test', date: '2026-10-30', responsible: 'Ana e Bruno', objective: 'Repetir saída 1', configuration: 'V3 / garra dupla', hypothesis: 'Atrito', change: 'Ajuste na rampa', result: 'Menos dispersão', nextStep: 'Repetir sem mudar a posição inicial', successes: '7', attempts: '10', score: '120' };
+  const text = buildEngineeringEntry(note);
+  assert.match(text, /7\/10 \(70%\)/); assert.match(text, /#teste-robo/); assert.match(text, /Próximo passo/);
+  for (const invalid of [{ ...note, successes: 11 }, { ...note, attempts: '' }, { ...note, date: '2026-02-30' }, { ...note, objective: '' }, { ...note, score: Infinity }]) assert.throws(() => buildEngineeringEntry(invalid));
+  const reports = [{ id: 'r1', studentId: 'a', reportDate: '2026-10-30' }, { id: 'r2', studentId: 'a', reportDate: '2026-10-29' }, { id: 'r3', studentId: 'b', reportDate: '2026-10-20' }];
+  assert.equal(reportCalendarWeek({ reportDate: '2026-02-30' }), '');
+  assert.equal(reportWeekIndex(reports)[0].authors, 1, 'two reports from one author do not count as two people');
+  const students = [{ id: 'a', name: 'Ana' }, { id: 'b', name: 'Bruno' }, { id: 'c', status: 'inactive' }];
+  const tasks = [{ id: 't', status: 'done', participants: [{ id: 'a', name: 'Ana' }, { id: 'b', name: 'Bruno' }] }, { id: 'solo', status: 'done', participants: [{ id: 'a', name: 'Ana' }, { id: 'a', name: 'Ana' }] }];
+  const before = structuredClone({ reports, students, tasks });
+  const progress = collaborationProgress({ reports, students, tasks, today: '2026-10-30' });
+  assert.equal(progress.sharedTotal, 1); assert.equal(progress.sharedCompleted, 1); assert.equal(progress.authors, 1); assert.equal(progress.members, 2);
+  assert.deepEqual({ reports, students, tasks }, before);
+  for (const formula of ['=HYPERLINK("x")', '+1', '@SUM(A1)', ' \t-1']) assert.ok(csvCell(formula).startsWith('"\''));
+  assert.match(teamCsv(['Nome'], [['Ana; "teste"']]), /"Ana; ""teste"""/);
+}

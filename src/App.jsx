@@ -5,12 +5,14 @@ import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebas
 import { loadReportsSession } from './services/weeklyReports';
 import useTeamRecords from './hooks/useTeamRecords';
 import useWorkspaceClock from './hooks/useWorkspaceClock';
+import useReducedMotion from './hooks/useReducedMotion';
 import useWeeklyReports from './hooks/useWeeklyReports';
 import useSeasonEvaluations from './hooks/useSeasonEvaluations';
 const WeeklyReportsView = lazy(() => import('./views/WeeklyReportsView'));
 const ReportRecipientsView = lazy(() => import('./views/ReportRecipientsView'));
 import WeeklyReportsSummary from './components/WeeklyReportsSummary';
 import WorkspaceBriefing from './components/WorkspaceBriefing';
+import TeamLearningGoals from './components/TeamLearningGoals';
 import WorkspaceSearch from './components/WorkspaceSearch';
 import { DialogSurface, NotificationToast, PanelSkeleton, SectionDisclosure } from './components/InterfacePrimitives';
 import WorkspaceActionQueue from './components/WorkspaceActionQueue';
@@ -1045,6 +1047,7 @@ function App() {
   const [badgeStudent, setBadgeStudent] = useState(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [isLiteMode, setIsLiteMode] = useState(() => detectLiteMode());
+  const reducedMotion = useReducedMotion();
   const [visualTheme, setVisualTheme] = useState(() => readStoredTheme());
   const prevXpRef = useRef(null);
   const confettiTimeoutRef = useRef(null);
@@ -1836,8 +1839,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-      if (viewAsStudent) {
-          const currentXp = viewAsStudent.xp || 0;
+      if (viewAsStudent && typeof viewAsStudent.xp === 'number' && Number.isFinite(viewAsStudent.xp)) {
+          const currentXp = viewAsStudent.xp;
 
           // 1. Descobre o nível atual baseado no XP do aluno
           const currentLevelObj = getCurrentLevel(currentXp);
@@ -1871,7 +1874,7 @@ function App() {
           if (triggerConfetti) {
               if (msg) showNotification(msg, "success");
 
-              if (!isLiteMode) {
+              if (!isLiteMode && !reducedMotion) {
                   setShowConfetti(true);
 
                   if (confettiTimeoutRef.current) {
@@ -1892,7 +1895,7 @@ function App() {
           // Se deslogar, limpa a memória temporária do XP
           prevXpRef.current = null;
       }
-  }, [isLiteMode, viewAsStudent, showNotification]);
+  }, [isLiteMode, reducedMotion, viewAsStudent, showNotification]);
 
   const getTodayMoodDate = () => gearDay();
 
@@ -7650,7 +7653,7 @@ const handleFileSelect = (e) => {
 
   // --- RENDER PRINCIPAL (SÓ CHEGA AQUI SE ESTIVER LOGADO) ---
   return (
-    <ScoreEvolutionChartContext.Provider value={{ db, rounds, scoreHistory, showNotification, user: currentUser, seasonId: activeTeamSeasonId || 'legacy' }}><GearExperienceProvider key={`${currentUser.type}:${currentUser.studentId || currentUser.data?.id || currentUser.uid || currentUser.name}:${activeTeamSeasonId || 'legacy'}`} db={db} user={currentUser} student={viewAsStudent} teamMembers={students.filter(isActiveStudent).map(workshopMember)} seasonId={activeTeamSeasonId || 'legacy'} isLiteMode={isLiteMode} aiContext={{ season: activeTeamSeasonName, project: projectSummary, robots: robotVersions, attachments, codes: codeSnippets }} onOpenKnowledge={() => setAdminTab('giro_knowledge')} onOpenShop={() => isAdmin ? setAdminTab('shop') : setStudentTab('shop')}>
+    <ScoreEvolutionChartContext.Provider value={{ db, rounds, scoreHistory, showNotification, user: currentUser, seasonId: activeTeamSeasonId || 'legacy' }}><GearExperienceProvider key={`${currentUser.type}:${currentUser.studentId || currentUser.data?.id || currentUser.uid || currentUser.name}:${activeTeamSeasonId || 'legacy'}`} db={db} user={currentUser} student={viewAsStudent} teamMembers={students.filter(isActiveStudent).map(workshopMember)} seasonId={activeTeamSeasonId || 'legacy'} isLiteMode={isLiteMode} companionContext={{ page: isAdmin ? adminTab : studentTab, today, tasks, events, readiness: commandCenterReadinessScore }} onNavigate={(page) => { const tabs = isAdmin ? adminWorkspaceTabs : studentWorkspaceTabs; if (tabs.some((tab) => tab.id === page)) { if (isAdmin) setAdminTab(page); else setStudentTab(page); } }} aiContext={{ season: activeTeamSeasonName, project: projectSummary, robots: robotVersions, attachments, codes: codeSnippets }} onOpenKnowledge={() => setAdminTab('giro_knowledge')} onOpenShop={() => isAdmin ? setAdminTab('shop') : setStudentTab('shop')}>
     <div className={`newgears-shell newgears-workspace min-h-screen text-white selection:bg-yellow-300 selection:text-slate-950 pb-20 relative overflow-hidden ${isLiteMode ? 'newgears-lite-mode' : ''}`}>
       {/* Estilo da Animação de Fundo */}
       <div className="newgears-floating-layer">
@@ -7666,7 +7669,7 @@ const handleFileSelect = (e) => {
       <div className="newgears-content">
         
         {/* EFEITO DE CONFETES (Fica no topo de tudo, z-index gigante) */}
-        {showConfetti && !isLiteMode && (
+        {showConfetti && !isLiteMode && !reducedMotion && (
           <div className="fixed inset-0 z-[9999] pointer-events-none">
             <Suspense fallback={null}>
               <ConfettiBurst width={window.innerWidth} height={window.innerHeight} recycle={false} numberOfPieces={420} gravity={0.14} />
@@ -8054,7 +8057,7 @@ const handleFileSelect = (e) => {
           {!adminPanelState.compact && adminTab !== 'overview' && <WorkspaceContent render={renderUrgentEventsBanner} />}
 
           <div className="mb-6" hidden={adminTab !== 'overview'}>
-            {adminTab === 'overview' && <WorkspaceBriefing technical name={adminProfile?.name} students={students} tasks={tasks} events={events} today={localTodayStr} season={activeTeamSeasonName} onNavigate={navigateWorkspace} readiness={commandCenterReadinessScore} onNewTask={() => { setTaskComposerRequest((value) => value + 1); navigateWorkspace('kanban'); }} onNewEvent={() => setModal({ type: 'eventForm' })} />}
+            {adminTab === 'overview' && <><WorkspaceBriefing technical name={adminProfile?.name} students={students} tasks={tasks} events={events} today={localTodayStr} season={activeTeamSeasonName} onNavigate={navigateWorkspace} readiness={commandCenterReadinessScore} onNewTask={() => { setTaskComposerRequest((value) => value + 1); navigateWorkspace('kanban'); }} onNewEvent={() => setModal({ type: 'eventForm' })} /><TeamLearningGoals tasks={tasks} students={students} reports={reportsWorkspace.reports} reportsReady={reportsWorkspace.enabled && !reportsWorkspace.loading && !reportsWorkspace.error} today={today} onNavigate={(page) => isAdmin ? setAdminTab(page) : setStudentTab(page)} /></>}
             <SectionDisclosure title={"Vis\u00e3o estrat\u00e9gica da equipe"} description="Indicadores completos, conquistas e controles da equipe">
             <WorkspaceCollapsible isOpen={adminPanelState.hero}>
               <WorkspaceHero
@@ -8271,7 +8274,7 @@ const handleFileSelect = (e) => {
           {ownTournamentSelection ? <TournamentSelectionNotice key={`${viewAsStudent.id}__${activeTeamSeasonId || 'legacy'}__${ownTournamentSelection.selectedAt || ownTournamentSelection.createdAt || 'selected'}`} studentName={viewAsStudent.name || 'Integrante'} seasonName={activeTeamSeasonName} isLiteMode={isLiteMode} /> : null}
 
           <div hidden={studentTab !== 'overview'}>
-          {studentTab === 'overview' && <WorkspaceBriefing name={viewAsStudent.name} student={viewAsStudent} students={students} tasks={tasks} events={events} today={localTodayStr} season={activeTeamSeasonName} onNavigate={navigateWorkspace} level={studentCurrentLevel} nextLevel={studentNextLevel} />}
+          {studentTab === 'overview' && <><WorkspaceBriefing name={viewAsStudent.name} student={viewAsStudent} students={students} tasks={tasks} events={events} today={localTodayStr} season={activeTeamSeasonName} onNavigate={navigateWorkspace} level={studentCurrentLevel} nextLevel={studentNextLevel} /><TeamLearningGoals tasks={tasks} students={students} reports={reportsWorkspace.reports} reportsReady={reportsWorkspace.enabled && !reportsWorkspace.loading && !reportsWorkspace.error} today={today} onNavigate={(page) => isAdmin ? setAdminTab(page) : setStudentTab(page)} /></>}
           <SectionDisclosure title="Meu perfil e minhas conquistas" description={"Veja sua evolu\u00e7\u00e3o, detalhes da semana e todos os atalhos"}>
           <div className="mb-2">
             <WorkspaceCollapsible isOpen={studentPanelState.hero}>

@@ -1,6 +1,7 @@
 import { ApiError, authenticate, firestoreRequest, getRecord, listRecords, writeRecord } from './firebase.js';
 import { MAX_REPORT_FILE_SIZE, REPORT_FILE_TYPES, validateReportBytes, validateReportDetails, validateReportFile } from '../../src/utils/weeklyReports.js';
 import { handleReminderRequest } from './reminders.js';
+import { handleCoachingRequest } from './coaching.js';
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 const validId = (id) => /^[a-zA-Z0-9_-]{1,128}$/.test(id || '');
@@ -187,12 +188,13 @@ export async function handleReportsRequest(request, env) {
     const segments = url.pathname.replace(/^\/api\/reports\/?/, '').split('/').filter(Boolean);
     const [id, action] = segments;
     const method = request.method;
+    if (id === 'coaching' && (segments.length === 1 || (segments.length === 2 && action === 'status'))) return await handleCoachingRequest(request, env, user);
     if (id === 'reminders') return await handleReminderRequest(request, env, user, segments);
     if (id === 'backup' && segments.length === 1 && method === 'GET') {
       assertAdmin(user);
       const scope = url.searchParams.get('scope') || 'all'; if (scope !== 'all') assertId(scope);
       const documents = [];
-      for (const name of ['weeklyReportExpectations', 'weeklyReportRecipients']) {
+      for (const name of ['weeklyReportExpectations', 'weeklyReportRecipients', 'coachObservations']) {
         const records = await listRecords(env, name, 20000);
         records.filter((item) => name === 'weeklyReportRecipients' || scope === 'all' || (item.seasonId || 'legacy') === scope).forEach(({ id: recordId, ...item }) => documents.push({ path: `${name}/${recordId}`, data: cleanRecord(item) }));
       }

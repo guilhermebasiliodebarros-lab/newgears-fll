@@ -87,9 +87,11 @@ function decodeValue(value) {
 const decodeFields = (fields) => Object.fromEntries(Object.entries(fields || {}).map(([key, value]) => [key, decodeValue(value)]));
 export const decodeDocument = (document) => ({ ...decodeFields(document.fields), id: document.name.split('/').pop(), _updateTime: document.updateTime });
 
+export const firestoreDocumentURL = (projectId, path) => `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/(default)/documents${path.startsWith(':') ? '' : '/'}${path}`;
+
 export async function firestoreRequest(env, path, options = {}) {
   const token = await googleAccessToken(env);
-  const response = await fetch(`https://firestore.googleapis.com/v1/projects/${encodeURIComponent(env.FIREBASE_PROJECT_ID)}/databases/(default)/documents/${path}`, {
+  const response = await fetch(firestoreDocumentURL(env.FIREBASE_PROJECT_ID, path), {
     ...options, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...options.headers },
   });
   if (response.status === 404) return null;

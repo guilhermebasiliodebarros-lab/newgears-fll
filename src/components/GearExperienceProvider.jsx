@@ -19,7 +19,7 @@ const readPending = (key) => {
   } catch { return []; }
 };
 
-export default function GearExperienceProvider({ children, db, user, student, teamMembers = [], seasonId = 'legacy', onOpenShop, onOpenKnowledge, isLiteMode, aiContext = {} }) {
+export default function GearExperienceProvider({ children, db, user, student, teamMembers = [], seasonId = 'legacy', onOpenShop, onOpenKnowledge, onNavigate, companionContext = {}, isLiteMode, aiContext = {} }) {
   const technicalContext = useMemo(() => sanitizeGiroContext(aiContext), [aiContext]);
   const knowledge = useGiroKnowledge({ db, seasonId, user, context: technicalContext });
   const studentId = user?.type === 'student' ? String(user.studentId || user.data?.id || student?.id || '') : '';
@@ -165,5 +165,5 @@ export default function GearExperienceProvider({ children, db, user, student, te
     finally { setBusy(''); }
   };
 
-  return <GearShopContext.Provider value={{ account, technicianMode, evolution, draftScope, seasonId, aiContext: technicalContext, knowledge, onOpenKnowledge, history, syncHistory, loading: technicianMode ? false : wallet.loading, walletError: technicianMode ? '' : wallet.error, reloadWallet: () => setRetryCount((value) => value + 1), student, isStudent: Boolean(studentId), isLiteMode, pending, retrying, retryPending, reaction, busy, operationError, activateItem, refundItem, onOpenShop, db, user, teamMembers, workshop: technicianMode ? technician.workshop : workshopState.data, workshopLoading: technicianMode ? false : workshopState.loading, workshopError: technicianMode ? '' : workshopState.error, workshopSaving, saveWorkshop }}>{children}</GearShopContext.Provider>;
+  return <GearShopContext.Provider value={{ account, technicianMode, evolution, draftScope, seasonId, aiContext: technicalContext, companionContext, onNavigate, knowledge, onOpenKnowledge, history, syncHistory, loading: technicianMode ? false : wallet.loading, walletError: technicianMode ? '' : wallet.error, reloadWallet: () => setRetryCount((value) => value + 1), student, isStudent: Boolean(studentId), isLiteMode, pending, retrying, retryPending, reaction, busy, operationError, activateItem, refundItem, onOpenShop, db, user, teamMembers, workshop: technicianMode ? technician.workshop : workshopState.data, workshopLoading: technicianMode ? false : workshopState.loading, workshopError: technicianMode ? '' : workshopState.error, workshopSaving, saveWorkshop }}>{children}</GearShopContext.Provider>;
 }

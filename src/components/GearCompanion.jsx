@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUp, Lightbulb, MessageCircle, Music2, RotateCw, ShoppingBag, SlidersHorizontal, Sparkles, Square, Volume2, X } from 'lucide-react';
+import { ArrowUp, ArrowUpRight, Leaf, Lightbulb, MessageCircle, Music2, RotateCw, ShoppingBag, SlidersHorizontal, Sparkles, Square, Volume2, X } from 'lucide-react';
 import useGearShopContext from '../hooks/useGearShopContext';
 import useGiroSpeech from '../hooks/useGiroSpeech';
 import GearMascot from './GearMascot';
@@ -9,6 +9,8 @@ import GiroAIChat from './GiroAIChat';
 import { gearItem } from '../utils/gearShop';
 import { gearEvolution } from '../utils/gearEvolution';
 import { giroVoiceId } from '../utils/giroSpeech';
+import useGiroLife from '../hooks/useGiroLife';
+import { giroLocalAdvice } from '../utils/giroCompanion';
 
 const INTRO_TITLE = 'Toda contribuição faz a equipe girar!';
 const INTRO_MESSAGE = 'Sou o Giro! Vou acompanhar suas descobertas e comemorar seus registros. Na loja, você pode escolher meu visual e personalizar seu perfil.';
@@ -24,7 +26,10 @@ function rewardMessage(reaction) {
 }
 
 export default function GearCompanion() {
-  const { account, reaction, pending, onOpenShop, isLiteMode, workshop, draftScope } = useGearShopContext();
+  const { account, reaction, pending, onOpenShop, isLiteMode, workshop, draftScope, student, technicianMode, companionContext = {}, onNavigate } = useGearShopContext();
+  const life = useGiroLife({ student, technical: technicianMode, tasks: companionContext.tasks, scope: draftScope });
+  const [tipStep, setTipStep] = useState(0);
+  const advice = giroLocalAdvice({ ...companionContext, student, technical: technicianMode }, tipStep);
   const evolution = gearEvolution(account);
   const bubbleId = useId();
   const [dismissed, setDismissed] = useState(null);
@@ -35,12 +40,12 @@ export default function GearCompanion() {
   const [dance, setDance] = useState(null);
   const [manualCelebration, setManualCelebration] = useState(null);
   const [finishedReaction, setFinishedReaction] = useState(null);
-  const automaticCelebration = reaction && reaction.id !== finishedReaction && (reaction.status === 'style' || (reaction.status === 'earned' && reaction.coins > 0));
+  const automaticCelebration = !life.quiet && life.visible && reaction && reaction.id !== finishedReaction && (reaction.status === 'style' || (reaction.status === 'earned' && reaction.coins > 0));
   const celebrationId = manualCelebration?.id || (automaticCelebration ? reaction.id : null);
   const celebrationEquipment = { ...account.equipped, animation: manualCelebration?.animationId || reaction?.animationId || account.equipped.animation };
   const celebrationMood = gearItem(celebrationEquipment.animation)?.variant === 'stage' ? 'stage' : 'celebrate';
   const finishCelebration = useCallback(() => { setManualCelebration(null); setFinishedReaction(reaction?.id); }, [reaction?.id]);
-  const open = Boolean(manualOpen || (reaction && reaction.id !== dismissed));
+  const open = !aiOpen && Boolean(manualOpen || (!life.quiet && life.visible && reaction && reaction.id !== dismissed));
   const title = reaction?.title || INTRO_TITLE;
   const message = reaction?.message || INTRO_MESSAGE;
   const reward = rewardMessage(reaction);
@@ -74,7 +79,7 @@ export default function GearCompanion() {
   const openAI = () => { close(); setAiOpen(true); };
   const closeAI = () => { setAiOpen(false); requestAnimationFrame(() => document.querySelector('.gear-companion__button')?.focus()); };
 
-  return createPortal(<><aside className={`gear-companion ${isLiteMode ? 'gear-companion--lite' : ''} ${dancing ? `gear-companion--performing gear-companion--${dance.mood || 'dance'}` : ''}`} aria-label="Giro, mascote da New Gears"
+  return createPortal(<><aside className={`gear-companion ${isLiteMode ? 'gear-companion--lite' : ''} ${life.quiet ? 'gear-companion--quiet' : ''} ${dancing ? `gear-companion--performing gear-companion--${dance.mood || 'dance'}` : ''}`} aria-label="Giro, mascote da New Gears"
     onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
     onFocusCapture={() => setFocused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}
     onKeyDown={(event) => { if (event.key === 'Escape' && open) { close(); event.currentTarget.querySelector('.gear-companion__button')?.focus(); } }}>
@@ -90,6 +95,12 @@ export default function GearCompanion() {
         {reward ? <p className={`gear-companion__reward ${reaction?.status === 'earned' ? 'gear-companion__reward--earned' : ''}`}>{reward}</p> : null}
         {tip ? <div className="gear-companion__tip"><p><Lightbulb size={13} />Dica do Giro</p><span>{tip}</span></div> : null}
       </div>
+      <section className="gear-companion__local" aria-label="Dica contextual do Giro">
+        <p><Lightbulb size={13} />Dica local · funciona sem IA</p>
+        <h4>{advice.title}</h4><span>{advice.message}</span>
+        <div>{onNavigate && <button type="button" onClick={() => { close(); onNavigate(advice.action.page); }}>{advice.action.label}<ArrowUpRight size={13} /></button>}
+        <button type="button" onClick={() => setTipStep((step) => step + 1)}>Outra dica<RotateCw size={13} /></button></div>
+      </section>
       <div className="gear-companion__actions">
         {speech.supported ? <button type="button" onClick={speech.playing ? speech.stop : speech.speak} aria-pressed={speech.playing} className="gear-companion__action gear-companion__action--voice">
           {speech.playing ? <Square size={13} fill="currentColor" /> : <Volume2 size={15} />}
@@ -111,14 +122,16 @@ export default function GearCompanion() {
       </details> : null}
       {speech.error ? <p className="gear-companion__audio-note" role="alert">{speech.error}</p> : null}
       {!speech.supported ? <p className="gear-companion__audio-note">A leitura em voz alta não está disponível neste navegador.</p> : null}
+      <button type="button" className="gear-companion__calm" aria-pressed={life.quiet} onClick={life.toggleQuiet}><Leaf size={14} />{life.quiet ? 'Retomar animações e reações' : 'Modo tranquilo'} </button>
       <button type="button" onClick={() => { close(); onOpenShop(); }} className="gear-companion__shop"><ShoppingBag size={14} />Visitar a loja{pending.length ? ` · ${pending.length} pendente(s)` : ''}</button>
       </div>
     </div> : null}
-    <button type="button" onClick={() => open ? close() : setManualOpen(true)} aria-expanded={open} aria-controls={open ? bubbleId : undefined} aria-label="Conversar com Giro" className="gear-companion__button">
-      <GearMascot key={dance?.sequence || celebrationId || 0} equipment={account.equipped} level={evolution.level} mood={dancing ? dance.mood || 'dance' : celebrationId ? celebrationMood : open ? reaction ? 'celebrate' : 'wave' : 'idle'} expression={workshop?.expression && workshop.expression !== 'auto' ? workshop.expression : open && reaction?.status === 'pending' ? 'focused' : open && reaction?.status === 'earned' ? 'surprised' : 'auto'} speaking={speech.speaking} decorative />
+    {!open && !aiOpen && life.notice && <div className="gear-companion__notice" role="status" aria-live="polite"><strong>{life.notice.title}</strong><p>{life.notice.message}</p><button type="button" onClick={life.dismissNotice} aria-label="Fechar reação do Giro"><X size={14} /></button></div>}
+    <button type="button" onClick={() => open ? close() : setManualOpen(true)} data-reaction={life.notice?.kind} aria-expanded={open} aria-controls={open ? bubbleId : undefined} aria-label="Conversar com Giro" className="gear-companion__button">
+      <GearMascot key={dance?.sequence || celebrationId || 0} equipment={account.equipped} level={evolution.level} mood={dancing ? dance.mood || 'dance' : celebrationId ? celebrationMood : life.notice?.mood || (life.greeting ? 'greet' : open ? reaction?.status === 'pending' ? 'thinking' : 'help' : 'idle')} expression={workshop?.expression || 'auto'} still={life.quiet} speaking={speech.speaking} decorative />
       <span className="gear-companion__name">{speech.speaking ? 'Falando…' : `Giro · N${evolution.level}`}</span>
       {pending.length ? <span className="gear-companion__badge" aria-label={`${pending.length} recompensa(s) pendente(s)`}>{pending.length}</span> : null}
     </button>
     <button type="button" onClick={openAI} className="gear-companion__ai-entry"><MessageCircle size={13} />Giro IA</button>
-  </aside>{aiOpen && <GiroAIChat key={draftScope} onClose={closeAI} />}{celebrationId && <GearCelebration key={celebrationId} equipment={celebrationEquipment} onComplete={finishCelebration} />}</>, document.body);
+  </aside>{aiOpen && <GiroAIChat key={draftScope} calm={life.quiet} onClose={closeAI} />}{celebrationId && <GearCelebration key={celebrationId} calm={life.quiet || isLiteMode} equipment={celebrationEquipment} onComplete={finishCelebration} />}</>, document.body);
 }

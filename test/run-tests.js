@@ -1,5 +1,9 @@
 import { runProjectSummaryTests } from './projectSummary.test.js';
 import { runWorkspaceBriefingTests } from './workspaceBriefing.test.js';
+import { runGiroCompanionTests } from './giroCompanion.test.js';
+import { runGiroTransportTests } from './giroTransport.test.js';
+import { runLearningFeaturesTests } from './learningFeatures.test.js';
+import { runCoachingTests } from './coaching.test.js';
 import { runAppStructureTests } from './appStructure.test.js';
 import { runSchoolReportTests } from './schoolReport.test.js';
 import { runPublicShowcaseTests } from './publicShowcase.test.js';
@@ -32,6 +36,10 @@ import { runGearAccessoriesTests } from './gearAccessories.test.js';
 import { runAuditCorrectionsTests } from './auditCorrections.test.js';
 
 const suites = [
+  { name: 'learningFeatures', run: runLearningFeaturesTests },
+  { name: 'coaching', run: runCoachingTests },
+  { name: 'giroCompanion', run: runGiroCompanionTests },
+  { name: 'giroTransport', run: runGiroTransportTests },
   { name: 'workspaceBriefing', run: runWorkspaceBriefingTests },
   { name: 'projectSummary', run: runProjectSummaryTests },
   { name: 'appStructure', run: runAppStructureTests },
