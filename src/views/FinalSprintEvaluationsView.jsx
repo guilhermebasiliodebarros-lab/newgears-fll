@@ -2,6 +2,8 @@ import { useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, Save } from 'lucide-react';
 import { buildEvaluationCalendar, FINAL_SPRINT_RANKING_CATEGORIES, FINAL_SPRINT_REPORT_NOTE_MAX_LENGTH, PRESENTATION_EVALUATION_CRITERIA, WEEKLY_EVALUATION_CRITERIA, getPresentationEvaluationCriteria, getFinalSprintEvaluationWeek, getFinalSprintEvaluationWeekForDate, getFinalSprintReportEvaluation, getFinalSprintTournamentRanking, parseFinalSprintReportScore } from '../utils/finalSprintEvaluations';
 import useEvaluationDrafts from '../hooks/useEvaluationDrafts';
+import SaveStatus from '../components/SaveStatus';
+import RecordConflictResolver from '../components/RecordConflictResolver';
 import EvaluationCalendar from '../components/EvaluationCalendar';
 import StudentEvaluationProgress from '../components/StudentEvaluationProgress';
 import CoachingPanel from '../components/CoachingPanel';
@@ -42,6 +44,8 @@ const FeedbackFields = ({ value, onChange, improvementRequired = true, maxLength
 );
 
 export default function FinalSprintEvaluationsView({
+  initialWeekId,
+  initialOnlyPending = false,
   isTechnicalProfile = false,
   student,
   students: rawStudents = [],
@@ -67,13 +71,14 @@ export default function FinalSprintEvaluationsView({
   const selections = useMemo(() => (Array.isArray(rawSelections) ? rawSelections : []).filter((item) => item && typeof item === 'object').map((item) => ({ ...item, studentName: typeof item.studentName === 'string' ? item.studentName : '', reportNote: typeof item.reportNote === 'string' ? item.reportNote : '' })), [rawSelections]);
   const evaluations = useMemo(() => normalizeEvaluationRecords(rawEvaluations), [rawEvaluations]);
   const [section, setSection] = useState('weekly');
-  const [selectedWeekId, setSelectedWeekId] = useState(() => getFinalSprintEvaluationWeek().id);
+  const [selectedWeekId, setSelectedWeekId] = useState(() => initialWeekId || getFinalSprintEvaluationWeek().id);
   const draftStorage = useEvaluationDrafts(isTechnicalProfile ? draftScope : `student:${draftScope}`);
   const { weekly: weeklyDrafts, presentation: presentationDrafts, report: reportDrafts } = draftStorage.drafts;
   const [calendarMonth, setCalendarMonth] = useState(() => getFinalSprintEvaluationWeek().id.slice(0, 7));
-  const [onlyPendingStudents, setOnlyPendingStudents] = useState(false);
+  const [onlyPendingStudents, setOnlyPendingStudents] = useState(initialOnlyPending);
   const [progressStudentId, setProgressStudentId] = useState('');
   const [evaluationSaveStates, setEvaluationSaveStates] = useState({});
+  const [recordConflict, setRecordConflict] = useState(null);
   const [reviewingPublication, setReviewingPublication] = useState(false);
   const [reportSaveStates, setReportSaveStates] = useState({});
   const [savingKey, setSavingKey] = useState('');
@@ -107,18 +112,21 @@ export default function FinalSprintEvaluationsView({
   const readinessRows = useMemo(() => isTechnicalProfile ? getFinalSprintTournamentRanking({ students: sortedStudents, evaluations, selections }) : [], [isTechnicalProfile, sortedStudents, evaluations, selections]);
 
   const weeklyDraftFor = (studentId, persisted) => weeklyDrafts[`${studentId}__${week.id}`] || {
+    expectedRecord: persisted || null,
     ratings: persisted?.ratings || makeEmptyRatings(WEEKLY_EVALUATION_CRITERIA),
     ...EMPTY_FEEDBACK,
     strengths: persisted?.strengths || '',
     improvement: persisted?.improvement || '',
   };
   const presentationDraftFor = (studentId, persisted) => presentationDrafts[studentId] || {
+    expectedRecord: persisted || null,
     ratings: persisted?.ratings || makeEmptyRatings(PRESENTATION_EVALUATION_CRITERIA),
     strengths: persisted?.strengths || '',
     improvement: persisted?.improvement || '',
     presentedAt: persisted?.presentedAt || new Date().toISOString().slice(0, 10),
   };
   const reportDraftFor = (studentId, persisted) => reportDrafts[studentId] || {
+    expectedRecord: evaluations.find((item) => item.type === 'report' && String(item.studentId) === String(studentId)) || null,
     score: persisted?.total ?? '',
     note: persisted?.note || '',
   };
@@ -155,7 +163,7 @@ export default function FinalSprintEvaluationsView({
       const saved = await onSaveWeekly({ student: studentItem, week, draft });
       const cleared = saved !== false && draftStorage.remove('weekly', draftKey, draft);
       setEvaluationSaveStates((current) => ({ ...current, [draftKey]: saved === false ? 'error' : cleared ? 'saved' : 'editing' }));
-    } catch { setEvaluationSaveStates((current) => ({ ...current, [draftKey]: 'error' })); }
+    } catch (failure) { if (failure.code === 'record-conflict') setRecordConflict({ failure, type: 'weekly', key: draftKey }); setEvaluationSaveStates((current) => ({ ...current, [draftKey]: 'error' })); }
     finally { saving.current = false; setSavingKey(''); }
   };
   const savePresentation = async (studentItem) => {
@@ -169,7 +177,7 @@ export default function FinalSprintEvaluationsView({
       const saved = await onSavePresentation({ student: studentItem, draft });
       const cleared = saved !== false && draftStorage.remove('presentation', studentItem.id, draft);
       setEvaluationSaveStates((current) => ({ ...current, [key]: saved === false ? 'error' : cleared ? 'saved' : 'editing' }));
-    } catch { setEvaluationSaveStates((current) => ({ ...current, [key]: 'error' })); }
+    } catch (failure) { if (failure.code === 'record-conflict') setRecordConflict({ failure, type: 'presentation', key: String(studentItem.id) }); setEvaluationSaveStates((current) => ({ ...current, [key]: 'error' })); }
     finally { saving.current = false; setSavingKey(''); }
   };
   const saveReport = async (studentItem) => {
@@ -183,10 +191,11 @@ export default function FinalSprintEvaluationsView({
     saving.current = true;
     setSavingKey(`report-${studentItem.id}`);
     try {
-      const saved = await onSaveReport({ student: studentItem, draft: { score, note: draft.note } });
+      const saved = await onSaveReport({ student: studentItem, draft: { ...draft, score, note: draft.note } });
       const cleared = saved !== false && draftStorage.remove('report', studentItem.id, draft);
       setReportSaveStates((current) => ({ ...current, [studentItem.id]: saved === false ? 'error' : cleared ? 'saved' : 'editing' }));
-    } catch {
+    } catch (failure) {
+      if (failure.code === 'record-conflict') setRecordConflict({ failure, type: 'report', key: String(studentItem.id) });
       setReportSaveStates((current) => ({ ...current, [studentItem.id]: 'error' }));
     } finally { saving.current = false; setSavingKey(''); }
   };
@@ -296,6 +305,7 @@ export default function FinalSprintEvaluationsView({
 
     {section !== 'private' && <>
     {draftStorage.storageError ? <p role="alert" className="rounded-xl border border-rose-300/25 bg-rose-300/10 p-4 text-xs text-rose-100">Não foi possível guardar o rascunho neste navegador. Mantenha esta página aberta e finalize em Salvar avaliação para não perder o preenchimento.</p> : <p role="status" className="text-xs text-gray-400">Rascunhos são guardados automaticamente neste navegador. As notas só entram no acompanhamento após salvar a avaliação.</p>}
+    <div>{recordConflict && <RecordConflictResolver key={recordConflict.type + recordConflict.key} conflict={{ ...recordConflict.failure.conflict, proposed: (() => { const draft = draftStorage.drafts[recordConflict.type][recordConflict.key]; return draft ? recordConflict.type === "report" ? { total: parseFinalSprintReportScore(draft.score), note: draft.note || "" } : { ratings: draft.ratings, strengths: draft.strengths, improvement: draft.improvement, ...(recordConflict.type === "presentation" ? { presentedAt: draft.presentedAt } : {}) } : recordConflict.failure.conflict.proposed; })() }} labels={{ ratings: "Notas por critério", strengths: "Pontos fortes", improvement: "Próximo ponto a melhorar", presentedAt: "Data da apresentação", total: "Nota do relatório", note: "Feedback do relatório" }} format={(value, field) => field === "ratings" && value ? Object.entries(value).map(([id, score]) => ([...WEEKLY_EVALUATION_CRITERIA, ...PRESENTATION_EVALUATION_CRITERIA].find((item) => item.id === id)?.label || id) + ": " + (score ?? "Sem nota")).join("\n") : undefined} onResolve={(merged) => { const { type, key, failure } = recordConflict; draftStorage.update(type, key, (current) => ({ ...current, ...(type === "report" ? { score: merged.total, note: merged.note || "" } : merged), expectedRecord: failure.currentRecord })); if (type === "weekly") { setSelectedWeekId(key.slice(key.lastIndexOf("__") + 2)); setOnlyPendingStudents(false); setSection("weekly"); } else setSection(type === "report" ? "report" : "presentation"); setRecordConflict(null); }} onCancel={() => setRecordConflict(null)} />}</div>
     {Object.values(evaluationSaveStates).includes('error') ? <p role="alert" className="rounded-xl border border-rose-300/25 bg-rose-300/10 p-4 text-xs text-rose-100">Uma avaliação não foi enviada. Seu preenchimento foi mantido; tente salvar novamente.</p> : null}
     {draftStorage.restored.length ? <details open className="rounded-2xl border border-cyan-300/25 bg-cyan-300/5 p-4"><summary className="cursor-pointer text-sm font-black text-cyan-100">Rascunhos recuperados · {draftStorage.restored.length}</summary><div className="mt-3 flex flex-wrap gap-2">{draftStorage.restored.map((entry) => {
       const studentId = entry.type === 'weekly' ? entry.key.slice(0, entry.key.lastIndexOf('__')) : entry.key;
@@ -334,7 +344,7 @@ export default function FinalSprintEvaluationsView({
           </summary>
           <form onSubmit={(event) => { event.preventDefault(); saveReport(studentItem); }} className="border-t border-white/10 p-5">
             <fieldset disabled={Boolean(savingKey)} className="space-y-5 disabled:opacity-60">
-              <DraftStatus draft={reportDrafts[id]} storageError={draftStorage.storageError} />
+              <DraftStatus state={saveState} sending={savingKey === key} draft={reportDrafts[id]} storageError={draftStorage.storageError} />
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <label className="block max-w-xs text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Nota dos relatórios · de 0 a 10 *<input type="number" required min="0" max="10" step="0.01" value={draft.score} onChange={(event) => updateReportDraft(id, 'score', event.target.value)} placeholder="Ex.: 8,5" className="mt-2 w-full rounded-xl border border-violet-300/20 bg-black/25 px-4 py-3 text-xl font-black text-white outline-none focus:border-violet-300" /></label>
                 <p className="max-w-md text-xs leading-relaxed text-gray-400">Considere o conjunto dos relatórios desse aluno. Use a análise abaixo para registrar exemplos, explicar a nota e orientar os próximos passos.</p>
@@ -370,14 +380,14 @@ export default function FinalSprintEvaluationsView({
         <label className="flex items-center gap-2 text-xs text-gray-300"><input type="checkbox" checked={onlyPendingStudents} onChange={(event) => setOnlyPendingStudents(event.target.checked)} />Mostrar somente alunos ainda não avaliados nesta semana</label>
         <p className="text-[10px] text-gray-500">5 critérios · máximo 25 pontos · rascunhos recuperados mesmo após fechar ou atualizar a página.</p>
       </section>
-      <div className="grid gap-3 xl:grid-cols-2">{weeklyStudents.filter((item) => !onlyPendingStudents || weeklyByStudent.get(String(item.id))?.status !== 'complete').map((studentItem) => {
+      <div className="grid gap-3 xl:grid-cols-2">{weeklyStudents.filter((item) => !onlyPendingStudents || weeklyByStudent.get(String(item.id))?.status !== 'complete' || Boolean(weeklyDrafts[String(item.id) + '__' + week.id])).map((studentItem) => {
         const id = String(studentItem.id);
         const saved = weeklyByStudent.get(id);
         const draft = weeklyDraftFor(id, saved);
         const total = getRatingTotal(draft.ratings, WEEKLY_EVALUATION_CRITERIA);
         const isSaved = saved?.status === 'complete';
         const key = `weekly-${studentItem.id}`;
-        return <details key={`${id}__${week.id}`} id={`evaluation-weekly-${encodeURIComponent(`${id}__${week.id}`)}`} className="group rounded-2xl border border-white/10 bg-[#111722] open:border-amber-300/25"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4"><div className="min-w-0"><p className="truncate text-sm font-black text-white">{studentItem.name || 'Aluno'}</p><p className="mt-1 text-[10px] text-gray-500">{isSaved ? `Avaliado · ${saved.total ?? total}/25` : 'Pendente nesta semana'}</p></div><div className="flex items-center gap-2">{isSaved ? <Check size={16} className="text-emerald-300" /> : <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-1 text-[9px] font-black uppercase text-amber-100">Avaliar</span>}<ChevronDown size={15} className="text-gray-500 transition-transform group-open:rotate-180" /></div></summary><div className="space-y-4 border-t border-white/8 p-4"><DraftStatus draft={weeklyDrafts[`${id}__${week.id}`]} storageError={draftStorage.storageError} />{!isSaved && Object.values(draft.ratings).every((value) => value === null) && (() => { const previous = weeklyEvaluations.filter((record) => record.studentId === id && record.weekId < week.id && record.status === 'complete').sort((a,b) => b.weekId.localeCompare(a.weekId))[0]; return previous ? <button type="button" className="ng-button" onClick={() => updateWeeklyDraft(id, { ratings: { ...previous.ratings } })}>Usar notas de {previous.weekLabel || previous.weekId} como rascunho</button> : null; })()} <RatingPicker criteria={WEEKLY_EVALUATION_CRITERIA} ratings={draft.ratings} onChange={(criterion, score) => updateWeeklyDraft(id, { ratings: { [criterion]: score } })} /><FeedbackFields value={draft} onChange={(field, value) => updateWeeklyDraft(id, { [field]: value })} /><div className="flex items-center justify-between gap-3"><p className="text-xs font-black text-gray-300">Pontuação: {total === null ? '—' : `${total}/25`}</p><button type="button" disabled={evaluationsLoading || Boolean(evaluationsError) || Boolean(savingKey) || total === null || !draft.improvement.trim()} onClick={() => saveWeekly(studentItem)} className="inline-flex items-center gap-2 rounded-xl bg-amber-300 px-4 py-2.5 text-xs font-black text-black disabled:opacity-40"><Save size={13} />{savingKey === key ? 'Salvando...' : 'Salvar avaliação'}</button></div></div></details>;
+        return <details key={`${id}__${week.id}`} id={`evaluation-weekly-${encodeURIComponent(`${id}__${week.id}`)}`} className="group rounded-2xl border border-white/10 bg-[#111722] open:border-amber-300/25"><summary className="flex cursor-pointer list-none items-center justify-between gap-3 p-4"><div className="min-w-0"><p className="truncate text-sm font-black text-white">{studentItem.name || 'Aluno'}</p><p className="mt-1 text-[10px] text-gray-500">{isSaved ? `Avaliado · ${saved.total ?? total}/25` : 'Pendente nesta semana'}</p></div><div className="flex items-center gap-2">{isSaved ? <Check size={16} className="text-emerald-300" /> : <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-1 text-[9px] font-black uppercase text-amber-100">Avaliar</span>}<ChevronDown size={15} className="text-gray-500 transition-transform group-open:rotate-180" /></div></summary><div className="space-y-4 border-t border-white/8 p-4"><DraftStatus state={evaluationSaveStates[id + "__" + week.id]} sending={savingKey === key} draft={weeklyDrafts[`${id}__${week.id}`]} storageError={draftStorage.storageError} />{!isSaved && Object.values(draft.ratings).every((value) => value === null) && (() => { const previous = weeklyEvaluations.filter((record) => record.studentId === id && record.weekId < week.id && record.status === 'complete').sort((a,b) => b.weekId.localeCompare(a.weekId))[0]; return previous ? <button type="button" className="ng-button" onClick={() => updateWeeklyDraft(id, { ratings: { ...previous.ratings } })}>Usar notas de {previous.weekLabel || previous.weekId} como rascunho</button> : null; })()} <RatingPicker criteria={WEEKLY_EVALUATION_CRITERIA} ratings={draft.ratings} onChange={(criterion, score) => updateWeeklyDraft(id, { ratings: { [criterion]: score } })} /><FeedbackFields value={draft} onChange={(field, value) => updateWeeklyDraft(id, { [field]: value })} /><div className="flex items-center justify-between gap-3"><p className="text-xs font-black text-gray-300">Pontuação: {total === null ? '—' : `${total}/25`}</p><button type="button" disabled={evaluationsLoading || Boolean(evaluationsError) || Boolean(savingKey) || total === null || !draft.improvement.trim()} onClick={() => saveWeekly(studentItem)} className="inline-flex items-center gap-2 rounded-xl bg-amber-300 px-4 py-2.5 text-xs font-black text-black disabled:opacity-40"><Save size={13} />{savingKey === key ? 'Salvando...' : 'Salvar avaliação'}</button></div></div></details>;
       })}</div>
     </div> : null}
 
@@ -397,7 +407,7 @@ export default function FinalSprintEvaluationsView({
         <div className="space-y-4 border-t border-white/8 p-4">
           <label className="block max-w-xs space-y-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Data da apresentação<input type="date" value={draft.presentedAt || ''} onChange={(event) => updatePresentationDraft(id, { presentedAt: event.target.value })} className="mt-1 w-full rounded-xl border border-white/10 bg-black/25 px-3 py-2.5 text-sm text-white" /></label>
           {usesOldCriteria ? <p className="rounded-xl border border-amber-300/20 bg-amber-300/5 p-3 text-xs leading-relaxed text-amber-100">Os critérios da apresentação foram atualizados. As notas de domínio do projeto, comunicação e postura foram mantidas. Avalie os quatro novos itens para salvar novamente.</p> : null}
-          <DraftStatus draft={presentationDrafts[id]} storageError={draftStorage.storageError} />
+          <DraftStatus state={evaluationSaveStates[key]} sending={savingKey === key} draft={presentationDrafts[id]} storageError={draftStorage.storageError} />
           <RatingPicker criteria={PRESENTATION_EVALUATION_CRITERIA} ratings={draft.ratings} onChange={(criterion, score) => updatePresentationDraft(id, { ratings: { [criterion]: score } })} />
           <FeedbackFields value={draft} onChange={(field, value) => updatePresentationDraft(id, { [field]: value })} />
           <div className="flex items-center justify-between gap-3">
@@ -508,9 +518,9 @@ function ReportEvaluationResultCard({ record }) {
   </article>;
 }
 
-function DraftStatus({ draft, storageError }) {
-  if (!draft) return null;
-  return <p role="status" className="rounded-xl border border-cyan-300/20 bg-cyan-300/5 p-3 text-xs text-cyan-100">{storageError ? 'Rascunho apenas nesta página. Finalize o envio antes de sair.' : 'Rascunho salvo neste navegador. Finalize em Salvar avaliação para registrar a nota.'}</p>;
+function DraftStatus({ draft, storageError, state, sending }) {
+  if (!draft && !state && !sending) return null;
+  return <SaveStatus state={sending ? "sending" : state === "saved" ? "confirmed" : state === "error" ? "error" : storageError ? "unavailable" : draft ? "draft" : "idle"} savedAt={draft?.draftSavedAt} />;
 }
 
 function EvaluationResultCard({ title, subtitle, criteria, record }) {

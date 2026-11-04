@@ -1,3 +1,5 @@
+import { parseLinkedTaskIds } from './workflowImprovements.js';
+
 export const MAX_REPORT_FILE_SIZE = 10 * 1024 * 1024;
 export const REPORT_FILE_TYPES = {
   pdf: 'application/pdf',
@@ -91,7 +93,7 @@ export function validateReportDetails(input) {
   if (!week || week.length > 80) throw new Error('Informe a semana (até 80 caracteres).');
   if (description.length > 4000) throw new Error('O resumo deve ter no máximo 4.000 caracteres.');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(reportDate) || !Number.isFinite(Date.parse(`${reportDate}T12:00:00Z`)) || new Date(`${reportDate}T12:00:00Z`).toISOString().slice(0, 10) !== reportDate) throw new Error('Informe uma data válida.');
-  return { title, description, week, reportDate, weekStart: weekStartFor(reportDate) };
+  return { title, description, week, reportDate, weekStart: weekStartFor(reportDate), linkedTaskIds: parseLinkedTaskIds(input.linkedTaskIds) };
 }
 
 export function localReportDate() {

@@ -16,6 +16,11 @@ import TeamLearningGoals from './components/TeamLearningGoals';
 import WorkspaceSearch from './components/WorkspaceSearch';
 import { DialogSurface, NotificationToast, PanelSkeleton, SectionDisclosure } from './components/InterfacePrimitives';
 import WorkspaceActionQueue from './components/WorkspaceActionQueue';
+import TrainingQuickActions from './components/TrainingQuickActions';
+import { belongsToStudent, missingStudentFields, parseLinkedTaskIds } from './utils/workflowImprovements';
+import MemberOnboarding from './components/MemberOnboarding';
+import { parseEffortMinutes } from './utils/workload';
+import { saveWeeklyCapacity } from './services/taskEditing';
 import SeasonPlanningPanel from './components/SeasonPlanningPanel';
 import AttendancePanel from './components/AttendancePanel';
 import TaskReviewForm from './components/TaskReviewForm';
@@ -1043,6 +1048,9 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [taskComposerRequest, setTaskComposerRequest] = useState(0);
+  const [attentionTarget, setAttentionTarget] = useState({ kind: '', revision: 0 });
+  const [quickAction, setQuickAction] = useState('');
+  const completeQuickAction = useCallback(() => setQuickAction(''), []);
   const completeTaskComposerRequest = useCallback(() => setTaskComposerRequest(0), []);
   const closeWorkspaceMenu = useCallback(() => setWorkspaceMenuOpen(false), []);
   const [badgeStudent, setBadgeStudent] = useState(null);
@@ -1087,7 +1095,8 @@ function App() {
     if (next !== studentTab) setStudentPanelState((previous) => previous.dashboard ? { ...previous, dashboard: false } : previous);
     setStudentTabValue(next);
   }, [studentTab]);
-  const openWeeklyReports = (reportId = '') => {
+  const openWeeklyReports = (reportId = '', { keepAttention = false } = {}) => {
+    if (!keepAttention) setAttentionTarget((current) => current.kind ? { kind: '', revision: current.revision + 1 } : current);
     setFocusedReportId(reportId);
     setAdminTab('weekly_reports'); setStudentTab('weekly_reports');
     const url = new URL(window.location.href);
@@ -1127,7 +1136,7 @@ function App() {
   const [selectionRetry, setSelectionRetry] = useState(0);
 
   const assignmentWorkspace = useTeamRecords({ db, user: currentUser, studentId: viewAsStudent?.id, technical: isAdmin, seasonId: seasonLifecycleReady ? activeTeamSeasonId : null,
-    enabled: isAdmin ? adminTab === 'sprint' : studentTab === 'sprint', attempt: finalSprintAssignmentsRetry, collectionName: 'finalSprintAssignments' });
+    enabled: isAdmin ? ['sprint', 'students'].includes(adminTab) : studentTab === 'sprint', attempt: finalSprintAssignmentsRetry, collectionName: 'finalSprintAssignments' });
   const finalSprintAssignments = assignmentWorkspace.records;
   const finalSprintAssignmentsState = assignmentWorkspace;
   const selectionWorkspace = useTeamRecords({ db, user: currentUser, studentId: viewAsStudent?.id, technical: isAdmin, seasonId: seasonLifecycleReady ? activeTeamSeasonId : null,
@@ -1574,10 +1583,11 @@ function App() {
               updatedAt: now,
           };
           const evaluationId = existing?.id || getFinalSprintEvaluationDocId('weekly', studentId, week.id);
-          await saveEvaluation({ db, user: currentUser, id: evaluationId, evaluation, expected: existing });
+          await saveEvaluation({ db, user: currentUser, id: evaluationId, evaluation, expected: draft.expectedRecord });
           showNotification(`Avaliação semanal de ${student.name || 'aluno'} salva.`, 'success');
           return true;
       } catch (error) {
+          if (error.code === "record-conflict") throw error;
           console.error('Erro ao salvar avaliação semanal da reta final:', error);
           showNotification(error.message || 'Não foi possível salvar a avaliação semanal.', 'error');
           return false;
@@ -1613,10 +1623,11 @@ function App() {
           };
           const evaluationId = existing?.id || getFinalSprintEvaluationDocId('presentation', studentId);
           // Replace the ratings map as a whole so removed criteria do not survive a reevaluation.
-          await saveEvaluation({ db, user: currentUser, id: evaluationId, evaluation, expected: existing });
+          await saveEvaluation({ db, user: currentUser, id: evaluationId, evaluation, expected: draft.expectedRecord });
           showNotification(`Avaliação da apresentação de ${student.name || 'aluno'} salva.`, 'success');
           return true;
       } catch (error) {
+          if (error.code === "record-conflict") throw error;
           console.error('Erro ao salvar avaliação da apresentação:', error);
           showNotification(error.message || 'Não foi possível salvar a avaliação da apresentação.', 'error');
           return false;
@@ -1647,10 +1658,11 @@ function App() {
       };
       const evaluationId = existing?.id || getFinalSprintEvaluationDocId('report', studentId);
       try {
-          await saveEvaluation({ db, user: currentUser, id: evaluationId, evaluation, expected: existing });
+          await saveEvaluation({ db, user: currentUser, id: evaluationId, evaluation, expected: draft.expectedRecord });
           showNotification(`Avaliação do relatório de ${student.name || 'aluno'} salva.`, 'success');
           return true;
       } catch (error) {
+          if (error.code === "record-conflict") throw error;
           console.error('Erro ao salvar avaliação do relatório:', error);
           showNotification(error.message || 'Não foi possível salvar a avaliação do relatório.', 'error');
           return false;
@@ -2939,12 +2951,12 @@ function App() {
   // --- ACTIONS ---
 
   // --- FUNÇÕES DO KANBAN (TAREFAS) ---
-  const createKanbanTask = async ({ text, dueDate = '', tag = 'geral', priority = 'normal', gearReward = 0, author, ...extraData }) => {
+  const createKanbanTask = async ({ text, dueDate = '', tag = 'geral', priority = 'normal', gearReward = 0, estimatedMinutes, author, draftId, ...extraData }) => {
       if (!text) return;
 
       const resolvedAuthor = author || (isAdmin ? "Tecnico" : (viewAsStudent?.name || "Equipe"));
 
-      const taskRef = doc(collection(db, "tasks"));
+      const taskRef = draftId ? doc(db, 'tasks', draftId) : doc(collection(db, "tasks"));
       const taskData = {
           text,
           seasonId: activeTeamSeasonId || 'legacy',
@@ -2958,10 +2970,16 @@ function App() {
           tag,
           priority,
           gearReward: isAdmin ? validateTaskGearReward(Number(gearReward)) : 0,
+          estimatedMinutes: parseEffortMinutes(estimatedMinutes),
           ...extraData
       };
       await runTransaction(db, async (transaction) => {
         await assertActiveSeason(transaction, db, activeTeamSeasonId || 'legacy');
+        const previous = await transaction.get(taskRef);
+        if (previous.exists()) {
+          if (previous.data().createdById !== taskData.createdById) throw new Error('Este rascunho pertence a outro integrante.');
+          return;
+        }
         transaction.set(taskRef, taskData);
       });
       void recordActivity({
@@ -2973,7 +2991,7 @@ function App() {
       });
   };
 
-  const handleAddTask = async ({ text, dueDate = '', tag = 'geral', priority = 'normal', gearReward = 0 }) => {
+  const handleAddTask = async ({ text, dueDate = '', tag = 'geral', priority = 'normal', gearReward = 0, estimatedMinutes }, { draftId } = {}) => {
       const normalizedText = text.trim();
       if (!normalizedText) return false;
 
@@ -2984,6 +3002,8 @@ function App() {
               tag,
               priority,
               gearReward,
+              estimatedMinutes,
+              draftId,
           });
           return true;
       } catch (error) {
@@ -3302,6 +3322,8 @@ function App() {
   const handleLogbookSubmit = async (e, { draftId } = {}) => {
       e.preventDefault();
       const text = studentLogbookDraft.trim();
+      const linkedTaskIds = parseLinkedTaskIds(new FormData(e.currentTarget).get('linkedTaskIds'));
+      if (linkedTaskIds.some((id) => !tasks.some((task) => task.id === id && task.status === 'done' && belongsToStudent(task, viewAsStudent)))) throw new Error('Revise as tarefas vinculadas antes de salvar.');
       // Se não tiver semana definida, pega a atual ou a 1
       const weekId = currentWeekData?.id || 1;
       const weekName = currentWeekData?.weekName || "Semana Inicial";
@@ -3325,6 +3347,7 @@ function App() {
               // Ainda salvamos o nome para a visualização consolidada do técnico
               studentName: viewAsStudent.name, 
               text: text,
+              linkedTaskIds,
               weekId: weekId,       // Para ordenar
               weekName: weekName,   // Para exibir bonitinho
               date: new Date().toISOString(),
@@ -3366,8 +3389,8 @@ function App() {
       }
   }
 
-const handleSetStudentAccess = async (studentId, active) => {
-    await setStudentAccess({ db, user: currentUser, studentId, active, actor: adminProfile?.name, seasonId: activeTeamSeasonId || 'legacy' });
+const handleSetStudentAccess = async (studentId, active, handoff) => {
+    await setStudentAccess({ db, user: currentUser, studentId, active, handoff, actor: adminProfile?.name, seasonId: activeTeamSeasonId || 'legacy' });
     showNotification(active ? 'Acesso reativado. Confira o planejamento do aluno.' : 'Acesso inativado. Todos os dados e relatórios foram preservados.');
 };
 
@@ -4610,12 +4633,7 @@ const handleDeleteRound = async (id) => {
   const incompleteStudentRecords = students
       .map((student) => ({
         ...student,
-        missingFields: [
-          !String(student.name || '').trim() && 'nome',
-          !String(student.turma || '').trim() && 'turma',
-          !String(student.username || '').trim() && 'usuário',
-          !String(student.password || '').trim() && 'senha de acesso',
-        ].filter(Boolean),
+        missingFields: missingStudentFields(student),
       }))
       .filter((student) => student.missingFields.length > 0);
 
@@ -4656,14 +4674,14 @@ const handleDeleteRound = async (id) => {
 
   const adminHeroActions = workspaceSeason === 'rotation'
       ? [
-          { label: 'Gerenciar alunos', onClick: () => setAdminTab('students'), icon: <Users size={14} />, style: 'bg-emerald-500/10 text-emerald-200 border-emerald-500/20 hover:bg-emerald-400 hover:text-black' },
+          { label: 'Gerenciar alunos', onClick: () => navigateWorkspace('students'), icon: <Users size={14} />, style: 'bg-emerald-500/10 text-emerald-200 border-emerald-500/20 hover:bg-emerald-400 hover:text-black' },
           { label: 'Abrir rodízio', onClick: () => setAdminTab('rotation'), icon: <RotateCcw size={14} />, style: 'bg-blue-500/10 text-blue-200 border-blue-500/20 hover:bg-blue-400 hover:text-black' },
-          { label: 'Kanban da Semana', onClick: () => setAdminTab('kanban'), icon: <ClipboardList size={14} />, style: 'bg-orange-500/10 text-orange-300 border-orange-500/20 hover:bg-orange-500 hover:text-white' },
-          { label: 'Agenda', onClick: () => setAdminTab('agenda'), icon: <CalendarDays size={14} />, style: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20 hover:bg-indigo-500 hover:text-white' }
+          { label: 'Kanban da Semana', onClick: () => navigateWorkspace('kanban'), icon: <ClipboardList size={14} />, style: 'bg-orange-500/10 text-orange-300 border-orange-500/20 hover:bg-orange-500 hover:text-white' },
+          { label: 'Agenda', onClick: () => navigateWorkspace('agenda'), icon: <CalendarDays size={14} />, style: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20 hover:bg-indigo-500 hover:text-white' }
       ]
       : [
           { label: 'Gerenciar alunos', onClick: () => setAdminTab('students'), icon: <Users size={14} />, style: 'bg-emerald-500/10 text-emerald-200 border-emerald-500/20 hover:bg-emerald-400 hover:text-black' },
-          { label: 'Avaliar a Semana', onClick: () => setAdminTab('evaluations'), icon: <ClipboardList size={14} />, style: 'bg-amber-500/10 text-amber-200 border-amber-500/20 hover:bg-amber-400 hover:text-black' },
+          { label: 'Avaliar a Semana', onClick: () => openAttention('evaluations'), icon: <ClipboardList size={14} />, style: 'bg-amber-500/10 text-amber-200 border-amber-500/20 hover:bg-amber-400 hover:text-black' },
           { label: 'Kanban da Semana', onClick: () => setAdminTab('kanban'), icon: <ClipboardList size={14} />, style: 'bg-orange-500/10 text-orange-300 border-orange-500/20 hover:bg-orange-500 hover:text-white' },
           { label: 'Agenda', onClick: () => setAdminTab('agenda'), icon: <CalendarDays size={14} />, style: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20 hover:bg-indigo-500 hover:text-white' }
       ];
@@ -4744,7 +4762,9 @@ const handleDeleteRound = async (id) => {
   const currentWorkspaceTabs = isAdmin ? adminWorkspaceTabs : studentWorkspaceTabs;
   const currentWorkspaceTab = currentWorkspaceTabs.find((tab) => tab.id === (isAdmin ? adminTab : studentTab));
   const workspaceProfileStudent = viewAsStudent || (currentUser?.type === 'student' ? currentUser.data || { name: currentUser.name } : null);
-  const navigateWorkspace = (tabId) => {
+  const navigateWorkspace = (tabId, { keepAttention = false } = {}) => {
+      setQuickAction('');
+      if (!keepAttention) setAttentionTarget((current) => current.kind ? { kind: '', revision: current.revision + 1 } : current);
       if (isAdmin) setAdminTab(tabId); else setStudentTab(tabId);
       requestAnimationFrame(() => {
           const content = document.getElementById('workspace-content');
@@ -4845,13 +4865,22 @@ const handleDeleteRound = async (id) => {
       urgentEventsCount > 0 && { title: 'Blindar compromissos da agenda', detail: `${urgentEventsCount} marco(s) exigem preparacao proxima.`, actionLabel: 'Ver Agenda', onClick: () => setAdminTab('agenda'), tone: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-100' }
   ].filter(Boolean).slice(0, 3);
 
+  const openAttention = (kind) => {
+      setAttentionTarget((current) => ({ kind, weekId: currentFinalSprintWeek.id, revision: current.revision + 1 }));
+      if (kind === 'events') { setAgendaSearchQuery(''); setAgendaTypeFilter('all'); setAgendaScopeFilter('urgent'); }
+      const tab = { blocked: 'kanban', urgent: 'kanban', review: 'kanban', mine: 'kanban', events: 'agenda', students: 'students', evaluations: 'evaluations', reports: 'weekly_reports', workload: 'kanban' }[kind];
+      if (kind === 'reports') openWeeklyReports('', { keepAttention: true });
+      navigateWorkspace(tab, { keepAttention: true });
+  };
+
   const adminActionQueueItems = [
-      tasks.some((task) => task.block && !task.block.resolvedAt && task.status !== 'done') && { id: 'blocked', title: 'Tarefas bloqueadas', count: tasks.filter((task) => task.block && !task.block.resolvedAt && task.status !== 'done').length, detail: 'Confira os impedimentos e quem precisa de ajuda.', onClick: () => setAdminTab('kanban'), icon: <AlertTriangle size={15} />, tone: 'border-amber-300/20 bg-amber-300/10 text-amber-100' },
-      urgentTasksCount > 0 && { id: 'tasks', title: 'Tarefas vencidas ou para hoje', count: urgentTasksCount, detail: 'Revise o Kanban e combine o próximo passo.', onClick: () => setAdminTab('kanban'), icon: <ClipboardList size={15} />, tone: 'border-orange-300/20 bg-orange-300/10 text-orange-100' },
-      urgentEventsCount > 0 && { id: 'events', title: 'Compromissos próximos', count: urgentEventsCount, detail: 'Há eventos hoje ou amanhã na agenda.', onClick: () => setAdminTab('agenda'), icon: <CalendarDays size={15} />, tone: 'border-indigo-300/20 bg-indigo-300/10 text-indigo-100' },
-      incompleteStudentRecords.length > 0 && { id: 'students', title: 'Cadastros incompletos', count: incompleteStudentRecords.length, detail: 'Faltam dados básicos ou acesso de integrantes.', onClick: () => setAdminTab('students'), icon: <Users size={15} />, tone: 'border-amber-300/20 bg-amber-300/10 text-amber-100' },
-      pendingWeeklyEvaluationCount > 0 && { id: 'evaluations', title: 'Avaliações semanais pendentes', count: pendingWeeklyEvaluationCount, detail: 'Registre o acompanhamento desta semana.', onClick: () => setAdminTab('evaluations'), icon: <ClipboardList size={15} />, tone: 'border-rose-300/20 bg-rose-300/10 text-rose-100' },
-      reportsWorkspace.unreadReports.length > 0 && { id: 'reports', title: 'Relatórios não lidos', count: reportsWorkspace.unreadReports.length, detail: 'Há aprendizados novos enviados pela equipe.', onClick: () => openWeeklyReports(), icon: <FileText size={15} />, tone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100' },
+      tasks.some((task) => task.status === 'review') && { id: 'review', title: 'Tarefas aguardando revisão', count: tasks.filter((task) => task.status === 'review').length, detail: 'Confira os resultados para aprovar ou devolver.', onClick: () => openAttention('review'), icon: <CheckCircle size={15} /> },
+      tasks.some((task) => task.block && !task.block.resolvedAt && task.status !== 'done') && { id: 'blocked', title: 'Tarefas bloqueadas', count: tasks.filter((task) => task.block && !task.block.resolvedAt && task.status !== 'done').length, detail: 'Confira os impedimentos e quem precisa de ajuda.', onClick: () => openAttention('blocked'), icon: <AlertTriangle size={15} />, tone: 'border-amber-300/20 bg-amber-300/10 text-amber-100' },
+      urgentTasksCount > 0 && { id: 'tasks', title: 'Tarefas vencidas ou para hoje', count: urgentTasksCount, detail: 'Revise o Kanban e combine o próximo passo.', onClick: () => openAttention('urgent'), icon: <ClipboardList size={15} />, tone: 'border-orange-300/20 bg-orange-300/10 text-orange-100' },
+      urgentEventsCount > 0 && { id: 'events', title: 'Compromissos próximos', count: urgentEventsCount, detail: 'Há eventos hoje ou amanhã na agenda.', onClick: () => openAttention('events'), icon: <CalendarDays size={15} />, tone: 'border-indigo-300/20 bg-indigo-300/10 text-indigo-100' },
+      incompleteStudentRecords.length > 0 && { id: 'students', title: 'Cadastros incompletos', count: incompleteStudentRecords.length, detail: 'Faltam dados básicos ou acesso de integrantes.', onClick: () => openAttention('students'), icon: <Users size={15} />, tone: 'border-amber-300/20 bg-amber-300/10 text-amber-100' },
+      pendingWeeklyEvaluationCount > 0 && { id: 'evaluations', title: 'Avaliações semanais pendentes', count: pendingWeeklyEvaluationCount, detail: 'Registre o acompanhamento desta semana.', onClick: () => openAttention('evaluations'), icon: <ClipboardList size={15} />, tone: 'border-rose-300/20 bg-rose-300/10 text-rose-100' },
+      reportsWorkspace.unreadReports.length > 0 && { id: 'reports', title: 'Relatórios não lidos', count: reportsWorkspace.unreadReports.length, detail: 'Há aprendizados novos enviados pela equipe.', onClick: () => openAttention('reports'), icon: <FileText size={15} />, tone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100' },
   ].filter(Boolean);
 
   const adminHeroFooter = (
@@ -7342,6 +7371,8 @@ const handleFileSelect = (e) => {
 
   const evaluationDraftScope = `${activeTeamSeasonId || 'legacy'}:${currentUser?.uid || currentUser?.email || currentUser?.name || currentUser?.type}`;
   const finalSprintEvaluationViewProps = {
+      initialWeekId: attentionTarget.kind === 'evaluations' ? attentionTarget.weekId : undefined,
+      initialOnlyPending: attentionTarget.kind === 'evaluations',
       isTechnicalProfile: currentUser?.type === 'admin' && isAdmin,
       student: viewAsStudent,
       students,
@@ -7365,6 +7396,7 @@ const handleFileSelect = (e) => {
   };
 
   const roundsViewProps = {
+      quickFocus: quickAction === 'test', onQuickFocusHandled: completeQuickAction,
       rounds,
       robotVersions,
       missionsList,
@@ -7395,7 +7427,13 @@ const handleFileSelect = (e) => {
       LazyPanelFallback
   };
 
+  const openLinkedTask = (taskId) => { setAttentionTarget((current) => ({ kind: "linked", taskId, revision: current.revision + 1 })); navigateWorkspace("kanban", { keepAttention: true }); };
+
   const kanbanViewProps = {
+      user: currentUser, seasonId: activeTeamSeasonId || "legacy", initialShowWorkload: attentionTarget.kind === "workload",
+      onSaveCapacity: (studentId, minutes, expected) => saveWeeklyCapacity({ db, user: currentUser, studentId, minutes, expected }),
+      initialTaskId: attentionTarget.taskId || "",
+      initialAttention: ['blocked', 'urgent', 'review', 'mine', 'linked'].includes(attentionTarget.kind) ? attentionTarget.kind : 'all',
       focusRequest: taskComposerRequest,
       onFocusRequestHandled: completeTaskComposerRequest,
       onOpenBlock: (task) => setModal({ type: 'taskBlock', data: { task } }),
@@ -7420,6 +7458,9 @@ const handleFileSelect = (e) => {
   };
 
   const logbookViewProps = {
+      quickFocus: quickAction === 'diary', onQuickFocusHandled: completeQuickAction,
+      tasks, student: viewAsStudent, onOpenTask: openLinkedTask,
+      seasonId: activeTeamSeasonId || 'legacy',
       currentWeekData,
       isAdmin,
       adminLogbookStudentQuery,
@@ -8047,8 +8088,9 @@ const handleFileSelect = (e) => {
         <main id="workspace-content" tabIndex={-1} aria-label={currentWorkspaceTab?.label} className={`newgears-stage workspace-section-anchor max-w-[1600px] mx-auto animate-in fade-in duration-500 ${adminPanelState.compact ? 'p-4 md:p-6' : 'p-4 md:p-8'}`}>
           {!adminPanelState.compact && adminTab !== 'overview' && <WorkspaceContent render={renderUrgentEventsBanner} />}
 
+          <TrainingQuickActions technical onTest={() => { setRobotSubTab("overview"); navigateWorkspace("rounds"); setQuickAction("test"); }} onTasks={() => openAttention("urgent")} />
           <div className="mb-6" hidden={adminTab !== 'overview'}>
-            {adminTab === 'overview' && <><WorkspaceBriefing technical name={adminProfile?.name} students={students} tasks={tasks} events={events} today={localTodayStr} season={activeTeamSeasonName} onNavigate={navigateWorkspace} readiness={commandCenterReadinessScore} onNewTask={() => { setTaskComposerRequest((value) => value + 1); navigateWorkspace('kanban'); }} onNewEvent={() => setModal({ type: 'eventForm' })} /><TeamLearningGoals tasks={tasks} students={students} reports={reportsWorkspace.reports} reportsReady={reportsWorkspace.enabled && !reportsWorkspace.loading && !reportsWorkspace.error} today={today} onNavigate={(page) => isAdmin ? setAdminTab(page) : setStudentTab(page)} /></>}
+            {adminTab === 'overview' && <><WorkspaceBriefing technical name={adminProfile?.name} students={students} tasks={tasks} events={events} today={localTodayStr} season={activeTeamSeasonName} onNavigate={navigateWorkspace} readiness={commandCenterReadinessScore} onNewTask={() => { setTaskComposerRequest((value) => value + 1); navigateWorkspace('kanban'); }} onNewEvent={() => setModal({ type: 'eventForm' })} /><WorkspaceActionQueue items={adminActionQueueItems} /><TeamLearningGoals tasks={tasks} students={students} reports={reportsWorkspace.reports} reportsReady={reportsWorkspace.enabled && !reportsWorkspace.loading && !reportsWorkspace.error} today={today} onNavigate={(page) => isAdmin ? setAdminTab(page) : setStudentTab(page)} /></>}
             <SectionDisclosure title={"Vis\u00e3o estrat\u00e9gica da equipe"} description="Indicadores completos, conquistas e controles da equipe">
             <WorkspaceCollapsible isOpen={adminPanelState.hero}>
               <WorkspaceHero
@@ -8072,7 +8114,6 @@ const handleFileSelect = (e) => {
           <WorkspaceCollapsible isOpen={adminPanelState.dashboard}>
             <div className="flex flex-col gap-6 mb-6">
               <WeeklyReportsSummary workspace={reportsWorkspace} onOpen={openWeeklyReports} />
-              <WorkspaceActionQueue items={adminActionQueueItems} />
               <WorkspacePanelToolbar
                 eyebrow="Painel Tatico"
                 panels={adminDashboardPanels}
@@ -8174,14 +8215,17 @@ const handleFileSelect = (e) => {
                 <div hidden={adminTab === 'overview'} className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(adminTab)}`}>
                   <WorkspaceScene sceneId={`admin-${adminTab}`} onHome={() => setAdminTab('overview')}><Suspense fallback={<LazyPanelFallback label="Carregando esta área…" />}>
                     {adminTab === 'giro_knowledge' && currentUser?.type === 'admin' && <GiroKnowledgeView key={activeTeamSeasonId || 'legacy'} seasonName={activeTeamSeasonName} />}
-                    {adminTab === 'weekly_reports' && <WeeklyReportsView key={focusedReportId || 'all-reports'} user={currentUser} workspace={reportsWorkspace} students={allStudents} seasonId={activeTeamSeasonId || 'legacy'} reportDueDay={effectivePlanning.reportDueDay} defaultWeek={currentWeekData?.weekName} focusedReportId={focusedReportId} />}
+                    {adminTab === 'weekly_reports' && <WeeklyReportsView key={JSON.stringify([focusedReportId, attentionTarget.revision])} user={currentUser} workspace={reportsWorkspace} tasks={tasks} onOpenTask={openLinkedTask} initialOnlyUnread={attentionTarget.kind === "reports"} students={allStudents} seasonId={activeTeamSeasonId || 'legacy'} reportDueDay={effectivePlanning.reportDueDay} defaultWeek={currentWeekData?.weekName} focusedReportId={focusedReportId} />}
                     {adminTab === 'report_recipients' && <ReportRecipientsView user={currentUser} workspace={reportsWorkspace} />}
                     {adminTab === 'shop' && <Suspense fallback={<LazyPanelFallback label="Carregando a loja do Giro…" />}><GearShopView /></Suspense>}
                     {adminTab === 'sprint' && <FinalSprintView {...finalSprintViewProps} />}
-                    {adminTab === 'evaluations' && <Suspense fallback={<LazyPanelFallback label="Carregando avaliações da reta final..." minHeightClass="min-h-[420px]" />}><FinalSprintEvaluationsView key={`${currentUser?.type}:${evaluationDraftScope}`} {...finalSprintEvaluationViewProps} /></Suspense>}
+                    {adminTab === 'evaluations' && <Suspense fallback={<LazyPanelFallback label="Carregando avaliações da reta final..." minHeightClass="min-h-[420px]" />}><FinalSprintEvaluationsView key={JSON.stringify([currentUser?.type, evaluationDraftScope, attentionTarget.revision])} {...finalSprintEvaluationViewProps} /></Suspense>}
                     {adminTab === 'students' && (
                       <Suspense fallback={<LazyPanelFallback label="Carregando gerenciamento dos alunos..." minHeightClass="min-h-[420px]" />}>
                         <StudentManagementPanel
+                          key={attentionTarget.revision}
+                          tasks={tasks} planning={effectivePlanning} assignments={finalSprintAssignments} assignmentsLoading={assignmentWorkspace.loading} assignmentsError={assignmentWorkspace.error}
+                          initialOnlyIncomplete={attentionTarget.kind === "students"}
                           students={allStudents}
                           getCurrentLevel={getCurrentLevel}
                           canManage={currentUser?.type === 'admin'}
@@ -8193,6 +8237,7 @@ const handleFileSelect = (e) => {
                           onSetBadgeStudent={setBadgeStudent}
                           onToggleEnglishChallenge={toggleEnglishChallenge}
                           onSetStudentAccess={handleSetStudentAccess}
+                          onOpenWorkload={() => openAttention("workload")}
                           onToggleActivityStatus={toggleActivityStatus}
                           onUpdateStudentSpecialty={updateStudentSpecialty}
                         />
@@ -8228,8 +8273,8 @@ const handleFileSelect = (e) => {
                     
                     {/* --- VISUALIZAÇÃO KANBAN --- */}
                     {adminTab === 'discipline' && <WorkspaceContent render={renderDisciplinePanel} />}
-                    {adminTab === 'kanban' && <KanbanView {...kanbanViewProps} />}
-                    {adminTab === 'logbook' && <LogbookView {...logbookViewProps} />}
+                    {adminTab === 'kanban' && <KanbanView key={attentionTarget.revision} {...kanbanViewProps} />}
+                    {adminTab === 'logbook' && <LogbookView key={diaryDraftIdentity} {...logbookViewProps} />}
                     {adminTab === 'agenda' && <AgendaView {...agendaViewProps} />}
                     {adminTab === 'showcase' && (
                       <PublicShowcaseAdminView
@@ -8260,6 +8305,8 @@ const handleFileSelect = (e) => {
       {/* --- ÁREA DO ALUNO --- */}
       {!isAdmin && viewAsStudent && (
         <main id="workspace-content" tabIndex={-1} aria-label={currentWorkspaceTab?.label} className="newgears-stage workspace-section-anchor p-4 md:p-8 w-full max-w-[1800px] mx-auto animate-in slide-in-from-bottom-8">
+          <TrainingQuickActions onTest={() => { setRobotSubTab("overview"); navigateWorkspace("rounds"); setQuickAction("test"); }} onTasks={() => openAttention("mine")} onDiary={() => { navigateWorkspace("logbook"); setQuickAction("diary"); }} />
+          {currentUser?.type === "student" && studentTab === "overview" && <MemberOnboarding student={viewAsStudent} seasonId={activeTeamSeasonId || "legacy"} reportsEnabled={reportsWorkspace.enabled} onNavigate={(tab) => { if (tab === "kanban") { openAttention("mine"); return; } navigateWorkspace(tab); if (tab === "logbook") setQuickAction("diary"); }} />}
           {studentTab !== 'overview' && <WorkspaceContent render={renderUrgentEventsBanner} />}
 
           {ownTournamentSelection ? <TournamentSelectionNotice key={`${viewAsStudent.id}__${activeTeamSeasonId || 'legacy'}__${ownTournamentSelection.selectedAt || ownTournamentSelection.createdAt || 'selected'}`} studentName={viewAsStudent.name || 'Integrante'} seasonName={activeTeamSeasonName} isLiteMode={isLiteMode} /> : null}
@@ -8426,10 +8473,10 @@ const handleFileSelect = (e) => {
                 {/* CONTEÃƒÅ¡DO DA ABA SELECIONADA */}
                 <div hidden={studentTab === 'overview'} className={`newgears-scene-shell px-4 pb-4 md:px-7 md:pb-7 min-h-[500px] ${getWorkspaceSceneTopPadding(studentTab)}`}>
                   <WorkspaceScene sceneId={`student-${studentTab}`} onHome={() => setStudentTab('overview')}><Suspense fallback={<LazyPanelFallback label="Carregando esta área…" />}>
-                    {studentTab === 'weekly_reports' && <WeeklyReportsView key={focusedReportId || 'all-reports'} user={currentUser} workspace={reportsWorkspace} students={allStudents} seasonId={activeTeamSeasonId || 'legacy'} reportDueDay={effectivePlanning.reportDueDay} defaultWeek={currentWeekData?.weekName} focusedReportId={focusedReportId} />}
+                    {studentTab === 'weekly_reports' && <WeeklyReportsView key={JSON.stringify([focusedReportId, attentionTarget.revision])} user={currentUser} workspace={reportsWorkspace} tasks={tasks} onOpenTask={openLinkedTask} initialOnlyUnread={attentionTarget.kind === "reports"} students={allStudents} seasonId={activeTeamSeasonId || 'legacy'} reportDueDay={effectivePlanning.reportDueDay} defaultWeek={currentWeekData?.weekName} focusedReportId={focusedReportId} />}
                     {studentTab === 'shop' && <Suspense fallback={<LazyPanelFallback label="Carregando a loja do Giro…" />}><GearShopView /></Suspense>}
                     {studentTab === 'sprint' && <FinalSprintView {...finalSprintViewProps} />}
-                    {studentTab === 'feedback' && <Suspense fallback={<LazyPanelFallback label="Carregando seu feedback..." minHeightClass="min-h-[420px]" />}><FinalSprintEvaluationsView key={`${currentUser?.type}:${evaluationDraftScope}`} {...finalSprintEvaluationViewProps} /></Suspense>}
+                    {studentTab === 'feedback' && <Suspense fallback={<LazyPanelFallback label="Carregando seu feedback..." minHeightClass="min-h-[420px]" />}><FinalSprintEvaluationsView key={JSON.stringify([currentUser?.type, evaluationDraftScope, attentionTarget.revision])} {...finalSprintEvaluationViewProps} /></Suspense>}
                     {studentTab === 'mission' && (
                         <>
                           {viewAsStudent.station ? (
@@ -8897,8 +8944,8 @@ const handleFileSelect = (e) => {
                         </Suspense>
                       </div>
                     )}
-                    {studentTab === 'kanban' && <div className="text-left"><KanbanView {...kanbanViewProps} /></div>}
-                    {studentTab === 'logbook' && <div className="text-left"><LogbookView {...logbookViewProps} /></div>}
+                    {studentTab === 'kanban' && <div className="text-left"><KanbanView key={attentionTarget.revision} {...kanbanViewProps} /></div>}
+                    {studentTab === 'logbook' && <div className="text-left"><LogbookView key={diaryDraftIdentity} {...logbookViewProps} /></div>}
                     {studentTab === 'agenda' && <div className="text-left"><AgendaView {...agendaViewProps} /></div>}
                   </Suspense></WorkspaceScene>
                 </div>

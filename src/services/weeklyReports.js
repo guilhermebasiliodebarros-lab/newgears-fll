@@ -28,11 +28,12 @@ export const notifyWeeklyReport = (id) => api(`/${encodeURIComponent(id)}/notify
 export const markWeeklyReportRead = (id) => api(`/${encodeURIComponent(id)}/read`, { method: 'POST' });
 export const getWeeklyReportFile = (id, download = false) => api(`/${encodeURIComponent(id)}/file${download ? '?download=1' : ''}`);
 
-export async function saveWeeklyReport({ id, details, file, onProgress = () => {} }) {
+export async function saveWeeklyReport({ id, details, file, expectedRevision, onProgress = () => {} }) {
   const token = await authorization();
   const form = new FormData();
-  Object.entries(details).forEach(([key, value]) => form.append(key, value));
+  Object.entries(details).forEach(([key, value]) => form.append(key, Array.isArray(value) ? JSON.stringify(value) : value));
   if (file) form.append('file', file);
+  if (id) form.append('expectedRevision', String(expectedRevision));
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open(id ? 'PATCH' : 'POST', `${baseUrl}${id ? `/${encodeURIComponent(id)}` : ''}`);
@@ -45,7 +46,11 @@ export async function saveWeeklyReport({ id, details, file, onProgress = () => {
     xhr.onload = () => {
       try {
         const data = JSON.parse(xhr.responseText);
-        if (xhr.status < 200 || xhr.status >= 300) { reject(new Error(data.error || 'Erro ao salvar o relatório.')); return; }
+        if (xhr.status < 200 || xhr.status >= 300) {
+          const error = new Error(data.error || 'Erro ao salvar o relatório.');
+          if (data.code === 'record-conflict') { error.code = data.code; error.currentRecord = data.currentRecord; }
+          reject(error); return;
+        }
         onProgress(100);
         resolve(data);
       } catch { reject(new Error('A API de relatórios não está disponível. Peça ao técnico para conferir a configuração.')); }

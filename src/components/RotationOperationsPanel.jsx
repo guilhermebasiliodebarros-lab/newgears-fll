@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import StudentAccessDialog from './StudentAccessDialog';
+import { missingStudentFields } from '../utils/workflowImprovements';
 import {
   AlertCircle,
   AlertTriangle,
@@ -566,6 +567,8 @@ const BenchStudentManagementDrawer = ({
 
 export const StudentManagementPanel = ({
   students,
+  tasks = [], planning, assignments = [], assignmentsLoading, assignmentsError, onOpenWorkload,
+  initialOnlyIncomplete = false,
   getCurrentLevel,
   canManage,
   onMoveStudent,
@@ -582,6 +585,7 @@ export const StudentManagementPanel = ({
   const [search, setSearch] = useState('');
   const [stationFilter, setStationFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('active');
+  const [onlyIncomplete, setOnlyIncomplete] = useState(initialOnlyIncomplete);
   const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [accessStudent, setAccessStudent] = useState(null);
   const activeStudents = useMemo(() => students.filter((student) => student.status !== 'inactive'), [students]);
@@ -602,9 +606,9 @@ export const StudentManagementPanel = ({
           ? !STATION_CONFIGS.some((station) => station.key === student.station)
           : student.station === stationFilter);
       const matchesStatus = statusFilter === 'all' || (statusFilter === 'inactive' ? student.status === 'inactive' : student.status !== 'inactive');
-      return matchesSearch && matchesStation && matchesStatus;
+      return matchesSearch && matchesStation && matchesStatus && (!onlyIncomplete || missingStudentFields(student).length > 0);
     })
-    .sort((left, right) => left.name.localeCompare(right.name)), [students, normalizedSearch, stationFilter, statusFilter]);
+    .sort((left, right) => left.name.localeCompare(right.name)), [students, normalizedSearch, stationFilter, statusFilter, onlyIncomplete]);
 
   const selectedStudent = students.find((student) => student.id === selectedStudentId) || null;
   const filters = [
@@ -658,6 +662,8 @@ export const StudentManagementPanel = ({
           </div>
         </div>
 
+        {onOpenWorkload && <button type="button" onClick={onOpenWorkload} className="ng-button mb-3 min-h-11">Ver carga de trabalho da equipe</button>}
+        <label className="flex min-h-11 items-center gap-2 text-sm text-amber-100"><input type="checkbox" checked={onlyIncomplete} onChange={(event) => setOnlyIncomplete(event.target.checked)} />Mostrar somente cadastros incompletos</label>
         <div className="mt-4 overflow-hidden rounded-[24px] border border-white/10 bg-black/15">
           <div className="hidden grid-cols-[minmax(0,1.5fr)_minmax(170px,0.8fr)_minmax(180px,0.8fr)_auto] gap-3 border-b border-white/10 bg-white/[0.03] px-4 py-3 text-[9px] font-black uppercase tracking-[0.16em] text-gray-500 lg:grid">
             <span>Aluno</span><span>Estacao atual</span><span>Especialidade</span><span>Acoes</span>
@@ -725,7 +731,8 @@ export const StudentManagementPanel = ({
           onUpdateStudentSpecialty={onUpdateStudentSpecialty}
         />
       )}
-      {accessStudent && <StudentAccessDialog student={accessStudent} onConfirm={onSetStudentAccess} onClose={() => setAccessStudent(null)} />}
+
+      {accessStudent && <StudentAccessDialog student={accessStudent} students={students} tasks={tasks} planning={planning} assignments={assignments} assignmentsLoading={assignmentsLoading} assignmentsError={assignmentsError} onConfirm={onSetStudentAccess} onClose={() => setAccessStudent(null)} />}
     </div>
   );
 };

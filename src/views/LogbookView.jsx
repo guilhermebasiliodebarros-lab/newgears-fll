@@ -1,8 +1,14 @@
 import DraftForm from '../components/DraftForm';
+import LinkedTaskReferences from '../components/LinkedTaskReferences';
+import { useState } from 'react';
+import TaskEvidencePicker from '../components/TaskEvidencePicker';
+import useFormShortcut from '../hooks/useFormShortcut';
 import EngineeringEntryComposer from '../components/EngineeringEntryComposer';
 import { BookOpen, Calendar, CheckCircle, Clock, Plus, Search, Trash2, UserCircle, Users } from 'lucide-react';
 
 export default function LogbookView({
+  quickFocus = false, onQuickFocusHandled,
+  tasks = [], student, onOpenTask, seasonId,
   currentWeekData,
   isAdmin,
   adminLogbookStudentQuery,
@@ -32,6 +38,8 @@ export default function LogbookView({
   handleDeleteLogbookEntry,
   handleLogbookSubmit
 }) {
+      useFormShortcut(quickFocus, '[data-draft-kind="logbook"] textarea[name="entry"]', onQuickFocusHandled);
+      const [linkedTaskIds, setLinkedTaskIds] = useState([]);
       const currentWeekValue = String(currentWeekData?.id || 'current');
       const prompts = ['Hoje eu testei...', 'O principal aprendizado foi...', 'O que deu errado foi...', 'Na proxima semana quero melhorar...'];
       const formatDiaryDate = (entry, includeTime = false) => !entry.date ? 'Data não registrada' : getLogbookEntryDate(entry).toLocaleDateString(
@@ -92,6 +100,7 @@ export default function LogbookView({
                                                   <button onClick={() => handleDeleteLogbookEntry(entry)} className="rounded-2xl border border-white/10 bg-black/20 p-3 text-gray-400 transition-all hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-300" title="Excluir Registro"><Trash2 size={15} /></button>
                                               </div>
                                               <p className="mt-5 whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-200">{entry.text}</p>
+                                              <LinkedTaskReferences ids={entry.linkedTaskIds} tasks={tasks} onOpenTask={onOpenTask} />
                                               {renderTags(tags)}
                                           </div>
                                       </article>
@@ -193,9 +202,10 @@ export default function LogbookView({
               </section>
               <div className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
                   <section className="rounded-[30px] border border-white/10 bg-[#151520] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-yellow-200">Novo registro</p><h3 className="mt-2 text-2xl font-black text-white">Escreva o que vale lembrar</h3><p className="mt-3 text-sm leading-relaxed text-gray-400">Registre testes, falhas, aprendizados e proximos passos para a equipe retomar rapido depois.</p></div><div className="inline-flex items-center gap-2 self-start rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-200"><CheckCircle size={14} /> Rascunho salvo automaticamente</div></div>
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-yellow-200">Novo registro</p><h3 className="mt-2 text-2xl font-black text-white">Escreva o que vale lembrar</h3><p className="mt-3 text-sm leading-relaxed text-gray-400">Registre testes, falhas, aprendizados e proximos passos para a equipe retomar rapido depois.</p></div><div className="inline-flex items-center gap-2 self-start rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-200"><CheckCircle size={14} /> Rascunho neste dispositivo</div></div>
                       <EngineeringEntryComposer onInsert={(text) => setStudentLogbookDraft((current) => current.includes(text) ? current : [current.trim(), text].filter(Boolean).join("\n\n"))} />
-                      <DraftForm key={currentWeekValue} kind="logbook" recordId={currentWeekValue} values={studentLogbookDraft} onDiscard={() => setStudentLogbookDraft('')} onSubmit={handleLogbookSubmit} className="mt-6 space-y-5">
+                      <DraftForm key={currentWeekValue} kind="logbook" recordId={currentWeekValue} values={{ text: studentLogbookDraft, linkedTaskIds }} onDiscard={() => { setStudentLogbookDraft(''); setLinkedTaskIds([]); }} onSubmit={async (event, draft) => { const confirmed = await handleLogbookSubmit(event, draft); if (confirmed) setLinkedTaskIds([]); return confirmed; }} className="mt-6 space-y-5">
+                          <TaskEvidencePicker seasonId={seasonId} tasks={tasks} student={student} selected={linkedTaskIds} onChange={setLinkedTaskIds} onInsert={(text) => setStudentLogbookDraft((current) => current.includes(text) ? current : [current.trim(), text].filter(Boolean).join('\n\n'))} />
                           <div className="rounded-[28px] border border-white/10 bg-black/20 p-4">
                               <div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-yellow-100">{currentWeekData?.weekName || 'Semana atual'}</span><span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">{draftWordCount} palavras</span><span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-300">{draftTags.length} hashtag(s)</span></div>
                               <textarea name="entry" value={studentLogbookDraft} onChange={(e) => setStudentLogbookDraft(e.target.value)} className="mt-4 h-40 w-full resize-none rounded-[24px] border border-white/10 bg-[#0d0d14] p-4 text-white outline-none transition-all placeholder:text-gray-500 focus:border-yellow-500" placeholder="O que aprendemos nesta semana? O que deu errado, como resolvemos e o que precisa acontecer depois?" />

@@ -1,6 +1,7 @@
 import { doc, runTransaction } from 'firebase/firestore';
 import { assertActiveSeason } from './teamProcesses.js';
 import { recordDate } from '../utils/workspaceRecords.js';
+import { RecordConflictError } from '../utils/recordConflicts.js';
 
 const adapter = { doc, runTransaction };
 const requireMember = (user) => { if (!['admin', 'student'].includes(user?.type)) throw Error('Entre na sua conta antes de alterar os dados.'); };
@@ -28,7 +29,10 @@ export async function saveEvaluation({ db, user, id, evaluation, expected, store
     const previous = snapshot.data();
     const revision = (record) => recordDate(record?.updatedAt)?.toISOString() || record?.updatedAt || null;
     const counter = (record) => Number.isSafeInteger(record?.revision) ? record.revision : 0;
-    if (snapshot.exists() !== Boolean(expected) || revision(previous) !== revision(expected) || counter(previous) !== counter(expected)) throw Error('Esta avaliação mudou em outro acesso. Confira os dados atuais antes de salvar. Seu rascunho foi mantido.');
+    if (snapshot.exists() !== Boolean(expected) || revision(previous) !== revision(expected) || counter(previous) !== counter(expected)) throw new RecordConflictError('Esta avaliação mudou em outro acesso. Compare as versões antes de salvar. Seu rascunho foi mantido.', {
+      expected, current: previous ? { ...previous, id } : null, proposed: evaluation,
+      fields: evaluation.type === 'report' ? ['total', 'note'] : ['ratings', 'strengths', 'improvement', ...(evaluation.type === 'presentation' ? ['presentedAt'] : [])],
+    });
     if (previous && (previous.studentId !== evaluation.studentId || previous.type !== evaluation.type || (previous.seasonId || 'legacy') !== evaluation.seasonId)) throw Error('A avaliação não corresponde a este integrante e temporada.');
     // Replace only the evaluation fields, including the complete ratings map.
     const next = { ...evaluation, revision: counter(previous) + 1 };

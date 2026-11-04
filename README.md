@@ -1,5 +1,9 @@
 # React + Vite
 
+Planejamento por integrante, recuperação de edições simultâneas e orientação inicial: [guia de carga de trabalho e primeiros passos](docs/workload-conflicts-onboarding.md).
+
+Atalhos de pendências, redistribuição ao inativar integrantes, tarefas vinculadas ao diário e relatórios, rascunhos e ações no celular: [guia da rotina de treino](docs/workflow-improvements.md).
+
 Fluxos de rodízio, chamada, tarefas, relatórios e encerramento de temporada: [guia dos processos da equipe](docs/team-processes.md).
 
 Resumo diário de prazos, impedimentos e relatórios: [configuração do agendador de lembretes](docs/reminders-setup.md).

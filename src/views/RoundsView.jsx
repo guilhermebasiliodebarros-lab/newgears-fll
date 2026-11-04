@@ -1,6 +1,8 @@
 import { Suspense } from 'react';
+import useFormShortcut from '../hooks/useFormShortcut';
 
 export default function RoundsView({
+  quickFocus = false, onQuickFocusHandled,
   rounds,
   robotVersions,
   missionsList,
@@ -31,6 +33,7 @@ export default function RoundsView({
   LazyPanelFallback,
   readonly = false
 }) {
+  useFormShortcut(quickFocus, '[data-draft-kind="full-round-test"] input[name="score"]', onQuickFocusHandled);
   return (
       <Suspense fallback={<LazyPanelFallback label="Carregando central de rounds..." minHeightClass="min-h-[420px]" />}>
         <RobotRoundsPanel

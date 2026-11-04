@@ -2,6 +2,9 @@ import { ApiError, authenticate, firestoreRequest, getRecord, listRecords, write
 import { MAX_REPORT_FILE_SIZE, REPORT_FILE_TYPES, validateReportBytes, validateReportDetails, validateReportFile } from '../../src/utils/weeklyReports.js';
 import { handleReminderRequest } from './reminders.js';
 import { handleCoachingRequest } from './coaching.js';
+import { belongsToStudent } from '../../src/utils/workflowImprovements.js';
+import { RecordConflictError, pickFields } from '../../src/utils/recordConflicts.js';
+import { REPORT_EDIT_FIELDS } from '../../src/utils/reportEditing.js';
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 const validId = (id) => /^[a-zA-Z0-9_-]{1,128}$/.test(id || '');
@@ -12,6 +15,11 @@ export const assertReportOwner = (user, report) => {
 };
 const assertAdmin = (user) => { if (user.role !== 'admin') throw new ApiError(403, 'Apenas o técnico pode gerenciar os destinatários.'); };
 const cleanRecord = (record) => Object.fromEntries(Object.entries(record).filter(([key]) => !key.startsWith('_')));
+const reportConflict = (current) => {
+  const error = new RecordConflictError('O relatório mudou em outro acesso. Compare as versões antes de salvar. Seu preenchimento foi mantido.', { expected: {}, current, proposed: {}, fields: REPORT_EDIT_FIELDS });
+  error.currentRecord = pickFields(current, [...REPORT_EDIT_FIELDS, 'revision', 'fileName', 'fileSize', 'fileRevision']);
+  return error;
+};
 const safeFileName = (name) => [...name].map((char) => char.charCodeAt(0) < 32 || char === '/' || char === '\\' ? '_' : char).join('').slice(0, 240);
 
 async function limitedBody(request, limit) {
@@ -75,16 +83,30 @@ async function saveReport(request, env, user, id) {
   let form;
   try { form = await new Response(body, { headers: { 'Content-Type': request.headers.get('Content-Type') || '' } }).formData(); }
   catch { throw new ApiError(400, 'Envie o relatório como formulário com arquivo.'); }
-  const details = validateReportDetails(Object.fromEntries(['title', 'description', 'week', 'reportDate'].map((key) => [key, form.get(key)])));
+  let details;
+  try { details = validateReportDetails(Object.fromEntries(['title', 'description', 'week', 'reportDate', 'linkedTaskIds'].map((key) => [key, form.get(key)]))); }
+  catch (error) { throw new ApiError(400, error.message); }
+  if (previous) {
+    const expectedRevision = form.get('expectedRevision');
+    if (expectedRevision === null || !/^\d+$/.test(expectedRevision) || !Number.isSafeInteger(Number(expectedRevision))) throw new ApiError(400, 'Atualize a página e reabra a edição para conferir a versão do relatório.');
+    if (Number(expectedRevision) !== (previous.revision || 0)) throw reportConflict(previous);
+  }
   const file = form.get('file');
   if (!previous && !file) throw new ApiError(400, 'Selecione um arquivo para publicar.');
   const reportId = id || crypto.randomUUID();
   const now = new Date().toISOString();
   const workspace = await getRecord(env, 'settings/workspace_season');
   if (workspace?.transitionLock) throw new ApiError(409, 'A temporada está sendo encerrada. Aguarde para publicar.');
-  const record = previous ? { ...cleanRecord(previous), ...details, updatedAt: now } : {
+  for (const taskId of details.linkedTaskIds) {
+    // Existing links remain meaningful even if the task is later reopened or removed.
+    if (previous?.linkedTaskIds?.includes(taskId)) continue;
+    const task = await getRecord(env, `tasks/${taskId}`);
+    const owner = previous ? { id: previous.studentId, name: previous.studentName } : { id: user.studentId, name: user.name };
+    if (!task || task.status !== 'done' || (task.seasonId || 'legacy') !== (previous?.seasonId || workspace?.activeSeasonId || 'legacy') || (user.role !== 'admin' && !belongsToStudent(task, owner))) throw new ApiError(400, 'Vincule somente tarefas concluídas da sua participação e desta temporada.');
+  }
+  const record = previous ? { ...cleanRecord(previous), ...details, revision: (previous.revision || 0) + 1, updatedAt: now } : {
     ...details, userId: user.uid, studentId: user.studentId, studentName: user.name, studentEmail: user.email,
-    createdAt: now, updatedAt: now, emailStatus: 'pending', seasonId: workspace?.activeSeasonId || 'legacy',
+    createdAt: now, updatedAt: now, revision: 1, emailStatus: 'pending', seasonId: workspace?.activeSeasonId || 'legacy',
   };
   let uploadedPath;
   try {
@@ -94,11 +116,15 @@ async function saveReport(request, env, user, id) {
       validateReportBytes(bytes, extension);
       uploadedPath = `${record.userId}/${reportId}/${crypto.randomUUID()}.${extension}`;
       await uploadDocument(env, uploadedPath, bytes, REPORT_FILE_TYPES[extension]);
-      Object.assign(record, { fileName: safeFileName(file.name), fileType: REPORT_FILE_TYPES[extension], fileExtension: extension, fileSize: bytes.length, filePath: uploadedPath, fileUrl: `/api/reports/${reportId}/file` });
+      Object.assign(record, { fileName: safeFileName(file.name), fileType: REPORT_FILE_TYPES[extension], fileExtension: extension, fileSize: bytes.length, fileRevision: (previous?.fileRevision || 0) + 1, filePath: uploadedPath, fileUrl: `/api/reports/${reportId}/file` });
     }
     await writeRecord(env, `weeklyReports/${reportId}`, record, previous ? { updateTime: previous._updateTime } : { create: true });
   } catch (error) {
     if (uploadedPath) await retireDocument(env, reportId, uploadedPath);
+    if (previous && error instanceof ApiError && error.status === 409) {
+      const current = await getRecord(env, `weeklyReports/${reportId}`);
+      if (current) throw reportConflict(current);
+    }
     throw error;
   }
   if (uploadedPath && previous?.filePath) await retireDocument(env, reportId, previous.filePath);
@@ -266,6 +292,7 @@ export async function handleReportsRequest(request, env) {
     }
     throw new ApiError(405, 'Operação não disponível.');
   } catch (error) {
+    if (error.code === 'record-conflict') return json({ error: error.message, code: error.code, currentRecord: error.currentRecord }, 409);
     if (error instanceof ApiError) return json({ error: error.message }, error.status);
     // Os validadores compartilhados lançam Error sem expor detalhes de provedores.
     if (/^(Selecione|Formato|O arquivo|O tipo|O conteúdo|Informe|O resumo)/.test(error.message || '')) return json({ error: error.message }, 400);

@@ -26,7 +26,7 @@ export async function runAppStructureTests() {
 
   for (const viewName of extractedViews) {
     assert.match(source, new RegExp(`const ${viewName} = lazy`));
-    assert.match(source, new RegExp(`<${viewName} \\{\\.\\.\\.[^}]+\\} ?/>`));
+    assert.match(source, new RegExp(`<${viewName}(?: key=\\{[^}]+\\})? \\{\\.\\.\\.[^}]+\\} ?/>`));
   }
 
   assert.match(source, /PROJECT_MAIN_DOC_ID/);

@@ -1,4 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import DraftForm from '../components/DraftForm';
+import RecordConflictResolver from '../components/RecordConflictResolver';
+import { reportEditSnapshot, reportEditConflict } from '../utils/reportEditing';
+import LinkedTaskReferences from '../components/LinkedTaskReferences';
+import TaskEvidencePicker from '../components/TaskEvidencePicker';
 import { Bell, Check, Download, FileText, LoaderCircle, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react';
 import { canManageReport, filterWeeklyReports, formatReportSize, localReportDate, validateReportDetails, validateReportFile, weekStartFor } from '../utils/weeklyReports';
 import { deleteWeeklyReport, getWeeklyReportFile, markWeeklyReportRead, notifyWeeklyReport, saveWeeklyReport } from '../services/weeklyReports';
@@ -11,10 +16,15 @@ const fieldClass = 'w-full rounded-xl border border-white/15 bg-[#101520] p-3 te
 const dateLabel = (value, includeTime = false) => value ? new Date(value.length === 10 ? `${value}T12:00:00Z` : value).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', ...(includeTime ? { hour: '2-digit', minute: '2-digit' } : {}) }) : '';
 const emptyFilters = { search: '', student: '', week: '', month: '', year: '' };
 
-function ReportForm({ report, user, defaultWeek, onClose, onSaved }) {
+function ReportForm({ report, user, defaultWeek, tasks, seasonId, onClose, onSaved }) {
   const today = localReportDate();
   const [details, setDetails] = useState({ title: report?.title || '', week: report?.week || defaultWeek || `Semana de ${dateLabel(weekStartFor(today))}`, reportDate: report?.reportDate || today, description: report?.description || '' });
+  const [linkedTaskIds, setLinkedTaskIds] = useState(report?.linkedTaskIds || []);
   const [file, setFile] = useState(null);
+  const [fileNamesOverride, setFileNamesOverride] = useState(undefined);
+  const [expectedRecord, setExpectedRecord] = useState(() => reportEditSnapshot(report));
+  const [conflictRecord, setConflictRecord] = useState(null);
+  const [resolutionNotice, setResolutionNotice] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -30,19 +40,20 @@ function ReportForm({ report, user, defaultWeek, onClose, onSaved }) {
   }, []);
   const selectFile = (candidate) => {
     if (saving) return;
-    try { validateReportFile(candidate); setFile(candidate); setError(''); }
+    try { validateReportFile(candidate); setFile(candidate); setFileNamesOverride([candidate.name]); setError(''); }
     catch (issue) { setError(issue.message); }
   };
   const submit = async (event) => {
     event.preventDefault();
     if (saving) return;
     try {
-      const values = validateReportDetails(details);
+      const values = validateReportDetails({ ...details, linkedTaskIds });
       if (file || !report) validateReportFile(file);
       setError(''); setSaving(true); setProgress(0);
-      const result = await saveWeeklyReport({ id: report?.id, details: values, file, onProgress: setProgress });
+      const result = await saveWeeklyReport({ id: report?.id, details: values, file, expectedRevision: expectedRecord.revision, onProgress: setProgress });
       onSaved(result.report, !report);
-    } catch (issue) { setError(issue.message); }
+      return true;
+    } catch (issue) { if (issue.code === "record-conflict") setConflictRecord(issue.currentRecord); setError(issue.message); throw issue; }
     finally { setSaving(false); }
   };
   const handleDialogKeys = (event) => {
@@ -59,31 +70,35 @@ function ReportForm({ report, user, defaultWeek, onClose, onSaved }) {
       <section role="dialog" aria-modal="true" aria-labelledby="report-form-title" onKeyDown={handleDialogKeys} className="newgears-modal-frame newgears-modal-scrollable max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/15 bg-[#151925] p-5 md:p-7">
         <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold text-cyan-200">Memória compartilhada da equipe</p><h2 id="report-form-title" className="mt-2 text-2xl font-black text-white">{report ? 'Editar relatório' : 'Novo relatório'}</h2></div><button ref={closeRef} type="button" aria-label="Fechar formulário" disabled={saving} onClick={onClose} className="rounded-lg border border-white/10 p-2 text-gray-300 disabled:opacity-40"><X size={18} /></button></div>
         <p className="mt-4 rounded-xl bg-white/5 p-3 text-xs text-gray-300">Autor: <strong className="text-white">{report?.studentName || user.name}</strong> · {report?.studentEmail || user.email}</p>
-        <form onSubmit={submit} className="mt-5 space-y-4">
-          <label className="block text-xs font-bold text-gray-300">Título do relatório<input required maxLength={160} disabled={saving} value={details.title} onChange={(event) => setDetails({ ...details, title: event.target.value })} className={`${fieldClass} mt-2`} placeholder="Ex.: Pesquisa sobre sensores do robô" /></label>
-          <div className="grid gap-4 sm:grid-cols-2"><label className="block text-xs font-bold text-gray-300">Semana<input required maxLength={80} disabled={saving} value={details.week} onChange={(event) => setDetails({ ...details, week: event.target.value })} className={`${fieldClass} mt-2`} placeholder="Ex.: Semana 3" /></label><label className="block text-xs font-bold text-gray-300">Data do relatório<input type="date" required disabled={saving} value={details.reportDate} onChange={(event) => setDetails({ ...details, reportDate: event.target.value })} className={`${fieldClass} mt-2`} /></label></div>
-          <label className="block text-xs font-bold text-gray-300">Descrição / resumo (opcional)<textarea maxLength={4000} rows={3} disabled={saving} value={details.description} onChange={(event) => setDetails({ ...details, description: event.target.value })} className={`${fieldClass} mt-2 resize-y`} placeholder="Conte rapidamente o que pesquisou, desenvolveu ou testou." /></label>
-          <input ref={inputRef} type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" disabled={saving} onChange={(event) => { if (event.target.files?.[0]) selectFile(event.target.files[0]); event.target.value = ''; }} />
+        <DraftForm fileNamesOverride={fileNamesOverride} kind="weekly-report" recordId={report?.id || "new"} scope={JSON.stringify([user.uid, seasonId])} values={{ ...details, linkedTaskIds, expectedRecord }} onDiscard={() => { setDetails({ title: report?.title || "", week: report?.week || defaultWeek || "", reportDate: report?.reportDate || today, description: report?.description || "" }); setLinkedTaskIds(report?.linkedTaskIds || []); setFile(null); setFileNamesOverride([]); setExpectedRecord(reportEditSnapshot(report)); setConflictRecord(null); }} onSubmit={submit} className="mt-5 space-y-4">
+          <input type="hidden" name="expectedReport" value={JSON.stringify(expectedRecord)} onInput={(event) => { try { const saved = JSON.parse(event.target.value); if (Number.isSafeInteger(saved.revision)) setExpectedRecord(saved); } catch { /* Keep the current reference for invalid local drafts. */ } }} />
+          <TaskEvidencePicker seasonId={seasonId} tasks={tasks} student={{ id: user.studentId || user.data?.id, name: user.name }} technical={user.type === "admin"} selected={linkedTaskIds} onChange={setLinkedTaskIds} currentText={details.description} maxLength={4000} onInsert={(text) => setDetails((current) => ({ ...current, description: current.description.includes(text) ? current.description : [current.description.trim(), text].filter(Boolean).join("\n\n") }))} />
+          <label className="block text-xs font-bold text-gray-300">Título do relatório<input name="title" required maxLength={160} disabled={saving} value={details.title} onChange={(event) => { const value = event.target.value; setDetails((current) => ({ ...current, title: value })); }} className={`${fieldClass} mt-2`} placeholder="Ex.: Pesquisa sobre sensores do robô" /></label>
+          <div className="grid gap-4 sm:grid-cols-2"><label className="block text-xs font-bold text-gray-300">Semana<input name="week" required maxLength={80} disabled={saving} value={details.week} onChange={(event) => { const value = event.target.value; setDetails((current) => ({ ...current, week: value })); }} className={`${fieldClass} mt-2`} placeholder="Ex.: Semana 3" /></label><label className="block text-xs font-bold text-gray-300">Data do relatório<input name="reportDate" type="date" required disabled={saving} value={details.reportDate} onChange={(event) => { const value = event.target.value; setDetails((current) => ({ ...current, reportDate: value })); }} className={`${fieldClass} mt-2`} /></label></div>
+          <label className="block text-xs font-bold text-gray-300">Descrição / resumo (opcional)<textarea name="description" maxLength={4000} rows={3} disabled={saving} value={details.description} onChange={(event) => { const value = event.target.value; setDetails((current) => ({ ...current, description: value })); }} className={`${fieldClass} mt-2 resize-y`} placeholder="Conte rapidamente o que pesquisou, desenvolveu ou testou." /></label>
+          <input name="document" ref={inputRef} type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" disabled={saving} onChange={(event) => { if (event.target.files?.[0]) selectFile(event.target.files[0]); }} />
           <button type="button" disabled={saving} onClick={() => inputRef.current?.click()} onDragOver={(event) => { event.preventDefault(); if (!saving) setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); if (event.dataTransfer.files.length !== 1) { setError('Selecione apenas um arquivo por relatório.'); return; } selectFile(event.dataTransfer.files[0]); }} className={`flex w-full flex-col items-center gap-2 rounded-2xl border-2 border-dashed p-6 text-center disabled:opacity-60 ${dragging ? 'border-cyan-300 bg-cyan-300/10' : 'border-white/20 bg-black/15 hover:border-cyan-300/50'}`}>
             <Upload size={25} className="text-cyan-200" /><span className="text-sm font-bold text-white">{file ? file.name : report ? 'Clique ou arraste para substituir o arquivo' : 'Clique ou arraste seu relatório aqui'}</span><span className="text-xs text-gray-400">{file ? formatReportSize(file.size) : 'PDF, DOC ou DOCX · até 10 MB'}</span>
           </button>
-          {report && !file && <p className="break-all text-xs text-gray-400">Arquivo atual: {report.fileName} · {formatReportSize(report.fileSize)}. Será mantido se você não escolher outro.</p>}
+          {report && !file && <p className="break-all text-xs text-gray-400">Arquivo atual: {expectedRecord.document?.fileName || report.fileName} · {formatReportSize(expectedRecord.document?.fileSize || report.fileSize)}. Será mantido se você não escolher outro.</p>}
           {saving && <div role="status" aria-live="polite"><div className="flex justify-between text-xs text-cyan-100"><span>{progress >= 99 ? 'Validando e salvando o relatório…' : 'Enviando arquivo…'}</span><span>{progress}%</span></div><progress value={progress} max="100" className="mt-2 h-2 w-full accent-cyan-300" /></div>}
+          {conflictRecord && <RecordConflictResolver key={conflictRecord.revision || 0} conflict={reportEditConflict(expectedRecord, conflictRecord, { ...details, linkedTaskIds }, file)} labels={{ title: "Título", description: "Resumo", week: "Semana", reportDate: "Data", linkedTaskIds: "Tarefas vinculadas", document: "Documento anexado" }} format={(value, field) => field === "document" ? value ? value.fileName + " · " + formatReportSize(value.fileSize) + (value.fileRevision === "local-upload" ? " · arquivo selecionado neste dispositivo" : " · versão " + value.fileRevision) : "Sem documento" : field === "linkedTaskIds" && Array.isArray(value) ? value.map((id) => tasks.find((task) => task.id === id)?.text || id).join("\n") : undefined} onResolve={(merged) => { setDetails({ title: merged.title || "", description: merged.description || "", week: merged.week || "", reportDate: merged.reportDate || today }); setLinkedTaskIds(merged.linkedTaskIds || []); if (merged.document?.fileRevision !== "local-upload") { setFile(null); setFileNamesOverride([]); if (inputRef.current) inputRef.current.value = ""; } setExpectedRecord(reportEditSnapshot(conflictRecord)); setConflictRecord(null); setError(""); setResolutionNotice("Escolhas aplicadas. Confira o relatório e salve novamente."); }} onCancel={() => setConflictRecord(null)} />}
+          {resolutionNotice && <p role="status" className="text-xs text-cyan-100">{resolutionNotice}</p>}
           {error && <p role="alert" className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200">{error}</p>}
-          <div className="flex flex-wrap justify-end gap-2 border-t border-white/10 pt-4"><button type="button" disabled={saving} onClick={onClose} className="rounded-xl border border-white/15 px-4 py-3 text-sm text-gray-300 disabled:opacity-40">Cancelar</button><button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 disabled:opacity-50">{saving ? <LoaderCircle size={16} className="animate-spin" /> : <Upload size={16} />}{saving ? 'Salvando…' : report ? 'Salvar alterações' : 'Publicar relatório'}</button></div>
-        </form>
+          <div className="flex flex-wrap justify-end gap-2 border-t border-white/10 pt-4"><button type="button" disabled={saving} onClick={onClose} className="rounded-xl border border-white/15 px-4 py-3 text-sm text-gray-300 disabled:opacity-40">Cancelar</button><button type="submit" disabled={saving || Boolean(conflictRecord)} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 disabled:opacity-50">{saving ? <LoaderCircle size={16} className="animate-spin" /> : <Upload size={16} />}{saving ? 'Salvando…' : report ? 'Salvar alterações' : 'Publicar relatório'}</button></div>
+        </DraftForm>
       </section>
     </div>
   );
 }
 
-export default function WeeklyReportsView({ user, workspace, defaultWeek, focusedReportId = '', students = [], seasonId = 'legacy', reportDueDay = 5 }) {
+export default function WeeklyReportsView({ user, workspace, defaultWeek, focusedReportId = '', students = [], seasonId = 'legacy', reportDueDay = 5, tasks = [], initialOnlyUnread = false, onOpenTask }) {
   const { readIds, loading, error, enabled, retry } = workspace;
   const focusedReport = focusedReportId ? workspace.reports.find((report) => report.id === focusedReportId) : null;
   const viewedSeasonId = focusedReport ? focusedReport.seasonId || 'legacy' : seasonId;
   const reports = workspace.reports.filter((report) => (report.seasonId || 'legacy') === viewedSeasonId);
   const [filters, setFilters] = useState(emptyFilters);
-  const [onlyUnread, setOnlyUnread] = useState(false);
+  const [onlyUnread, setOnlyUnread] = useState(initialOnlyUnread);
   const [formReport, setFormReport] = useState(undefined);
   const [notice, setNotice] = useState(null);
   const [busyId, setBusyId] = useState('');
@@ -142,13 +157,14 @@ export default function WeeklyReportsView({ user, workspace, defaultWeek, focuse
         return <article key={report.id} id={`weekly-report-${report.id}`} className={`scroll-mt-24 rounded-[24px] border bg-[#141925] p-5 ${focusedReportId === report.id ? 'border-cyan-300 ring-1 ring-cyan-300/40' : 'border-white/10'}`}>
           <div className="flex flex-wrap items-center justify-between gap-2"><span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-bold text-cyan-100">{report.week}</span><span className={`text-xs ${read ? 'text-gray-400' : 'font-bold text-amber-200'}`}>{own ? 'Seu relatório' : read ? 'Lido' : '● Não lido'}</span></div>
           <h3 className="mt-4 text-lg font-black text-white">{report.title}</h3><p className="mt-2 text-sm font-bold text-gray-200">{report.studentName}</p><p className="mt-1 break-all text-xs text-gray-400">{report.studentEmail}</p><p className="mt-2 text-xs text-gray-400">Data: {dateLabel(report.reportDate)} · Enviado em {dateLabel(report.createdAt, true)}</p>
+          <LinkedTaskReferences ids={report.linkedTaskIds} tasks={tasks} onOpenTask={onOpenTask} />
           {report.description && <p className="mt-4 whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-300">{report.description}</p>}
           <div className="mt-4 flex items-start gap-2 rounded-xl bg-white/5 p-3"><FileText size={17} className="mt-0.5 shrink-0 text-cyan-200" /><div className="min-w-0"><p className="break-all text-xs font-bold text-gray-200">{report.fileExtension?.toUpperCase()} — {report.fileName}</p><p className="mt-1 text-xs text-gray-400">{formatReportSize(report.fileSize)}</p></div></div>
           <div className="mt-4 flex flex-wrap gap-2">{report.fileExtension === 'pdf' && <button disabled={busy} onClick={() => openFile(report, false)} className="rounded-lg bg-cyan-300 px-3 py-2 text-xs font-black text-slate-950 disabled:opacity-50">Visualizar PDF</button>}<button disabled={busy} onClick={() => openFile(report, true)} className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-xs font-bold text-gray-200 disabled:opacity-50"><Download size={13} />Baixar{report.fileExtension !== 'pdf' ? ' Word' : ''}</button>{!read && <button disabled={busy} onClick={() => runAction(report, () => markWeeklyReportRead(report.id))} className="inline-flex items-center gap-1.5 px-2 py-2 text-xs text-cyan-200"><Check size={13} />Marcar como lido</button>}{manage && <><button disabled={busy} onClick={() => setFormReport(report)} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs text-gray-300"><Pencil size={13} />Editar</button><button disabled={busy} onClick={() => { if (window.confirm(`Excluir “${report.title}” e seu arquivo? Esta ação não pode ser desfeita.`)) runAction(report, () => deleteWeeklyReport(report.id), 'Relatório excluído.'); }} className="inline-flex items-center gap-1.5 rounded-lg border border-red-300/15 px-3 py-2 text-xs text-red-200"><Trash2 size={13} />Excluir</button></>}</div>
           {manage && <div className="mt-4 border-t border-white/5 pt-3 text-xs text-gray-400"><p>E-mail: {({ sent: 'envio concluído', sending: 'processando', failed: 'falha no envio', not_configured: 'aguardando configuração', pending: 'aguardando envio' })[report.emailStatus] || 'aguardando envio'}</p>{report.emailStatus !== 'sent' && <button disabled={busy} onClick={() => runAction(report, async () => { const result = await notifyWeeklyReport(report.id); setNotice({ success: result.emailStatus === 'sent', message: result.emailStatus === 'sent' ? 'Envio de e-mail concluído.' : result.message || 'Envio em processamento.' }); })} className="mt-2 font-bold text-cyan-200 hover:underline disabled:opacity-50">Tentar e-mail novamente</button>}</div>}
         </article>;
       })}</section>
-      {formReport !== undefined && <ReportForm report={formReport} user={user} defaultWeek={defaultWeek} onClose={() => setFormReport(undefined)} onSaved={saved} />}
+      {formReport !== undefined && <ReportForm report={formReport} user={user} defaultWeek={defaultWeek} tasks={tasks} seasonId={formReport ? formReport.seasonId || "legacy" : seasonId} onClose={() => setFormReport(undefined)} onSaved={saved} />}
     </div>
   );
 }

@@ -135,9 +135,20 @@ export async function runWeeklyReportsTests() {
     assert.equal((await call('alice', '', 'POST', form('oversized.pdf', new Uint8Array(MAX_REPORT_FILE_SIZE + 1)))).status, 400);
     assert.equal((await call('alice', '', 'POST', form(), undefined, { 'Content-Length': String(MAX_REPORT_FILE_SIZE + 200000) })).status, 413);
     assert.equal(files.size, 0);
-    const created = await call('alice', '', 'POST', form());
+    setRecord('tasks/own-done', { seasonId: 'legacy', status: 'done', participants: [{ id: 'student-alice', name: 'alice' }] });
+    setRecord('tasks/other-done', { seasonId: 'legacy', status: 'done', participants: [{ id: 'student-bob', name: 'bob' }] });
+    setRecord('tasks/own-open', { seasonId: 'legacy', status: 'doing', participants: [{ id: 'student-alice', name: 'alice' }] });
+    setRecord('tasks/old-season', { seasonId: 'archived', status: 'done', participants: [{ id: 'student-alice', name: 'alice' }] });
+    for (const taskId of ['other-done', 'own-open', 'old-season', '../invalid']) {
+      const invalidLinked = form(); invalidLinked.set('linkedTaskIds', JSON.stringify([taskId]));
+      assert.equal((await call('alice', '', 'POST', invalidLinked)).status, 400, 'invalid task links must be refused before upload');
+    }
+    assert.equal(files.size, 0);
+    const linkedForm = form(); linkedForm.set('linkedTaskIds', '["own-done"]');
+    const created = await call('alice', '', 'POST', linkedForm);
     assert.equal(created.status, 201);
     const report = created.data.report;
+    assert.deepEqual(report.linkedTaskIds, ['own-done']);
     assert.equal(report.userId, 'alice'); assert.equal(report.studentName, 'alice'); assert.equal(report.studentEmail, 'alice@example.com');
     assert.equal(report.weekStart, '2026-10-05'); assert.equal(report.fileExtension, 'pdf');
     assert.equal(files.size, 1);
@@ -160,11 +171,21 @@ export async function runWeeklyReportsTests() {
     assert.equal(signed.status, 200); assert.equal(new URL(signed.data.url).searchParams.get('download'), 'report.pdf');
     assert.equal((await call('bob', `/${report.id}/read`, 'POST')).status, 200);
     assert.ok(records.has(`weeklyReportReads/bob/reports/${report.id}`));
-    const updated = await call('coach', `/${report.id}`, 'PATCH', form());
+    assert.equal((await call('coach', `/${report.id}`, 'PATCH', form())).status, 400, 'edits need an explicit base revision');
+    const editForm = form(); editForm.set('expectedRevision', String(report.revision));
+    const updated = await call('coach', `/${report.id}`, 'PATCH', editForm);
     assert.equal(updated.status, 200); assert.equal(updated.data.report.userId, 'alice'); assert.equal(updated.data.report.studentName, 'alice');
     assert.notEqual(updated.data.report.filePath, report.filePath); assert.equal(files.size, 1); assert.ok(!files.has(report.filePath));
+    const staleForm = form(); staleForm.set('expectedRevision', String(report.revision));
+    const staleEdit = await call('alice', `/${report.id}`, 'PATCH', staleForm);
+    assert.equal(staleEdit.status, 409);
+    assert.equal(staleEdit.data.code, 'record-conflict');
+    assert.equal(staleEdit.data.currentRecord.revision, updated.data.report.revision);
+    assert.equal('filePath' in staleEdit.data.currentRecord, false, 'comparison does not expose storage internals');
+    assert.equal(files.size, 1, 'a stale version must be refused before uploading a replacement');
     conflictReportId = report.id;
-    assert.equal((await call('alice', `/${report.id}`, 'PATCH', form())).status, 409);
+    const concurrentForm = form(); concurrentForm.set('expectedRevision', String(updated.data.report.revision));
+    assert.equal((await call('alice', `/${report.id}`, 'PATCH', concurrentForm)).status, 409);
     assert.equal(files.size, 1); assert.ok(files.has(updated.data.report.filePath));
     const recipientBody = JSON.stringify({ name: 'Bob', email: 'bob@example.com', active: true, notificationsEnabled: true });
     assert.equal((await call('alice', '/recipients', 'POST', recipientBody, undefined, { 'Content-Type': 'application/json' })).status, 403);

@@ -36,8 +36,12 @@ import { runClientDiagnosticsTests } from './clientDiagnostics.test.js';
 import { runGearAccessoriesTests } from './gearAccessories.test.js';
 import { runAuditCorrectionsTests } from './auditCorrections.test.js';
 import { runStudentAccessTests } from './studentAccess.test.js';
+import { runWorkflowImprovementsTests } from './workflowImprovements.test.js';
+import { runWorkloadAndConflictsTests } from './workloadAndConflicts.test.js';
 
 const suites = [
+  { name: 'workloadAndConflicts', run: runWorkloadAndConflictsTests },
+  { name: 'workflowImprovements', run: runWorkflowImprovementsTests },
   { name: 'studentAccess', run: runStudentAccessTests },
   { name: 'learningFeatures', run: runLearningFeaturesTests },
   { name: 'coaching', run: runCoachingTests },
