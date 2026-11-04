@@ -56,6 +56,7 @@ import { adjustStudentXp, undoStudentXp, reviewLeaderPenalty, saveSchoolGrades, 
 import { readInlineMedia } from './utils/inlineMedia';
 import { legacySessionIdentity } from './utils/legacySession';
 import { setStudentAccess } from './services/studentAccess';
+import { INACTIVE_STUDENT_MESSAGE, resolveLegacyStudentLogin } from './utils/studentAccess';
 import { browserStorage } from './utils/browserStorage';
 import { reportClientIssue, setDiagnosticsContext } from './services/clientDiagnostics';
 const AgendaView = lazy(() => import('./views/AgendaView'));
@@ -1969,11 +1970,8 @@ function App() {
         browserStorage.setItem("roboquest_user", JSON.stringify(legacySessionIdentity(userObj))); // Salva na memória
         return;
     }
-    // 2. Tenta logar como Aluno (busca no array 'students' que já existe no seu código)
-    // Nota: Certifique-se de que o cadastro de aluno salva 'username' e 'password'
-    const studentFound = students.find(s => 
-        isActiveStudent(s) && s.username && s.username.toLowerCase().trim() === userClean && s.password === passClean
-    );
+    // Valida as credenciais antes de informar que o acesso foi inativado.
+    const { student: studentFound, error } = resolveLegacyStudentLogin(allStudents, loginUser, loginPass);
 
     if (studentFound) {
         const userObj = { type: 'student', data: studentFound };
@@ -1982,7 +1980,7 @@ function App() {
         setViewAsStudent(studentFound); // Força a visão para este aluno
         browserStorage.setItem("roboquest_user", JSON.stringify(legacySessionIdentity(userObj))); // Salva na memória
     } else {
-        // Log para ajudar a descobrir o erro (veja no F12)        setLoginError("Usuário ou senha incorretos.");
+        setLoginError(error);
     }
   };
 
@@ -2375,7 +2373,7 @@ function App() {
         setCurrentUser(null); setViewAsStudent(null); setIsAdmin(false); persistStoredUser(null);
         setModal({ type: null, data: null });
         setLoginPass('');
-        setLoginError(fresh ? 'Seu acesso está inativo. Procure o técnico da equipe.' : 'Seu cadastro não está disponível. Procure o técnico da equipe.');
+        setLoginError(fresh ? INACTIVE_STUDENT_MESSAGE : 'Seu cadastro não está disponível. Procure o técnico da equipe.');
         if (FIREBASE_AUTH_ENABLED) void signOut(auth).catch(() => {});
         return;
       }
@@ -7574,7 +7572,7 @@ const handleFileSelect = (e) => {
                       </div>
 
                       {loginError && (
-                          <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg flex items-center gap-2 animate-in slide-in-from-top-2">
+                          <div role="alert" className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg flex items-start gap-2 animate-in slide-in-from-top-2">
                               <AlertCircle size={16} className="text-red-500 shrink-0" />
                               <p className="text-red-400 text-xs font-bold">{loginError}</p>
                           </div>

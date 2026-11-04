@@ -119,7 +119,10 @@ export async function runWeeklyReportsTests() {
     records.delete('students/student-alice');
     assert.equal((await call('alice', '/session')).status, 403);
     setRecord('students/student-alice', { status: 'inactive' });
-    assert.equal((await call('alice', '/session')).status, 403);
+    const inactiveSession = await call('alice', '/session');
+    assert.equal(inactiveSession.status, 403);
+    assert.match(inactiveSession.data.error, /não faz mais parte da equipe New Gears/);
+    assert.match(inactiveSession.data.error, /entre em contato com o técnico/);
     setRecord('students/student-alice', { status: 'active' });
     accountState.get('alice').disabled = true;
     assert.equal((await call('alice', '/session')).status, 401);

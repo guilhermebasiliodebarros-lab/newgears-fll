@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { setStudentAccess } from '../src/services/studentAccess.js';
 import { memoryStore } from './teamProcesses.test.js';
+import { INACTIVE_STUDENT_MESSAGE, resolveLegacyStudentLogin } from '../src/utils/studentAccess.js';
 
 export async function runStudentAccessTests() {
   const original = {
@@ -16,6 +17,13 @@ export async function runStudentAccessTests() {
     'studentGearProfiles/a': { coins: 200 },
     'tasks/task': { participants: [{ id: 'a', name: 'Aluno' }], status: 'done' },
   };
+  assert.equal(resolveLegacyStudentLogin([original], ' ALUNO ', ' existing-password ').student, original);
+  const inactiveLogin = { ...original, status: 'inactive' };
+  assert.deepEqual(resolveLegacyStudentLogin([inactiveLogin], 'aluno', 'existing-password'), { student: null, error: INACTIVE_STUDENT_MESSAGE });
+  for (const roster of [[original], [inactiveLogin]]) {
+    assert.deepEqual(resolveLegacyStudentLogin(roster, 'aluno', 'wrong-password'), { student: null, error: 'Usuário ou senha incorretos.' });
+    assert.deepEqual(resolveLegacyStudentLogin(roster, 'unknown', 'existing-password'), { student: null, error: 'Usuário ou senha incorretos.' });
+  }
   const memory = memoryStore({ 'students/a': original, ...history });
   const options = { db: {}, user: { type: 'admin', uid: 'coach' }, actor: 'Técnico', studentId: 'a', seasonId: 'current', store: memory.store };
 
@@ -49,6 +57,7 @@ export async function runStudentAccessTests() {
   await setStudentAccess({ ...options, active: true });
   const restored = memory.records.get('students/a');
   assert.deepEqual(restored, { ...original, status: 'active', archivedAt: null, archivedBy: null });
+  assert.equal(resolveLegacyStudentLogin([restored], 'aluno', 'existing-password').student, restored);
   for (const [path, data] of Object.entries(history)) assert.deepEqual(memory.records.get(path), data);
   assert.equal(logs().length, 2);
   assert.match(logs()[1].action, /reativou/);
