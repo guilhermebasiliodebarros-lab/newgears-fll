@@ -55,6 +55,7 @@ import { studentAttendanceStats, studentLevel } from './utils/studentMetrics';
 import { adjustStudentXp, undoStudentXp, reviewLeaderPenalty, saveSchoolGrades, claimEnglishReward, changeStudentBadge } from './services/studentXp';
 import { readInlineMedia } from './utils/inlineMedia';
 import { legacySessionIdentity } from './utils/legacySession';
+import { setStudentAccess } from './services/studentAccess';
 import { browserStorage } from './utils/browserStorage';
 import { reportClientIssue, setDiagnosticsContext } from './services/clientDiagnostics';
 const AgendaView = lazy(() => import('./views/AgendaView'));
@@ -741,8 +742,7 @@ const resolveStudentFromStoredUser = (user, students) => {
   const studentId = snapshot?.id || user.studentId || user.id || null;
 
   if (studentId) {
-    const matchById = students.find((student) => student.id === studentId);
-    if (matchById) return matchById;
+    return students.find((student) => student.id === studentId) || null;
   }
 
   const username = normalizeLookupValue(snapshot?.username || user.username);
@@ -2358,7 +2358,7 @@ function App() {
         return onSnapshot(scoped, (snapshot) => {
             const data = snapshot.docs.map((docSnap) => mapRecord(normalizeWorkspaceRecord(colName, { ...docSnap.data(), id: docSnap.id })));
             console.log(`✅ ${colName} carregados com sucesso:`, data.length);
-            setter(SEASON_COLLECTIONS.includes(colName) && seasonLifecycleReady ? data.filter((record) => !record.seasonId || record.seasonId === activeTeamSeasonId) : data);
+            setter(SEASON_COLLECTIONS.includes(colName) && seasonLifecycleReady ? data.filter((record) => !record.seasonId || record.seasonId === activeTeamSeasonId) : data, snapshot.metadata);
         }, (error) => {
             reportClientIssue(error, { area: colName });
             console.error(`❌ ERRO CRÍTICO em ${colName}:`, error);
@@ -2366,17 +2366,19 @@ function App() {
         });
     };
 
-    const unsubStudents = createListener("students", (records) => {
+    const unsubStudents = createListener("students", (records, metadata) => {
       setStudents(records);
       if (currentUser?.type !== 'student') return;
       const identity = currentUser.studentId || currentUser.data?.id;
-      if (records.some((student) => student.id === identity && student.status === 'inactive')) {
+      const fresh = resolveStudentFromStoredUser(currentUser, records);
+      if (fresh?.status === 'inactive' || (identity && !fresh && !metadata.fromCache)) {
         setCurrentUser(null); setViewAsStudent(null); setIsAdmin(false); persistStoredUser(null);
-        setLoginError('Seu cadastro foi arquivado. Pe\u00e7a ao t\u00e9cnico para reativ\u00e1-lo.');
+        setModal({ type: null, data: null });
+        setLoginPass('');
+        setLoginError(fresh ? 'Seu acesso está inativo. Procure o técnico da equipe.' : 'Seu cadastro não está disponível. Procure o técnico da equipe.');
         if (FIREBASE_AUTH_ENABLED) void signOut(auth).catch(() => {});
         return;
       }
-      const fresh = resolveStudentFromStoredUser(currentUser, records.filter(isActiveStudent));
       if (fresh) { setViewAsStudent(fresh); showStudentXpLossNotice(fresh); }
     }, normalizeStudentRecord);
 
@@ -3366,18 +3368,9 @@ function App() {
       }
   }
 
- // 2. A função de excluir:
-const handleDeleteStudent = async (studentId) => {
-    if (!isAdmin) return;
-    const student = allStudents.find((item) => item.id === studentId);
-    if (!student) return;
-    const inactive = student.status === 'inactive';
-    if (!window.confirm((inactive ? 'Reativar ' : 'Arquivar ') + student.name + '? Seu histórico será preservado.')) return;
-    try {
-      await updateDoc(doc(db, 'students', studentId), { status: inactive ? 'active' : 'inactive', archivedAt: inactive ? null : new Date().toISOString(), archivedBy: inactive ? null : adminProfile?.name || 'Técnico' });
-      void recordActivity({ action: inactive ? 'reativou um integrante' : 'arquivou um integrante', category: 'team', title: student.name, entityId: studentId });
-      showNotification(inactive ? 'Aluno reativado. Inclua-o no planejamento quando desejar.' : 'Aluno arquivado com histórico preservado.');
-    } catch (error) { showNotification(error.message, 'error'); }
+const handleSetStudentAccess = async (studentId, active) => {
+    await setStudentAccess({ db, user: currentUser, studentId, active, actor: adminProfile?.name, seasonId: activeTeamSeasonId || 'legacy' });
+    showNotification(active ? 'Acesso reativado. Confira o planejamento do aluno.' : 'Acesso inativado. Todos os dados e relatórios foram preservados.');
 };
 
 const handleDeleteRound = async (id) => {
@@ -8201,7 +8194,7 @@ const handleFileSelect = (e) => {
                           onOpenNewStudentModal={openNewStudentModal}
                           onSetBadgeStudent={setBadgeStudent}
                           onToggleEnglishChallenge={toggleEnglishChallenge}
-                          onDeleteStudent={handleDeleteStudent}
+                          onSetStudentAccess={handleSetStudentAccess}
                           onToggleActivityStatus={toggleActivityStatus}
                           onUpdateStudentSpecialty={updateStudentSpecialty}
                         />

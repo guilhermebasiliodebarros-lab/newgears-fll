@@ -44,9 +44,13 @@ No acesso autenticado, o técnico encontra **Entregas esperadas da semana** em R
 
 Dispensas exigem motivo e podem ser removidas pelo técnico. Elas são gravadas pela API autenticada; falhas no carregamento não são interpretadas como falta de entrega. Novos relatórios recebem a temporada ativa no servidor. Arquivos antigos sem temporada pertencem ao ciclo legado e continuam consultáveis no histórico e por seus links.
 
-## Arquivar e reativar alunos
+## Inativar e reativar o acesso de alunos
 
-Em **Alunos**, o filtro alterna Ativos, Arquivados e Todos os cadastros. **Arquivar aluno** preserva seus registros, remove o integrante dos fluxos ativos e impede o login. **Reativar aluno** devolve o cadastro à equipe; inclua-o novamente na escala quando desejar. Editar o perfil não sobrescreve XP, presença ou entregas com valores antigos do formulário.
+Em **Alunos → Gerenciar → Inativar acesso**, confira o nome e use **Confirmar inativação**. Relatórios, arquivos, diário, tarefas, avaliações, notas, presenças, XP e conquistas permanecem vinculados ao mesmo cadastro. O integrante sai dos fluxos ativos e não consegue entrar pelo login do sistema. Sessões abertas são encerradas ao receber a atualização do cadastro. A inativação e o registro de quem a realizou são gravados juntos; uma falha mantém a confirmação aberta para nova tentativa.
+
+Para consultar o cadastro, escolha **Inativos** no filtro de situação. Para devolver o acesso, abra **Gerenciar → Reativar acesso → Confirmar reativação**. A conta e os dados anteriores são reutilizados. Confira o planejamento e o rodízio antes de incluí-lo nas próximas atividades. Cadastros anteriormente arquivados aparecem nesse mesmo filtro. Editar o perfil não sobrescreve XP, presença ou entregas com valores antigos do formulário.
+
+O acesso autenticado também recusa requisições de alunos inativos na API de relatórios, mesmo com um token anterior à inativação; o técnico continua podendo consultar os arquivos. No acesso legado, o bloqueio de login e encerramento de sessão são controles da aplicação: a autorização direta no banco depende da migração e das regras descritas no [guia de autenticação](auth-migration.md).
 
 ## Encerrar temporada
 

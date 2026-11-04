@@ -35,8 +35,10 @@ import { runShopExperienceTests } from './shopExperience.test.js';
 import { runClientDiagnosticsTests } from './clientDiagnostics.test.js';
 import { runGearAccessoriesTests } from './gearAccessories.test.js';
 import { runAuditCorrectionsTests } from './auditCorrections.test.js';
+import { runStudentAccessTests } from './studentAccess.test.js';
 
 const suites = [
+  { name: 'studentAccess', run: runStudentAccessTests },
   { name: 'learningFeatures', run: runLearningFeaturesTests },
   { name: 'coaching', run: runCoachingTests },
   { name: 'giroCompanion', run: runGiroCompanionTests },

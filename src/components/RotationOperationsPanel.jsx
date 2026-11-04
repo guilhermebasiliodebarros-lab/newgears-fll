@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import StudentAccessDialog from './StudentAccessDialog';
 import {
   AlertCircle,
   AlertTriangle,
@@ -359,7 +360,7 @@ const BenchStudentManagementDrawer = ({
   onOpenNewStudentModal,
   onSetBadgeStudent,
   onToggleEnglishChallenge,
-  onDeleteStudent,
+  onChangeAccess,
   onToggleActivityStatus,
   onUpdateStudentSpecialty,
 }) => {
@@ -543,11 +544,12 @@ const BenchStudentManagementDrawer = ({
                   type="button"
                   onClick={() => {
                     onClose();
-                    onDeleteStudent(student.id);
+                    onChangeAccess(student);
                   }}
+                  disabled={!canManage}
                   className="w-full rounded-[20px] border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-red-100 transition-all hover:-translate-y-0.5 hover:bg-red-500 hover:text-white"
                 >
-                  {student.status === 'inactive' ? 'Reativar aluno' : 'Arquivar aluno'}
+                  {student.status === 'inactive' ? 'Reativar acesso' : 'Inativar acesso'}
                 </button>
               </div>
             </div>
@@ -573,7 +575,7 @@ export const StudentManagementPanel = ({
   onOpenNewStudentModal,
   onSetBadgeStudent,
   onToggleEnglishChallenge,
-  onDeleteStudent,
+  onSetStudentAccess,
   onToggleActivityStatus,
   onUpdateStudentSpecialty,
 }) => {
@@ -581,13 +583,16 @@ export const StudentManagementPanel = ({
   const [stationFilter, setStationFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('active');
   const [selectedStudentId, setSelectedStudentId] = useState(null);
+  const [accessStudent, setAccessStudent] = useState(null);
+  const activeStudents = useMemo(() => students.filter((student) => student.status !== 'inactive'), [students]);
+  const statusStudents = useMemo(() => statusFilter === 'all' ? students : students.filter((student) => (student.status === 'inactive') === (statusFilter === 'inactive')), [students, statusFilter]);
   const normalizedSearch = normalizeValue(search);
 
   const countsByStation = useMemo(() => Object.fromEntries(
-    STATION_CONFIGS.map((station) => [station.key, students.filter((student) => student.station === station.key).length]),
-  ), [students]);
-  const unassignedCount = students.filter((student) => !STATION_CONFIGS.some((station) => station.key === student.station)).length;
-  const pendingCount = students.filter((student) => student.submission?.status === 'pending').length;
+    STATION_CONFIGS.map((station) => [station.key, statusStudents.filter((student) => student.station === station.key).length]),
+  ), [statusStudents]);
+  const unassignedCount = statusStudents.filter((student) => !STATION_CONFIGS.some((station) => station.key === student.station)).length;
+  const pendingCount = activeStudents.filter((student) => student.submission?.status === 'pending').length;
 
   const filteredStudents = useMemo(() => students
     .filter((student) => {
@@ -603,7 +608,7 @@ export const StudentManagementPanel = ({
 
   const selectedStudent = students.find((student) => student.id === selectedStudentId) || null;
   const filters = [
-    { key: 'all', label: 'Todos', count: students.length },
+    { key: 'all', label: 'Todos', count: statusStudents.length },
     ...STATION_CONFIGS.map((station) => ({ key: station.key, label: station.label, count: countsByStation[station.key] || 0 })),
     { key: 'unassigned', label: 'Sem estacao', count: unassignedCount },
   ];
@@ -616,6 +621,7 @@ export const StudentManagementPanel = ({
             <p className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-200"><Users size={13} /> Cadastro e acompanhamento</p>
             <h2 className="mt-3 text-2xl font-black text-white md:text-3xl">Gerenciar alunos</h2>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-300">Consulte a equipe, atualize a estação e abra as ações de cada aluno sem passar pela tela do rodízio.</p>
+            <p className="mt-2 max-w-2xl text-xs leading-relaxed text-gray-400">Quem saiu da equipe pode ter o acesso inativado sem perder relatórios, arquivos ou histórico. Abra Gerenciar → Inativar acesso.</p>
           </div>
           <button onClick={() => onOpenNewStudentModal()} className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-gradient-to-r from-emerald-500/20 to-teal-400/10 px-5 py-3 text-xs font-black uppercase tracking-[0.12em] text-emerald-100 shadow-[0_12px_28px_rgba(16,185,129,0.08)] transition-all hover:-translate-y-0.5 hover:bg-emerald-500 hover:text-black">
             <UserPlus size={15} /> Novo aluno
@@ -624,8 +630,8 @@ export const StudentManagementPanel = ({
 
         <div className="mt-5 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
           {[
-            { label: 'Alunos cadastrados', value: students.length, icon: <Users size={16} />, color: 'text-emerald-200', tone: 'border-emerald-400/15 bg-emerald-400/[0.06]' },
-            { label: 'Sem estacao', value: unassignedCount, icon: <UserCircle size={16} />, color: unassignedCount > 0 ? 'text-amber-200' : 'text-gray-300', tone: unassignedCount > 0 ? 'border-amber-400/15 bg-amber-400/[0.06]' : 'border-white/10 bg-white/[0.025]' },
+            { label: 'Alunos ativos', value: activeStudents.length, icon: <Users size={16} />, color: 'text-emerald-200', tone: 'border-emerald-400/15 bg-emerald-400/[0.06]' },
+            { label: 'Acessos inativos', value: students.length - activeStudents.length, icon: <UserCircle size={16} />, color: 'text-gray-300', tone: 'border-white/10 bg-white/[0.025]' },
             { label: 'Para avaliar', value: pendingCount, icon: <ClipboardList size={16} />, color: pendingCount > 0 ? 'text-yellow-200' : 'text-gray-300', tone: pendingCount > 0 ? 'border-yellow-400/15 bg-yellow-400/[0.06]' : 'border-white/10 bg-white/[0.025]' },
           ].map((metric) => (
             <div key={metric.label} className={`flex items-center justify-between gap-3 rounded-[20px] border px-4 py-3 ${metric.tone}`}>
@@ -643,7 +649,7 @@ export const StudentManagementPanel = ({
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nome, turma ou especialidade" className="w-full bg-transparent text-sm text-white outline-none placeholder:text-gray-500" />
           </label>
           <div className="flex flex-wrap gap-2">
-            <select aria-label="Situação dos alunos" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-full border border-white/10 bg-[#151b27] px-3 py-2 text-xs text-white"><option value="active">Ativos</option><option value="inactive">Arquivados</option><option value="all">Todos os cadastros</option></select>
+            <select aria-label="Situação dos alunos" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="rounded-full border border-white/10 bg-[#151b27] px-3 py-2 text-xs text-white"><option value="active">Ativos</option><option value="inactive">Inativos</option><option value="all">Todos os cadastros</option></select>
             {filters.map((filter) => (
               <button key={filter.key} type="button" onClick={() => setStationFilter(filter.key)} className={`rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-[0.1em] transition-colors ${stationFilter === filter.key ? 'border-emerald-400/40 bg-emerald-400/15 text-emerald-100' : 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'}`}>
                 {filter.label}<span className="ml-2 opacity-70">{filter.count}</span>
@@ -667,10 +673,11 @@ export const StudentManagementPanel = ({
                     <StudentAvatar student={student} />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-sm font-black text-white">{student.name}{student.status === 'inactive' ? ' · Arquivado' : ''}</p>
+                        <p className="truncate text-sm font-black text-white">{student.name}{student.status === 'inactive' ? ' · Acesso inativo' : ''}</p>
                         <span className={`rounded-full border px-2 py-1 text-[9px] font-bold ${submissionMeta.badgeClass}`}>{submissionMeta.label}</span>
                       </div>
                       <p className="mt-1 truncate text-[11px] text-gray-400">{student.turma || 'Turma nao informada'} · {level.name} · {student.xp || 0} XP</p>
+                      {student.status === 'inactive' && <p className="mt-1 text-[11px] text-amber-200">Histórico preservado{student.archivedAt && Number.isFinite(new Date(student.archivedAt).getTime()) ? ` · Inativado em ${new Date(student.archivedAt).toLocaleDateString('pt-BR')}` : ''}</p>}
                     </div>
                   </div>
                   <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.1em] text-gray-500 lg:block">
@@ -713,11 +720,12 @@ export const StudentManagementPanel = ({
           onOpenNewStudentModal={onOpenNewStudentModal}
           onSetBadgeStudent={onSetBadgeStudent}
           onToggleEnglishChallenge={onToggleEnglishChallenge}
-          onDeleteStudent={onDeleteStudent}
+          onChangeAccess={setAccessStudent}
           onToggleActivityStatus={onToggleActivityStatus}
           onUpdateStudentSpecialty={onUpdateStudentSpecialty}
         />
       )}
+      {accessStudent && <StudentAccessDialog student={accessStudent} onConfirm={onSetStudentAccess} onClose={() => setAccessStudent(null)} />}
     </div>
   );
 };

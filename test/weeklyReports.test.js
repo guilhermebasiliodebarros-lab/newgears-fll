@@ -139,6 +139,17 @@ export async function runWeeklyReportsTests() {
     assert.equal(report.weekStart, '2026-10-05'); assert.equal(report.fileExtension, 'pdf');
     assert.equal(files.size, 1);
     assert.equal(Object.keys(report).some((key) => /base64|fileData|fileContent/i.test(key)), false);
+    setRecord('students/student-alice', { name: 'alice', status: 'inactive' });
+    const preservedReport = structuredClone(records.get(`weeklyReports/${report.id}`));
+    assert.equal((await call('alice', '/session')).status, 403);
+    assert.equal((await call('alice', `/${report.id}/file`)).status, 403, 'an existing token cannot read files after inactivation');
+    assert.equal((await call('alice', '', 'POST', form())).status, 403);
+    assert.equal((await call('alice', `/${report.id}`, 'DELETE')).status, 403);
+    assert.equal((await call('coach', `/${report.id}/file`)).status, 200, 'the coach can still consult the inactive student report');
+    assert.deepEqual(records.get(`weeklyReports/${report.id}`), preservedReport);
+    assert.equal(files.size, 1, 'inactivation preserves uploaded files');
+    setRecord('students/student-alice', { name: 'alice', status: 'active' });
+    assert.equal((await call('alice', '/session')).status, 200, 'reactivation restores access using the same account');
     assert.equal((await call('bob', `/${report.id}`, 'PATCH', form())).status, 403);
     assert.equal((await call('bob', `/${report.id}`, 'DELETE')).status, 403);
     assert.equal(files.size, 1);
