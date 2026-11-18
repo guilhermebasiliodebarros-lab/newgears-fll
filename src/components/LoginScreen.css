@@ -1,0 +1,65 @@
+.ng-entry { min-height: 100svh; padding: 0 clamp(22px, 5vw, 80px); background: radial-gradient(ellipse at 15% 35%, #7460ca12, transparent 55%), var(--ng-canvas); }
+.ng-entry__header { display: flex; align-items: center; justify-content: space-between; gap: 20px; max-width: 1320px; margin: 0 auto; padding: 28px 0; border-bottom: 1px solid var(--ng-border); }
+.ng-entry__brand { display: flex; align-items: center; gap: 12px; color: var(--ng-text); text-decoration: none; }
+.ng-entry__brand > span:first-child { width: 45px; height: 43px; }
+.ng-entry__brand strong { display: block; font-size: 21px; font-weight: 800; letter-spacing: .025em; line-height: 1.15; white-space: nowrap; }
+.ng-entry__brand-dot { color: var(--ng-primary); }
+.ng-entry__brand small { display: block; margin-top: 6px; color: var(--ng-muted); font-size: 10px; letter-spacing: .12em; }
+.ng-entry__header nav { display: flex; align-items: center; gap: 20px; }
+.ng-entry button { cursor: pointer; }
+.ng-entry button:disabled { cursor: wait; opacity: .6; }
+.ng-entry__public { display: inline-flex; align-items: center; gap: 9px; color: var(--ng-muted); font-size: 12px; }
+.ng-entry__public:hover { color: var(--ng-text); }
+.ng-entry__theme { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--ng-border); border-radius: 12px; color: var(--ng-muted); background: var(--ng-surface); }
+.ng-entry__layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(340px, .85fr); align-items: center; gap: clamp(40px, 7vw, 112px); max-width: 1180px; margin: 0 auto; padding: 60px 0 64px; }
+.ng-entry__eyebrow { display: flex; align-items: center; gap: 9px; color: var(--ng-primary); font-size: 10px; font-weight: 650; letter-spacing: .12em; line-height: 1.6; text-transform: uppercase; }
+.ng-entry__eyebrow > span { width: 6px; height: 6px; border-radius: 50%; background: var(--ng-primary); box-shadow: 0 0 0 4px var(--ng-primary-soft); }
+.ng-entry__story h1 { margin: 20px 0 0; font-size: clamp(36px, 4.3vw, 61px); line-height: 1.08; font-weight: 740; letter-spacing: -.055em; }
+.ng-entry__story h1 em { font-style: normal; color: var(--ng-primary); }
+.ng-entry__description { max-width: 465px; margin-top: 20px; color: var(--ng-muted); font-size: 14px; line-height: 1.8; }
+.ng-entry__field { max-width: 520px; margin-top: 30px; }
+.ng-entry__field-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 18px; color: #8f9db6; font-size: 9px; letter-spacing: .1em; }
+.ng-entry__field-heading > span:first-child { display: flex; gap: 8px; align-items: center; }
+.ng-entry__signal { width: 5px; height: 5px; border-radius: 50%; background: #7be0bf; }
+.ng-entry__field svg { display: block; width: 100%; height: auto; color: var(--ng-primary); margin-top: 0; }
+.ng-entry__field-caption { display: flex; align-items: center; gap: 20px; padding: 0 23px; color: var(--ng-muted); font-size: 10px; }
+.ng-entry__field-caption > span:not(.ng-entry__field-line) { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.ng-entry__field-caption svg { width: 14px; color: #7be0bf; }
+.ng-entry__field-line { flex: 1; height: 1px; background: var(--ng-border); }
+.newgears-login-card.ng-access { padding: 32px; border-radius: 22px; background: var(--ng-surface); box-shadow: 0 24px 70px #0002; }
+.ng-access__icon { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 25px; border: 1px solid #b9aaff30; border-radius: 15px; background: var(--ng-primary-soft); color: var(--ng-primary); }
+.ng-access h2 { margin-top: 9px; font-size: 27px; font-weight: 700; letter-spacing: -.04em; }
+.ng-access__intro { margin-top: 10px; color: var(--ng-muted); font-size: 12px; line-height: 1.7; }
+.ng-access form { margin-top: 28px; }
+.ng-access form > label { display: block; margin: 20px 0 8px; font-size: 12px; font-weight: 600; }
+.ng-access__field { position: relative; display: flex; align-items: center; }
+.ng-access__field > svg { position: absolute; left: 15px; color: var(--ng-muted); pointer-events: none; }
+.ng-entry .ng-access__field input { width: 100%; min-width: 0; min-height: 49px; padding: 13px 45px 13px 44px; color: var(--ng-text); background: var(--ng-field); outline: none; font-size: 13px; }
+.ng-access__field input::placeholder { color: #8b99ae; }
+.ng-entry .ng-access__reveal { position: absolute; right: 5px; display: grid; place-items: center; width: 38px; min-height: 38px; border-radius: 7px; color: var(--ng-muted); }
+.ng-access__reveal:hover { background: var(--ng-surface-raised); color: var(--ng-text); transform: none; }
+.ng-access__error { margin-top: 14px; padding: 11px 13px; border: 1px solid #fda4af40; border-radius: 10px; color: var(--ng-danger); background: #fda4af09; font-size: 12px; line-height: 1.6; }
+.ng-entry .ng-access__submit { display: flex; justify-content: center; align-items: center; gap: 12px; width: 100%; margin-top: 24px; padding: 13px; font-size: 13px; font-weight: 700; }
+.ng-access__submit:hover { filter: brightness(1.08); box-shadow: 0 6px 22px #b9aaff15; }
+.ng-access__help { margin-top: 17px; font-size: 11px; color: var(--ng-muted); }
+.ng-access__help summary { display: flex; justify-content: center; align-items: center; gap: 8px; padding: 5px; cursor: pointer; list-style: none; }
+.ng-access__help summary::-webkit-details-marker { display: none; }
+.ng-access__help[open] summary svg { transform: rotate(180deg); }
+.ng-access__help p { margin-top: 10px; padding: 12px; border-radius: 10px; background: var(--ng-field); line-height: 1.8; }
+.ng-access__divider { display: flex; align-items: center; gap: 12px; margin: 27px 0 17px; font-size: 10px; color: var(--ng-muted); }
+.ng-access__divider span { height: 1px; flex: 1; background: var(--ng-border); }
+.ng-access__guest { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 44px; width: 100%; border: 1px solid var(--ng-border); border-radius: 11px; background: var(--ng-surface-raised); color: var(--ng-text); font-size: 12px; font-weight: 600; }
+.ng-access__guest-note { margin-top: 10px; font-size: 10px; text-align: center; color: var(--ng-muted); }
+.ng-entry__footer { display: flex; justify-content: space-between; align-items: center; gap: 24px; max-width: 1320px; margin: 0 auto; padding: 24px 0 28px; border-top: 1px solid var(--ng-border); color: var(--ng-muted); font-size: 10px; }
+.ng-entry__footer > p { color: var(--ng-text); }
+.ng-entry__footer > div { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; }
+.ng-entry__footer > div > span { display: inline-flex; align-items: center; gap: 7px; }
+.ng-entry__footer small { font-size: 9px; letter-spacing: .08em; }
+.ng-entry__skip { position: absolute; top: 12px; left: 12px; z-index: 10; transform: translateY(-200%); padding: 12px; border-radius: 10px; background: var(--ng-primary); color: var(--ng-primary-ink); font-size: 13px; }
+.ng-entry__skip:focus { transform: translateY(0); }
+.ng-entry :where(button, input, a, summary):focus-visible { outline: 2px solid var(--ng-focus); outline-offset: 4px; }
+@media(min-width:1500px) { .ng-entry__layout { padding-block: 80px; } }
+@media(max-width:1050px) { .ng-entry__layout { gap: 36px; grid-template-columns: minmax(0,1fr) minmax(310px,.9fr); } .newgears-login-card.ng-access { padding: 27px; } .ng-entry__footer > p { display: none; } }
+@media(max-width:760px) { .ng-entry__layout { grid-template-columns: minmax(0,1fr); max-width: 500px; gap: 32px; padding-block: 38px; } .ng-entry__story h1 { font-size: clamp(37px,8vw,52px); } .ng-entry__story h1 br:nth-of-type(2) { display: none; } .ng-entry__description { max-width: none; font-size: 13px; } .ng-entry__field { display: none; } .ng-entry__header { padding-block: 21px; } .ng-entry__brand strong { font-size: 18px; } .ng-entry__brand > span:first-child { width: 37px; height: 35px; } .ng-entry__brand small { font-size: 8px; } .ng-entry__header nav { gap: 12px; } .ng-entry__public { font-size: 11px; } .ng-entry__public > svg { display: none; } .ng-entry__footer { flex-direction: column; gap: 19px; } .ng-entry__footer > div { gap: 15px; } .ng-entry__footer > div > span { font-size: 9px; } }
+@media(max-width:380px) { .ng-entry { padding-inline: 16px; } .newgears-login-card.ng-access { padding: 23px; } .ng-entry__eyebrow { font-size: 9px; } .ng-entry__public span { max-width: 65px; text-align: right; } .ng-access h2 { font-size: 24px; } }
+@media(max-width:380px) { .ng-entry__header { gap: 12px; } .ng-entry__header nav { gap: 8px; } .ng-entry__public { justify-content: center; width: 36px; min-height: 40px; border: 1px solid var(--ng-border); border-radius: 10px; background: var(--ng-surface); } .ng-entry__public > span { display: none; } .ng-entry__public > svg:first-child { display: block; } .ng-entry__brand small { max-width: 125px; letter-spacing: .05em; } }

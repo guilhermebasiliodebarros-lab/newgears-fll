@@ -12,6 +12,8 @@ const WeeklyReportsView = lazy(() => import('./views/WeeklyReportsView'));
 const ReportRecipientsView = lazy(() => import('./views/ReportRecipientsView'));
 import WeeklyReportsSummary from './components/WeeklyReportsSummary';
 import WorkspaceBriefing from './components/WorkspaceBriefing';
+import LoginScreen from './components/LoginScreen';
+import { WorkspaceConnectionNotice, WorkspaceConnectionStatus, WorkspaceMobileNav } from './components/WorkspaceUtilities';
 import TeamLearningGoals from './components/TeamLearningGoals';
 import WorkspaceSearch from './components/WorkspaceSearch';
 import { DialogSurface, NotificationToast, PanelSkeleton, SectionDisclosure } from './components/InterfacePrimitives';
@@ -65,6 +67,8 @@ import { INACTIVE_STUDENT_MESSAGE, resolveLegacyStudentLogin } from './utils/stu
 import { browserStorage } from './utils/browserStorage';
 import { reportClientIssue, setDiagnosticsContext } from './services/clientDiagnostics';
 const AgendaView = lazy(() => import('./views/AgendaView'));
+const TrainingHubView = lazy(() => import('./views/TrainingHubView'));
+const CompetitionWorkspaceView = lazy(() => import('./views/CompetitionWorkspaceView'));
 const FinalSprintView = lazy(() => import('./views/FinalSprintView'));
 import { FINAL_SPRINT_FRONTS } from './constants/finalSprintFronts';
 const ActivityHistoryView = lazy(() => import('./views/ActivityHistoryView'));
@@ -4701,19 +4705,23 @@ const handleDeleteRound = async (id) => {
       { label: 'Agenda', onClick: () => setStudentTab('agenda'), icon: <CalendarDays size={14} />, style: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20 hover:bg-indigo-500 hover:text-white' }
   ];
 
+  const trainingWorkspaceTab = { id: 'training', label: 'Central de treino', icon: <Timer size={16} />, description: 'Planeje um objetivo, treine com foco e registre suas descobertas com checklist e cronômetro.' };
+  const competitionWorkspaceTab = { id: 'competition', label: 'Central de competição', icon: <Trophy size={16} />, description: 'Modalidade configurável, programação do evento, checklist do pit e preparação com evidências.' };
   const adminWorkspaceTabs = [
       { id: 'giro_knowledge', label: 'Biblioteca do Giro', icon: <BookOpen size={16} />, description: 'Cadastre rúbricas, orientações do torneio e materiais para o Giro consultar.', pill: 'Materiais', pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-slate-950 shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
       { id: 'overview', label: 'Visão geral', icon: <LayoutDashboard size={16} />, description: 'Resumo da equipe, indicadores e preparação para o torneio.' },
+      trainingWorkspaceTab,
+      competitionWorkspaceTab,
       { id: 'shop', label: 'Loja New Gears', icon: <Sparkles size={16} />, description: 'Conheça o Giro e personalize seu perfil com Gears conquistados nas contribuições.', pill: 'Giro', pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-slate-950 shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
       { id: 'students', label: 'Alunos', icon: <Users size={16} />, description: 'Cadastro, estações e acompanhamento individual da equipe.', pill: `${students.length} alunos`, badge: incompleteStudentRecords.length || null, pillTone: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200', activeClass: 'bg-emerald-400 text-black shadow-lg shadow-emerald-900/20', inactiveClass: 'text-gray-300 hover:text-emerald-200 hover:bg-emerald-500/10' },
       { id: 'rotation', label: 'Rodízio', icon: <LayoutDashboard size={16} />, description: 'Escala semanal e distribuição planejada para o rodízio da equipe.', pill: currentWeekData?.weekName || 'Escala semanal', pillTone: 'border-blue-400/20 bg-blue-400/10 text-blue-100', activeClass: 'bg-blue-400 text-black shadow-lg shadow-blue-900/20', inactiveClass: 'text-gray-400 hover:text-blue-200 hover:bg-blue-400/10' },
       { id: 'weekly_reports', label: 'Relatórios Semanais', icon: <FileText size={16} />, description: 'Pesquisas e desenvolvimentos compartilhados por toda a equipe.', badge: reportsWorkspace.unreadReports.length || null, pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
       { id: 'report_recipients', label: 'Integrantes / Notificações', icon: <Users size={16} />, description: 'Gerencie os destinatários dos avisos de novos relatórios.', pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
-      { id: 'sprint', label: 'Reta final', icon: <Flag size={16} />, description: 'Frentes de trabalho e preparação para o torneio de dezembro.', pillTone: 'border-amber-500/20 bg-amber-500/10 text-amber-200', activeClass: 'bg-amber-400 text-black shadow-lg shadow-amber-900/20', inactiveClass: 'text-gray-400 hover:text-amber-300 hover:bg-amber-500/10' },
+      { id: 'sprint', label: 'Reta final', icon: <Flag size={16} />, description: 'Frentes de trabalho e preparação para a competição da temporada.', pillTone: 'border-amber-500/20 bg-amber-500/10 text-amber-200', activeClass: 'bg-amber-400 text-black shadow-lg shadow-amber-900/20', inactiveClass: 'text-gray-400 hover:text-amber-300 hover:bg-amber-500/10' },
       { id: 'evaluations', label: 'Avaliações', icon: <ClipboardList size={16} />, description: 'Avalie a semana às sextas e acompanhe a preparação para o torneio.', badge: pendingWeeklyEvaluationCount > 0 ? pendingWeeklyEvaluationCount : null, pillTone: 'border-rose-500/20 bg-rose-500/10 text-rose-200', activeClass: 'bg-rose-400 text-black shadow-lg shadow-rose-900/20', inactiveClass: 'text-gray-400 hover:text-rose-300 hover:bg-rose-500/10' },
       { id: 'strategy', label: 'Estrategia', icon: <Lightbulb size={16} />, description: 'Projeto, impacto, ideias e narrativa que os juizes entendem rapido.', pillTone: 'border-purple-500/20 bg-purple-500/10 text-purple-200', activeClass: 'bg-purple-500 text-white shadow-lg shadow-purple-900/20', inactiveClass: 'text-gray-400 hover:text-purple-300 hover:bg-purple-500/10' },
       { id: 'rounds', label: 'Robo', icon: <ListTodo size={16} />, description: 'Saidas, anexos, codigo e evolucao do robo em linguagem de equipe.', pillTone: 'border-blue-500/20 bg-blue-500/10 text-blue-200', activeClass: 'bg-blue-600 text-white shadow-lg shadow-blue-900/20', inactiveClass: 'text-gray-400 hover:text-blue-300 hover:bg-blue-500/10' },
-      { id: 'rubrics', label: 'Rubricas', icon: <Scale size={16} />, description: 'Placar oficial da equipe com leitura simples e proximo passo.', pill: `${overallRubricAverage}/4`, pillTone: 'border-gray-400/20 bg-gray-400/10 text-gray-100', activeClass: 'bg-gray-300 text-black shadow-lg shadow-gray-900/20', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
+      { id: 'rubrics', label: 'Rubricas FLL', icon: <Scale size={16} />, description: 'Acompanhamento dos critérios FLL atuais. Para outras modalidades, configure a Central de competição.', pill: `${overallRubricAverage}/4`, pillTone: 'border-gray-400/20 bg-gray-400/10 text-gray-100', activeClass: 'bg-gray-300 text-black shadow-lg shadow-gray-900/20', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
       { id: 'discipline', label: 'Disciplina', icon: <Shield size={16} />, description: 'Perdas de XP, reincidencia e ranking de consistencia da equipe.', badge: (pendingLeaderPenaltyRequests.length + disciplineAlerts.length) > 0 ? pendingLeaderPenaltyRequests.length + disciplineAlerts.length : null, pillTone: pendingLeaderPenaltyRequests.length > 0 || disciplineAlerts.length > 0 ? 'border-red-500/20 bg-red-500/10 text-red-200' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200', activeClass: 'bg-red-500 text-white shadow-lg shadow-red-900/20', inactiveClass: 'text-gray-400 hover:text-red-300 hover:bg-red-500/10' },
       { id: 'kanban', label: 'Kanban', icon: <ClipboardList size={16} />, description: 'Fluxo da semana, prioridades e entregas sem cara de planilha.', badge: urgentTasksCount > 0 ? urgentTasksCount : null, pillTone: 'border-orange-500/20 bg-orange-500/10 text-orange-200', activeClass: 'bg-orange-500 text-white shadow-lg shadow-orange-900/20', inactiveClass: 'text-gray-400 hover:text-orange-300 hover:bg-orange-500/10' },
       { id: 'logbook', label: 'Diario', icon: <Book size={16} />, description: 'Memoria viva do time com testes, aprendizados e mini vitorias.', pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
@@ -4726,13 +4734,15 @@ const handleDeleteRound = async (id) => {
 
   const studentWorkspaceTabs = [
       { id: 'overview', label: 'Visão geral', icon: <LayoutDashboard size={16} />, description: 'Seu perfil, conquistas, progresso e resumo da equipe.' },
+      trainingWorkspaceTab,
+      competitionWorkspaceTab,
       { id: 'shop', label: 'Loja New Gears', icon: <Sparkles size={16} />, description: 'Conheça o Giro e personalize seu perfil com Gears conquistados nas contribuições.', pill: 'Giro', pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-slate-950 shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
       { id: 'weekly_reports', label: 'Relatórios Semanais', icon: <FileText size={16} />, description: 'Compartilhe seu relatório e consulte os registros da equipe.', badge: reportsWorkspace.unreadReports.length || null, pillTone: 'border-cyan-300/20 bg-cyan-300/10 text-cyan-100', activeClass: 'bg-cyan-300 text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-cyan-200 hover:bg-cyan-300/10' },
       { id: 'sprint', label: 'Reta final', icon: <Flag size={16} />, description: 'Escolha onde contribuir e mantenha seus próximos passos registrados.', pillTone: 'border-amber-500/20 bg-amber-500/10 text-amber-200', activeClass: 'bg-amber-400 text-black shadow-lg shadow-amber-900/20', inactiveClass: 'text-gray-400 hover:text-amber-300 hover:bg-amber-500/10' },
       { id: 'feedback', label: 'Meu feedback', icon: <MessageSquare size={16} />, description: 'Consulte seus pontos fortes e o próximo passo recomendado.', pillTone: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200', activeClass: 'bg-cyan-300 text-black shadow-lg shadow-cyan-900/20', inactiveClass: 'text-gray-400 hover:text-cyan-300 hover:bg-cyan-500/10' },
       { id: 'mission', label: 'Minha Missao', icon: <Rocket size={16} />, description: 'Seu foco da semana, status da entrega e proximo passo.', pill: viewAsStudent?.station || 'Equipe', pillTone: 'border-white/10 bg-white/5 text-gray-200', activeClass: 'bg-white text-black shadow-lg', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
       { id: 'strategy', label: 'Estrategia', icon: <Lightbulb size={16} />, description: 'Entenda o projeto, o impacto e o caminho competitivo do time.', pillTone: 'border-purple-500/20 bg-purple-500/10 text-purple-200', activeClass: 'bg-purple-500 text-white shadow-lg shadow-purple-900/20', inactiveClass: 'text-gray-400 hover:text-purple-300 hover:bg-purple-500/10' },
-      { id: 'rubrics', label: 'Rubricas', icon: <Scale size={16} />, description: 'Veja o placar da equipe e onde subir de nivel.', pill: `${overallRubricAverage}/4`, pillTone: 'border-gray-400/20 bg-gray-400/10 text-gray-100', activeClass: 'bg-gray-300 text-black shadow-lg shadow-gray-900/20', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
+      { id: 'rubrics', label: 'Rubricas FLL', icon: <Scale size={16} />, description: 'Consulte os critérios FLL atuais. A Central de competição acompanha outras modalidades.', pill: `${overallRubricAverage}/4`, pillTone: 'border-gray-400/20 bg-gray-400/10 text-gray-100', activeClass: 'bg-gray-300 text-black shadow-lg shadow-gray-900/20', inactiveClass: 'text-gray-400 hover:text-white hover:bg-white/5' },
       { id: 'rounds', label: 'Robo', icon: <ListTodo size={16} />, description: 'Rounds, estrategia de mesa, codigo e anexos do robo.', pillTone: 'border-blue-500/20 bg-blue-500/10 text-blue-200', activeClass: 'bg-blue-600 text-white shadow-lg shadow-blue-900/20', inactiveClass: 'text-gray-400 hover:text-blue-300 hover:bg-blue-500/10' },
       { id: 'kanban', label: STUDENT_TASKS_LABEL, icon: <ClipboardList size={16} />, description: 'Seu quadro da semana para agir sem se perder nas entregas.', badge: urgentTasksCount > 0 ? urgentTasksCount : null, pillTone: 'border-orange-500/20 bg-orange-500/10 text-orange-200', activeClass: 'bg-orange-500 text-white shadow-lg shadow-orange-900/20', inactiveClass: 'text-gray-400 hover:text-orange-300 hover:bg-orange-500/10' },
       { id: 'logbook', label: 'Diario', icon: <Book size={16} />, description: 'Guarde o que aprendeu, testou e melhorou na temporada.', pillTone: 'border-yellow-500/20 bg-yellow-500/10 text-yellow-200', activeClass: 'bg-yellow-500 text-black shadow-lg shadow-yellow-900/20', inactiveClass: 'text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10' },
@@ -4761,6 +4771,8 @@ const handleDeleteRound = async (id) => {
 
   const currentWorkspaceTabs = isAdmin ? adminWorkspaceTabs : studentWorkspaceTabs;
   const currentWorkspaceTab = currentWorkspaceTabs.find((tab) => tab.id === (isAdmin ? adminTab : studentTab));
+  const trainingScope = JSON.stringify([currentUser?.type, currentUser?.studentId || currentUser?.data?.id || currentUser?.uid || currentUser?.name, activeTeamSeasonId || 'legacy']);
+  const renderCompetitionWorkspace = () => <Suspense fallback={<LazyPanelFallback label="Abrindo a central de competição…" />}><CompetitionWorkspaceView key={trainingScope} scope={trainingScope} db={db} user={currentUser} seasonId={activeTeamSeasonId || 'legacy'} seasonName={activeTeamSeasonName} canManage={currentUser?.type === 'admin' && isAdmin} students={students} scoreHistory={scoreHistory} onNavigate={navigateWorkspace} /></Suspense>;
   const workspaceProfileStudent = viewAsStudent || (currentUser?.type === 'student' ? currentUser.data || { name: currentUser.name } : null);
   const navigateWorkspace = (tabId, { keepAttention = false } = {}) => {
       setQuickAction('');
@@ -7559,96 +7571,7 @@ const handleFileSelect = (e) => {
 
   if (!currentUser) {
       return (
-          <div className="newgears-login-shell min-h-screen text-white flex items-center justify-center p-4 relative overflow-hidden">
-              <div className="newgears-orb newgears-orb--cyan"></div>
-              <div className="newgears-orb newgears-orb--pink"></div>
-              <div className="newgears-orb newgears-orb--yellow"></div>
-
-              <div className="newgears-login-card p-8 w-full max-w-md shadow-2xl relative z-10 animate-in zoom-in-95 duration-500">
-                  <div className="text-center mb-8 mt-2">
-                      <div className="w-24 h-24 mx-auto mb-6 flex items-center justify-center rounded-[28px] border border-white/12 bg-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.2)]">
-                          <LogoNewGears />
-                      </div>
-                      <span className="inline-flex items-center gap-2 rounded-full border border-yellow-300/20 bg-yellow-300/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-yellow-100">
-                          Equipe FLL em missao
-                      </span>
-                      <h1 className="text-3xl font-black tracking-tight mt-4">Base da Equipe New Gears</h1>
-                      <p className="text-slate-300/75 text-sm mt-3 leading-relaxed">
-                          Entre para acompanhar desafios, evoluir no XP e viver a temporada com cara de jogo, robo e torneio.
-                      </p>
-                  </div>
-
-                  <form onSubmit={handleLogin} className="space-y-5">
-                      <div>
-                          <label className="text-[10px] text-slate-300/60 uppercase font-black mb-1.5 block tracking-wider">{FIREBASE_AUTH_ENABLED ? 'Seu e-mail' : 'Seu usuario'}</label>
-                          <div className="relative">
-                              <UserCircle className="absolute left-3 top-3.5 text-slate-400" size={18} />
-                              <input
-                                  type={FIREBASE_AUTH_ENABLED ? 'email' : 'text'}
-                                  value={loginUser}
-                                  onChange={(e) => setLoginUser(e.target.value)}
-                                  className="newgears-login-input w-full p-3 pl-10 text-white outline-none transition-all placeholder:text-slate-500 font-medium"
-                                  placeholder={FIREBASE_AUTH_ENABLED ? 'seu@email.com' : 'Ex: tecnico ou ana.fll'}
-                                  disabled={loginBusy}
-                                  autoComplete="username"
-                                  autoFocus
-                              />
-                          </div>
-                      </div>
-
-                      <div>
-                          <label className="text-[10px] text-slate-300/60 uppercase font-black mb-1.5 block tracking-wider">Senha secreta</label>
-                          <div className="relative">
-                              <Lock className="absolute left-3 top-3.5 text-slate-400" size={18} />
-                              <input
-                                  type="password"
-                                  value={loginPass}
-                                  onChange={(e) => setLoginPass(e.target.value)}
-                                  className="newgears-login-input w-full p-3 pl-10 text-white outline-none transition-all placeholder:text-slate-500 font-medium"
-                                  placeholder="••••••"
-                                  disabled={loginBusy}
-                                  autoComplete="current-password"
-                              />
-                          </div>
-                      </div>
-
-                      {loginError && (
-                          <div role="alert" className="bg-red-500/10 border border-red-500/20 p-3 rounded-lg flex items-start gap-2 animate-in slide-in-from-top-2">
-                              <AlertCircle size={16} className="text-red-500 shrink-0" />
-                              <p className="text-red-400 text-xs font-bold">{loginError}</p>
-                          </div>
-                      )}
-
-                      <button disabled={loginBusy} className="newgears-login-button w-full text-white font-black py-4 mt-2 text-sm uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50">
-                          <LogOut size={18} className="rotate-180" /> {loginBusy ? 'Validando acesso…' : 'Entrar na Base'}
-                      </button>
-                  </form>
-
-                  <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
-                      <button
-                          type="button"
-                          onClick={openPublicMode}
-                          className="w-full rounded-lg border border-cyan-300/20 bg-cyan-300/10 px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-cyan-100 hover:bg-cyan-300 hover:text-slate-950"
-                      >
-                          <span className="flex items-center justify-center gap-2">
-                              <Globe2 size={16} /> Conhecer a equipe
-                          </span>
-                      </button>
-                      <button
-                          type="button"
-                          onClick={toggleVisualTheme}
-                          title={visualTheme === 'gold' ? 'Usar tema classico' : 'Usar tema dourado'}
-                          className="rounded-lg border border-white/10 bg-white/5 px-3 py-3 text-white hover:bg-white/10"
-                      >
-                          <Palette size={17} />
-                      </button>
-                  </div>
-
-                  <div className="mt-6 pt-6 border-t border-white/5 text-center">
-                      <p className="text-[11px] text-slate-400/70">Plataforma da equipe para aprender, jogar junto e crescer na temporada.</p>
-                  </div>
-              </div>
-          </div>
+          <LoginScreen emailAccess={FIREBASE_AUTH_ENABLED} username={loginUser} password={loginPass} onUsernameChange={setLoginUser} onPasswordChange={setLoginPass} onSubmit={handleLogin} busy={loginBusy} error={loginError} onPublicView={openPublicMode} theme={visualTheme} onToggleTheme={toggleVisualTheme} />
       )
   }
 
@@ -7896,7 +7819,7 @@ const handleFileSelect = (e) => {
               </div>
           </div>
 
-          <div className="ng-topbar-actions"><WorkspaceSearch tabs={currentWorkspaceTabs} activeId={isAdmin ? adminTab : studentTab} onNavigate={navigateWorkspace} />
+          <div className="ng-topbar-actions"><WorkspaceConnectionStatus /><WorkspaceSearch tabs={currentWorkspaceTabs} activeId={isAdmin ? adminTab : studentTab} onNavigate={navigateWorkspace} />
           <details className="workspace-tools" onClick={(event) => { if (event.target.closest('button')) event.currentTarget.open = false; }} onKeyDown={(event) => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); } }} onBlur={(event) => { if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false; }}>
             <summary aria-label="Ferramentas da equipe"><SlidersHorizontal size={18} /><span>Ferramentas</span><ChevronDown size={14} /></summary>
             <div className="workspace-tools__panel flex items-center gap-2 md:gap-3 flex-wrap justify-start">
@@ -8049,6 +7972,7 @@ const handleFileSelect = (e) => {
             </div>
           </details>
       </div></header>
+      <WorkspaceConnectionNotice />
 
       <div className="px-4 pt-4 md:px-8"><ReminderInbox authenticated={reportsWorkspace.enabled} user={currentUser} seasonId={activeTeamSeasonId || 'legacy'} tasks={tasks} students={students} reportsVersion={reportsWorkspace.reports.map((report) => report.id + (report.updatedAt || '')).join('|')} onOpen={(tab) => isAdmin ? setAdminTab(tab) : setStudentTab(tab)} /></div>
       {/* --- ÁREA DO TÉCNICO (ADMIN) --- */}
@@ -8088,13 +8012,15 @@ const handleFileSelect = (e) => {
         <main id="workspace-content" tabIndex={-1} aria-label={currentWorkspaceTab?.label} className={`newgears-stage workspace-section-anchor max-w-[1600px] mx-auto animate-in fade-in duration-500 ${adminPanelState.compact ? 'p-4 md:p-6' : 'p-4 md:p-8'}`}>
           {!adminPanelState.compact && adminTab !== 'overview' && <WorkspaceContent render={renderUrgentEventsBanner} />}
 
-          <TrainingQuickActions technical onTest={() => { setRobotSubTab("overview"); navigateWorkspace("rounds"); setQuickAction("test"); }} onTasks={() => openAttention("urgent")} />
+          {adminTab !== 'training' && <TrainingQuickActions technical onTest={() => { setRobotSubTab("overview"); navigateWorkspace("rounds"); setQuickAction("test"); }} onTasks={() => openAttention("urgent")} />}
+          {adminTab === 'training' && <Suspense fallback={<LazyPanelFallback label="Preparando a central de treino…" />}><TrainingHubView key={trainingScope} scope={trainingScope} onNavigate={navigateWorkspace} /></Suspense>}
+          {adminTab === 'competition' && renderCompetitionWorkspace()}
           <div className="mb-6" hidden={adminTab !== 'overview'}>
-            {adminTab === 'overview' && <><WorkspaceBriefing technical name={adminProfile?.name} students={students} tasks={tasks} events={events} today={localTodayStr} season={activeTeamSeasonName} onNavigate={navigateWorkspace} readiness={commandCenterReadinessScore} onNewTask={() => { setTaskComposerRequest((value) => value + 1); navigateWorkspace('kanban'); }} onNewEvent={() => setModal({ type: 'eventForm' })} /><WorkspaceActionQueue items={adminActionQueueItems} /><TeamLearningGoals tasks={tasks} students={students} reports={reportsWorkspace.reports} reportsReady={reportsWorkspace.enabled && !reportsWorkspace.loading && !reportsWorkspace.error} today={today} onNavigate={(page) => isAdmin ? setAdminTab(page) : setStudentTab(page)} /></>}
+            {adminTab === 'overview' && <><WorkspaceBriefing technical name={adminProfile?.name} students={students} tasks={tasks} events={events} today={localTodayStr} season={activeTeamSeasonName} onNavigate={navigateWorkspace} onOpenTask={openLinkedTask} readiness={commandCenterReadinessScore} onNewTask={() => { setTaskComposerRequest((value) => value + 1); navigateWorkspace('kanban'); }} onNewEvent={() => setModal({ type: 'eventForm' })} /><WorkspaceActionQueue items={adminActionQueueItems} /><TeamLearningGoals tasks={tasks} students={students} reports={reportsWorkspace.reports} reportsReady={reportsWorkspace.enabled && !reportsWorkspace.loading && !reportsWorkspace.error} today={today} onNavigate={(page) => isAdmin ? setAdminTab(page) : setStudentTab(page)} /></>}
             <SectionDisclosure title={"Vis\u00e3o estrat\u00e9gica da equipe"} description="Indicadores completos, conquistas e controles da equipe">
             <WorkspaceCollapsible isOpen={adminPanelState.hero}>
               <WorkspaceHero
-                eyebrow="Temporada FLL"
+                eyebrow="Temporada da equipe"
                 title="Central tatica da equipe"
                 subtitle="Acompanhe a reta final, as frentes de trabalho e a preparacao da equipe para o torneio."
                 metrics={adminHeroMetrics}
@@ -8305,14 +8231,16 @@ const handleFileSelect = (e) => {
       {/* --- ÁREA DO ALUNO --- */}
       {!isAdmin && viewAsStudent && (
         <main id="workspace-content" tabIndex={-1} aria-label={currentWorkspaceTab?.label} className="newgears-stage workspace-section-anchor p-4 md:p-8 w-full max-w-[1800px] mx-auto animate-in slide-in-from-bottom-8">
-          <TrainingQuickActions onTest={() => { setRobotSubTab("overview"); navigateWorkspace("rounds"); setQuickAction("test"); }} onTasks={() => openAttention("mine")} onDiary={() => { navigateWorkspace("logbook"); setQuickAction("diary"); }} />
+          {studentTab !== 'training' && <TrainingQuickActions onTest={() => { setRobotSubTab("overview"); navigateWorkspace("rounds"); setQuickAction("test"); }} onTasks={() => openAttention("mine")} onDiary={() => { navigateWorkspace("logbook"); setQuickAction("diary"); }} />}
+          {studentTab === 'training' && <Suspense fallback={<LazyPanelFallback label="Preparando a central de treino…" />}><TrainingHubView key={trainingScope} scope={trainingScope} onNavigate={navigateWorkspace} /></Suspense>}
+          {studentTab === 'competition' && renderCompetitionWorkspace()}
           {currentUser?.type === "student" && studentTab === "overview" && <MemberOnboarding student={viewAsStudent} seasonId={activeTeamSeasonId || "legacy"} reportsEnabled={reportsWorkspace.enabled} onNavigate={(tab) => { if (tab === "kanban") { openAttention("mine"); return; } navigateWorkspace(tab); if (tab === "logbook") setQuickAction("diary"); }} />}
           {studentTab !== 'overview' && <WorkspaceContent render={renderUrgentEventsBanner} />}
 
           {ownTournamentSelection ? <TournamentSelectionNotice key={`${viewAsStudent.id}__${activeTeamSeasonId || 'legacy'}__${ownTournamentSelection.selectedAt || ownTournamentSelection.createdAt || 'selected'}`} studentName={viewAsStudent.name || 'Integrante'} seasonName={activeTeamSeasonName} isLiteMode={isLiteMode} /> : null}
 
           <div hidden={studentTab !== 'overview'}>
-          {studentTab === 'overview' && <><WorkspaceBriefing name={viewAsStudent.name} student={viewAsStudent} students={students} tasks={tasks} events={events} today={localTodayStr} season={activeTeamSeasonName} onNavigate={navigateWorkspace} level={studentCurrentLevel} nextLevel={studentNextLevel} /><TeamLearningGoals tasks={tasks} students={students} reports={reportsWorkspace.reports} reportsReady={reportsWorkspace.enabled && !reportsWorkspace.loading && !reportsWorkspace.error} today={today} onNavigate={(page) => isAdmin ? setAdminTab(page) : setStudentTab(page)} /></>}
+          {studentTab === 'overview' && <><WorkspaceBriefing name={viewAsStudent.name} student={viewAsStudent} students={students} tasks={tasks} events={events} today={localTodayStr} season={activeTeamSeasonName} onNavigate={navigateWorkspace} onOpenTask={openLinkedTask} level={studentCurrentLevel} nextLevel={studentNextLevel} /><TeamLearningGoals tasks={tasks} students={students} reports={reportsWorkspace.reports} reportsReady={reportsWorkspace.enabled && !reportsWorkspace.loading && !reportsWorkspace.error} today={today} onNavigate={(page) => isAdmin ? setAdminTab(page) : setStudentTab(page)} /></>}
           <SectionDisclosure title="Meu perfil e minhas conquistas" description={"Veja sua evolu\u00e7\u00e3o, detalhes da semana e todos os atalhos"}>
           <div className="mb-2">
             <WorkspaceCollapsible isOpen={studentPanelState.hero}>
@@ -8956,6 +8884,7 @@ const handleFileSelect = (e) => {
       </div>
     </div>
     </div>
+    <WorkspaceMobileNav activeId={isAdmin ? adminTab : studentTab} onNavigate={navigateWorkspace} />
     </GearExperienceProvider></ScoreEvolutionChartContext.Provider>
   );
 }

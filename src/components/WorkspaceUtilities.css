@@ -1,0 +1,18 @@
+.ng-connection { display: inline-flex; align-items: center; gap: 6px; padding: 8px 9px; border: 1px solid var(--ng-border); border-radius: 9px; color: var(--ng-muted); font-size: 10px; white-space: nowrap; }
+.ng-connection > svg { color: #8de5c3; }
+.ng-connection[data-online='false'] { color: var(--ng-warning); border-color: #fcd68b40; background: #fcd68b09; }
+.ng-connection[data-online='false'] > svg { color: var(--ng-warning); }
+.ng-connection-notice { display: flex; align-items: flex-start; gap: 10px; margin: 14px clamp(18px,3vw,36px) 0; padding: 14px 17px; border: 1px solid #fcd68b40; border-radius: 12px; background: #fcd68b0a; color: var(--ng-warning); font-size: 12px; line-height: 1.8; }
+.ng-connection-notice > svg { flex-shrink: 0; margin-top: 3px; }
+.ng-mobile-nav { display: none; }
+.workspace-topbar-heading h1 { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+@media(max-width:900px) { .ng-connection { display: none; } .ng-connection[data-online='false'] { display: inline-flex; padding: 8px; } .ng-connection > span { display: none; } }
+@media(max-width:767px) {
+  .ng-mobile-nav { position: fixed; z-index: 60; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); align-items: center; gap: 5px; bottom: 0; left: 0; right: 0; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--ng-border); background: var(--ng-surface); box-shadow: 0 -8px 30px #0002; }
+  .ng-mobile-nav button { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 5px; min-height: 49px; padding: 7px 4px; border-radius: 10px; color: var(--ng-muted); font-size: 10px; font-weight: 500; }
+  .ng-mobile-nav button[aria-current='page'] { color: var(--ng-primary); background: var(--ng-primary-soft); }
+  .newgears-workspace .newgears-stage { padding-bottom: calc(110px + env(safe-area-inset-bottom)); }
+  .newgears-workspace .gear-companion, body:has(.ng-mobile-nav) .gear-companion { bottom: calc(83px + env(safe-area-inset-bottom)); }
+  .ng-mobile-nav button:focus-visible { outline: 2px solid var(--ng-focus); outline-offset: 1px; }
+}
+@media(max-width:480px) { .workspace-topbar-heading { max-width: min(39vw,156px); } }

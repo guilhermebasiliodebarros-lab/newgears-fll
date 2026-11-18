@@ -1,31 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { countdownState } from '../utils/countdown';
 import './Countdown.css';
 
 const Countdown = ({ targetDate, title, compact = false, dense = false }) => {
-  const calculateTimeLeft = () => {
-    const difference = +new Date(targetDate) - +new Date();
-    let timeLeft = {};
-
-    if (difference > 0) {
-      timeLeft = {
-        dias: Math.floor(difference / (1000 * 60 * 60 * 24)),
-        horas: Math.floor((difference / (1000 * 60 * 60)) % 24),
-        minutos: Math.floor((difference / 1000 / 60) % 60),
-        segundos: Math.floor((difference / 1000) % 60),
-      };
-    }
-    return timeLeft;
-  };
-
-  const [timeLeft, setTimeLeft] = useState(calculateTimeLeft());
+  const [now, setNow] = useState(Date.now);
+  const state = countdownState(targetDate, now);
+  const timeLeft = state.units || {};
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setTimeLeft(calculateTimeLeft());
+    const timer = setInterval(() => {
+      setNow(Date.now());
     }, 1000);
 
-    return () => clearTimeout(timer);
-  });
+    return () => clearInterval(timer);
+  }, []);
 
   const timerComponents = [];
 
@@ -61,7 +49,7 @@ const Countdown = ({ targetDate, title, compact = false, dense = false }) => {
           {title}
         </span>
         <div className="flex items-center gap-1">
-          {timerComponents.length ? timerComponents : <span className={`rounded-full border border-green-400/20 bg-green-400/10 font-black text-green-200 ${dense ? 'px-2 py-0.5 text-[10px]' : 'px-3 py-1 text-xs'}`}>Chegou!</span>}
+          {timerComponents.length ? timerComponents : <span className={`rounded-full border border-white/10 bg-white/5 font-black text-slate-300 ${dense ? 'px-2 py-0.5 text-[10px]' : 'px-3 py-1 text-xs'}`}>{state.label}</span>}
         </div>
       </div>
     );
@@ -71,7 +59,7 @@ const Countdown = ({ targetDate, title, compact = false, dense = false }) => {
     <div className="countdown-container">
       <h3>{title}</h3>
       <div className="timer-wrapper">
-        {timerComponents.length ? timerComponents : <span>Chegou o dia! 🚀</span>}
+        {timerComponents.length ? timerComponents : <span>{state.label}</span>}
       </div>
     </div>
   );

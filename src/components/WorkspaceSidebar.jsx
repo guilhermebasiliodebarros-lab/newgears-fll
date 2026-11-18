@@ -13,7 +13,7 @@ const subscribeDesktop = (notify) => {
 };
 const getDesktop = () => window.matchMedia(desktopQuery).matches;
 const groups = [
-  { label: 'Principal', ids: ['overview'] },
+  { label: 'Principal', ids: ['overview', 'competition', 'training'] },
   { label: 'Minha rotina', ids: ['mission', 'feedback', 'sprint', 'kanban', 'agenda', 'weekly_reports', 'logbook'] },
   { label: 'Projeto e robô', ids: ['strategy', 'rounds', 'rubrics', 'giro_knowledge'] },
   { label: 'Equipe', ids: ['students', 'rotation', 'evaluations', 'discipline', 'showcase'] },
@@ -109,7 +109,7 @@ export default function WorkspaceSidebar({ tabs, activeId, onNavigate, open, onC
         })}
         {visibleTabs.some((tab) => !knownIds.has(tab.id)) && <section className="workspace-sidebar__group" aria-label="Outras áreas"><h2>Outras áreas</h2>{visibleTabs.filter((tab) => !knownIds.has(tab.id)).map(renderTab)}</section>}
       </nav>
-      <div className="workspace-sidebar__footer"><span>New Gears · FLL</span><button type="button" onClick={onLogout}><LogOut size={15} /> Sair</button></div>
+      <div className="workspace-sidebar__footer"><span>New Gears · Robótica</span><button type="button" onClick={onLogout}><LogOut size={15} /> Sair</button></div>
     </aside>
   </>;
   // The mobile drawer must cover floating widgets that also live outside the app.

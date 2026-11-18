@@ -1,0 +1,19 @@
+.ng-briefing .ng-briefing__hero { background: radial-gradient(ellipse at 14% 0%,#b9aaff14,transparent 62%),var(--ng-surface); border-top-color: #b9aaff50; }
+.ng-briefing__welcome h2 > span { color: var(--ng-primary); }
+.ng-briefing .ng-briefing__welcome h2 { font-size: clamp(27px,3vw,37px); line-height: 1.17; }
+.ng-briefing .ng-briefing__progress { border-radius: 16px; background: var(--ng-field); }
+.ng-briefing__stat[data-warning='true'] > span:first-child { color: var(--ng-warning); background: #fcd68b0d; }
+.ng-briefing__stat[data-warning='true'] strong { color: var(--ng-warning); }
+.ng-training-banner { display: grid; grid-template-columns: minmax(0,1fr) 260px; align-items: center; gap: 20px; position: relative; overflow: hidden; margin-top: 20px; padding: 25px 27px; border: 1px solid #b9aaff35; border-radius: 18px; background: radial-gradient(ellipse at right,#b9aaff09,transparent 70%),var(--ng-surface); }
+.ng-training-banner h3 { margin-top: 10px; font-size: clamp(18px,2.3vw,23px); font-weight: 650; letter-spacing: -.035em; }
+.ng-training-banner > div > p:not(.ng-eyebrow) { max-width: 470px; margin-top: 10px; color: var(--ng-muted); font-size: 12px; line-height: 1.75; }
+.ng-training-banner .ng-button { margin-top: 18px; font-size: 12px; color: var(--ng-primary); border-color: #b9aaff40; background: var(--ng-primary-soft); }
+.ng-training-banner__art { width: 100%; height: auto; color: var(--ng-primary); }
+.ng-competition-shortcut { display: flex; align-items: center; gap: 15px; width: 100%; margin-top: 20px; padding: 20px 23px; border: 1px solid #8de5c32e; border-radius: 15px; text-align: left; background: #8de5c305; }
+.ng-competition-shortcut > span:first-child { display: grid; place-items: center; flex-shrink: 0; width: 42px; height: 42px; border-radius: 12px; color: #8de5c3; background: #8de5c30c; }
+.ng-competition-shortcut > span:nth-child(2) { flex: 1; min-width: 0; }
+.ng-competition-shortcut strong { display: block; color: var(--ng-text); font-size: 14px; font-weight: 600; line-height: 1.6; }
+.ng-competition-shortcut small { display: block; margin-top: 5px; color: var(--ng-muted); font-size: 11px; line-height: 1.7; }
+.ng-competition-shortcut > svg { color: #8de5c3; flex-shrink: 0; }
+@media(max-width:900px) { .ng-training-banner { grid-template-columns: minmax(0,1fr) 190px; padding: 23px; gap: 8px; } }
+@media(max-width:640px) { .ng-training-banner { grid-template-columns: minmax(0,1fr); padding: 23px 20px; } .ng-training-banner__art { display: none; } .ng-training-banner h3 { max-width: 240px; font-size: 22px; } .ng-briefing .ng-briefing__welcome h2 { font-size: 29px; } }

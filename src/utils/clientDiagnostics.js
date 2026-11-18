@@ -6,7 +6,7 @@ export const DIAGNOSTIC_LABELS = {
   render: 'Falha ao exibir uma tela',
   runtime: 'Falha durante uma operação',
 };
-const AREAS = new Set(['startup', 'principal', 'overview', 'sprint', 'kanban', 'agenda', 'weekly_reports', 'report_recipients', 'logbook', 'strategy', 'rounds', 'rubrics', 'giro_knowledge', 'students', 'rotation', 'evaluations', 'discipline', 'showcase', 'operations', 'history', 'season_history', 'shop', 'mission', 'feedback', 'public', 'tv', 'tasks', 'events', 'experts', 'expertContacts', 'decisionMatrix', 'outreach', 'prototypeIterations', 'robotVersions', 'attachments', 'codeSnippets', 'score_history', 'xpLossRecords', 'leaderPenaltyRequests', 'publicGalleryPhotos']);
+const AREAS = new Set(['startup', 'principal', 'overview', 'training', 'competition', 'competitionWorkspaces', 'sprint', 'kanban', 'agenda', 'weekly_reports', 'report_recipients', 'logbook', 'strategy', 'rounds', 'rubrics', 'giro_knowledge', 'students', 'rotation', 'evaluations', 'discipline', 'showcase', 'operations', 'history', 'season_history', 'shop', 'mission', 'feedback', 'public', 'tv', 'tasks', 'events', 'experts', 'expertContacts', 'decisionMatrix', 'outreach', 'prototypeIterations', 'robotVersions', 'attachments', 'codeSnippets', 'score_history', 'xpLossRecords', 'leaderPenaltyRequests', 'publicGalleryPhotos']);
 export const diagnosticArea = (value) => {
   const area = String(value || '').replace(/^(admin|student)-/, '');
   return AREAS.has(area) ? area : 'principal';

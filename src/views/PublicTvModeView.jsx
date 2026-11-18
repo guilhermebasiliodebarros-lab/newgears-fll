@@ -188,7 +188,7 @@ export default function PublicTvModeView({
       return (
         <section className="grid h-full grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)] items-center gap-12 px-[7vw] py-[9vh]">
           <div className="max-w-4xl">
-            <p className="text-lg font-black uppercase tracking-[0.22em] text-cyan-200">FIRST LEGO League</p>
+            <p className="text-lg font-black uppercase tracking-[0.22em] text-cyan-200">Robótica · Inovação · Trabalho em equipe</p>
             <h1 className="mt-5 text-8xl font-black leading-none text-white 2xl:text-9xl">New Gears</h1>
             <p className="mt-7 max-w-3xl text-3xl font-bold leading-relaxed text-slate-100/88">
               Robotica, inovacao e trabalho em equipe em uma temporada feita de ideias, testes e evolucao.
@@ -278,7 +278,7 @@ export default function PublicTvModeView({
                   <h3 className="text-3xl font-black leading-tight text-white">{student.name}</h3>
                   <p className="mt-4 flex items-start gap-2 text-lg font-bold leading-relaxed text-slate-300">
                     <Award size={20} className="mt-0.5 shrink-0 text-cyan-300" />
-                    {cleanText(student.specialty) || 'Competidor FLL'}
+                    {cleanText(student.specialty) || 'Integrante da equipe'}
                   </p>
                 </div>
               </article>

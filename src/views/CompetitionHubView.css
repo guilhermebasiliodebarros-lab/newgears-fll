@@ -1,0 +1,126 @@
+.ng-competition { --competition-accent: #8de5c3; }
+.ng-competition__hero { position: relative; overflow: hidden; padding: 30px; border: 1px solid var(--ng-border); border-top-color: #8de5c350; border-radius: 22px; background: radial-gradient(ellipse at 90% 0%,#8de5c30c,transparent 60%),var(--ng-surface); }
+.ng-competition__hero .ng-eyebrow { color: var(--competition-accent); }
+.ng-competition__hero-copy { position: relative; z-index: 1; max-width: 78%; }
+.ng-competition__edition { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.ng-competition__edition span { padding: 5px 9px; border: 1px solid var(--ng-border); border-radius: 7px; font-size: 10px; color: var(--ng-muted); background: var(--ng-field); }
+.ng-competition__edition span:first-child { border-color: #8de5c32b; color: var(--competition-accent); background: #8de5c309; }
+.ng-competition__hero h2 { margin-top: 16px; font-size: clamp(29px,3.3vw,43px); font-weight: 720; letter-spacing: -.045em; line-height: 1.15; overflow-wrap: anywhere; }
+.ng-competition__hero-copy > p:not(.ng-eyebrow) { margin-top: 13px; color: var(--ng-muted); font-size: 13px; line-height: 1.8; }
+.ng-competition__event-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-top: 21px; }
+.ng-competition__event-meta > span { display: inline-flex; align-items: center; gap: 7px; color: var(--ng-muted); font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.ng-competition__event-meta svg { color: var(--competition-accent); flex-shrink: 0; }
+.ng-competition__hero-art { position: absolute; right: 32px; top: 38px; color: var(--competition-accent); opacity: .15; transform: rotate(-12deg); pointer-events: none; }
+.ng-competition__hero-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 28px; position: relative; z-index: 1; }
+.ng-competition__hero-actions .ng-button { font-size: 12px; }
+.ng-competition__hero-actions .ng-button[aria-pressed='true'] { border-color: var(--competition-accent); color: var(--competition-accent); background: #8de5c30d; }
+.ng-competition__metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 18px; }
+.ng-competition__metrics > div { min-width: 0; padding: 20px; border: 1px solid var(--ng-border); border-radius: 14px; background: var(--ng-surface); }
+.ng-competition__metrics > div > span { display: flex; align-items: center; gap: 8px; color: var(--ng-muted); font-size: 11px; }
+.ng-competition__metrics > div > span svg { flex-shrink: 0; color: var(--competition-accent); }
+.ng-competition__metrics strong { display: block; margin-top: 15px; color: var(--ng-text); font-size: 30px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.04em; line-height: 1.3; }
+.ng-competition__metrics strong small { margin-left: 3px; font-size: 17px; color: var(--ng-muted); font-weight: 400; }
+.ng-competition__metrics strong.ng-competition__next-time { font-size: 24px; margin-top: 18px; }
+.ng-competition__metrics > div > small { display: block; margin-top: 8px; color: var(--ng-muted); font-size: 10px; line-height: 1.6; overflow-wrap: anywhere; }
+.ng-competition__rule-link { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 15px 18px; margin-top: 15px; border: 1px solid var(--ng-border); border-radius: 12px; color: var(--ng-muted); font-size: 11px; background: var(--ng-field); }
+.ng-competition__rule-link > svg { color: var(--competition-accent); }
+.ng-competition__rule-link > span { flex: 1 1 200px; }
+.ng-competition__reader-note { display: flex; align-items: flex-start; gap: 8px; margin-top: 18px; color: var(--ng-muted); font-size: 11px; line-height: 1.7; }
+.ng-competition__reader-note > svg { flex-shrink: 0; margin-top: 2px; }
+.ng-competition__tabs { display: flex; flex-wrap: wrap; gap: 7px; margin: 25px 0; padding: 5px; border: 1px solid var(--ng-border); border-radius: 13px; background: var(--ng-field); }
+.ng-competition__tabs button { display: inline-flex; justify-content: center; align-items: center; gap: 8px; min-width: 0; min-height: 42px; padding: 10px 15px; flex: 1; border: 1px solid transparent; border-radius: 9px; color: var(--ng-muted); font-size: 12px; font-weight: 550; }
+.ng-competition__tabs button[aria-pressed='true'] { border-color: var(--ng-border); color: var(--ng-text); background: var(--ng-surface-raised); box-shadow: 0 3px 8px #0001; }
+.ng-competition__tabs button[aria-pressed='true'] svg { color: var(--competition-accent); }
+.ng-competition__overview-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; margin-bottom: 20px; }
+.ng-competition .ng-section-header { gap: 12px; }
+.ng-competition .ng-section-header h3 { font-size: 19px; line-height: 1.4; font-weight: 630; letter-spacing: -.035em; }
+.ng-competition .ng-section-header .ng-button { flex-shrink: 0; min-height: 36px; padding: 8px 11px; font-size: 11px; }
+.ng-competition__pit .ng-progress { margin-top: 20px; height: 4px; }
+.ng-competition__pit .ng-progress > span { background: var(--competition-accent); }
+.ng-competition__pit ul { margin-top: 10px; }
+.ng-competition__pit li { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ng-competition__pit li + li { border-top: 1px solid var(--ng-border); }
+.ng-competition__pit li label { display: flex; align-items: flex-start; gap: 12px; flex: 1; min-width: 0; padding: 16px 0; }
+.ng-competition__pit li input { flex-shrink: 0; width: 17px; height: 17px; margin-top: 3px; accent-color: var(--competition-accent); }
+.ng-competition__pit li strong { display: block; font-size: 12px; font-weight: 550; line-height: 1.6; overflow-wrap: anywhere; }
+.ng-competition__pit li small { display: block; margin-top: 5px; color: var(--ng-muted); font-size: 10px; line-height: 1.6; overflow-wrap: anywhere; }
+.ng-competition__pit li input:checked + span strong { color: var(--ng-muted); text-decoration: line-through; }
+.ng-competition__row-actions { display: inline-flex; align-items: center; flex-shrink: 0; gap: 3px; }
+.ng-competition__row-actions button { display: grid; place-items: center; width: 32px; min-height: 35px; border-radius: 7px; color: var(--ng-muted); }
+.ng-competition__row-actions button:hover { background: var(--ng-surface-raised); color: var(--ng-text); }
+.ng-competition__all-clear { display: flex; align-items: center; gap: 9px; margin-top: 20px; padding: 16px; border-radius: 12px; color: var(--competition-accent); background: #8de5c30a; font-size: 12px; }
+.ng-competition__pit > .ng-text-link,.ng-competition__schedule > .ng-text-link { margin-top: 19px; }
+.ng-competition__schedule > ol { margin-top: 20px; }
+.ng-competition__schedule li { display: flex; align-items: flex-start; gap: 15px; min-width: 0; position: relative; padding: 18px 0; border-bottom: 1px solid var(--ng-border); }
+.ng-competition__schedule li:last-child { border-bottom: 0; }
+.ng-competition__schedule li > div { flex: 1; min-width: 0; }
+.ng-competition__schedule li > div > p { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: var(--ng-muted); font-size: 10px; }
+.ng-competition__schedule li > div > strong { display: block; margin-top: 6px; font-size: 13px; font-weight: 550; line-height: 1.6; overflow-wrap: anywhere; }
+.ng-competition__schedule li > div > small { display: block; margin-top: 6px; color: var(--ng-muted); font-size: 10px; line-height: 1.6; }
+.ng-competition__time { flex-shrink: 0; min-width: 65px; border-left: 2px solid var(--ng-border); padding-left: 12px; }
+.ng-competition__time > strong { display: block; font-size: 17px; font-variant-numeric: tabular-nums; font-weight: 600; }
+.ng-competition__time > small { display: block; margin-top: 4px; color: var(--ng-muted); font-size: 9px; }
+.ng-competition__schedule li[data-next='true'] .ng-competition__time { border-color: var(--competition-accent); color: var(--competition-accent); }
+.ng-competition__schedule li[data-next='true'] .ng-badge { font-size: 9px; padding: 3px 7px; color: var(--competition-accent); border-color: #8de5c32b; background: #8de5c309; }
+.ng-competition__schedule li[data-past='true'] { opacity: .65; }
+.ng-competition__muted { margin-top: 14px; color: var(--ng-muted); font-size: 12px; line-height: 1.8; }
+.ng-competition__criteria > ul { margin-top: 24px; }
+.ng-competition__criteria li { display: flex; align-items: flex-start; gap: 15px; min-width: 0; padding: 23px 0; border-top: 1px solid var(--ng-border); }
+.ng-competition__criterion-icon { display: grid; place-items: center; flex-shrink: 0; width: 38px; height: 38px; border-radius: 11px; background: var(--ng-primary-soft); color: var(--ng-primary); }
+.ng-competition__criteria li[data-status='done'] .ng-competition__criterion-icon { color: var(--competition-accent); background: #8de5c30d; }
+.ng-competition__criteria li > div { flex: 1; min-width: 0; }
+.ng-competition__criteria .ng-badge { display: inline-flex; font-size: 9px; }
+.ng-competition__criteria li h4 { margin-top: 10px; font-size: 16px; font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }
+.ng-competition__criteria li small { display: block; margin-top: 4px; color: var(--ng-muted); font-size: 11px; }
+.ng-competition__criteria li p { margin-top: 13px; color: var(--ng-muted); font-size: 12px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ng-competition__criteria li .ng-text-link { margin-top: 12px; }
+.ng-competition__savebar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 15px; position: sticky; bottom: 16px; z-index: 35; margin-top: 20px; padding: 17px 20px; border: 1px solid #b9aaff60; border-radius: 15px; background: var(--ng-surface-raised); box-shadow: 0 10px 50px #0006; }
+.ng-competition__savebar > span { display: flex; align-items: center; gap: 11px; color: var(--ng-primary); }
+.ng-competition__savebar strong { display: block; font-size: 12px; font-weight: 600; }
+.ng-competition__savebar small { display: block; max-width: 330px; margin-top: 4px; color: var(--ng-muted); font-size: 10px; line-height: 1.6; }
+.ng-competition__savebar > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.ng-competition__savebar .ng-button { font-size: 11px; }
+.ng-competition__status { min-height: 12px; margin-top: 17px; color: var(--competition-accent); font-size: 12px; line-height: 1.7; }
+.ng-competition > .ng-error { margin-top: 15px; flex-wrap: wrap; align-items: center; }
+.ng-competition__footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; padding: 24px 2px; border-top: 1px solid var(--ng-border); margin-top: 20px; }
+.ng-competition__footer p { display: flex; align-items: center; gap: 7px; color: var(--ng-muted); font-size: 10px; }
+.ng-competition__day-call { margin: 22px 0; padding: 28px; border-radius: 16px; border: 1px solid #8de5c340; background: #8de5c30b; }
+.ng-competition__day-call > span { color: var(--competition-accent); font-size: 11px; letter-spacing: .06em; }
+.ng-competition__day-call > strong { display: block; margin-top: 12px; font-size: clamp(24px,4vw,38px); line-height: 1.3; font-weight: 650; }
+.ng-competition__day-call > p { margin-top: 12px; color: var(--ng-muted); font-size: 14px; }
+.ng-competition__day-checklist { display: grid; gap: 20px; }
+.ng-competition--day .ng-competition__overview-grid { margin-top: 22px; }
+.ng-competition--day .ng-competition__day-checklist strong { font-size: 16px; }
+.ng-competition-editor { width: 100%; max-width: 650px; padding: 28px; }
+.ng-competition-editor > h2 { margin-top: 12px; padding-right: 32px; font-size: 25px; line-height: 1.3; font-weight: 650; }
+.ng-competition-editor > p:not(.ng-eyebrow) { margin-top: 13px; max-width: 500px; color: var(--ng-muted); font-size: 12px; line-height: 1.8; }
+.ng-competition-editor__fields { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 18px 15px; margin-top: 24px; }
+.ng-competition-editor__wide { grid-column: 1 / -1; }
+.ng-competition-editor__fields label { display: block; min-width: 0; }
+.ng-competition-editor__fields > div { min-width: 0; }
+.ng-competition-editor__fields label > span { display: block; margin-bottom: 8px; color: var(--ng-text); font-size: 12px; }
+.ng-competition-editor__fields :is(input,select,textarea) { width: 100%; min-width: 0; padding: 11px 12px; }
+.ng-competition-editor__fields textarea { min-height: 120px; }
+.ng-competition-editor__actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 9px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--ng-border); }
+.ng-competition-editor form > .ng-error { margin-top: 16px; }
+.ng-competition-editor .ng-status-note { font-size: 11px; }
+.ng-competition-analytics .ng-section-header { align-items: center; }
+.ng-competition-analytics select { width: 170px; max-width: 100%; padding: 9px 28px 9px 12px; font-size: 11px; }
+.ng-competition-analytics__metrics { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin-top: 26px; }
+.ng-competition-analytics__metrics > div { padding: 16px; border: 1px solid var(--ng-border); border-radius: 11px; background: var(--ng-field); }
+.ng-competition-analytics__metrics span { display: block; color: var(--ng-muted); font-size: 11px; line-height: 1.6; }
+.ng-competition-analytics__metrics strong { display: block; margin-top: 9px; font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ng-competition-analytics__bars { display: flex; align-items: flex-end; justify-content: center; gap: 14px; height: 165px; padding: 30px 10px 24px; margin-top: 24px; border-bottom: 1px solid var(--ng-border); }
+.ng-competition-analytics__bars li { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; position: relative; height: 100%; flex: 1; min-width: 0; max-width: 72px; }
+.ng-competition-analytics__bars li > strong { position: absolute; top: -23px; color: var(--ng-muted); font-size: 10px; font-weight: 500; }
+.ng-competition-analytics__bars li > span:not(.sr-only) { display: block; width: 100%; max-width: 40px; min-height: 2px; border-radius: 6px 6px 2px 2px; background: var(--ng-primary); }
+.ng-competition-analytics__bars li > span[data-within='true'] { background: var(--competition-accent); }
+.ng-competition-analytics__bars li > span[data-within='false'] { background: var(--ng-warning); }
+.ng-competition-analytics__bars li small { position: absolute; bottom: -20px; color: var(--ng-muted); font-size: 9px; }
+.ng-competition-analytics__caption { margin-top: 14px; color: var(--ng-muted); font-size: 10px; line-height: 1.8; }
+.ng-competition-analytics__footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--ng-border); }
+.ng-competition-analytics__footer > p { max-width: 480px; color: var(--ng-muted); font-size: 11px; line-height: 1.8; }
+.ng-competition-analytics__footer .ng-button { flex-shrink: 0; font-size: 11px; }
+@media(max-width:1150px) { .ng-competition__metrics > div { padding: 17px 14px; } .ng-competition__metrics > div > span { font-size: 10px; gap: 6px; } .ng-competition__metrics strong.ng-competition__next-time { font-size: 21px; } }
+@media(max-width:850px) { .ng-competition__overview-grid { grid-template-columns: minmax(0,1fr); } .ng-competition__metrics { grid-template-columns: repeat(2,minmax(0,1fr)); } .ng-competition-analytics .ng-section-header { flex-wrap: wrap; } .ng-competition__tabs button { font-size: 11px; padding-inline: 10px; } }
+@media(max-width:640px) { .ng-competition__hero { padding: 24px 20px; } .ng-competition__hero-copy { max-width: 100%; } .ng-competition__hero h2 { font-size: 31px; } .ng-competition__hero-art { top: 20px; right: -20px; width: 105px; opacity: .07; } .ng-competition__hero-actions { gap: 8px; } .ng-competition__hero-actions .ng-button { flex: 1 1 130px; font-size: 11px; padding: 10px; } .ng-competition__hero-actions .ng-button:first-child { flex-basis: 100%; } .ng-competition__metrics { gap: 10px; } .ng-competition__metrics > div { padding: 17px 13px; } .ng-competition__metrics strong { font-size: 28px; } .ng-competition__metrics strong.ng-competition__next-time { font-size: 21px; } .ng-competition__tabs { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 5px; margin-block: 20px; } .ng-competition__tabs button { justify-content: flex-start; gap: 8px; padding: 9px; font-size: 10px; } .ng-competition .ng-panel { padding: 21px 18px; } .ng-competition .ng-section-header h3 { font-size: 18px; } .ng-competition .ng-section-header > .ng-button { padding: 8px; font-size: 10px; } .ng-competition__row-actions { flex-direction: column; } .ng-competition__schedule li { gap: 11px; } .ng-competition__time { min-width: 59px; padding-left: 9px; } .ng-competition__criteria li { gap: 10px; } .ng-competition__criterion-icon { width: 31px; height: 33px; } .ng-competition__criteria li h4 { font-size: 14px; } .ng-competition__savebar { bottom: calc(80px + env(safe-area-inset-bottom)); padding: 15px; } .ng-competition__savebar > div { width: 100%; } .ng-competition__savebar .ng-button { flex: 1; font-size: 10px; padding: 9px; } .ng-competition__footer { align-items: flex-start; } .ng-competition__footer .ng-text-link { white-space: normal; text-align: left; } .ng-competition-analytics__metrics { gap: 8px; } .ng-competition-analytics__metrics > div { padding: 13px 9px; } .ng-competition-analytics__metrics span { font-size: 9px; } .ng-competition-analytics__metrics strong { font-size: 23px; } .ng-competition-analytics__bars { gap: 10px; padding-inline: 0; } .ng-competition-analytics__bars li > strong { font-size: 8px; } .ng-competition-analytics__footer { flex-wrap: wrap; gap: 14px; } .ng-competition-editor { padding: 24px 20px; } .ng-competition-editor > h2 { font-size: 23px; } .ng-competition-editor__fields { grid-template-columns: minmax(0,1fr); gap: 16px; } .ng-competition-editor__actions .ng-button { flex: 1; font-size: 12px; } .ng-competition__day-call { padding: 24px 20px; } }

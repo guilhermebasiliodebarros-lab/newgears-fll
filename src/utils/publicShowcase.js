@@ -18,8 +18,8 @@ export const PUBLIC_BADGE_LABELS = Object.freeze({
 });
 
 export const DEFAULT_PUBLIC_SHOWCASE_SETTINGS = Object.freeze({
-  tournamentName: 'Proximo torneio FLL',
-  tournamentTarget: '2026-12-01T08:00',
+  tournamentName: 'Próxima competição',
+  tournamentTarget: '',
   innovationUrl: '',
   socialUrl: '',
   socialLabel: 'Redes da equipe',

@@ -1,4 +1,5 @@
 import ProjectVisual from '../components/ProjectVisual';
+import { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   Award,
@@ -13,10 +14,16 @@ import {
   Star,
   UserCircle,
   Users,
+  ChevronLeft,
+  ChevronRight,
+  Expand,
 } from 'lucide-react';
 import LogoNewGears from '../components/LogoNewGears';
 import PublicQrCodes from '../components/PublicQrCodes';
 import { buildTrainingGallery } from '../utils/publicShowcase';
+import { DialogSurface } from '../components/InterfacePrimitives';
+import { isActiveStudent } from '../utils/teamProcesses';
+import './PublicTeamEnhancements.css';
 
 const cleanText = (value) => `${value || ''}`.trim();
 
@@ -35,7 +42,7 @@ export default function PublicTeamView({
   onToggleTheme,
 }) {
   const publicStudents = [...students]
-    .filter((student) => cleanText(student.name))
+    .filter((student) => isActiveStudent(student) && cleanText(student.name))
     .sort((left, right) => left.name.localeCompare(right.name));
   const totalImpactPeople = outreachEvents.reduce((sum, event) => sum + (Number(event.people) || 0), 0);
   const trainingPhotos = buildTrainingGallery({ galleryPhotos, robotVersions, attachments }).slice(0, 6);
@@ -46,22 +53,35 @@ export default function PublicTeamView({
     || cleanText(projectSummary?.problem)
     || 'A equipe esta construindo uma solucao com pesquisa, criatividade e impacto real.';
   const projectImage = projectSummary?.image || '';
+  const [selectedPhotoId, setSelectedPhotoId] = useState('');
+  const photoIndex = trainingPhotos.findIndex((photo) => photo.id === selectedPhotoId);
+  const selectedPhoto = trainingPhotos[photoIndex] || null;
+  const selectPhoto = (direction) => setSelectedPhotoId(trainingPhotos[(photoIndex + direction + trainingPhotos.length) % trainingPhotos.length].id);
+  useEffect(() => {
+    if (photoIndex < 0) return;
+    const move = (event) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || !document.activeElement?.closest('.ng-public-lightbox')) return;
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setSelectedPhotoId(trainingPhotos[(photoIndex + (event.key === 'ArrowRight' ? 1 : -1) + trainingPhotos.length) % trainingPhotos.length].id); }
+    };
+    document.addEventListener('keydown', move);
+    return () => document.removeEventListener('keydown', move);
+  }, [photoIndex, trainingPhotos]);
 
   return (
     <div className="newgears-public-shell min-h-screen bg-[#070b14] text-white">
       <header className="sticky top-0 z-30 border-b border-white/10 bg-[#070b14]/95 px-4 py-3 backdrop-blur-md md:px-8">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+          <div className="ng-public-brand flex items-center gap-3">
             <div className="h-11 w-12 rounded-lg border border-white/10 bg-white/5 p-2">
               <LogoNewGears />
             </div>
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-200/70">Vitrine publica</p>
-              <p className="text-sm font-black text-white">New Gears FLL</p>
+              <p className="text-sm font-black text-white">New Gears</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="ng-public-header-actions flex items-center gap-2">
             <button
               type="button"
               onClick={onToggleTheme}
@@ -74,6 +94,7 @@ export default function PublicTeamView({
             <button
               type="button"
               onClick={onOpenTvMode}
+              aria-label="Abrir modo TV"
               className="inline-flex items-center gap-2 rounded-lg border border-cyan-300/20 bg-cyan-300/10 px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-cyan-100 hover:bg-cyan-300 hover:text-slate-950"
             >
               <MonitorPlay size={16} />
@@ -82,6 +103,7 @@ export default function PublicTeamView({
             <button
               type="button"
               onClick={onBackToLogin}
+              aria-label="Voltar à área da equipe"
               className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-black uppercase tracking-[0.12em] text-white hover:bg-white/10"
             >
               <ArrowLeft size={16} />
@@ -90,6 +112,7 @@ export default function PublicTeamView({
           </div>
         </div>
       </header>
+      <nav className="ng-public-section-nav" aria-label="Explore a equipe"><a href="#nossa-equipe">A equipe</a><a href="#treinos">Na bancada</a><a href="#nosso-projeto">Nosso projeto</a><a href="#impacto">Impacto</a></nav>
 
       <main>
         <section className="relative min-h-[540px] overflow-hidden border-b border-white/10">
@@ -97,7 +120,7 @@ export default function PublicTeamView({
           <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,9,19,0.98),rgba(5,9,19,0.86)_48%,rgba(5,9,19,0.58)),linear-gradient(180deg,rgba(5,9,19,0.18),rgba(5,9,19,0.96))]" />
           <div className="relative mx-auto grid min-h-[540px] w-full max-w-7xl items-center gap-8 px-5 py-12 md:grid-cols-[minmax(0,1fr)_minmax(260px,0.72fr)] md:px-8 md:py-16">
             <div className="order-2 max-w-3xl self-end md:order-1">
-              <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-200">FIRST LEGO League</p>
+              <p className="text-xs font-black uppercase tracking-[0.22em] text-cyan-200">Robótica · Inovação · Trabalho em equipe</p>
               <h1 className="mt-3 text-5xl font-black leading-tight text-white md:text-7xl">New Gears</h1>
               <p className="mt-5 max-w-2xl text-base leading-relaxed text-slate-100/82 md:text-lg">
                 Robotica, inovacao e trabalho em equipe em uma temporada feita de ideias, testes e evolucao constante.
@@ -120,7 +143,7 @@ export default function PublicTeamView({
           </div>
         </section>
 
-        <section className="border-b border-white/10 bg-[#0c111d] px-5 py-12 md:px-8">
+        <section id="nossa-equipe" className="border-b border-white/10 bg-[#0c111d] px-5 py-12 md:px-8">
           <div className="mx-auto w-full max-w-7xl">
             <div className="max-w-2xl">
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-fuchsia-200/75">Quem faz acontecer</p>
@@ -134,7 +157,7 @@ export default function PublicTeamView({
               {publicStudents.map((student) => (
                 <article key={student.id} className="overflow-hidden rounded-lg border border-white/10 bg-[#111827] shadow-lg">
                   {student.avatarImage ? (
-                    <img src={student.avatarImage} alt={student.name} className="aspect-[4/3] w-full object-cover" />
+                    <img src={student.avatarImage} alt={student.name} loading="lazy" className="aspect-[4/3] w-full object-cover" />
                   ) : (
                     <div className="flex aspect-[4/3] items-center justify-center bg-[linear-gradient(135deg,#14213d,#24113c)]">
                       <UserCircle size={62} className="text-white/45" />
@@ -144,7 +167,7 @@ export default function PublicTeamView({
                     <h3 className="text-lg font-black text-white">{student.name}</h3>
                     <p className="mt-2 flex items-start gap-2 text-xs leading-relaxed text-slate-300">
                       <Award size={14} className="mt-0.5 shrink-0 text-cyan-300" />
-                      {cleanText(student.specialty) || 'Competidor FLL'}
+                      {cleanText(student.specialty) || 'Integrante da equipe'}
                     </p>
                   </div>
                 </article>
@@ -159,7 +182,7 @@ export default function PublicTeamView({
           </div>
         </section>
 
-        <section className="border-b border-white/10 bg-[#0a0f1a] px-5 py-12 md:px-8">
+        <section id="treinos" className="border-b border-white/10 bg-[#0a0f1a] px-5 py-12 md:px-8">
           <div className="mx-auto w-full max-w-7xl">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div className="max-w-2xl">
@@ -178,13 +201,13 @@ export default function PublicTeamView({
               <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {trainingPhotos.map((photo) => (
                   <article key={photo.id} className={`relative aspect-[4/3] overflow-hidden rounded-lg border bg-[#111827] shadow-lg ${photo.isFeatured ? 'newgears-public-accent-panel sm:col-span-2' : 'border-white/10'}`}>
-                    <img src={photo.image} alt={photo.title} className="h-full w-full object-cover" />
+                    <button type="button" className="ng-public-photo" aria-label={`Ampliar foto: ${photo.title}`} onClick={() => setSelectedPhotoId(photo.id)}><img src={photo.image} alt={photo.title} loading="lazy" className="h-full w-full object-cover" /><span><Expand size={16} />Ampliar</span></button>
                     {photo.isFeatured && (
-                      <span className="newgears-public-accent-badge absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] shadow-lg">
+                      <span className="newgears-public-accent-badge pointer-events-none absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[10px] font-black uppercase tracking-[0.14em] shadow-lg">
                         <Star size={13} fill="currentColor" /> Destaque da equipe
                       </span>
                     )}
-                    <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,transparent,rgba(5,9,19,0.96))] px-4 pb-4 pt-14">
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,transparent,rgba(5,9,19,0.96))] px-4 pb-4 pt-14">
                       <p className="newgears-public-accent-text text-[10px] font-black uppercase tracking-[0.14em]">{photo.type}</p>
                       <h3 className="mt-1 text-lg font-black text-white">{photo.title}</h3>
                     </div>
@@ -202,7 +225,7 @@ export default function PublicTeamView({
           </div>
         </section>
 
-        <section className="border-b border-white/10 bg-[#070b14] px-5 py-12 md:px-8">
+        <section id="nosso-projeto" className="border-b border-white/10 bg-[#070b14] px-5 py-12 md:px-8">
           <div className="mx-auto grid w-full max-w-7xl gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
             <div>
               <p className="newgears-public-accent-text text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Projeto de inovacao</p>
@@ -236,7 +259,7 @@ export default function PublicTeamView({
           </div>
         </section>
 
-        <section className="bg-[#0c111d] px-5 py-12 md:px-8">
+        <section id="impacto" className="bg-[#0c111d] px-5 py-12 md:px-8">
           <div className="mx-auto grid w-full max-w-7xl gap-4 md:grid-cols-3">
             <div className="rounded-lg border border-white/10 bg-white/5 p-5">
               <Users size={21} className="text-cyan-300" />
@@ -258,13 +281,14 @@ export default function PublicTeamView({
           </div>
 
           <div className="mx-auto mt-10 flex w-full max-w-7xl flex-col gap-3 border-t border-white/10 pt-6 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
-            <p className="flex items-center gap-2"><Shield size={14} /> New Gears FLL</p>
+            <p className="flex items-center gap-2"><Shield size={14} /> New Gears · Robótica em equipe</p>
             <button type="button" onClick={onBackToLogin} className="inline-flex items-center gap-2 text-cyan-200 hover:text-white">
               Entrar na plataforma <ExternalLink size={14} />
             </button>
           </div>
         </section>
       </main>
+      {selectedPhoto && <DialogSurface label={`Foto ampliada: ${selectedPhoto.title}`} onClose={() => setSelectedPhotoId('')} className="ng-public-lightbox" closeButton dismissOnBackdrop><figure><img src={selectedPhoto.image} alt={selectedPhoto.title} /><figcaption><div><p>{selectedPhoto.type} · {photoIndex + 1}/{trainingPhotos.length}</p><h2>{selectedPhoto.title}</h2>{selectedPhoto.detail && <p>{selectedPhoto.detail}</p>}</div><div><button type="button" aria-label="Foto anterior" disabled={trainingPhotos.length < 2} onClick={() => selectPhoto(-1)}><ChevronLeft size={22} /></button><button type="button" aria-label="Próxima foto" disabled={trainingPhotos.length < 2} onClick={() => selectPhoto(1)}><ChevronRight size={22} /></button></div></figcaption></figure></DialogSurface>}
     </div>
   );
 }

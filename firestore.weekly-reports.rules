@@ -45,6 +45,42 @@ service cloud.firestore {
         ? get(/databases/$(database)/documents/settings/workspace_season).data : {};
       return settings.get('activeSeasonId', 'legacy') == seasonId && settings.get('transitionLock', null) == null;
     }
+    // Central de competição: integrantes consultam; técnico configura e confere.
+    function validCompetitionWorkspace(data) {
+      let plan = data.plan;
+      let event = plan.event;
+      return data.keys().hasOnly(['plan', 'seasonId', 'revision', 'mutationId', 'createdAt', 'updatedAt', 'updatedBy'])
+        && data.seasonId is string && data.revision is int && data.revision >= 1
+        && data.mutationId is string && data.mutationId.size() <= 100
+        && data.createdAt is string && data.updatedAt is string && data.updatedBy == request.auth.uid
+        && plan is map && plan.keys().hasOnly(['version', 'event', 'pit', 'schedule', 'criteria']) && plan.version == 1
+        && event is map && event.keys().hasOnly(['name', 'program', 'category', 'date', 'location', 'rulebookUrl', 'rulebookVersion', 'matchSeconds'])
+        && event.name is string && event.name.size() >= 3 && event.name.size() <= 120
+        && event.program is string && event.program.size() <= 100
+        && event.category is string && event.category.size() <= 80
+        && event.date is string && event.date.size() <= 10
+        && event.location is string && event.location.size() <= 180
+        && event.rulebookVersion is string && event.rulebookVersion.size() <= 80
+        && event.rulebookUrl is string && event.rulebookUrl.size() <= 1600
+        && (event.rulebookUrl == '' || event.rulebookUrl.matches('https?://.*'))
+        && (event.matchSeconds == null || (event.matchSeconds is int && event.matchSeconds >= 10 && event.matchSeconds <= 3600))
+        && plan.pit is list && plan.pit.size() <= 30
+        && plan.schedule is list && plan.schedule.size() <= 30
+        && plan.criteria is list && plan.criteria.size() <= 16;
+    }
+    match /competitionWorkspaces/{seasonId} {
+      allow read: if isReportMember();
+      allow create: if isReportAdmin() && validCompetitionWorkspace(request.resource.data)
+        && request.resource.data.seasonId == seasonId && request.resource.data.revision == 1
+        && giroSeasonWritable(seasonId);
+      allow update: if isReportAdmin() && validCompetitionWorkspace(request.resource.data)
+        && request.resource.data.seasonId == resource.data.seasonId && resource.data.seasonId == seasonId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.revision == resource.data.revision + 1 && giroSeasonWritable(seasonId);
+      // O fechamento da temporada reaplica o mesmo seasonId sem modificar o plano.
+      allow update: if isReportAdmin() && request.resource.data == resource.data;
+      allow delete: if false;
+    }
     // Planejador de trajetos: equipe lê; autor e técnico editam na temporada ativa.
     function validRobotTrajectory(data) {
       let settings = data.settings;

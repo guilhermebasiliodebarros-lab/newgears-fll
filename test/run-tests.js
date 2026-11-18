@@ -1,5 +1,7 @@
 import { runProjectSummaryTests } from './projectSummary.test.js';
 import { runWorkspaceBriefingTests } from './workspaceBriefing.test.js';
+import { runTrainingSessionTests } from './trainingSession.test.js';
+import { runCompetitionTests } from './competition.test.js';
 import { runGiroCompanionTests } from './giroCompanion.test.js';
 import { runGiroTransportTests } from './giroTransport.test.js';
 import { runLearningFeaturesTests } from './learningFeatures.test.js';
@@ -40,6 +42,8 @@ import { runWorkflowImprovementsTests } from './workflowImprovements.test.js';
 import { runWorkloadAndConflictsTests } from './workloadAndConflicts.test.js';
 
 const suites = [
+  { name: 'competition', run: runCompetitionTests },
+  { name: 'trainingSession', run: runTrainingSessionTests },
   { name: 'workloadAndConflicts', run: runWorkloadAndConflictsTests },
   { name: 'workflowImprovements', run: runWorkflowImprovementsTests },
   { name: 'studentAccess', run: runStudentAccessTests },

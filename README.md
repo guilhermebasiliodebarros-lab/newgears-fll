@@ -1,4 +1,8 @@
-# React + Vite
+# New Gears · Robótica em equipe
+
+Preparação para diferentes modalidades, checklist do pit, programação e critérios com evidências: [guia da Central de competição](docs/central-de-competicao.md).
+
+Novo acesso, melhorias no painel e sessões pessoais com objetivo, checklist, cronômetro e histórico: [guia da Central de treino](docs/central-de-treino.md).
 
 Planejamento por integrante, recuperação de edições simultâneas e orientação inicial: [guia de carga de trabalho e primeiros passos](docs/workload-conflicts-onboarding.md).
 
